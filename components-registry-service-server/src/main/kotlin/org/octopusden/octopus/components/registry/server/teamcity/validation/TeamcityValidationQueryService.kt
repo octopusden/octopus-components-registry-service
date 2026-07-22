@@ -3,8 +3,10 @@ package org.octopusden.octopus.components.registry.server.teamcity.validation
 import org.octopusden.octopus.components.registry.server.config.ConditionalOnDatabaseEnabled
 import org.octopusden.octopus.components.registry.server.dto.v4.ComponentTeamcityValidationRow
 import org.octopusden.octopus.components.registry.server.dto.v4.TeamcityValidationSummaryResponse
+import org.octopusden.octopus.components.registry.server.mapper.composeTeamcityProjectUrl
 import org.octopusden.octopus.components.registry.server.repository.TeamcityValidationRepository
 import org.octopusden.octopus.components.registry.server.repository.VersionLineRepository
+import org.octopusden.octopus.components.registry.server.teamcity.TeamcityProperties
 import org.springframework.stereotype.Service
 import org.springframework.transaction.annotation.Transactional
 import java.util.UUID
@@ -18,6 +20,7 @@ import java.util.UUID
 class TeamcityValidationQueryService(
     private val teamcityValidationRepository: TeamcityValidationRepository,
     private val versionLineRepository: VersionLineRepository,
+    private val teamcityProperties: TeamcityProperties,
 ) {
     @Transactional(readOnly = true)
     fun list(
@@ -40,6 +43,7 @@ class TeamcityValidationQueryService(
                         componentId = componentId,
                         componentName = componentName,
                         projectId = finding.projectId,
+                        projectUrl = composeTeamcityProjectUrl(teamcityProperties.baseUrl, finding.projectId),
                         type = finding.type,
                         status = finding.status,
                         message = finding.message,

@@ -39,9 +39,9 @@ class MultipleVersionValidator(
                 ValidationResult(
                     type,
                     Status.WARNING,
-                    "Multiple $toolName versions found: " +
-                        stepsByVersion.entries.joinToString { (version, atSteps) ->
-                            "${version.raw} (${atSteps.joinToString { describe(it.configuration, it.step) }})"
+                    "Multiple $toolName versions found:\n" +
+                        stepsByVersion.entries.joinToString("\n") { (version, atSteps) ->
+                            "${version.raw}:\n${atSteps.joinToString("\n") { describe(it.configuration, it.step) }}"
                         },
                 )
             inspectedAnything ->

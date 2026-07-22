@@ -8,6 +8,7 @@ data class ComponentTeamcityValidationRow(
     val componentId: UUID,
     val componentName: String,
     val projectId: String,
+    val projectUrl: String?,
     val type: String,
     val status: String,
     val message: String?,

@@ -110,7 +110,8 @@ class MultipleJavaVersionValidatorTest {
         val result = validator.validate(tcProject(configs = listOf(templateConfig, plainConfig)))
 
         assertEquals(Status.WARNING, result.status)
-        assertTrue(result.message!!.contains("21 ($GRADLE_DEFAULT_STEP_ID ($GRADLE_DEFAULT_STEP_ID) in Gradle)"))
-        assertTrue(result.message!!.contains("17 (s1 (s1) in Plain)"))
+        assertTrue(result.message!!.startsWith("Multiple Java versions found:\n"))
+        assertTrue(result.message!!.contains("21:\n- $GRADLE_DEFAULT_STEP_ID ($GRADLE_DEFAULT_STEP_ID) in Gradle"))
+        assertTrue(result.message!!.contains("17:\n- s1 (s1) in Plain"))
     }
 }

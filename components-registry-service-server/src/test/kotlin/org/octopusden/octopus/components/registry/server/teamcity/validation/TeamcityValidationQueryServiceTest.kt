@@ -9,6 +9,7 @@ import org.octopusden.octopus.components.registry.server.entity.TeamcityValidati
 import org.octopusden.octopus.components.registry.server.entity.VersionLineEntity
 import org.octopusden.octopus.components.registry.server.repository.TeamcityValidationRepository
 import org.octopusden.octopus.components.registry.server.repository.VersionLineRepository
+import org.octopusden.octopus.components.registry.server.teamcity.TeamcityProperties
 import java.time.Instant
 import java.util.UUID
 import kotlin.test.assertEquals
@@ -16,7 +17,8 @@ import kotlin.test.assertEquals
 class TeamcityValidationQueryServiceTest {
     private val validationRepo = Mockito.mock(TeamcityValidationRepository::class.java)
     private val versionLineRepo = Mockito.mock(VersionLineRepository::class.java)
-    private val service = TeamcityValidationQueryService(validationRepo, versionLineRepo)
+    private val teamcityProperties = TeamcityProperties(baseUrl = "https://tc.example.com")
+    private val service = TeamcityValidationQueryService(validationRepo, versionLineRepo, teamcityProperties)
 
     private val a = UUID.randomUUID()
     private val b = UUID.randomUUID()
@@ -53,6 +55,8 @@ class TeamcityValidationQueryServiceTest {
         assertEquals(setOf(a, b), rows.map { it.componentId }.toSet())
         assertEquals(1, rows.count { it.projectId == "Bar" }) // Bar owned only by comp-a
         assertEquals(4, rows.count { it.projectId == "Foo" }) // 2 findings x 2 components
+        assertEquals("https://tc.example.com/project/Foo", rows.first { it.projectId == "Foo" }.projectUrl)
+        assertEquals("https://tc.example.com/project/Bar", rows.first { it.projectId == "Bar" }.projectUrl)
     }
 
     @Test

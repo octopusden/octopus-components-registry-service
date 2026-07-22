@@ -110,7 +110,8 @@ class MultipleMavenVersionValidatorTest {
         val result = validator.validate(tcProject(configs = listOf(templateConfig, plainConfig)))
 
         assertEquals(Status.WARNING, result.status)
-        assertTrue(result.message!!.contains("3.6.3 ($MAVEN_DEFAULT_STEP_ID ($MAVEN_DEFAULT_STEP_ID) in Maven)"))
-        assertTrue(result.message!!.contains("3.3.9 (s1 (s1) in Plain)"))
+        assertTrue(result.message!!.startsWith("Multiple Maven versions found:\n"))
+        assertTrue(result.message!!.contains("3.6.3:\n- $MAVEN_DEFAULT_STEP_ID ($MAVEN_DEFAULT_STEP_ID) in Maven"))
+        assertTrue(result.message!!.contains("3.3.9:\n- s1 (s1) in Plain"))
     }
 }

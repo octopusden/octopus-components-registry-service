@@ -24,8 +24,8 @@ class CustomBuildStepValidator(
         val found = customSteps(input).filter { buildStepToolVersionResolver.resolve(it.step).isNotEmpty() }
 
         return if (found.isNotEmpty()) {
-            val description = found.joinToString { describe(it.configuration, it.step) }
-            ValidationResult(type, Status.WARNING, "Custom build step(s) found: $description")
+            val description = found.joinToString("\n") { describe(it.configuration, it.step) }
+            ValidationResult(type, Status.WARNING, "Custom build step(s) found:\n$description")
         } else {
             ValidationResult(type, Status.OK, "No custom step with a detected tool version found")
         }

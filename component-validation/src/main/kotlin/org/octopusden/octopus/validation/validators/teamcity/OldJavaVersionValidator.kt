@@ -36,7 +36,7 @@ class OldJavaVersionValidator(
                 ValidationResult(
                     type,
                     Status.WARNING,
-                    "Java 1.8 found: ${onJavaEight.joinToString { describe(it.configuration, it.step) }}",
+                    "Java 1.8 found:\n${onJavaEight.joinToString("\n") { describe(it.configuration, it.step) }}",
                 )
             inspectedAnything ->
                 ValidationResult(type, Status.OK, "No Java 1.8 usage found")
