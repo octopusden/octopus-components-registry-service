@@ -1,7 +1,7 @@
 # ADR-002: Backend Language — Kotlin / Java 21
 
 ## Status
-Proposed
+Accepted
 
 ## Context
 
