@@ -616,7 +616,7 @@ technical-design.md section that documents their behavior/lifecycle:
 |---|---|---|---|
 | `V4__add_service_event.sql` | `service_event` | Append-only operational-event journal (redeploys, migration/sync/validation job runs) | [technical-design.md §6.6](technical-design.md#66-operational-service-event-journal-sys-060061) |
 | `V6__add_teamcity_project_version.sql` | `teamcity_project`, `version_line` | Normalizes the former flat `component_teamcity_projects` table: `teamcity_project` is one row per distinct TeamCity project id (append-only — sync never removes a row here even after a project is unlinked); `version_line` links a component + release version to a `teamcity_project` and is the source of truth for which projects are *currently* linked | §6 (TeamCity sync) |
-| `V7__add_teamcity_validation.sql` | `teamcity_validation` | Stores WARNING/ERROR build-configuration findings (Java/Maven version checks, template attachment), latest-only per project, keyed by `(project_id, type)` | [technical-design.md §6.7](technical-design.md#67-teamcity-validation-sys-064-sys-075084) |
+| `V7__add_teamcity_validation.sql` | `teamcity_validation` | Stores WARNING/ERROR build-configuration findings (Java/Maven version checks, template attachment), latest-only per project, keyed by `(project_id, type)` | [technical-design.md §6.7](technical-design.md#67-teamcity-validation-sys-075084) |
 
 `teamcity_validation`'s scope (which projects to validate/prune) is derived from `version_line`,
 not `teamcity_project` — see §6.7 for why the append-only table is the wrong source for that.
