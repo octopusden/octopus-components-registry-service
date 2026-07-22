@@ -2,48 +2,33 @@
 
 This note covers the operational rollout of the TC validation feature (SYS-064, SYS-075–092).
 It is additive-only: no schema migration in this change touches existing `teamcity_project`/
-`version_line`/`teamcity_validation` data, and the feature ships **inert** in this repository —
-see the activation model below.
+`version_line`/`teamcity_validation` data.
 
-## Activation model
+## Configuration is mandatory
 
-`TeamcityValidationProperties` (bound from `teamcity.validation.*`) has no `enabled` flag, and its
-five template/step-id fields have **no Kotlin default value** — each one is a required
-constructor parameter. That means:
+`TeamcityValidationProperties` (bound from `teamcity.validation.*`) has no `enabled` flag and no
+"off" state. All five template/step-id fields are **required and must be non-blank**, enforced by
+Bean Validation on the properties class (`@Validated` + `@NotBlank` on the four string fields,
+`@NotEmpty` on `release-family-template-ids`). If any is blank or empty, **the application fails to
+start**.
 
-- Every profile (this repo's `application.yml`, `service-config` per environment, and every test
-  profile) **must explicitly declare all five keys**. If any key is omitted entirely from every
-  active profile, Spring Boot's constructor binding fails at startup (`BindException` /
-  `NullPointerException` while binding `teamcity.validation.*`) — this is real, built-in fail-fast
-  behavior, not custom code.
-- **Fully blank/empty** (`gradle-build-template-id: ""`, `maven-build-template-id: ""`,
-  `release-family-template-ids: []`, `gradle-default-build-step-id: ""`,
-  `maven-default-build-step-id: ""`) is the inert baseline shipped in this repo's
-  `application.yml` — a deliberate, explicitly-declared "off" state, not an omission. Validation
-  endpoints exist and run, but every result comes back with no findings, since
-  `ConfigTemplateCatalog` has nothing to check against.
-- **Fully set** — the real per-environment values (below), supplied via `service-config`.
-  Validation runs for real after every sync and on demand.
-- **Partially set** (e.g. the two template ids filled in but a default-build-step id left blank)
-  is **not specially detected**. Nothing fails at startup in this case, because every key is still
-  present (just some are blank) — Spring's required-parameter check only catches a fully missing
-  key, not a blank one sitting next to real ones. A partial config like this can silently produce
-  misleading "clean" results (e.g. a blank default-build-step id makes
-  `OVERRIDES_DEFAULT_BUILD_STEP` report nothing instead of flagging real drift). There is currently
-  no dedicated startup guard against this specific case — treat "set all five together, in the
-  same `service-config` change" as an operational rule for now (see Rollout procedure below), and
-  double-check via the `/summary` endpoint after any change to this block. A stronger structural
-  guard (e.g. a startup validator) was considered and intentionally left out of this PR — it can
-  be revisited later if partial-config incidents actually happen in practice.
+This is deliberate. The validation suite is meaningless without a real `ConfigTemplateCatalog`:
+with blank ids, `isBuildTemplate(...)` never matches any real template, so `ATTACHED_TO_BUILD_TEMPLATE`
+would flag *every* project as "not attached to a build template" and the other checks would run
+against a catalog that recognizes none of our templates — i.e. invalid findings. Rather than ship a
+fake "inert" state that silently emits garbage, the app requires the real values before it will
+boot.
 
-Do not hardcode real template/step ids in this repository's `application.yml` — they are
-environment-specific TeamCity topology, not product defaults.
+Note: declaring the fields as non-null Kotlin `String`s does NOT enforce this on its own — a blank
+YAML value like `gradle-build-template-id:` binds to `""` (Spring converts a null YAML scalar to an
+empty string), which is non-null and would bind fine. The `@NotBlank`/`@NotEmpty` constraints are
+what actually reject blanks at startup.
 
 ## Per-environment values (service-config)
 
-Set all five properties together in each environment's `service-config`
-(`components-registry-service.yml`, mirroring how `teamcity.base-url`/`teamcity.sync.*` are
-already externalized):
+The repo `application.yml` carries the current OpenWay TeamCity defaults so local/dev/test contexts
+boot. Each environment overrides them in its `service-config` (`components-registry-service.yml`,
+mirroring how `teamcity.base-url` / `teamcity.sync.*` are handled):
 
 ```yaml
 teamcity:
@@ -58,27 +43,25 @@ teamcity:
     maven-default-build-step-id: <real default build-step id for the Maven template>
 ```
 
-Every profile must declare all five keys explicitly (see Activation model above) — test profiles
-supply their own fixture values (see `application-integration-test.yml`'s `teamcity.validation.*`
-block, used by the fat-jar startup tests, and the `test-db-validate` profile used by the
-`TeamcityValidationRepeatedRunIntegrationTest` family) so nothing needs a live TeamCity instance in
-CI.
+Confirm the real ids against the live TeamCity instance per environment (decision D2) — in
+particular the default build-step ids (`GRADLE_ID` / `MAVEN_ID` in `application.yml` are
+placeholders that need real values). Test profiles supply their own fixture values (see
+`application-integration-test.yml`'s `teamcity.validation.*` block, used by the fat-jar startup
+tests, and the `test-db-validate` profile — which inherits the `application.yml` defaults) so
+nothing needs a live TeamCity instance in CI.
 
 ## Rollout procedure
 
-1. Deploy this change with `teamcity.validation.*` explicitly blank in `service-config` (matching
-   this repo's `application.yml` baseline). The application boots normally; validation runs but
-   reports nothing.
-2. Confirm the real template/step ids for the target TeamCity instance.
-3. Set all five `teamcity.validation.*` properties together, in the same `service-config` change,
-   and roll the deployment. Setting them one at a time (or leaving one blank) will NOT fail
-   startup — see the "partially set" note above — so treat "all five together" as a manual
-   checklist item during review of the `service-config` change, not something the app enforces.
-4. Verify via `GET /rest/api/4/admin/teamcity-validations` (or the `/summary` endpoint) that
+1. Confirm the real template/step ids for the target TeamCity instance (decision D2).
+2. Set all five `teamcity.validation.*` properties in that environment's `service-config` and roll
+   the deployment. If any is blank/empty the pod fails to start (`@NotBlank`/`@NotEmpty` violation
+   in the startup log names the offending field) — a misconfiguration is caught at boot, never
+   silently producing invalid findings.
+3. Verify via `GET /rest/api/4/admin/teamcity-validations` (or the `/summary` endpoint) that
    findings are being produced for at least one known-misconfigured project.
 
 ## Rollback
 
-Blank out all five properties in `service-config` (explicitly, not by omitting the block — see
-Activation model) and redeploy — this returns the feature to its inert baseline without requiring
-a code change or data migration.
+There is no config-level "off" switch — the feature is always configured and always runs. To stop
+producing findings, revert the deployment (remove the feature) rather than blanking the config,
+which would fail startup.
