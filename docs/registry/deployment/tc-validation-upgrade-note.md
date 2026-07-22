@@ -26,7 +26,7 @@ what actually reject blanks at startup.
 
 ## Per-environment values (service-config)
 
-The repo `application.yml` carries the current OpenWay TeamCity defaults so local/dev/test contexts
+The repo `application.yml` carries the current TeamCity defaults so local/dev/test contexts
 boot. Each environment overrides them in its `service-config` (`components-registry-service.yml`,
 mirroring how `teamcity.base-url` / `teamcity.sync.*` are handled):
 
