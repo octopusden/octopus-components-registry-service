@@ -28,6 +28,15 @@ repositoryPath: /whiskey-builds
 supportedGroupIds: corp.domain
 supportedSystems: NONE,CLASSIC
 
+teamcity:
+  validation:
+    gradle-build-template-id: AUTOMATION_GRADLE_TEMPLATE
+    maven-build-template-id: AUTOMATION_MAVEN_TEMPLATE
+    release-family-template-ids:
+      - AUTOMATION_RELEASE_TEMPLATE
+    gradle-default-build-step-id: AUTOMATION_GRADLE_STEP
+    maven-default-build-step-id: AUTOMATION_MAVEN_STEP
+
 # auth-server.url and auth-server.realm are injected by the OKD template as
 # AUTH_SERVER_URL and AUTH_SERVER_REALM env vars (Spring's relaxed binding maps
 # them to auth-server.url/realm). The actual values come from Gradle project
