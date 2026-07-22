@@ -2390,7 +2390,7 @@ build-type fallback, archived/all-paused exclusion); v4 PATCH preservation in
 
 New pure-Kotlin module `component-validation` validates
 TeamCity projects: input in (`TeamcityProject`), `List<ValidationResult>` out — no Spring, no
-DB, no TeamCity-client dependency, no IO. `ATTACHED_TO_BUILD_TEMPLATE` is the first of its five
+DB, no TeamCity-client dependency, no IO. `ATTACHED_TO_BUILD_TEMPLATE` is the first of its six
 checks: is any build configuration attached to a build template (`CDGradleBuild` /
 `CDJavaMavenBuild` in the real deployment; the module itself takes a `TemplateCatalog` and knows
 no concrete ids)?
@@ -2762,13 +2762,13 @@ retaining old findings for that type.
    didn't survive are gone, survivors are present once (not duplicated).
 
 **Test method:** `TeamcityValidationRepeatedRunIntegrationTest` —
-`repeated_replace_with_surviving_type_does_not_collide`.
+`SYS_085_repeated_replace_with_surviving_type_does_not_collide`.
 
 ### SYS-086: TC validation — scope derived from currently-linked projects
 
 **Priority:** High
-**Test layer:** unit-test
-**Status:** ❌ Not tested
+**Test layer:** integration-test
+**Status:** ✅ Tested
 
 **Description:**
 `teamcity_project` is effectively append-only: sync replaces `version_line` rows but never
@@ -2784,9 +2784,9 @@ out of scope and its stored findings become eligible for removal.
 2. A project present in `teamcity_project` but with no current `version_line` row is excluded
    from scope, even though it would appear in `teamcity_project`'s own distinct-id list.
 
-**Test method:** none yet — the fix is exercised indirectly through SYS-087's pruning test, but
-there is no unit test isolating `findDistinctLinkedProjectIds` itself against a mixed
-linked/orphaned `teamcity_project`+`version_line` fixture. Flagged as a follow-up.
+**Test method:** `VersionLineRepositoryLinkedProjectScopeIntegrationTest` —
+`SYS_086_findDistinctLinkedProjectIds_scopes_to_currently_linked_projects_only`,
+`SYS_086_findDistinctLinkedProjectIds_deduplicates_multiple_version_lines_to_same_project`.
 
 ### SYS-087: TC validation — stale-project pruning, including down to empty scope
 
@@ -2808,13 +2808,16 @@ entirely on an empty scope was removed, since there's no separate signal here to
    nothing is retained just because the known-project set happened to be empty.
 
 **Test method:** `TeamcityValidationRepeatedRunIntegrationTest` —
-`stale_row_pruning_with_empty_scope_removes_the_last_project`.
+`SYS_087_validate_with_empty_scope_removes_the_last_project`, which drives the real
+`TeamcityValidationService.validate()` end to end (seeds stored findings for two projects, leaves
+them unlinked from any `version_line`, then asserts the service itself — not a reimplementation of
+its pruning query — removes both).
 
 ### SYS-088: TC validation — automatic post-sync trigger + cache invalidation
 
 **Priority:** High
 **Test layer:** unit-test
-**Status:** ❌ Not tested
+**Status:** ✅ Tested
 
 **Description:**
 `TeamcityValidationSyncListener` runs a validation job after every successful TeamCity sync
@@ -2831,14 +2834,19 @@ automatic post-sync run read enriched project data computed from the pre-sync Te
 3. An exception from `startAsync` is caught and logged; it does not propagate to the sync's own
    completion path.
 
-**Test method:** none yet. `TeamcityValidationSyncListener` and `CachingEnrichedTcProjectFetcher`
-each have no dedicated unit test as of this PR. Flagged as a follow-up.
+**Test method:** `TeamcityValidationSyncListenerTest` —
+`SYS_088_syncCompleted_invalidatesCacheThenTriggersStartAsyncOnce`,
+`SYS_088_startAsyncException_isCaughtAndDoesNotPropagate`,
+`SYS_088_invalidateAllException_isCaughtAndStartAsyncNeverCalled`.
+`CachingEnrichedTcProjectFetcher` itself (the cache TTL/invalidation mechanics, as opposed to the
+listener's call to `invalidateAll()`) still has no dedicated unit test — flagged as a narrower
+follow-up.
 
 ### SYS-089: TC validation — mutual exclusion with sync/migration via the lifecycle gate
 
 **Priority:** High
 **Test layer:** unit-test
-**Status:** ❌ Not tested
+**Status:** ✅ Tested
 
 **Description:**
 TC validation runs through the same shared single-pod `MigrationLifecycleGate` as the
@@ -2855,11 +2863,12 @@ is RUNNING, or vice versa) is rejected with `MigrationConflictException`.
 3. Starting a COMPONENTS or HISTORY migration (or a TC resync) while TC validation is RUNNING is
    likewise rejected.
 
-**Test method:** none yet — `MigrationLifecycleGateTest` (if one exists) does not appear to cover
-the `TC_VALIDATION` kind specifically; existing cross-kind coverage is exercised indirectly via
-`TeamcityValidationTriggerControllerTest`'s cross-kind-COMPONENTS case (SYS-090), which asserts
-the controller-level 409 envelope but not the gate's own kind-matching logic in isolation.
-Flagged as a follow-up.
+**Test method:** `MigrationLifecycleGateTest` —
+`SYS-089 same-kind TC_VALIDATION second tryClaim attaches to the existing owner`,
+`SYS-089 starting TC_VALIDATION while COMPONENTS is RUNNING reports the COMPONENTS owner`,
+`SYS-089 starting COMPONENTS or TC_RESYNC while TC_VALIDATION is RUNNING is also rejected`,
+exercising the gate's own `TC_VALIDATION`-kind matching directly, at the gate level (not just
+through the controller-level 409 envelope covered by SYS-090).
 
 ### SYS-090: TC validation — admin trigger/poll endpoint contract
 
@@ -2887,16 +2896,16 @@ IMPORT_DATA.
 7. IMPORT_DATA GET, COMPLETED → 200 with the result counts.
 
 **Test method:** `TeamcityValidationTriggerControllerTest` —
-`postAnonymousReturns401`, `postEditorReturns403`, `postAdminFreshReturns202`,
-`postAdminSameKindAttachReturns409`, `postAdminCrossKindComponentsReturns409Conflict`,
-`getJobAnonymousReturns401`, `getJobEditorReturns403`, `getJobIdleReturns404`,
-`getJobCompletedReturns200WithResult`.
+`SYS_090_postAnonymousReturns401`, `SYS_090_postEditorReturns403`, `SYS_090_postAdminFreshReturns202`,
+`SYS_090_postAdminSameKindAttachReturns409`, `SYS_090_postAdminCrossKindComponentsReturns409Conflict`,
+`SYS_090_getJobAnonymousReturns401`, `SYS_090_getJobEditorReturns403`, `SYS_090_getJobIdleReturns404`,
+`SYS_090_getJobCompletedReturns200WithResult`.
 
 ### SYS-091: TC validation — component-detail embedding
 
 **Priority:** Medium
 **Test layer:** integration-test
-**Status:** ❌ Not tested
+**Status:** ✅ Tested
 
 **Description:**
 `ComponentManagementServiceImpl.attachTeamcityValidations` attaches stored WARNING/ERROR findings
@@ -2912,8 +2921,12 @@ validation run has actually completed for that project; it is not distinguished 
 2. A linked project with no stored findings has an empty `validations` list.
 3. A component with no linked TeamCity projects is unaffected (no findings query is issued).
 
-**Test method:** none yet — `attachTeamcityValidations` has no dedicated unit or integration test
-as of this PR. Flagged as a follow-up.
+**Test method:** `ComponentTeamcityValidationEmbeddingIntegrationTest` —
+`SYS_091_getComponent_embeds_findings_per_linked_project` (criteria 1–2),
+`SYS_091_getComponent_with_no_linked_projects_has_empty_teamcityProjects` (criterion 3, at the
+DTO-shape level — this asserts the resulting `teamcityProjects` list is empty rather than spying on
+whether the findings query itself was skipped, since `attachTeamcityValidations` already
+short-circuits on an empty `teamcityProjects` list before querying).
 
 ### SYS-092: TC validation — admin dashboard read APIs
 
@@ -2944,5 +2957,5 @@ counts DISTINCT components per type/status rather than raw finding rows. Both en
 `list dedupes component reached via multiple version lines to same project`,
 `list filters by type`, `summary distinct component counts`;
 `TeamcityValidationControllerV4SecurityTest` —
-`listAnonymousReturns401`, `listEditorReturns403`, `listAdminReturns200`,
-`summaryAnonymousReturns401`, `summaryEditorReturns403`, `summaryAdminReturns200`.
+`SYS_092_listAnonymousReturns401`, `SYS_092_listEditorReturns403`, `SYS_092_listAdminReturns200`,
+`SYS_092_summaryAnonymousReturns401`, `SYS_092_summaryEditorReturns403`, `SYS_092_summaryAdminReturns200`.

@@ -405,7 +405,7 @@ lived only in an in-memory `AtomicReference` (single-pod, lost on restart) + log
 
 ### 6.7 TeamCity validation (SYS-075–084)
 A new pure-Kotlin module, `component-validation` (no Spring/DB/TeamCity-client/IO — see
-[TD-016](tech-debt/016-validator-token-matching.md) for its one tracked follow-up), inspects each
+[TD-018](tech-debt/018-component-validation-version-resolver-value-coverage.md) for its one tracked follow-up), inspects each
 registered TeamCity project's build configs/steps and reports six findings per project
 (`ATTACHED_TO_BUILD_TEMPLATE`, `OVERRIDES_DEFAULT_BUILD_STEP`, `HAS_CUSTOM_BUILD_STEP`,
 `USES_OLD_JAVA_VERSION`, `MULTIPLE_JAVA_VERSIONS`, `MULTIPLE_MAVEN_VERSIONS`). The server owns both

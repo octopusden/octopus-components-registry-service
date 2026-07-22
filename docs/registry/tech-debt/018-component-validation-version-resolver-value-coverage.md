@@ -1,4 +1,4 @@
-# TD-016: component-validation — version resolvers match against a hardcoded token list, not arbitrary versions
+# TD-018: component-validation — version resolvers match against a hardcoded token list, not arbitrary versions
 
 ## Status
 
