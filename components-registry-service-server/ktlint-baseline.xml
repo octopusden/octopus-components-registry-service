@@ -44,7 +44,43 @@
     <file name="src/main/kotlin/org/octopusden/octopus/components/registry/server/service/impl/ImportServiceImpl.kt">
         <error line="2701" column="1" source="standard:no-consecutive-comments" />
     </file>
+    <file name="src/test/kotlin/org/octopusden/octopus/components/registry/server/controller/TeamcityValidationControllerV4SecurityTest.kt">
+        <error line="62" column="9" source="standard:function-naming" />
+        <error line="72" column="9" source="standard:function-naming" />
+        <error line="82" column="9" source="standard:function-naming" />
+        <error line="94" column="9" source="standard:function-naming" />
+        <error line="104" column="9" source="standard:function-naming" />
+        <error line="114" column="9" source="standard:function-naming" />
+    </file>
+    <file name="src/test/kotlin/org/octopusden/octopus/components/registry/server/controller/TeamcityValidationTriggerControllerTest.kt">
+        <error line="85" column="9" source="standard:function-naming" />
+        <error line="95" column="9" source="standard:function-naming" />
+        <error line="105" column="9" source="standard:function-naming" />
+        <error line="122" column="9" source="standard:function-naming" />
+        <error line="138" column="9" source="standard:function-naming" />
+        <error line="161" column="9" source="standard:function-naming" />
+        <error line="171" column="9" source="standard:function-naming" />
+        <error line="181" column="9" source="standard:function-naming" />
+        <error line="191" column="9" source="standard:function-naming" />
+    </file>
     <file name="src/test/kotlin/org/octopusden/octopus/components/registry/server/controller/V4ClearSemanticsTest.kt">
         <error line="156" column="141" source="standard:max-line-length" />
+    </file>
+    <file name="src/test/kotlin/org/octopusden/octopus/components/registry/server/repository/VersionLineRepositoryLinkedProjectScopeIntegrationTest.kt">
+        <error line="56" column="9" source="standard:function-naming" />
+        <error line="80" column="9" source="standard:function-naming" />
+    </file>
+    <file name="src/test/kotlin/org/octopusden/octopus/components/registry/server/service/impl/ComponentTeamcityValidationEmbeddingIntegrationTest.kt">
+        <error line="70" column="9" source="standard:function-naming" />
+        <error line="103" column="9" source="standard:function-naming" />
+    </file>
+    <file name="src/test/kotlin/org/octopusden/octopus/components/registry/server/teamcity/validation/TeamcityValidationRepeatedRunIntegrationTest.kt">
+        <error line="82" column="9" source="standard:function-naming" />
+        <error line="107" column="9" source="standard:function-naming" />
+    </file>
+    <file name="src/test/kotlin/org/octopusden/octopus/components/registry/server/teamcity/validation/TeamcityValidationSyncListenerTest.kt">
+        <error line="41" column="9" source="standard:function-naming" />
+        <error line="55" column="9" source="standard:function-naming" />
+        <error line="68" column="9" source="standard:function-naming" />
     </file>
 </baseline>

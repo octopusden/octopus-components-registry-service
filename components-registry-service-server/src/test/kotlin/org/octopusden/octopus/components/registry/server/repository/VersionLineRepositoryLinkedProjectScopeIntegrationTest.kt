@@ -87,7 +87,11 @@ class VersionLineRepositoryLinkedProjectScopeIntegrationTest {
 
         val scope = versionLineRepository.findDistinctLinkedProjectIds()
 
-        assertEquals(1, scope.count { it == sharedProject.projectId }, "a shared project must appear exactly once, not once per version line")
+        assertEquals(
+            1,
+            scope.count { it == sharedProject.projectId },
+            "a shared project must appear exactly once, not once per version line",
+        )
     }
 
     companion object {
