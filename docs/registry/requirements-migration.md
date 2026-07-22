@@ -1033,7 +1033,7 @@ DSL nested `components { ... }` block creates a `component_groups` row. Detectio
 > was `top-level ⊕ Defaults`; see [ADR-018 §2 amendment](adr/018-decoupled-version-model.md)), with the
 > OLDER blocks kept as overrides. There is **no synthetic-bounded base**. Overrides
 > may be **open-upper** (`[X,)`) and apply by **containment**, not exact range match (TD-010). See
-> ADR-018 and the case matrix M1–M8 in `version-model-spec-DRAFT.md`.
+> ADR-018 and the case matrix M1–M8 in `version-model-spec.md`.
 
 DSL version-range blocks produce a `RANGE_PRESENCE` coverage row plus override rows on `component_configurations`. Each scalar attribute change (relative to the `ALL_VERSIONS` base) is a separate row (`overridden_attribute = 'aspect.field'`); each child-collection replacement is a marker row.
 

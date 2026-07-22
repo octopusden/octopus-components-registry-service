@@ -113,42 +113,12 @@ test {
         'junit.jupiter.execution.parallel.config.strategy': 'fixed',
         'junit.jupiter.execution.parallel.config.fixed.parallelism': (project.findProperty('compat.parallelism') ?: '8') as String,
     ]
-    // Absolute path to the same dir compatibilityReporter aggregates from —
-    // wired inside a doFirst block (execution phase) because both earlier
-    // attempts failed on the TC agent's gradle/JVM combination:
-    //
-    //   - Putting `layout.buildDirectory.dir(...).get().asFile.absolutePath`
-    //     inside the `systemProperties = [...]` map literal evaluated eagerly
-    //     at configuration phase. id17 #3631 showed the result as the
-    //     RELATIVE module basename `components-registry-compat-test/build/
-    //     reports/compat` (while the compatibilityReporter task — same
-    //     expression, but running in doLast at execution phase — saw the
-    //     absolute `/opt/TeamCity/.../components-registry-compat-test/build/
-    //     reports/compat`). The relative value resolved against the test
-    //     JVM's relative `user.dir` and the per-worker ndjson landed in a
-    //     doubled-prefix path the reporter never read.
-    //   - Switching to `systemProperty(name, providers.provider { ... })`
-    //     (a deferred Provider) was a misread of the Gradle API. The Test
-    //     task's `systemProperty(String, Object)` documents the value is
-    //     converted via `Object.toString()`; the Provider is NOT unwrapped,
-    //     so the test JVM received the literal string `provider(?)` as the
-    //     property value. id17 #3633 surfaced this by failing 15834 tests
-    //     with `IllegalStateException: compat.report-dir must be absolute
-    //     — got 'provider(?)'` from `resolveReportDir`.
-    //
-    // The doFirst block below runs at task execution time, by which point
-    // layout.buildDirectory is finalised and `.canonicalPath` returns an
-    // absolute path (defence in depth vs `.absolutePath` — canonical
-    // resolves through the filesystem rather than going via user.dir).
-    //
-    // Wired via `jvmArgs "-D..."` rather than `systemProperty(...)`
-    // because id17 #3634 showed `systemProperty` set inside doFirst not
-    // taking effect — the test JVM kept seeing the (config-phase) value.
-    // `jvmArgs` mutates the JVM command-line that's assembled at fork
-    // time, so a value appended in doFirst lands on the actual JVM args.
-    //
-    // The `resolveReportDir` check in the test code still asserts
-    // absolute-ness as a backstop for any future regression.
+    // compat.report-dir must be an ABSOLUTE path to the dir compatibilityReporter aggregates from,
+    // resolved at EXECUTION phase (doFirst) via `.canonicalPath` — a config-phase value resolves
+    // relative to the test JVM's user.dir and the per-worker ndjson lands where the reporter can't
+    // read it. Set via `jvmArgs "-D..."`, not `systemProperty(...)`: only jvmArgs appended in
+    // doFirst reach the forked test JVM. `resolveReportDir` in the test code asserts absolute-ness
+    // as a backstop.
     doFirst {
         def reportDirAbs = layout.buildDirectory.dir('reports/compat').get().asFile.canonicalPath
         println "[compat-test] doFirst: setting -Dcompat.report-dir=${reportDirAbs}"
@@ -750,10 +720,7 @@ tasks.register('compatDiffOfDiffs') {
                 logger.warn("[compat-dod] failed to parse ${knownDeltasName}: ${e.message}; treating as empty")
             }
         }
-        // Shared matcher — see `compatMatchesDelta` above the task registrations. This task
-        // previously carried a hand-duplicated copy that silently drifted (it missed the
-        // jsonPathPattern/messagePattern keys), so ADR-018-amendment entries were excluded by
-        // the reporter but NOT by this gate. One definition, both gates.
+        // One shared matcher for both gates — see `compatMatchesDelta` above the task registrations.
         def matchesDelta = { Map delta, Map record -> compatMatchesDelta(delta, record) }
 
         def loadRecords = { File dir, String label ->
