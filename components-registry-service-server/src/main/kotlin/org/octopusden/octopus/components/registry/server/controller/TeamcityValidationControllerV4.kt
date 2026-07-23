@@ -24,11 +24,14 @@ import org.springframework.web.bind.annotation.RestController
 class TeamcityValidationControllerV4(
     private val teamcityValidationQueryService: TeamcityValidationQueryService,
 ) {
-    /** Component-centric findings; optional filters: validation `type`, `status`, `component` (name substring). */
+    /**
+     * Component-centric findings; optional filters: validation `type` (repeatable — `?type=A&type=B`
+     * matches ANY of the given types), `status`, `component` (name substring).
+     */
     @GetMapping
     @Operation(operationId = "listTeamcityValidations")
     fun list(
-        @RequestParam(required = false) type: String?,
+        @RequestParam(required = false) type: List<String>?,
         @RequestParam(required = false) status: String?,
         @RequestParam(required = false) component: String?,
     ): List<ComponentTeamcityValidationRow> = teamcityValidationQueryService.list(type, status, component)

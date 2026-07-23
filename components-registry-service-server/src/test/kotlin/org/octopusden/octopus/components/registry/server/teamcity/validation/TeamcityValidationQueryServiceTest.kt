@@ -49,7 +49,7 @@ class TeamcityValidationQueryServiceTest {
     @Test
     @DisplayName("list joins each finding to its owning component(s); a shared project yields one row per component")
     fun `list fans out shared project to each component`() {
-        val rows = service.list(type = null, status = null, component = null)
+        val rows = service.list(types = null, status = null, component = null)
         // Foo(old-java)->a,b ; Bar(old-java)->a ; Foo(override)->a,b = 5 rows
         assertEquals(5, rows.size)
         assertEquals(setOf(a, b), rows.map { it.componentId }.toSet())
@@ -62,9 +62,36 @@ class TeamcityValidationQueryServiceTest {
     @Test
     @DisplayName("list filters by validation type before the component join")
     fun `list filters by type`() {
-        val rows = service.list(type = "OVERRIDES_DEFAULT_BUILD_STEP", status = null, component = null)
+        val rows = service.list(types = listOf("OVERRIDES_DEFAULT_BUILD_STEP"), status = null, component = null)
         assertEquals(2, rows.size) // only Foo(override) -> a, b
         assertEquals(setOf(a, b), rows.map { it.componentId }.toSet())
+    }
+
+    @Test
+    @DisplayName("list filters by ANY of multiple types (case-insensitive), de-duplicated")
+    fun `list filters by multiple types`() {
+        // Both types requested (one lower-cased to prove case-insensitivity, one blank to prove it's ignored).
+        val rows =
+            service.list(
+                types = listOf("overrides_default_build_step", "USES_OLD_JAVA_VERSION", "  "),
+                status = null,
+                component = null,
+            )
+        // Foo(override)->a,b + Foo(old-java)->a,b + Bar(old-java)->a = 5 rows (all findings match one of the two).
+        assertEquals(5, rows.size)
+        assertEquals(
+            setOf("OVERRIDES_DEFAULT_BUILD_STEP", "USES_OLD_JAVA_VERSION"),
+            rows.map { it.type }.toSet(),
+        )
+    }
+
+    @Test
+    @DisplayName("list treats an empty type list as no type filter")
+    fun `list empty type list is no filter`() {
+        assertEquals(
+            service.list(types = null, status = null, component = null).size,
+            service.list(types = emptyList(), status = null, component = null).size,
+        )
     }
 
     @Test
@@ -76,7 +103,7 @@ class TeamcityValidationQueryServiceTest {
             (versionLines + versionLine(a, "comp-a", "Foo")).filter { it.teamcityProject.projectId in ids }
         }
 
-        val rows = service.list(type = "USES_OLD_JAVA_VERSION", status = null, component = null)
+        val rows = service.list(types = listOf("USES_OLD_JAVA_VERSION"), status = null, component = null)
         // Foo(old-java) -> a,b ; Bar(old-java) -> a = 3 rows.
         // Without the projectId+componentId de-dupe, the duplicate Foo->a version line would add
         // a 4th row (a second "Foo" row for comp-a).

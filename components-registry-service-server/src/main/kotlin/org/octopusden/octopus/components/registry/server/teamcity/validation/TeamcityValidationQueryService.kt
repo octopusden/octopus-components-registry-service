@@ -24,13 +24,14 @@ class TeamcityValidationQueryService(
 ) {
     @Transactional(readOnly = true)
     fun list(
-        type: String?,
+        types: List<String>?,
         status: String?,
         component: String?,
     ): List<ComponentTeamcityValidationRow> {
+        val typeFilter = types?.filter { it.isNotBlank() }?.map { it.lowercase() }?.toSet()?.takeIf { it.isNotEmpty() }
         val findings =
             teamcityValidationRepository.findAll().filter { finding ->
-                (type == null || finding.type.equals(type, ignoreCase = true)) &&
+                (typeFilter == null || finding.type.lowercase() in typeFilter) &&
                     (status == null || finding.status.equals(status, ignoreCase = true))
             }
         if (findings.isEmpty()) return emptyList()
@@ -60,7 +61,7 @@ class TeamcityValidationQueryService(
 
     @Transactional(readOnly = true)
     fun summary(): TeamcityValidationSummaryResponse {
-        val rows = list(type = null, status = null, component = null)
+        val rows = list(types = null, status = null, component = null)
 
         fun distinctComponents(subset: List<ComponentTeamcityValidationRow>): Int = subset.map { it.componentId }.toSet().size
         return TeamcityValidationSummaryResponse(
