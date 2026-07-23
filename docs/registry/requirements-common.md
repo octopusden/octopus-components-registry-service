@@ -66,6 +66,7 @@
 | SYS-061 | `POST /rest/api/4/admin/service-events` ingests portal-sourced events (portal redeploys, validation-sweep runs) into the shared journal, so the Admin "Events" tab shows both services on one timeline. Authenticated by a shared-secret `X-Service-Event-Token` header (the portal BFF calls CRS tokenless), verified constant-time and **fail-closed** (blank/unset configured token rejects every call 403); method-scoped permitAll at the filter chain so the sibling GET read stays JWT+IMPORT_DATA gated; unknown eventType/status/source → 400 | High | integration-test | ✅ Tested |
 | SYS-064 | The component owner's manager (resolved via employee-service `getManager`) may edit the component and its field-overrides — a fourth, derived condition on `canEditComponent` alongside owner/RM/SC/admin. A directory failure or no-manager answer denies (fail-closed), never grants. `GET /{idOrName}/editors` enumerates the resolved manager (unlike the admin bypass, it is one concrete person per component); `getManager` is 2-minute cached per owner (resolved answers only) and its DB read runs in its own short-lived transaction, closed before the network call | High | unit + integration-test | ✅ Tested |
 | SYS-065 | Desired-set field-override PATCH is echo-safe: re-submitting an UNCHANGED override row (same id, same normalized range) does not re-validate its range, so a component carrying a legacy composite range can still be saved; a CREATE or an actual range change is still validated (composite still rejected) | High | integration-test | ✅ Tested |
+| SYS-066 | One-off admin operation `POST /rest/api/4/admin/field-overrides/split-composites` splits legacy composite field-override rows into single-segment rows so their ranges become API-editable while resolved output is preserved. A SEPARATE `@ConditionalOnProperty(components-registry.composite-override-split.enabled, default OFF)` controller (bean absent → 404 → "our DB only"); IMPORT_DATA-gated. Fail-closed: a malformed range, a composite on any attribute other than `vcs.settings`, self-overlapping segments, or a sibling collision whose ordered vcs payload is not identical aborts the whole transaction. `dryRun` (default true) previews + returns a deterministic `manifestToken`; a write must echo the token, recomputed + compared in-transaction (stale/missing → 409). Bumps each affected component's version once; audits per component | High | unit + integration-test | ✅ Tested |
 
 ---
 
@@ -2464,3 +2465,67 @@ whole live collection, including legacy composite siblings (via `isIntersect`).
 `SYS-065 value-only edit of composite is accepted`,
 `SYS-065 disjointness still enforced against untouched composite`,
 `SYS-065 valid range change is persisted`.
+### SYS-066: One-off composite field-override split
+
+**Priority:** High
+**Test layer:** unit + integration-test
+**Status:** ✅ Tested
+
+**Motivation:**
+Legacy DSL import created field-override rows with composite Maven ranges (multiple top-level
+segments, e.g. `[2.2.18,2.2.20-132),(2.2.20-132,2.2.21)`). SYS-064/SYS-065 made the portal Save
+tolerate them, but such a row's *range* still cannot be edited via the API (composites are rejected
+on POST/PATCH). This one-off operation splits each composite into its single-segment rows — which
+ARE API-editable — while preserving the resolved per-version output. It is scoped to our production
+DB (our DSL is no longer re-imported); colleagues' deployments never expose it.
+
+**Description:**
+A SEPARATE controller `CompositeOverrideSplitAdminController` (base `rest/api/4/admin`, `canImport`
+auth, `@ConditionalOnDatabaseEnabled`) gated by
+`@ConditionalOnProperty("components-registry.composite-override-split.enabled", default false)` — the
+bean is not registered unless enabled (path → 404), enforcing "our DB only" structurally without
+touching other admin endpoints. `POST /field-overrides/split-composites?dryRun={true}&manifestToken=`:
+1. Scans all field-override rows; a row is composite iff `splitCompositeStrict` (which aborts on any
+   malformed/unaccounted input) yields > 1 segment.
+2. Fail-closed scope guard: any composite that is not a `vcs.settings` MARKER aborts (409).
+3. Intra-composite disjointness: a composite whose own segments overlap aborts.
+4. Sibling collision preflight (semantic `isIntersect`, decided by mutual containment): a segment
+   intersecting an existing sibling aborts unless it is the SAME interval with an identical ordered
+   vcs payload (then that duplicate segment is skipped, not recreated).
+5. Deterministic `manifestToken` (SHA-256 over the canonically-ordered plan incl. payload). `dryRun`
+   (default true) previews and writes nothing; a write requires the token, recomputed + compared
+   in-transaction — a stale or missing token aborts (409), so a write can only apply the exact
+   reviewed state.
+6. Writes create single-segment rows (deep-copying vcs entries), delete the composite, bump each
+   affected component's `@Version` once, and emit a per-composite audit UPDATE. Idempotent.
+
+Robustness (review-hardened): the collision preflight inspects EVERY intersecting sibling (a segment is
+skipped only when byte-identical + identical ordered payload, and any other intersecting sibling still
+aborts); every produced segment is validated through the production `VersionRangeFactory` (a
+regex-accepted but factory-invalid segment aborts); the manifest token is a control-delimited,
+null-marked, sorted encoding (injective). Configuration rows have no optimistic-lock version, so the
+operation MUST run in a maintenance window with the registry quiesced (no concurrent edits) — the token
+covers the dry-run→write gap, quiescence covers the write itself.
+
+**Acceptance criteria:**
+1. Dry-run returns the manifest + token and writes nothing.
+2. A write splits a composite into its single-segment rows with the vcs payload copied; the original
+   is gone.
+3. Exact-version composites split into `[x]` rows; whitespace is normalized.
+4. A second run is a no-op (idempotent); the BASE `(,0),[0,)` sentinel is never touched.
+5. Fail-closed: non-`vcs.settings` composite, self-overlap, sibling collision with a different
+   payload, malformed range → 409 with no writes (rollback).
+6. A sibling collision with an identical payload skips only that duplicate segment.
+7. A write without a token, or with a token stale after the data changed, → 409 with no writes.
+8. With the flag unset the endpoint is not wired (404).
+
+**Test method:** `CompositeOverrideSplitAdminControllerTest` —
+`SYS-066 dry-run previews without writing`, `SYS-066 write splits with copied payload`,
+`SYS-066 exact-version composite splits`, `SYS-066 idempotent`, `SYS-066 base sentinel untouched`,
+`SYS-066 non-vcs attribute aborts`, `SYS-066 self-overlapping aborts`,
+`SYS-066 sibling collision different payload aborts`, `SYS-066 sibling collision identical payload skips`,
+`SYS-066 write without token aborts`, `SYS-066 stale token aborts`, `SYS-066 malformed range aborts`,
+`SYS-066 all intersecting siblings are inspected`, `SYS-066 composite with invalid segment aborts`;
+`CompositeOverrideSplitDisabledTest` — `SYS-066 endpoint absent when flag off`;
+`VersionRangePartitionTest` — `SYS-066 strict split decomposes composites`,
+`SYS-066 strict split does not check disjointness`, `SYS-066 strict split throws on malformed input`.
