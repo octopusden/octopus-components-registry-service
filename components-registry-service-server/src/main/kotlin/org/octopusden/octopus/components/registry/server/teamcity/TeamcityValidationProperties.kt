@@ -19,9 +19,12 @@ import org.springframework.validation.annotation.Validated
  * All five template/step-id fields are **required and must be non-blank** (`@Validated` + Bean
  * Validation `@NotBlank`/`@NotEmpty`). The application **fails to start** if any is blank or empty.
  * `releaseFamilyTemplateIds` must additionally contain no blank/whitespace-only elements (enforced
- * by [releaseFamilyTemplateIdsHaveNoBlankElements]): a blank id matches no real template, so a
- * release configuration would fall through into `notAttachedToBuildTemplate` and produce false
- * WARNING noise — exactly what the fail-fast contract exists to prevent.
+ * by [isReleaseFamilyTemplateIdsAllNonBlank]): a blank id matches no real template, so a release
+ * configuration would fall through into `notAttachedToBuildTemplate` and produce false WARNING
+ * noise — exactly what the fail-fast contract exists to prevent. (An `@AssertTrue` getter is used
+ * rather than `Set<@NotBlank String>` because Kotlin type-use annotations on a generic argument are
+ * not reliably surfaced to Hibernate Validator as container-element constraints; the method must be
+ * `is`-prefixed so the validator treats it as a bean property and actually evaluates it.)
  */
 @Validated
 @ConfigurationProperties(prefix = "teamcity.validation")
@@ -50,5 +53,5 @@ class TeamcityValidationProperties(
      * blank element such as `[""]` or `["  "]`.
      */
     @AssertTrue(message = "release-family-template-ids must not contain blank/whitespace-only entries")
-    fun releaseFamilyTemplateIdsHaveNoBlankElements(): Boolean = releaseFamilyTemplateIds.all { it.isNotBlank() }
+    fun isReleaseFamilyTemplateIdsAllNonBlank(): Boolean = releaseFamilyTemplateIds.all { it.isNotBlank() }
 }
