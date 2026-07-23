@@ -35,12 +35,6 @@ import org.springframework.test.context.junit.jupiter.SpringExtension
 )
 @ActiveProfiles("common", "no-db")
 class NoDbModeTeamcityValidationOptionalTest {
-    companion object {
-        init {
-            BaseComponentsRegistryServiceTest.configureSpringAppTestDataDir()
-        }
-    }
-
     @Autowired
     private lateinit var ctx: ApplicationContext
 
@@ -61,5 +55,11 @@ class NoDbModeTeamcityValidationOptionalTest {
             ctx.getBeanNamesForType(TemplateCatalog::class.java).isEmpty(),
             "ConfigTemplateCatalog (injects TeamcityValidationProperties) must be absent in no-db mode",
         )
+    }
+
+    companion object {
+        init {
+            BaseComponentsRegistryServiceTest.configureSpringAppTestDataDir()
+        }
     }
 }
