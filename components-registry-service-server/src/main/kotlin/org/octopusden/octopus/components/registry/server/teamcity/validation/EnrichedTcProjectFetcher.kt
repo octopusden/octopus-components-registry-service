@@ -1,5 +1,6 @@
 package org.octopusden.octopus.components.registry.server.teamcity.validation
 
+import org.octopusden.octopus.components.registry.server.config.ConditionalOnDatabaseEnabled
 import org.octopusden.octopus.components.registry.server.teamcity.TeamcityProperties
 import org.octopusden.octopus.components.registry.server.teamcity.TeamcityValidationProperties
 import org.octopusden.octopus.infrastructure.client.commons.ClientParametersProvider
@@ -24,7 +25,11 @@ interface EnrichedTcProjectFetcher {
 /**
  * Per-id enriched fetch with a short-TTL cache. By project id (not the `COMPONENT_NAME` locator), so
  * validation is decoupled from sync and never silently drops a stored project.
+ *
+ * DB-conditional: injects [TeamcityValidationProperties] (registered only with the DB), so it is
+ * absent in no-db mode along with the rest of the validation feature.
  */
+@ConditionalOnDatabaseEnabled
 @Component
 class CachingEnrichedTcProjectFetcher(
     private val properties: TeamcityProperties,

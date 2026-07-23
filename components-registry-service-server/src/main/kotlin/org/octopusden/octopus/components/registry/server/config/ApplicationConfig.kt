@@ -3,7 +3,6 @@ package org.octopusden.octopus.components.registry.server.config
 import org.octopusden.octopus.components.registry.core.dto.ServiceMode
 import org.octopusden.octopus.components.registry.server.model.ServiceStatus
 import org.octopusden.octopus.components.registry.server.teamcity.TeamcityProperties
-import org.octopusden.octopus.components.registry.server.teamcity.TeamcityValidationProperties
 import org.springframework.boot.context.properties.EnableConfigurationProperties
 import org.springframework.context.annotation.Bean
 import org.springframework.context.annotation.Configuration
@@ -15,7 +14,6 @@ import java.util.concurrent.ConcurrentHashMap
     ComponentsRegistryProperties::class,
     AdminConfigProperties::class,
     TeamcityProperties::class,
-    TeamcityValidationProperties::class,
     EmployeeServiceProperties::class,
     ServiceEventProperties::class,
     FeedbackProperties::class,

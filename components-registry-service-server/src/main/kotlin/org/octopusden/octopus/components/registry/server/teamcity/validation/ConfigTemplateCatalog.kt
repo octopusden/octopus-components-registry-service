@@ -1,10 +1,16 @@
 package org.octopusden.octopus.components.registry.server.teamcity.validation
 
+import org.octopusden.octopus.components.registry.server.config.ConditionalOnDatabaseEnabled
 import org.octopusden.octopus.components.registry.server.teamcity.TeamcityValidationProperties
 import org.octopusden.octopus.validation.dto.teamcity.TemplateCatalog
 import org.springframework.stereotype.Component
 
-/** Supplies the module's `TemplateCatalog` from `teamcity.validation.*` config (decision D2). */
+/**
+ * Supplies the module's `TemplateCatalog` from `teamcity.validation.*` config.
+ * DB-conditional: it injects [TeamcityValidationProperties], which is only registered when the
+ * database (and thus the validation feature) is enabled.
+ */
+@ConditionalOnDatabaseEnabled
 @Component
 class ConfigTemplateCatalog(
     properties: TeamcityValidationProperties,
