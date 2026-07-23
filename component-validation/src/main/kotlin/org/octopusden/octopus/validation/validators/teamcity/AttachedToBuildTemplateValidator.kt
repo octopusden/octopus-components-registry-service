@@ -18,8 +18,8 @@ class AttachedToBuildTemplateValidator(
         return if (attached.size == 1) {
             ValidationResult(type, Status.OK, "Attached to a build template: ${attached.first().id}")
         } else if (attached.size > 1) {
-            val ids = attached.joinToString(", ") { it.id }
-            ValidationResult(type, Status.WARNING, "Multiple build configurations are attached to a build template: $ids")
+            val ids = attached.joinToString("\n") { "- ${it.id}" }
+            ValidationResult(type, Status.WARNING, "Multiple build configurations are attached to a build template:\n$ids")
         } else {
             ValidationResult(type, Status.WARNING, "No build configuration is attached to a build template")
         }

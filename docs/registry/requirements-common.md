@@ -78,7 +78,7 @@
 | SYS-078 | `component-validation` module: `USES_OLD_JAVA_VERSION` is WARNING if any resolved Java version is 1.8 (every uninherited step across every configuration, plus each attached configuration's default build step regardless of its own inherited flag), OK if versions resolved but none is 1.8, NOT_APPLICABLE if nothing Java was inspected; an unresolved version is ignored, not flagged                                                                                                                                                                                                                                                                                                                                                                                                                                             | High | unit-test | ✅ Tested |
 | SYS-079 | `component-validation` module: `ValidatorSuite.validate` isolates a throwing validator as a single `Status.ERROR` result instead of losing every other check's result                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                     | Medium | unit-test | ✅ Tested |
 | SYS-080 | `component-validation` module: `JavaVersion.isEight` is true only for the exact `"1.8"` / `"8"` spellings; `JavaVersionResolver` normalizes marker-bearing real-world values (`"env.JDK_ZULU_17_x64"`, `"/opt/java/openjdk-11"`, etc. — a value with no `jdk`/`java`/`jvm` marker never resolves) down to that major-version form before `isEight` is checked                                                                                                                                                                                                                                                                                                                                                                                                                                                                           | Medium | unit-test | ✅ Tested |
-| SYS-081 | `component-validation` module: `TeamCityValidators` (the suite) returns exactly the six TeamCity results for a given project, each with the status the individual checks would produce in isolation                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                     | High | unit-test | ✅ Tested |
+| SYS-081 | `component-validation` module: `TeamCityValidators` (the suite) returns exactly the seven TeamCity results for a given project, each with the status the individual checks would produce in isolation                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                     | High | unit-test | ✅ Tested |
 | SYS-082 | `component-validation` module: `BuildStepToolVersionResolver` — given one `BuildStep`, dispatch by `StepType` (Maven/Gradle/command-line) to read the right parameter(s), recursively resolve `%param%` references via `ParameterReferenceResolver`, and derive `Set<ToolVersion>` via the per-tool `ValueVersionResolver`s (`JavaVersionResolver`, `MavenVersionResolver`)                                                                                                                                                                                                                                                                                                                                                                                                                                                             | High | unit-test | ✅ Tested |
 | SYS-083 | `component-validation` module: `MULTIPLE_JAVA_VERSIONS` is WARNING when more than one distinct Java version is found across the same inspected steps as `USES_OLD_JAVA_VERSION`, OK for zero or one distinct version, NOT_APPLICABLE if nothing was inspectable                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                         | High | unit-test | ✅ Tested |
 | SYS-084 | `component-validation` module: `MULTIPLE_MAVEN_VERSIONS` is WARNING when more than one distinct Maven version is found across the same inspected steps, OK for zero or one distinct version, NOT_APPLICABLE if nothing was inspectable                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                  | High | unit-test | ✅ Tested |
@@ -90,6 +90,7 @@
 | SYS-090 | `POST /admin/teamcity-validation` returns 202 Accepted with the freshly-started job for a new run, 409 Conflict with the existing job's state when attaching to an already-RUNNING validation (same-kind), and 409 Conflict with a structured conflict envelope for a cross-kind gate conflict; `GET /admin/teamcity-validation/job` returns the latest known state or 404 if none; both endpoints are IMPORT_DATA-gated (401 anonymous, 403 non-IMPORT_DATA)                                                                                                                                                                                                                                                                                                                                                                           | High | integration-test | ✅ Tested |
 | SYS-091 | Component detail (`GET /rest/api/4/components/{id}`) embeds stored WARNING/ERROR findings per linked TeamCity project as `{type, status, message, updatedAt}`; a project with no stored findings is presented as clean (no entries), not as "not yet validated" vs "validated clean"                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                    | Medium | integration-test | ✅ Tested |
 | SYS-092 | The admin dashboard read APIs (`GET /admin/teamcity-validations` + `.../summary`) join stored findings back to their owning component(s) via `version_line`, de-duplicate a component reachable through more than one version line to the same project, and count DISTINCT components (not raw finding rows) per type/status; both endpoints are IMPORT_DATA-gated                                                                                                                                                                                                                                                                                                                                                                                                                                                                      | High | unit + integration-test | ✅ Tested |
+| SYS-093 | `component-validation` module: `JAVA_HOME_NOT_FROM_ENV` is WARNING when a build step resolves a Java version whose java-home (`target.jdk.home`, or a java-resolving command-line token) does not reference `%env.JAVA_HOME%` at any point in its recursive parameter-reference chain — i.e. it points at a specific JDK directly instead of the agent's configured default; OK when every resolved java-home goes through `%env.JAVA_HOME%`, NOT_APPLICABLE when nothing Java was inspectable                                                                                                                                                                                                                                                                                                                                            | High | unit-test | ✅ Tested |
 
 ---
 
@@ -2390,7 +2391,7 @@ build-type fallback, archived/all-paused exclusion); v4 PATCH preservation in
 
 New pure-Kotlin module `component-validation` validates
 TeamCity projects: input in (`TeamcityProject`), `List<ValidationResult>` out — no Spring, no
-DB, no TeamCity-client dependency, no IO. `ATTACHED_TO_BUILD_TEMPLATE` is the first of its six
+DB, no TeamCity-client dependency, no IO. `ATTACHED_TO_BUILD_TEMPLATE` is the first of its seven
 checks: is any build configuration attached to a build template (`CDGradleBuild` /
 `CDJavaMavenBuild` in the real deployment; the module itself takes a `TemplateCatalog` and knows
 no concrete ids)?
@@ -2541,19 +2542,20 @@ all, resolves to `null`.
 ### SYS-081: component-validation — TeamCityValidators suite, end to end
 
 **Description:**
-`TeamCityValidators` wires the six validators together over one shared `BuildConfigurationResolver`
-/ `BuildStepResolver` pair and returns exactly six `ValidationResult`s per `validate(project)`
+`TeamCityValidators` wires the seven validators together over one shared `BuildConfigurationResolver`
+/ `BuildStepResolver` pair and returns exactly seven `ValidationResult`s per `validate(project)`
 call, matching what each validator would independently produce.
 
 **Acceptance criteria:**
-1. A well-behaved project (attached, inherited default step, modern Java, no custom steps) →
-   all six checks `OK`.
+1. A well-behaved project (attached, inherited default step, modern Java resolved via
+   `%env.JAVA_HOME%`, no custom steps) → all seven checks `OK`.
 2. An unattached project with an old-Java custom command-line step → `ATTACHED_TO_BUILD_TEMPLATE`
    `WARNING`, `OVERRIDES_DEFAULT_BUILD_STEP` `NOT_APPLICABLE`, `HAS_CUSTOM_BUILD_STEP` `WARNING`,
    `USES_OLD_JAVA_VERSION` `WARNING`, both `MULTIPLE_*_VERSIONS` `OK` (only one distinct version
-   of either tool resolves).
+   of either tool resolves), `JAVA_HOME_NOT_FROM_ENV` `WARNING` (the java token is a literal
+   `env.JDK_1_8`, not a `%env.JAVA_HOME%` reference).
 
-**Test method:** `TeamCityValidatorsTest` — `SYS-081 well-behaved project resolves all six checks`,
+**Test method:** `TeamCityValidatorsTest` — `SYS-081 well-behaved project resolves all seven checks`,
 `SYS-081 unattached project with custom java 8 step`.
 
 ### SYS-082: component-validation — BuildStepToolVersionResolver (per-step-type tool-version dispatch)
@@ -2961,3 +2963,41 @@ counts DISTINCT components per type/status rather than raw finding rows. Both en
 `TeamcityValidationControllerV4SecurityTest` —
 `SYS_092_listAnonymousReturns401`, `SYS_092_listEditorReturns403`, `SYS_092_listAdminReturns200`,
 `SYS_092_summaryAnonymousReturns401`, `SYS_092_summaryEditorReturns403`, `SYS_092_summaryAdminReturns200`.
+
+### SYS-093: component-validation — java-home must resolve from %env.JAVA_HOME%
+
+**Priority:** High
+**Test layer:** unit-test
+**Status:** ✅ Tested
+
+**Description:**
+`EnvJavaHomeValidator` (`JAVA_HOME_NOT_FROM_ENV`) inspects every `relevantBuildSteps` step that
+resolves a Java version and asks whether that step's java-home reached its value through the
+standard `%env.JAVA_HOME%` reference. The java-home source is step-type specific — `target.jdk.home`
+for `GRADLE`/`MAVEN` runner steps, and each java-resolving `script.content` token for
+`COMMAND_LINE` steps. `JavaHomeReferenceResolver` collects the full set of `%paramName%` references
+traversed while (recursively) expanding that source — via
+`ParameterReferenceResolver.collectReferencedParameters` — **including references to parameters not
+present in the bag** (`%env.JAVA_HOME%` is typically an agent env var, not a build-config
+parameter, so it appears as an unresolved-but-referenced name). A step whose java-home resolves a
+version but never references `%env.JAVA_HOME%` is pointing at a specific JDK directly (e.g.
+`target.jdk.home = %env.JDK_17%`), bypassing the agent's configured default — a `WARNING`.
+
+**Acceptance criteria:**
+1. A step whose java-home reference chain includes `%env.JAVA_HOME%` (directly or through an
+   intermediate parameter) is `OK`.
+2. A step that resolves a Java version from a java-home that never references `%env.JAVA_HOME%`
+   (e.g. `%env.JDK_17%` or a literal path) is `WARNING`.
+3. A reference to `%env.JAVA_HOME%` counts even when that parameter is absent from the bag (agent
+   env var).
+4. Steps that resolve no Java version are not evaluated (no spurious `WARNING`); when nothing Java
+   is inspectable the result is `NOT_APPLICABLE`.
+
+**Test method:** `EnvJavaHomeValidatorTest` —
+`WARNING when java home is a direct jdk reference`, `OK when java home is env JAVA_HOME`,
+`OK when java home reaches env JAVA_HOME indirectly`, `WARNING for command line java token not from env`,
+`OK ignores steps with no resolvable java`, `NOT_APPLICABLE when nothing to inspect`;
+`JavaHomeReferenceResolverTest` (reference tracing);
+`ParameterReferenceResolverTest` — `collect records the whole reference chain`,
+`collect records missing reference`, `collect is cycle safe`.
+(These support tests carry no SYS id, matching the convention for the other resolver-level tests.)

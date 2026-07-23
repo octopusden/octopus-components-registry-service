@@ -12,8 +12,8 @@ class TeamCityValidatorsTest {
     private val suite = TeamCityValidators(catalog = TestTemplateCatalog)
 
     @Test
-    @DisplayName("SYS-081: the suite returns exactly the six TeamCity results, in a well-behaved project")
-    fun `SYS-081 well-behaved project resolves all six checks`() {
+    @DisplayName("SYS-081: the suite returns exactly the seven TeamCity results, in a well-behaved project")
+    fun `SYS-081 well-behaved project resolves all seven checks`() {
         val config = buildConfig(
             "Gradle",
             templateIds = setOf(GRADLE_TEMPLATE_ID),
@@ -22,7 +22,12 @@ class TeamCityValidatorsTest {
                     GRADLE_DEFAULT_STEP_ID,
                     StepType.GRADLE,
                     inherited = true,
-                    parameters = params("target.jdk.home" to "env.JDK_21"),
+                    // Java-home resolves to 21 AND goes through the standard %env.JAVA_HOME% reference,
+                    // so JAVA_HOME_NOT_FROM_ENV stays OK alongside the version checks.
+                    parameters = params(
+                        "target.jdk.home" to "%env.JAVA_HOME%",
+                        "env.JAVA_HOME" to "/usr/lib/jvm/java-21-openjdk",
+                    ),
                 ),
             ),
         )
@@ -38,6 +43,7 @@ class TeamCityValidatorsTest {
                 TeamCityValidationType.USES_OLD_JAVA_VERSION to Status.OK,
                 TeamCityValidationType.MULTIPLE_JAVA_VERSIONS to Status.OK,
                 TeamCityValidationType.MULTIPLE_MAVEN_VERSIONS to Status.OK,
+                TeamCityValidationType.JAVA_HOME_NOT_FROM_ENV to Status.OK,
             ),
             results.map { (it.type as TeamCityValidationType) to it.status },
         )
@@ -67,5 +73,6 @@ class TeamCityValidatorsTest {
         assertEquals(Status.WARNING, results[TeamCityValidationType.USES_OLD_JAVA_VERSION]?.status)
         assertEquals(Status.OK, results[TeamCityValidationType.MULTIPLE_JAVA_VERSIONS]?.status)
         assertEquals(Status.OK, results[TeamCityValidationType.MULTIPLE_MAVEN_VERSIONS]?.status)
+        assertEquals(Status.WARNING, results[TeamCityValidationType.JAVA_HOME_NOT_FROM_ENV]?.status)
     }
 }

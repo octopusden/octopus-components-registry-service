@@ -24,6 +24,30 @@ object ParameterReferenceResolver {
         value: String,
     ): String? = resolveValue(parameters, value, mutableSetOf())
 
+    /**
+     * Answers "does this parameter's value ever go through `%X%`?" — e.g. whether a `target.jdk.home`
+     * ultimately references `%env.JAVA_HOME%` — which the resolved text alone cannot tell you once
+     * the reference has been substituted away.
+     */
+    fun collectReferencedParameters(
+        parameters: Parameters,
+        parameterName: String,
+    ): Set<String> {
+        val acc = mutableSetOf<String>()
+        collectFromParam(parameters, parameterName, mutableSetOf(), acc)
+        return acc
+    }
+
+    /** As [collectReferencedParameters] but starting from an arbitrary [value] rather than a named parameter. */
+    fun collectReferencedParametersInValue(
+        parameters: Parameters,
+        value: String,
+    ): Set<String> {
+        val acc = mutableSetOf<String>()
+        collectFromValue(parameters, value, mutableSetOf(), acc)
+        return acc
+    }
+
     private fun resolveParam(
         parameters: Parameters,
         name: String,
@@ -59,6 +83,30 @@ object ParameterReferenceResolver {
             searchFrom = 0 // restart: the replacement text may itself contain references
         }
         return current
+    }
+
+    private fun collectFromParam(
+        parameters: Parameters,
+        name: String,
+        visited: MutableSet<String>,
+        acc: MutableSet<String>,
+    ) {
+        if (!visited.add(name)) return
+        parameters[name]?.let { collectFromValue(parameters, it, visited, acc) }
+        visited.remove(name)
+    }
+
+    private fun collectFromValue(
+        parameters: Parameters,
+        value: String,
+        visited: MutableSet<String>,
+        acc: MutableSet<String>,
+    ) {
+        REFERENCE.findAll(value).forEach { match ->
+            val refName = match.groupValues[1]
+            acc.add(refName)
+            collectFromParam(parameters, refName, visited, acc)
+        }
     }
 
     private val REFERENCE = Regex("""%([\w.\-]+)%""")

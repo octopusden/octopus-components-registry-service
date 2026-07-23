@@ -104,4 +104,58 @@ class ParameterReferenceResolverTest {
 
         assertEquals("plain-value", ParameterReferenceResolver.resolveValue(parameters, "plain-value"))
     }
+
+    @Test
+    @DisplayName("collectReferencedParameters records every reference name traversed through the chain")
+    fun `collect records the whole reference chain`() {
+        val parameters = params(
+            "target.jdk.home" to "%custom.jdk%",
+            "custom.jdk" to "%env.JAVA_HOME%",
+            "env.JAVA_HOME" to "/opt/jdk-21",
+        )
+
+        assertEquals(
+            setOf("custom.jdk", "env.JAVA_HOME"),
+            ParameterReferenceResolver.collectReferencedParameters(parameters, "target.jdk.home"),
+        )
+    }
+
+    @Test
+    @DisplayName("collectReferencedParameters records a reference to a missing parameter")
+    fun `collect records missing reference`() {
+        val parameters = params("target.jdk.home" to "%env.JAVA_HOME%")
+
+        assertEquals(
+            setOf("env.JAVA_HOME"),
+            ParameterReferenceResolver.collectReferencedParameters(parameters, "target.jdk.home"),
+        )
+    }
+
+    @Test
+    @DisplayName("collectReferencedParameters is cycle-safe")
+    fun `collect is cycle safe`() {
+        val parameters = params("a" to "%b%", "b" to "%a%")
+
+        assertEquals(setOf("a", "b"), ParameterReferenceResolver.collectReferencedParameters(parameters, "a"))
+    }
+
+    @Test
+    @DisplayName("collectReferencedParameters is empty when the parameter is absent or has no references")
+    fun `collect empty when no references`() {
+        val parameters = params("target.jdk.home" to "/opt/jdk-21")
+
+        assertEquals(emptySet(), ParameterReferenceResolver.collectReferencedParameters(parameters, "target.jdk.home"))
+        assertEquals(emptySet(), ParameterReferenceResolver.collectReferencedParameters(parameters, "missing"))
+    }
+
+    @Test
+    @DisplayName("collectReferencedParametersInValue records references embedded in an arbitrary value")
+    fun `collect in value`() {
+        val parameters = params("env.JAVA_HOME" to "/opt/jdk-21")
+
+        assertEquals(
+            setOf("env.JAVA_HOME"),
+            ParameterReferenceResolver.collectReferencedParametersInValue(parameters, "%env.JAVA_HOME%/bin/java"),
+        )
+    }
 }

@@ -30,7 +30,7 @@ class OverridesDefaultBuildStepValidator(
             ValidationResult(
                 type,
                 Status.WARNING,
-                "Default build step overridden in build configuration(s): ${overridden.joinToString(", ") { it.id }}",
+                "Default build step overridden in build configuration(s):\n${overridden.joinToString("\n") { "- ${it.id}" }}",
             )
         } else {
             ValidationResult(type, Status.OK, "Default build step inherited in all attached configurations")

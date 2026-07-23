@@ -44,4 +44,4 @@ internal fun relevantBuildSteps(
 internal fun describe(
     configuration: BuildConfiguration,
     step: BuildStep,
-): String = "- ${step.name} (${step.id}) in ${configuration.name ?: configuration.id}"
+): String = "- ${step.id} in ${configuration.id}"

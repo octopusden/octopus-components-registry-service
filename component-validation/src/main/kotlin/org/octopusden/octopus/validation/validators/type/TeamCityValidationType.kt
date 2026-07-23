@@ -2,7 +2,7 @@ package org.octopusden.octopus.validation.validators.type
 
 import org.octopusden.octopus.validation.core.ValidationType
 
-/** The six TeamCity project questions. */
+/** The seven TeamCity project questions. */
 enum class TeamCityValidationType : ValidationType {
     /** Is any build configuration attached to default build template? */
     ATTACHED_TO_BUILD_TEMPLATE,
@@ -21,6 +21,12 @@ enum class TeamCityValidationType : ValidationType {
 
     /** Do the uninherited build steps and the default build step resolve to more than one distinct Maven version? */
     MULTIPLE_MAVEN_VERSIONS,
+
+    /**
+     * Does any build step resolve a Java version whose java-home does NOT go through the standard
+     * `%env.JAVA_HOME%` reference?
+     */
+    JAVA_HOME_NOT_FROM_ENV,
     ;
 
     override val id get() = name
