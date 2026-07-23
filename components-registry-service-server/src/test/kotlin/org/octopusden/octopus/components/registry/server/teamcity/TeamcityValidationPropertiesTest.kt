@@ -66,7 +66,13 @@ class TeamcityValidationPropertiesTest {
     fun `blank release family element fails`() {
         val violations = validator.validate(props(releaseFamily = setOf("CDRelease", "")))
         assertEquals(1, violations.size)
-        assertTrue(violations.first().propertyPath.toString().startsWith("releaseFamilyTemplateIds"))
+        assertTrue(
+            violations
+                .first()
+                .propertyPath
+                .toString()
+                .startsWith("releaseFamilyTemplateIds"),
+        )
     }
 
     @Test
@@ -74,7 +80,13 @@ class TeamcityValidationPropertiesTest {
     fun `whitespace release family element fails`() {
         val violations = validator.validate(props(releaseFamily = setOf("CDRelease", "   ")))
         assertEquals(1, violations.size)
-        assertTrue(violations.first().propertyPath.toString().startsWith("releaseFamilyTemplateIds"))
+        assertTrue(
+            violations
+                .first()
+                .propertyPath
+                .toString()
+                .startsWith("releaseFamilyTemplateIds"),
+        )
     }
 
     @Test
