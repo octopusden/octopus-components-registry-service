@@ -41,10 +41,11 @@ class JavaHomeReferenceResolver(
         return rawScript
             .split(WHITESPACE)
             .filter { it.isNotBlank() }
-            .filter { token -> javaVersionResolver.resolve(
-                ParameterReferenceResolver.resolveValue(step.parameters, token) ?: token
-            ) != null }
-            .flatMap { token -> ParameterReferenceResolver.collectReferencedParametersInValue(step.parameters, token) }
+            .filter { token ->
+                javaVersionResolver.resolve(
+                    ParameterReferenceResolver.resolveValue(step.parameters, token) ?: token,
+                ) != null
+            }.flatMap { token -> ParameterReferenceResolver.collectReferencedParametersInValue(step.parameters, token) }
             .toSet()
     }
 
