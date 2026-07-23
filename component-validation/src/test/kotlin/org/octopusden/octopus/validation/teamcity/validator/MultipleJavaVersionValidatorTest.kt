@@ -111,7 +111,7 @@ class MultipleJavaVersionValidatorTest {
 
         assertEquals(Status.WARNING, result.status)
         assertTrue(result.message!!.startsWith("Multiple Java versions found:\n"))
-        assertTrue(result.message!!.contains("21:\n- $GRADLE_DEFAULT_STEP_ID ($GRADLE_DEFAULT_STEP_ID) in Gradle"))
-        assertTrue(result.message!!.contains("17:\n- s1 (s1) in Plain"))
+        assertTrue(result.message!!.contains("21:\n- $GRADLE_DEFAULT_STEP_ID in Gradle"))
+        assertTrue(result.message!!.contains("17:\n- s1 in Plain"))
     }
 }

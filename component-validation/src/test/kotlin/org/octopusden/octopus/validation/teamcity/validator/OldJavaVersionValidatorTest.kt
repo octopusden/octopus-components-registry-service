@@ -49,7 +49,7 @@ class OldJavaVersionValidatorTest {
 
         val result = validator.validate(tcProject(configs = listOf(config)))
         assertEquals(Status.WARNING, result.status)
-        assertTrue(result.message!!.contains("$GRADLE_DEFAULT_STEP_ID ($GRADLE_DEFAULT_STEP_ID) in Gradle"))
+        assertTrue(result.message!!.contains("$GRADLE_DEFAULT_STEP_ID in Gradle"))
     }
 
     @Test

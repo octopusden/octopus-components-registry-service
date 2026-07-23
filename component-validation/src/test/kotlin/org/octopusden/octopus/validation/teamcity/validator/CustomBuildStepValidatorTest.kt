@@ -119,6 +119,6 @@ class CustomBuildStepValidatorTest {
         val result = validator.validate(tcProject(configs = listOf(plainConfig)))
 
         assertEquals(Status.WARNING, result.status)
-        assertTrue(result.message!!.contains("s1 (s1) in Plain"))
+        assertTrue(result.message!!.contains("s1 in Plain"))
     }
 }
