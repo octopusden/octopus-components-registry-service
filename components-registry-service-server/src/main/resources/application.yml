@@ -100,6 +100,12 @@ teamcity:
   password:
   sync:
     cron: "0 0 4 * * SUN"
+  validation:
+    gradle-build-template-id:
+    maven-build-template-id:
+    release-family-template-ids: []
+    gradle-default-build-step-id:
+    maven-default-build-step-id:
 
 # Employee-service active-employee validation. Defaults are inert: with
 # `enabled` false (and `url` blank) no EmployeeServiceClient bean is wired, so

@@ -3,22 +3,15 @@ package org.octopusden.octopus.components.registry.server.teamcity
 import org.springframework.boot.context.properties.ConfigurationProperties
 
 /**
- * Configuration for the TeamCity sync engine. Bound from `teamcity.*` in
- * application*.yml (defaults below).
- *
- * Defaults are intentionally inert: with `base-url` blank and `sync.enabled`
- * false, the [TeamcitySyncScheduler] bean is not registered — so dev /
- * unconfigured envs boot cleanly without TC credentials. The manual admin
- * resync endpoint will throw when `base-url` is blank, which is the intended
- * behavior (surfaces misconfiguration). Production wires through
- * `service-config` per env.
+ * Shared TeamCity config (`teamcity.*`); in `teamcity.common` so both `sync` and `validation` use it.
+ * Inert by default (blank `base-url` / `sync.enabled=false`) so unconfigured envs boot cleanly.
  */
 @ConfigurationProperties(prefix = "teamcity")
 class TeamcityProperties(
     /**
      * Base URL of the TC server, e.g. `https://teamcity.example.com`.
      * Trailing slashes are tolerated. Blank is a misconfiguration —
-     * [TeamcitySyncService] throws [IllegalStateException] so the caller
+     * `TeamcitySyncService` throws [IllegalStateException] so the caller
      * surfaces the error rather than silently returning all-NO_MATCH. Set via
      * `teamcity.base-url` in service-config (components-registry-service.yml).
      */

@@ -4,6 +4,7 @@ import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.Assertions.assertNotNull
 import org.junit.jupiter.api.Assertions.assertNull
 import org.junit.jupiter.api.Assertions.assertTrue
+import org.junit.jupiter.api.DisplayName
 import org.junit.jupiter.api.RepeatedTest
 import org.junit.jupiter.api.Test
 import org.octopusden.octopus.components.registry.server.service.MigrationLifecycleGate
@@ -87,6 +88,44 @@ class MigrationLifecycleGateTest {
         val conflict = gate.tryClaim(JobKind.HISTORY, "history-1")
         assertNull(conflict, "after release, a different kind must be able to claim")
         assertEquals(JobKind.HISTORY, gate.current()!!.kind)
+    }
+
+    @Test
+    @DisplayName("SYS-089: same-kind TC_VALIDATION second tryClaim attaches to the existing owner")
+    fun `SYS-089 same-kind TC_VALIDATION second tryClaim attaches to the existing owner`() {
+        val gate = MigrationLifecycleGate()
+        gate.tryClaim(JobKind.TC_VALIDATION, "validation-1")
+        val conflict = gate.tryClaim(JobKind.TC_VALIDATION, "validation-2")
+        assertNotNull(conflict, "a second TC_VALIDATION claim while one is RUNNING must attach, not start a duplicate")
+        assertEquals(JobKind.TC_VALIDATION, conflict!!.kind)
+        assertEquals("validation-1", conflict.jobId, "owner must remain the first job")
+    }
+
+    @Test
+    @DisplayName("SYS-089: starting TC_VALIDATION while COMPONENTS is RUNNING reports the COMPONENTS owner")
+    fun `SYS-089 starting TC_VALIDATION while COMPONENTS is RUNNING reports the COMPONENTS owner`() {
+        val gate = MigrationLifecycleGate()
+        gate.tryClaim(JobKind.COMPONENTS, "components-1")
+        val conflict = gate.tryClaim(JobKind.TC_VALIDATION, "validation-1")
+        assertNotNull(conflict, "TC_VALIDATION must be rejected while COMPONENTS holds the gate")
+        assertEquals(JobKind.COMPONENTS, conflict!!.kind)
+        assertEquals("components-1", conflict.jobId)
+    }
+
+    @Test
+    @DisplayName("SYS-089: starting COMPONENTS or TC_RESYNC while TC_VALIDATION is RUNNING is also rejected")
+    fun `SYS-089 starting COMPONENTS or TC_RESYNC while TC_VALIDATION is RUNNING is also rejected`() {
+        val gate = MigrationLifecycleGate()
+        gate.tryClaim(JobKind.TC_VALIDATION, "validation-1")
+
+        val componentsConflict = gate.tryClaim(JobKind.COMPONENTS, "components-1")
+        assertNotNull(componentsConflict, "COMPONENTS must be rejected while TC_VALIDATION holds the gate")
+        assertEquals(JobKind.TC_VALIDATION, componentsConflict!!.kind)
+
+        val resyncConflict = gate.tryClaim(JobKind.TC_RESYNC, "resync-1")
+        assertNotNull(resyncConflict, "TC_RESYNC must likewise be rejected while TC_VALIDATION holds the gate")
+        assertEquals(JobKind.TC_VALIDATION, resyncConflict!!.kind)
+        assertEquals("validation-1", resyncConflict.jobId)
     }
 
     /**

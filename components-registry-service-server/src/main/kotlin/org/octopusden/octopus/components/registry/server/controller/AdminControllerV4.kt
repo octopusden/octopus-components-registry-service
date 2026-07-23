@@ -1,10 +1,15 @@
 package org.octopusden.octopus.components.registry.server.controller
 
+import io.swagger.v3.oas.annotations.media.Content
+import io.swagger.v3.oas.annotations.media.Schema
+import io.swagger.v3.oas.annotations.responses.ApiResponse
+import io.swagger.v3.oas.annotations.responses.ApiResponses
 import org.octopusden.octopus.components.registry.server.config.ConditionalOnDatabaseEnabled
 import org.octopusden.octopus.components.registry.server.dto.v4.HistoryMigrationJobResponse
 import org.octopusden.octopus.components.registry.server.dto.v4.MigrationConflictResponse
 import org.octopusden.octopus.components.registry.server.dto.v4.MigrationJobResponse
 import org.octopusden.octopus.components.registry.server.dto.v4.TeamcitySyncJobResponse
+import org.octopusden.octopus.components.registry.server.dto.v4.TeamcityValidationJobResponse
 import org.octopusden.octopus.components.registry.server.security.CurrentUserResolver
 import org.octopusden.octopus.components.registry.server.service.BatchMigrationResult
 import org.octopusden.octopus.components.registry.server.service.ForceResetOutcome
@@ -17,7 +22,8 @@ import org.octopusden.octopus.components.registry.server.service.MigrationResult
 import org.octopusden.octopus.components.registry.server.service.MigrationStatus
 import org.octopusden.octopus.components.registry.server.service.ValidationResult
 import org.octopusden.octopus.components.registry.server.service.impl.ConfigValidationException
-import org.octopusden.octopus.components.registry.server.teamcity.TeamcitySyncJobService
+import org.octopusden.octopus.components.registry.server.teamcity.sync.TeamcitySyncJobService
+import org.octopusden.octopus.components.registry.server.teamcity.validation.TeamcityValidationJobService
 import org.springframework.cloud.context.refresh.ContextRefresher
 import org.springframework.http.HttpStatus
 import org.springframework.http.ResponseEntity
@@ -40,6 +46,7 @@ class AdminControllerV4(
     private val migrationJobService: MigrationJobService,
     private val historyMigrationJobService: HistoryMigrationJobService,
     private val teamcitySyncJobService: TeamcitySyncJobService,
+    private val teamcityValidationJobService: TeamcityValidationJobService,
     private val contextRefresher: ContextRefresher,
     private val currentUserResolver: CurrentUserResolver,
 ) {
@@ -222,6 +229,23 @@ class AdminControllerV4(
      * surface a clear "something else is running" message.
      */
     @PostMapping("/teamcity-project-ids/sync")
+    @ApiResponses(
+        ApiResponse(responseCode = "202", description = "A new TC resync job was started"),
+        ApiResponse(
+            responseCode = "409",
+            description = "Same-kind attach: a TC resync is already running, body is the in-flight " +
+                "TeamcitySyncJobResponse. Cross-kind conflict: another migration kind (components " +
+                "migration, history migration, or TC validation) is running, body is a " +
+                "MigrationConflictResponse describing which one.",
+            content = [
+                Content(
+                    schema = Schema(
+                        oneOf = [TeamcitySyncJobResponse::class, MigrationConflictResponse::class],
+                    ),
+                ),
+            ],
+        ),
+    )
     fun startTeamcitySync(): ResponseEntity<TeamcitySyncJobResponse> {
         val outcome = teamcitySyncJobService.startAsync(currentUserResolver.currentUsername())
         val httpStatus = if (outcome.isNewlyStarted) HttpStatus.ACCEPTED else HttpStatus.CONFLICT
@@ -239,6 +263,43 @@ class AdminControllerV4(
     }
 
     /**
+     * Kick off a TeamCity Java/Maven validation run on the background executor.
+     * 202 with the freshly-started job, or (same-kind attach) the running job's
+     * state with 409; a cross-kind conflict is mapped to a structured 409 by
+     * [handleCrossKindConflict].
+     */
+    @PostMapping("/teamcity-validation")
+    @ApiResponses(
+        ApiResponse(responseCode = "202", description = "A new TC validation job was started"),
+        ApiResponse(
+            responseCode = "409",
+            description = "Same-kind attach: a TC validation is already running, body is the " +
+                "in-flight TeamcityValidationJobResponse. Cross-kind conflict: another migration " +
+                "kind (components migration, history migration, or TC resync) is running, body is " +
+                "a MigrationConflictResponse describing which one.",
+            content = [
+                Content(
+                    schema = Schema(
+                        oneOf = [TeamcityValidationJobResponse::class, MigrationConflictResponse::class],
+                    ),
+                ),
+            ],
+        ),
+    )
+    fun startTeamcityValidation(): ResponseEntity<TeamcityValidationJobResponse> {
+        val outcome = teamcityValidationJobService.startAsync(currentUserResolver.currentUsername())
+        val httpStatus = if (outcome.isNewlyStarted) HttpStatus.ACCEPTED else HttpStatus.CONFLICT
+        return ResponseEntity.status(httpStatus).body(TeamcityValidationJobResponse.from(outcome.state))
+    }
+
+    /** Latest known TeamCity validation job state, or 404 if none. */
+    @GetMapping("/teamcity-validation/job")
+    fun getTeamcityValidationJob(): ResponseEntity<TeamcityValidationJobResponse> {
+        val state = teamcityValidationJobService.current() ?: return ResponseEntity.notFound().build()
+        return ResponseEntity.ok(TeamcityValidationJobResponse.from(state))
+    }
+
+    /**
      * Map cross-kind gate conflicts to a structured 409. Same-kind 409 is
      * NOT routed here — it returns from startAsync as `isNewlyStarted=false`
      * with the existing job state body so the SPA can attach.
@@ -250,6 +311,7 @@ class AdminControllerV4(
                 MigrationLifecycleGate.JobKind.COMPONENTS -> "components-migration-running"
                 MigrationLifecycleGate.JobKind.HISTORY -> "history-migration-running"
                 MigrationLifecycleGate.JobKind.TC_RESYNC -> "tc-resync-running"
+                MigrationLifecycleGate.JobKind.TC_VALIDATION -> "tc-validation-running"
             }
         return ResponseEntity.status(HttpStatus.CONFLICT).body(
             MigrationConflictResponse(

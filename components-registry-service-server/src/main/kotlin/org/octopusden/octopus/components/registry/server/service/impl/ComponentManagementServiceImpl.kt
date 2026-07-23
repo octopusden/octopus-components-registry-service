@@ -82,6 +82,7 @@ import org.octopusden.octopus.components.registry.server.repository.Distribution
 import org.octopusden.octopus.components.registry.server.repository.LabelRepository
 import org.octopusden.octopus.components.registry.server.repository.SystemRepository
 import org.octopusden.octopus.components.registry.server.repository.TeamcityProjectRepository
+import org.octopusden.octopus.components.registry.server.repository.TeamcityValidationRepository
 import org.octopusden.octopus.components.registry.server.repository.ToolRepository
 import org.octopusden.octopus.components.registry.server.security.CurrentUserResolver
 import org.octopusden.octopus.components.registry.server.security.PermissionEvaluator
@@ -156,6 +157,10 @@ class ComponentManagementServiceImpl(
     // Defaulted so the few unit tests that construct this service directly need
     // no new wiring; Spring injects the singleton bean in production.
     private val auditCorrelationIdProvider: AuditCorrelationIdProvider = AuditCorrelationIdProvider(),
+    // Defaulted (nullable) so unit tests constructing this service directly need no new wiring;
+    // Spring injects the singleton bean in production. Used to attach TeamCity validation findings
+    // onto the component detail response (see toDetail / attachTeamcityValidations).
+    private val teamcityValidationRepository: TeamcityValidationRepository? = null,
 ) : ComponentManagementService {
     // ConfigHelper is constructed lazily because it touches the Spring
     // Environment on first access; mirrors the pattern used by
@@ -3261,13 +3266,41 @@ class ComponentManagementServiceImpl(
      * preview needs the negative-lookahead, which depends on OTHER components' claims).
      */
     private fun toDetail(entity: ComponentEntity): ComponentDetailResponse {
-        val response = entity.toDetailResponse(teamcityProperties.baseUrl)
+        val response = attachTeamcityValidations(entity.toDetailResponse(teamcityProperties.baseUrl))
         val patterns = ownershipExportPatterns(entity)
         if (patterns.isEmpty()) return response
         return response.copy(
             artifactIds =
                 response.artifactIds.map { ai ->
                     patterns[ai.id]?.let { ai.copy(legacyArtifactIdPattern = it) } ?: ai
+                },
+        )
+    }
+
+    /**
+     * Attach stored TeamCity validation findings (WARNING/ERROR only) onto each linked TeamCity
+     * project in [response], in one batch query. No findings for a project means "clean" (given a
+     * validation run has completed). The nullable repo default keeps direct unit-test construction
+     * wiring-free; when absent, findings are simply not attached.
+     */
+    private fun attachTeamcityValidations(response: ComponentDetailResponse): ComponentDetailResponse {
+        val repo = teamcityValidationRepository ?: return response
+        if (response.teamcityProjects.isEmpty()) return response
+        val byProject = repo.findByProjectIdIn(response.teamcityProjects.map { it.projectId }).groupBy { it.projectId }
+        return response.copy(
+            teamcityProjects =
+                response.teamcityProjects.map { project ->
+                    project.copy(
+                        validations =
+                            byProject[project.projectId].orEmpty().map { finding ->
+                                org.octopusden.octopus.components.registry.server.dto.v4.ValidationResponse(
+                                    type = finding.type,
+                                    status = finding.status,
+                                    message = finding.message,
+                                    updatedAt = finding.updatedAt,
+                                )
+                            },
+                    )
                 },
         )
     }

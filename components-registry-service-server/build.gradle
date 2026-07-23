@@ -14,6 +14,7 @@ dependencies {
         exclude group: 'org.jetbrains.kotlin', module: 'kotlin-main-kts'
     }
     implementation project(':components-registry-service-core')
+    implementation project(':component-validation')
 
     // Employee-service client. It is only a transitive `implementation` of
     // `component-resolver-core` (which applies `java-library` and declares it
