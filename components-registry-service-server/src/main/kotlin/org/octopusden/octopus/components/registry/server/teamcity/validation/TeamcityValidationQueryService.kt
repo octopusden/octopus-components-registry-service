@@ -28,7 +28,11 @@ class TeamcityValidationQueryService(
         status: String?,
         component: String?,
     ): List<ComponentTeamcityValidationRow> {
-        val typeFilter = types?.filter { it.isNotBlank() }?.map { it.lowercase() }?.toSet()?.takeIf { it.isNotEmpty() }
+        val typeFilter = types
+            ?.filter { it.isNotBlank() }
+            ?.map { it.lowercase() }
+            ?.toSet()
+            ?.takeIf { it.isNotEmpty() }
         val findings =
             teamcityValidationRepository.findAll().filter { finding ->
                 (typeFilter == null || finding.type.lowercase() in typeFilter) &&
