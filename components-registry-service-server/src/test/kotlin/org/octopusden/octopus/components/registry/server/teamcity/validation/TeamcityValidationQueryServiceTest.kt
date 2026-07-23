@@ -47,8 +47,8 @@ class TeamcityValidationQueryServiceTest {
     }
 
     @Test
-    @DisplayName("list joins each finding to its owning component(s); a shared project yields one row per component")
-    fun `list fans out shared project to each component`() {
+    @DisplayName("SYS-092: list joins each finding to its owning component(s); a shared project yields one row per component")
+    fun `SYS-092 list fans out shared project to each component`() {
         val rows = service.list(types = null, status = null, component = null)
         // Foo(old-java)->a,b ; Bar(old-java)->a ; Foo(override)->a,b = 5 rows
         assertEquals(5, rows.size)
@@ -60,16 +60,16 @@ class TeamcityValidationQueryServiceTest {
     }
 
     @Test
-    @DisplayName("list filters by validation type before the component join")
-    fun `list filters by type`() {
+    @DisplayName("SYS-092: list filters by validation type before the component join")
+    fun `SYS-092 list filters by type`() {
         val rows = service.list(types = listOf("OVERRIDES_DEFAULT_BUILD_STEP"), status = null, component = null)
         assertEquals(2, rows.size) // only Foo(override) -> a, b
         assertEquals(setOf(a, b), rows.map { it.componentId }.toSet())
     }
 
     @Test
-    @DisplayName("list filters by ANY of multiple types (case-insensitive), de-duplicated")
-    fun `list filters by multiple types`() {
+    @DisplayName("SYS-092: list filters by ANY of multiple types (case-insensitive), de-duplicated")
+    fun `SYS-092 list filters by multiple types`() {
         // Both types requested (one lower-cased to prove case-insensitivity, one blank to prove it's ignored).
         val rows =
             service.list(
@@ -86,8 +86,8 @@ class TeamcityValidationQueryServiceTest {
     }
 
     @Test
-    @DisplayName("list treats an empty type list as no type filter")
-    fun `list empty type list is no filter`() {
+    @DisplayName("SYS-092: list treats an empty type list as no type filter")
+    fun `SYS-092 list empty type list is no filter`() {
         assertEquals(
             service.list(types = null, status = null, component = null).size,
             service.list(types = emptyList(), status = null, component = null).size,
@@ -95,8 +95,48 @@ class TeamcityValidationQueryServiceTest {
     }
 
     @Test
-    @DisplayName("list dedupes a component reachable through multiple version lines to the same project")
-    fun `list dedupes component reached via multiple version lines to same project`() {
+    @DisplayName("SYS-092: list filters by status (case-insensitive)")
+    fun `SYS-092 list filters by status`() {
+        // Mixed statuses: one ERROR on Bar, the rest WARNING.
+        Mockito.`when`(validationRepo.findAll()).thenReturn(
+            listOf(
+                finding("Foo", "USES_OLD_JAVA_VERSION", status = "WARNING"),
+                finding("Bar", "USES_OLD_JAVA_VERSION", status = "ERROR"),
+                finding("Foo", "OVERRIDES_DEFAULT_BUILD_STEP", status = "WARNING"),
+            ),
+        )
+
+        val errors = service.list(types = null, status = "error", component = null) // case-insensitive
+        assertEquals(1, errors.size) // only Bar(ERROR) -> comp-a
+        assertEquals("ERROR", errors.single().status)
+        assertEquals("Bar", errors.single().projectId)
+
+        val warnings = service.list(types = null, status = "WARNING", component = null)
+        // Foo(old-java)->a,b + Foo(override)->a,b = 4 rows.
+        assertEquals(4, warnings.size)
+        assertEquals(setOf("WARNING"), warnings.map { it.status }.toSet())
+
+        assertEquals(0, service.list(types = null, status = "NOPE", component = null).size)
+    }
+
+    @Test
+    @DisplayName("SYS-092: list filters by component-name substring")
+    fun `SYS-092 list filters by component`() {
+        // comp-b only owns Foo, so filtering to comp-b drops all comp-a-only rows (e.g. Bar).
+        val onlyB = service.list(types = null, status = null, component = "comp-b")
+        assertEquals(setOf(b), onlyB.map { it.componentId }.toSet())
+        assertEquals(setOf("Foo"), onlyB.map { it.projectId }.toSet())
+
+        // Substring match, case-insensitive.
+        val onlyA = service.list(types = null, status = null, component = "COMP-A")
+        assertEquals(setOf(a), onlyA.map { it.componentId }.toSet())
+
+        assertEquals(0, service.list(types = null, status = null, component = "no-such-component").size)
+    }
+
+    @Test
+    @DisplayName("SYS-092: list dedupes a component reachable through multiple version lines to the same project")
+    fun `SYS-092 list dedupes component reached via multiple version lines to same project`() {
         // comp-a reaches "Foo" via two distinct version lines (e.g. duplicate manual v4 curation).
         Mockito.`when`(versionLineRepo.findByProjectIdsWithComponent(Mockito.anyCollection())).thenAnswer { inv ->
             val ids = inv.getArgument<Collection<String>>(0)
@@ -112,8 +152,8 @@ class TeamcityValidationQueryServiceTest {
     }
 
     @Test
-    @DisplayName("summary counts DISTINCT components per type and overall")
-    fun `summary distinct component counts`() {
+    @DisplayName("SYS-092: summary counts DISTINCT components per type and overall")
+    fun `SYS-092 summary distinct component counts`() {
         val summary = service.summary()
         assertEquals(2, summary.componentsWithIssues) // a, b
         assertEquals(5, summary.findings)
@@ -124,10 +164,11 @@ class TeamcityValidationQueryServiceTest {
     private fun finding(
         projectId: String,
         type: String,
+        status: String = "WARNING",
     ) = TeamcityValidationEntity(
         projectId = projectId,
         type = type,
-        status = "WARNING",
+        status = status,
         message = null,
         updatedAt = Instant.now(),
     )

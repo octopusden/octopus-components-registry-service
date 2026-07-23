@@ -62,6 +62,22 @@ class TeamcityValidationPropertiesTest {
     }
 
     @Test
+    @DisplayName("a blank release-family element is rejected (Set<@NotBlank String>)")
+    fun `blank release family element fails`() {
+        val violations = validator.validate(props(releaseFamily = setOf("CDRelease", "")))
+        assertEquals(1, violations.size)
+        assertTrue(violations.first().propertyPath.toString().startsWith("releaseFamilyTemplateIds"))
+    }
+
+    @Test
+    @DisplayName("a whitespace-only release-family element is rejected (Set<@NotBlank String>)")
+    fun `whitespace release family element fails`() {
+        val violations = validator.validate(props(releaseFamily = setOf("CDRelease", "   ")))
+        assertEquals(1, violations.size)
+        assertTrue(violations.first().propertyPath.toString().startsWith("releaseFamilyTemplateIds"))
+    }
+
+    @Test
     @DisplayName("the all-blank baseline is invalid (every required field violates)")
     fun `all blank fails on every required field`() {
         val violations =

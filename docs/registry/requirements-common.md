@@ -2957,9 +2957,11 @@ counts DISTINCT components per type/status rather than raw finding rows. Both en
    200.
 
 **Test method:** `TeamcityValidationQueryServiceTest` —
-`list fans out shared project to each component`,
-`list dedupes component reached via multiple version lines to same project`,
-`list filters by type`, `summary distinct component counts`;
+`SYS-092 list fans out shared project to each component`,
+`SYS-092 list dedupes component reached via multiple version lines to same project`,
+`SYS-092 list filters by type`, `SYS-092 list filters by multiple types`,
+`SYS-092 list filters by status`, `SYS-092 list filters by component`,
+`SYS-092 summary distinct component counts`;
 `TeamcityValidationControllerV4SecurityTest` —
 `SYS_092_listAnonymousReturns401`, `SYS_092_listEditorReturns403`, `SYS_092_listAdminReturns200`,
 `SYS_092_summaryAnonymousReturns401`, `SYS_092_summaryEditorReturns403`, `SYS_092_summaryAdminReturns200`.

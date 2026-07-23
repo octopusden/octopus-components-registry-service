@@ -4,6 +4,7 @@ import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.Assertions.assertNotNull
 import org.junit.jupiter.api.Assertions.assertNull
 import org.junit.jupiter.api.Assertions.assertTrue
+import org.junit.jupiter.api.DisplayName
 import org.junit.jupiter.api.RepeatedTest
 import org.junit.jupiter.api.Test
 import org.octopusden.octopus.components.registry.server.service.MigrationLifecycleGate
@@ -90,6 +91,7 @@ class MigrationLifecycleGateTest {
     }
 
     @Test
+    @DisplayName("SYS-089: same-kind TC_VALIDATION second tryClaim attaches to the existing owner")
     fun `SYS-089 same-kind TC_VALIDATION second tryClaim attaches to the existing owner`() {
         val gate = MigrationLifecycleGate()
         gate.tryClaim(JobKind.TC_VALIDATION, "validation-1")
@@ -100,6 +102,7 @@ class MigrationLifecycleGateTest {
     }
 
     @Test
+    @DisplayName("SYS-089: starting TC_VALIDATION while COMPONENTS is RUNNING reports the COMPONENTS owner")
     fun `SYS-089 starting TC_VALIDATION while COMPONENTS is RUNNING reports the COMPONENTS owner`() {
         val gate = MigrationLifecycleGate()
         gate.tryClaim(JobKind.COMPONENTS, "components-1")
@@ -110,6 +113,7 @@ class MigrationLifecycleGateTest {
     }
 
     @Test
+    @DisplayName("SYS-089: starting COMPONENTS or TC_RESYNC while TC_VALIDATION is RUNNING is also rejected")
     fun `SYS-089 starting COMPONENTS or TC_RESYNC while TC_VALIDATION is RUNNING is also rejected`() {
         val gate = MigrationLifecycleGate()
         gate.tryClaim(JobKind.TC_VALIDATION, "validation-1")

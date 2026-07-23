@@ -27,9 +27,9 @@ class TeamcityValidationProperties(
     /** Build template id whose configs are "our Maven build". */
     @field:NotBlank
     val mavenBuildTemplateId: String,
-    /** Release-family templates excluded from "not attached to build template". */
+    /** Release-family templates excluded from "not attached to build template". Non-empty, no blank elements. */
     @field:NotEmpty
-    val releaseFamilyTemplateIds: Set<String>,
+    val releaseFamilyTemplateIds: Set<@NotBlank String>,
     /** Default build step id `X` for the Gradle build template. */
     @field:NotBlank
     val gradleDefaultBuildStepId: String,
