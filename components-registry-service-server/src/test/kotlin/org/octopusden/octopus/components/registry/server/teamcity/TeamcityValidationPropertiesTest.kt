@@ -62,7 +62,7 @@ class TeamcityValidationPropertiesTest {
     }
 
     @Test
-    @DisplayName("a blank release-family element is rejected (Set<@NotBlank String>)")
+    @DisplayName("a blank release-family element is rejected")
     fun `blank release family element fails`() {
         val violations = validator.validate(props(releaseFamily = setOf("CDRelease", "")))
         assertEquals(1, violations.size)
@@ -76,7 +76,7 @@ class TeamcityValidationPropertiesTest {
     }
 
     @Test
-    @DisplayName("a whitespace-only release-family element is rejected (Set<@NotBlank String>)")
+    @DisplayName("a whitespace-only release-family element is rejected")
     fun `whitespace release family element fails`() {
         val violations = validator.validate(props(releaseFamily = setOf("CDRelease", "   ")))
         assertEquals(1, violations.size)

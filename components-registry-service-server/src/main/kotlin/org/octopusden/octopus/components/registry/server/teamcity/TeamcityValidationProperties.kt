@@ -1,5 +1,6 @@
 package org.octopusden.octopus.components.registry.server.teamcity
 
+import jakarta.validation.constraints.AssertTrue
 import jakarta.validation.constraints.NotBlank
 import jakarta.validation.constraints.NotEmpty
 import org.springframework.boot.context.properties.ConfigurationProperties
@@ -17,6 +18,10 @@ import org.springframework.validation.annotation.Validated
  *
  * All five template/step-id fields are **required and must be non-blank** (`@Validated` + Bean
  * Validation `@NotBlank`/`@NotEmpty`). The application **fails to start** if any is blank or empty.
+ * `releaseFamilyTemplateIds` must additionally contain no blank/whitespace-only elements (enforced
+ * by [releaseFamilyTemplateIdsHaveNoBlankElements]): a blank id matches no real template, so a
+ * release configuration would fall through into `notAttachedToBuildTemplate` and produce false
+ * WARNING noise — exactly what the fail-fast contract exists to prevent.
  */
 @Validated
 @ConfigurationProperties(prefix = "teamcity.validation")
@@ -29,7 +34,7 @@ class TeamcityValidationProperties(
     val mavenBuildTemplateId: String,
     /** Release-family templates excluded from "not attached to build template". Non-empty, no blank elements. */
     @field:NotEmpty
-    val releaseFamilyTemplateIds: Set<@NotBlank String>,
+    val releaseFamilyTemplateIds: Set<String>,
     /** Default build step id `X` for the Gradle build template. */
     @field:NotBlank
     val gradleDefaultBuildStepId: String,
@@ -38,4 +43,12 @@ class TeamcityValidationProperties(
     val mavenDefaultBuildStepId: String,
     /** Enriched-fetch cache TTL, minutes (see design §2). Not correctness-sensitive; kept defaulted. */
     val cacheTtlMinutes: Long = 30,
-)
+) {
+    /**
+     * No `release-family-template-ids` element may be blank/whitespace-only. An empty set is
+     * allowed here (that case is reported by `@NotEmpty` instead), so this fails only on a genuine
+     * blank element such as `[""]` or `["  "]`.
+     */
+    @AssertTrue(message = "release-family-template-ids must not contain blank/whitespace-only entries")
+    fun releaseFamilyTemplateIdsHaveNoBlankElements(): Boolean = releaseFamilyTemplateIds.all { it.isNotBlank() }
+}
