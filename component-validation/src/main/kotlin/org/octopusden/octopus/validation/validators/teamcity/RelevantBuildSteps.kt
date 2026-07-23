@@ -40,7 +40,15 @@ internal fun relevantBuildSteps(
     return (customSteps + defaultSteps).filter { !it.step.disabled }.distinct()
 }
 
-/** "step name (step id) in configuration name (configuration id)" -- the shared label for reports. */
+/**
+ * The per-step label embedded in a finding's message, exactly: `- <STEP_ID> in <CONFIGURATION_ID>`
+ * (one per line; callers join multiple with `"\n"`).
+ *
+ * CROSS-REPOSITORY WIRE CONTRACT: the components-management-portal parses this exact shape out of
+ * the finding message to reconstruct TeamCity deep links (build config + step). Changing the format
+ * — the leading `- `, the ` in ` separator, or emitting names instead of ids — is a breaking change
+ * that requires a coordinated Portal update. Do not alter it in isolation.
+ */
 internal fun describe(
     configuration: BuildConfiguration,
     step: BuildStep,
