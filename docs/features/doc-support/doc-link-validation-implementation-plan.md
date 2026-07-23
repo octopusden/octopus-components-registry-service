@@ -1,80 +1,145 @@
-# Close the documented gaps in solution↔doc-component linking
+# Support many-to-many component ↔ doc-component links
 
-## Context
+## Top-level design
 
-The request asks for many-to-many linking between solution components and
-documentation components. Investigation showed this repo already has an
-opinion on the topic, recorded in `docs/features/doc-support/doc-improvement-concept.md`:
+A component can reference a "documentation component" — another regular
+component holding its docs — via `component_doc_links`
+(`component_id`, `doc_component_key`, `major_version`, `sort_order`).
+The intended model going forward: **any component may hold several
+simultaneous doc links at once.** This is genuine many-to-many, not "one
+active doc per version."
 
-- **"Doc component referenced by many solutions"** already works today —
-  `component_doc_links` has no uniqueness constraint on `doc_component_key`
-  alone, and `ComponentDocLinkRepository.findByDocComponentKey` already
-  returns a list. Nothing to build.
-- **"One solution → several simultaneous doc components"** is *not* the
-  intended model in this repo. The concept doc's own TODO #4 calls for
-  "single doc component per version" validation, rule #6/#7 forbids doc→doc
-  chains, and Part 2 puts multi-doc aggregation for a solution in a
-  different system (idp-automation walks the solution's sub-components,
-  each with its own single `doc` link, and aggregates their docs at release
-  time). Zverev's answer on the ticket itself (2026-03-19) matches this
-  exactly: single-solution/multi-doc "is not currently supported; this can
-  be implemented via a transitive component."
+This capability already works today, with zero code changes needed to
+enable it: the write path already accepts an uncapped list of doc links
+with no dedup-by-key restriction, the read path already returns the full
+list, and the database schema only blocks an exact duplicate
+`(component, doc key, major version)` triple — it never enforced "at most
+one doc key per version." So this isn't "build a feature" — it's "close
+the two real gaps around an already-working capability, and document it
+as an intentional, tested contract":
 
-Per decision, this plan **aligns with the documented design** rather than
-building direct multi-doc-per-component support. The registry's job is to
-make the existing single-doc-per-version model correct and well-validated,
-not to add a capability the architecture deliberately doesn't want.
-Concretely, three real gaps exist between the concept doc and the actual
-code, all inside `component_doc_links` resolution/validation:
+1. **Deterministic legacy resolution.** There's an older, single-valued
+   API surface that can only ever expose one doc link per component (it
+   predates the many-to-many model). When a component has multiple doc
+   links, which one this older surface picks needs to be a documented,
+   deterministic rule — not accidental database-fetch ordering. Multiple
+   candidates is now the normal case, not rare bad data, so this
+   resolution rule matters more than it used to.
+2. **Doc→doc chains stay blocked.** A documentation component must not
+   itself reference another documentation component. This is orthogonal
+   to multiplicity — it's about a *different* component being both a doc
+   target and a doc referencer — and needs a validator on the direct-API
+   write path. Self-documentation (a component referencing only its own
+   key) must stay legal throughout — that's an existing, explicitly
+   tested contract that must not regress.
 
-1. **Non-deterministic resolution.** `pickDocLink` (`EntityMappers.kt:1277`)
-   does `links.firstOrNull { ... }` over `component.docLinks.toList()`, and
-   `ComponentEntity.docLinks` (`ComponentEntity.kt:189`) has no `@OrderBy` —
-   so when more than one row is a candidate, which one wins for the legacy
-   v1-v3 `doc` field is undefined between requests.
-2. **"Single doc component per version" isn't enforced.** The DB only
-   dedupes exact `(component_id, doc_component_key, major_version)`
-   triples, plus a partial index blocking two `major_version IS NULL` rows
-   *for the same key*. Nothing stops two *different* `doc_component_key`
-   values from both claiming the same `major_version` (or both `NULL`) on
-   one component — exactly the ambiguity concept-doc TODO #4 asks to be
-   validated away. `ComponentDetailMapperTest.docs_sortedBySortOrder`
-   currently exercises this exact ambiguous shape (two different-key rows,
-   both `majorVersion = null`) and will need a note once it's rejected at
-   the service layer (the mapper itself doesn't validate, so the test
-   stays green — see change #5).
-3. **Doc→doc chains aren't blocked.** Concept-doc rule #6/#7: a
-   documentation component can't itself reference another documentation
-   component. No validator exists for this today. **Self-documentation is
-   explicitly not a chain** — `validateDocComponentExistence` (`#20`)
-   already treats a component referencing its own key as legal
-   (`CrossComponentValidationTest.create_docComponentSelfReference_ok`),
-   and the new chain validator must preserve that: a component whose only
-   doc link points at itself is not "acting as a documentation component"
-   for chain-detection purposes.
+### Scope boundaries
 
-Scope boundaries (explicitly **not** doing these, and why):
-- No DB migration — `component_doc_links` already has the columns needed.
-- No new v4 endpoint — `docs[]` on `ComponentDetailResponse` already
-  exposes the full per-component doc-link list.
-- No change to the Groovy DSL — the `doc {}` grammar lives in the external
-  `releng-lib` dependency, out of this repo's control; DSL-imported
-  components stay single-doc via `ImportServiceImpl.kt:1467-1479`.
-- Not implementing rule #5 (doc target must have `distribution.GAV`) or the
-  `majorVersion` `$major`/`$minor` format validator — real documented gaps,
-  but orthogonal to the multiplicity question this ticket raises; leaving
-  them for a separate pass.
-- Not touching the "one solution → several docs" aggregation flow at all —
-  that's idp-automation's responsibility per the concept doc.
+- **No "single doc per version" restriction** — two different doc
+  components sharing a version bucket (including no version specified)
+  is intentionally legal. Nothing to build or remove here — the database
+  and the primary write API already allow it.
+- **No friendly duplicate-pair guard** for the exact same doc
+  link submitted twice in one write — the database already rejects that
+  with a clear error today. Leaving this as-is by explicit decision: it's
+  a UX nicety, not part of this request, and the bad state is already
+  prevented.
+- **No change to the Groovy DSL / config-import grammar**, by explicit
+  decision. That grammar lives in this repo's own DSL/config-loading
+  module and is genuinely single-valued *per version-range config* today
+  — a component authored via DSL can already have different docs across
+  different version ranges, but not several at once within one range.
+  Extending that is a real, larger, self-contained change (grammar +
+  its validator + the import mapping, plus its own compatibility-test
+  surface) — deferred as a follow-up. The primary write API and the
+  admin UI already deliver full many-to-many today; DSL-authored
+  components keep one-doc-per-range until that follow-up lands.
+- No database migration — the schema already permits true many-to-many.
+- No new API endpoint — the current multi-value API surface already
+  exposes the full list.
+- **Only the chain-ban rule (#7) is restored to the direct-write API in
+  this pass.** The DSL validator also enforces rule #5 (a doc target must
+  have `distribution.GAV`), which the direct-write API does not — that
+  parity gap is real but orthogonal to multiplicity and deliberately left
+  for a separate pass. Rule #6 (non-overlapping doc ranges) is not
+  restored because the reversal obsoletes it (see change 3).
 
-## Changes
+## Backward compatibility
+
+- **Write path**: two different doc components sharing a version bucket
+  was never actually rejected in production — no regression to reason
+  about, only a newly-documented, intentionally legal capability. The
+  only new write-path rejection is the chain ban. Because the chain ban
+  never existed on the direct-write API before, production data may
+  already contain a doc→doc chain; after this lands, a patch that trips
+  the `crossComponentRelevantChange` guard on such a component will 400
+  until the chain is broken. This mirrors how `#20` already behaves for a
+  component whose docs reference a since-deleted target — consistent with
+  existing behavior, not a new class of surprise, but worth a PR note.
+- **Read path**: a no-op for single-candidate components; makes the
+  older single-valued surface's answer deterministic instead of
+  undefined for genuinely multi-doc components — now the normal case, so
+  more likely to be *noticed* than when it only affected rare bad data.
+  Worth a one-line PR callout: any caller who observed "flip-flopping"
+  values on that older surface will see a stable answer after this lands.
+- No database migration, no wire-shape change on the current write/read
+  API.
+
+## Impact on other components
+
+All four candidates were checked directly (not just grepped-for-and-
+assumed) — either in this repo, in a local sibling checkout, or via a
+fresh clone. Findings:
+
+- **CLI client** — no change; it's a pure DTO mirror of the current API
+  response shape, which is unchanged.
+- **This repo's own DSL/config-loading module** — no change *in this
+  change*, by explicit decision (see Scope boundaries above). This is
+  the one place a real, in-repo follow-up exists: its `doc` field is
+  singular per version-range, and its validator already runs
+  chain-ban + existence + distribution-artifact checks for DSL-authored
+  configs at load time — genuine multi-doc-per-range for DSL-authored
+  components needs its own future change there, separate from this one.
+- **Admin/management UI (portal)** — checked locally — **no change
+  needed, confirmed.** Its component editor already fully supports
+  multiple simultaneous doc links: a repeatable field-array control with
+  per-row add/remove, and its save requests already submit the
+  multi-value array shape end-to-end.
+- **Release-engineering build-parameter tooling** — checked the
+  candidate repo locally — **not the right repo, confirmed.** It has zero
+  references to documentation-link handling or any client of this
+  service; whatever computes build-time doc-dependency parameters (if it
+  exists at all) could not be located in any locally-available repo. No
+  action item since nothing concrete was found to affect.
+- **Solution-release aggregation tooling** — cloned fresh and inspected
+  — **the aggregation feature this was expected to own does not exist in
+  that repo.** Its entire source is a handful of files implementing one
+  unrelated CLI command for TeamCity build-chain restructuring; it calls
+  this service's client only for two unrelated fields, never for
+  anything documentation-related. There's nothing there to break because
+  the feature was never built. Worth flagging to whoever owns that
+  system's roadmap, since it describes a capability that doesn't exist
+  yet, independent of this change.
+
+## Implementation
 
 ### 1. Deterministic resolution — `EntityMappers.kt`
 
-In `pickDocLink` (line 1277), sort `links` by `sortOrder` before selecting,
-so `firstOrNull()` calls are deterministic regardless of JPA fetch order:
+In `pickDocLink` (`EntityMappers.kt:1277`), sort `links` by `sortOrder`
+before selecting, so the result is deterministic regardless of JPA fetch
+order:
 
 ```kotlin
+/**
+ * The legacy single-valued `doc` field (Component.kt / DocDTO) is
+ * structurally single-valued on the wire even though a component may
+ * legitimately hold N simultaneous doc links (docs[], uncapped — see
+ * ComponentManagementServiceImpl.addDocLinks). This is the documented,
+ * intentional single-value projection policy for that legacy surface,
+ * not a fallback for bad data: sort candidates by sortOrder
+ * (author-declared precedence), then prefer an exact majorVersion match,
+ * else the null/fallback row, else the first remaining by sortOrder.
+ */
 private fun pickDocLink(links: List<ComponentDocLinkEntity>, versionRange: String): ComponentDocLinkEntity? {
     if (links.isEmpty()) return null
     val ordered = links.sortedBy { it.sortOrder }
@@ -85,63 +150,48 @@ private fun pickDocLink(links: List<ComponentDocLinkEntity>, versionRange: Strin
 }
 ```
 
-Pure bug fix, no wire-shape change for well-formed data (single doc
-component per version, the only case that should exist once change #2 below
-is in place).
+Update `docs/registry/schema-spec.md` (~line 401, the `doc:
+{component, majorVersion}` row) to add the sortOrder tie-break clause —
+it currently documents majorVersion-match/null-fallback but is silent on
+ties, which becomes a real spec gap once multi-doc is the normal case.
 
-### 2. "Single doc component per version" validator — `ComponentManagementServiceImpl.kt`
+### 2. Doc→doc chain ban validator — `ComponentManagementServiceImpl.kt`
 
-Add `#30` next to the existing `#20` existence check
-(`validateDocComponentExistence`, line 3019), called from the same two
-sites (`createComponent`, line 374; update/patch, line 804):
+**This is a parity restoration for the direct-write API, not a net-new
+rule.** The DSL/config-loading module's validator already enforces this
+exact rule ("Doc component ... must not have 'doc' property",
+`EscrowConfigValidator.groovy:543`) for DSL-imported/reloaded components,
+since its config loader instantiates and runs it at config-load time
+(`EscrowConfigurationLoader.groovy:218`, wired into `ImportServiceImpl`).
+The direct-write API path (`ComponentManagementServiceImpl`) doesn't get
+DSL validations for free — per the existing validation-parity pattern
+already in this file (`:3550-3557`, restoring checks "the [direct] write
+path dropped"), each DSL rule needs its own reimplementation to apply to
+direct writes. This is that reimplementation, mirroring how the existing
+`#20` doc-existence check already restored parity for that rule.
 
-```kotlin
-/**
- * #30 single doc component per version — reject a docLinks set where two
- * DIFFERENT doc_component_key values would both apply to the same
- * major_version bucket (including the null/fallback bucket). Concept-doc
- * TODO #4: "single doc component per version."
- */
-private fun validateSingleDocComponentPerVersion(entity: ComponentEntity) {
-    val byMajor = entity.docLinks.groupBy { it.majorVersion }
-    byMajor.forEach { (majorVersion, links) ->
-        val distinctKeys = links.map { it.docComponentKey }.toSet()
-        require(distinctKeys.size <= 1) {
-            val label = majorVersion ?: "<no major version>"
-            "docs: multiple doc components ($distinctKeys) claim major version " +
-                "'$label' on component '${entity.componentKey}' — at most one is allowed"
-        }
-    }
-}
-```
-
-### 3. Doc→doc chain validator — `ComponentManagementServiceImpl.kt`
-
-Add `#31`, same call sites, using the existing
-`ComponentDocLinkRepository.findByDocComponentKey`.
-
-**Review correction:** an earlier draft of this validator checked
-`it.docLinks.isNotEmpty()` / `findByDocComponentKey(...).isEmpty()`
-directly, without excluding the entity's own self-referencing row. That
-breaks `create_docComponentSelfReference_ok` (`CrossComponentValidationTest`,
-2xx expected): a self-documenting component's own row is exactly what
-`findByDocComponentKey(entity.componentKey)` returns, so the naive check
-would 400 the very case `#20` was written to allow. Both directions below
-are written to strip self-references before asking "does this component
-have/receive doc links from someone **else**":
+Add next to `#20` (`validateDocComponentExistence`, line 3045), and wire
+the call at the same two post-flush sites, immediately after the `#20`
+call: `createComponent` (line 374) and update/patch (line 804). On the
+patch path, the `#20` call sits **inside** the `if
+(crossComponentRelevantChange)` guard (line 801) — place the chain-ban
+call inside that same guard, so it inherits the existing grandfathering:
+a component is only re-validated for chains when the patch actually
+touches docs or another cross-component-relevant field, never on an
+unrelated field edit. Uses the existing
+`ComponentDocLinkRepository.findByDocComponentKey`:
 
 ```kotlin
 /**
- * #31 doc-component chain ban — concept-doc rule #6/#7: a documentation
- * component (one referenced by someone else's docLinks) cannot itself
- * declare doc links to a DIFFERENT component, in either direction:
- *  (a) a target this entity now references must not itself reference a
- *      third, different documentation component, and
- *  (b) if this entity is itself already referenced as someone else's doc
- *      target, it must not now be given doc links to a different component.
- * Self-documentation (a component's docLinks pointing only at its own key)
- * is explicitly NOT a chain — see #20's self-reference carve-out — so it
- * must not trip either direction below.
+ * #30 doc-component chain ban: a documentation component (one referenced
+ * by someone else's docLinks) cannot itself declare doc links to a
+ * DIFFERENT component. Orthogonal to how many doc links one component
+ * may hold — many-to-many is legal — this only forbids the target of a
+ * doc link from itself being a referencer of some OTHER target.
+ * Self-documentation is explicitly not a chain in either direction
+ * (#20's self-reference carve-out;
+ * CrossComponentValidationTest.create_docComponentSelfReference_ok must
+ * stay 2xx).
  */
 private fun validateNoDocComponentChain(entity: ComponentEntity) {
     fun hasNonSelfDocLinks(componentKey: String, docLinks: List<ComponentDocLinkEntity>) =
@@ -168,172 +218,72 @@ private fun validateNoDocComponentChain(entity: ComponentEntity) {
 }
 ```
 
-Both validators run post-flush, same as `validateDocComponentExistence`,
-so self-reference edge cases behave consistently — including the existing
-`create_docComponentSelfReference_ok` case, which must stay 2xx.
+### 3. Concept/design doc: supersede, don't rewrite
+
+In `docs/features/doc-support/doc-improvement-concept.md`, at rule #6
+(`:105-106`, "version ranges with doc sections must not overlap") and
+TODO #4 (`:308-310`, "single doc component per version"): add a dated
+superseding note stating that many-to-many doc-component links are now
+supported and a component may hold N simultaneous doc links, retained
+there for history. Do not touch rule #7 (chain ban) — it's unaffected
+and is exactly what change 2 implements; say so explicitly in the PR so
+a reviewer doesn't assume the whole rules block changed.
 
 ### 4. Requirements traceability
 
-Add `SYS-066`, `SYS-067`, `SYS-068` to `docs/registry/requirements-common.md`.
-**Review correction:** the original draft said "next after `SYS-064`," but
-`SYS-065` was merged separately in the meantime (echo-safe field-override
-save, commit `452183a`, already present at `requirements-common.md:2427`).
-Re-check the tail of the file for the actual next free ID before landing
-this — `SYS-066` is current as of this writing but may drift further if
-other in-flight branches land first. Follow the existing template
-(Priority / Test layer / Status / narrative), covering: deterministic
-doc-link resolution, single-doc-per-version validation, and doc-chain
-prohibition. Mark ✅ Tested once the corresponding tests below land, per
-AGENTS.md's "every new feature → requirement first" / traceability rules
-(test method names embed the SYS-NNN id, `@DisplayName` annotation).
+Add to `docs/registry/requirements-common.md` (current tail is `SYS-065`
+— re-verify immediately before landing, this is a race with any other
+in-flight branch):
+- **SYS-066**: a component may hold multiple simultaneous doc-component
+  links (uncapped; deterministic single-value projection for the legacy
+  surface via change 1). Codifies existing-but-unspecified behavior as
+  an intentional, tested contract.
+- **SYS-067**: doc→doc chain ban (change 2), including the self-doc
+  carve-out as an explicit acceptance criterion.
 
-### 5. Tests
+Follow the existing template (Priority / Test layer / Status /
+Motivation / Description / Acceptance criteria / Test method), mirroring
+`SYS-064`/`SYS-065` (`requirements-common.md:2371-2472`).
 
-- `DatabaseComponentRegistryResolverTest`: new case alongside existing
-  `(6)/(6b)/(6c)` proving `sortOrder` (not insertion order) breaks ties.
-  Note in-line why this constructs an ambiguous two-different-key shape
-  directly on the entity: after change #2, that shape can no longer reach
-  the DB through the API, so this test is defense-in-depth for rows
-  written before the validator existed (no migration is planned to clean
-  those up — see "Backward compatibility" below), not a shape the write
-  path is expected to produce going forward.
-- `CrossComponentValidationTest`: new 400 cases mirroring the `#20` doc
-  existence tests —
-  - two different doc components both with `majorVersion = null` → 400
-  - two different doc components both pinned to the same `majorVersion` → 400
-  - referencing a component that itself has doc links to a *different*
-    component → 400 (chain, direction a)
-  - giving doc links (to a different component) to a component already
-    referenced as someone's doc target → 400 (chain, direction b)
-  - **regression guard:** re-run (or extend)
-    `create_docComponentSelfReference_ok` and add a PATCH-side equivalent —
-    a component whose docs[] contains only its own key must stay 2xx
-    both on create and on update, even after #31 lands. This is the test
-    that would have caught the self-doc bug found in review; it must be
-    green before/after #31 in the same PR, not just left as a pre-existing
-    passing test.
-- Update `ComponentDetailMapperTest.docs_sortedBySortOrder` fixture: it
-  currently constructs two different-key rows sharing `majorVersion =
-  null`, which is exactly the shape #30 now rejects at the service layer.
-  Keep the mapper-level round-trip test (the mapper itself doesn't
-  validate, only the service write path does) but note in-line that this
-  input shape is no longer reachable through the API, or switch the
-  fixture to distinct `majorVersion` values so it still represents a
-  legal state. (`docLink_majorVersion_preserved` only ever constructs a
-  single doc link — it doesn't exercise the ambiguous shape and needs no
-  change.)
+## Tests
 
-### 6. Backward compatibility
-
-No wire-shape change, and no schema migration. This is a behavior-only
-change scoped to two axes; treat them separately because their risk
-profiles differ:
-
-**Read path (change #1, `pickDocLink`) — strictly non-breaking.**
-- For every component with ≤1 doc-link candidate in a given `majorVersion`
-  bucket (i.e. all *new* writes after change #2, and the overwhelming
-  majority of existing data, since the DB has always deduped exact
-  `(component_id, doc_component_key, major_version)` triples), sorting by
-  `sortOrder` before picking is a no-op — same link wins as before.
-- For the narrow band of **pre-existing rows already in the ambiguous
-  shape** (two different `doc_component_key`s sharing a `majorVersion`,
-  written before this plan's validator existed — see below), the winner
-  for the legacy v1-v3 `doc` field may change from "whatever JPA fetch
-  order happened to return" to "lowest `sortOrder`, i.e. first-added." A
-  caller polling the same component repeatedly could observe today's
-  answer flip once. This is a fix, not a regression — the old behavior was
-  never a promised contract, just accidental JVM/DB behavior — but flag it
-  in the PR description so anyone who filed a support ticket about
-  "inconsistent doc info" can be pointed at this cause.
-
-**Write path (changes #2 and #3, the new `#30`/`#31` validators) — a
-behavior change, not a wire change.** Requests that were previously
-accepted (silently creating ambiguous or chained doc-link data) will now
-get a `400` with the new error messages. This only affects:
-- writes that set two different doc components on the same
-  `majorVersion` bucket (or both `null`) — previously silently accepted;
-  concept-doc TODO #4 always intended this to be invalid, it was just
-  unenforced;
-- writes that create a doc→doc chain — previously silently accepted;
-  concept-doc rule #6/#7 always intended this to be invalid.
-- Self-documentation (a component referencing its own key, with or
-  without other doc links) is **not** affected by either new validator —
-  see the self-doc carve-out in change #3 and its regression test in
-  change #5. This is the one case that must be verified to keep behaving
-  identically before and after this change.
-
-**No backfill / no cleanup of existing bad rows.** Per the "no DB
-migration" scope boundary, any component that already has the ambiguous
-multi-doc-per-version shape in production keeps it — change #2 only
-blocks *new* writes from creating more of it, and change #1 makes reads
-of the existing bad rows deterministic rather than fixing them. If a
-data audit turns up existing ambiguous rows, that's a separate cleanup
-(likely a one-off admin PATCH per affected component, not a migration),
-not blocking for this plan.
-
-### 7. Compat verification
-
-Both `pickDocLink` and the write-path validators sit on the v1-v3
-read/write surface (`AGENTS.md:159-163`). Run
-`scripts/local-stands/verify.sh` before declaring done; consult
-`docs/registry/compat-gate.md` if it flags a diff. Expect no wire-shape
-change for legal data — only previously-ambiguous/invalid combinations
-change behavior (deterministic pick, or 400 on write).
-
-## Impact on other components
-
-This plan is scoped entirely to `components-registry-service`. No other
-repo requires a code change to keep working, because the v4 `docs[]`
-field is unchanged and the only behavior change is that some previously-
-accepted (and already-wrong-per-spec) writes now 400. Reviewed explicitly:
-
-- **`octopus-components-management-portal`** (the interactive writer,
-  via its BFF) — **not verified from this repo; needs a check there, not
-  a code change here.** If the portal has a doc-links edit form, confirm
-  it surfaces the new `400` messages from `#30`/`#31` to the user instead
-  of a generic "save failed." This is a UX-completeness check on the
-  portal side, not a functional break — the portal's existing error
-  handling for other 400s (e.g. `#20` doc-existence, already live today)
-  presumably already covers the pattern; confirm rather than assume.
-- **`releng-lib` / Groovy DSL import** (`ImportServiceImpl.kt:1467-1481`)
-  — **no change needed, but the reason is narrower than it first looks.**
-  `ImportServiceImpl` persists via `componentRepository.save(componentEntity)`
-  directly (line 953) — it never calls `createComponent`/`updateComponent`,
-  so `#20`/`#30`/`#31` don't run on the import path at all. That's *why*
-  no existing import can start failing: the validators simply aren't
-  invoked here, not that the shapes are unreachable.
-  - `#30` (single doc component per version) is moot regardless, since
-    each DSL component config produces exactly one doc link
-    (`sortOrder = 0`) — there's only ever one candidate per component, so
-    there's nothing for that validator to reject even if it did run.
-  - `#31` (doc→doc chain) is a **real gap this plan doesn't close**: a
-    DSL-imported chain (component A's config sets `doc { component = "B" }`,
-    B's config sets `doc { component = "C" }` — each single-doc, so no
-    conflict with #30) is not caught by the validators this plan adds,
-    since import never calls them (whether `ImportServiceImpl` has any
-    doc-chain check of its own was not verified here). Explicitly out of
-    scope for this plan (the scope boundary already excludes DSL changes),
-    but call it out as a known gap rather than implying the DSL is immune
-    to it.
-- **`idp-automation`** (owns Part 2 solution-doc aggregation per the
-  concept doc) — **no change needed.** It walks a solution's
-  sub-components and aggregates each one's single `doc` link at release
-  time; this plan doesn't touch that flow or the model it depends on
-  (single doc component per version), it only makes that existing model
-  enforced and deterministic.
-- **`components-registry-cli`** (`Component.kt`, `DocLinkResponse` mirror)
-  — **no change needed.** It's a pure DTO mirror of the v4 response shape,
-  which is unchanged; it does no client-side validation of doc-link
-  multiplicity that this plan would make redundant or conflicting.
+- `CrossComponentValidationTest`:
+  - New positive test: create with two different doc components at the
+    same version bucket (or both with no version) → 2xx, both present in
+    the response. This is a characterization test locking in existing
+    behavior as an intentional contract, not a test of new code.
+  - New positive test: N (>2) doc links across different version buckets
+    → 2xx.
+  - New 400 test: chain-ban direction (a) — referencing a component that
+    itself has doc links to a different component.
+  - New 400 test: chain-ban direction (b) — giving doc links to a
+    component already referenced as someone else's doc target.
+  - Regression guard (load-bearing): `create_docComponentSelfReference_ok`
+    (line 661) must stay 2xx unchanged; add a PATCH-side equivalent — a
+    component whose doc links contain only its own key must stay 2xx on
+    update too, in the same change as change 2.
+- `ComponentDetailMapperTest.docs_sortedBySortOrder` (line 444): no code
+  change needed — it already constructs two different doc keys sharing
+  no version. Re-frame its display name/comment from "tolerate an
+  ambiguous legacy shape" to "prove the now-canonical multi-doc-same-
+  version shape sorts deterministically."
+- `DatabaseComponentRegistryResolverTest`: add a case alongside existing
+  `(6)/(6b)/(6c)` proving `sortOrder` breaks ties **between two different
+  doc keys** sharing the same version — the existing cases only use one
+  key at different versions, so they don't exercise the multi-key
+  tie-break at all.
 
 ## Verification
 
-1. `./gradlew :components-registry-service-server:test` — new + updated
-   unit tests above, plus the existing `(6)/(6b)/(6c)` and `#20` suites
-   stay green.
-2. `scripts/local-stands/verify.sh` — v1-v3 compat baseline, per
-   `docs/registry/compat-gate.md`.
-3. Manual spot check via v4 API: create a component with two doc links at
-   different `majorVersion`s (legal) and confirm 201; attempt the same with
-   overlapping `majorVersion`s or a chained doc target and confirm 400 with
-   the new error message.
+1. `./gradlew :components-registry-service-server:test` — new/updated
+   tests above, plus existing `(6)/(6b)/(6c)` and `#20` suites stay
+   green.
+2. `scripts/local-stands/verify.sh` per `docs/registry/compat-gate.md` —
+   change 1 touches the legacy read surface (`AGENTS.md:160-164` mandates
+   this for any read-path change).
+3. Manual API spot check: create a component with 3 doc links (two
+   sharing a version, one on a different one) → 201, all three present;
+   confirm the legacy single-value read returns one deterministic
+   value; attempt a chained doc target → 400.
+4. Re-check `requirements-common.md` tail for the true next free
+   requirement id immediately before landing.
