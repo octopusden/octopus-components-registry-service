@@ -4,13 +4,19 @@ This note covers the operational rollout of the TC validation feature (SYS-064, 
 It is additive-only: no schema migration in this change touches existing `teamcity_project`/
 `version_line`/`teamcity_validation` data.
 
-## Configuration is mandatory
+## Configuration is mandatory (DB mode only)
 
-`TeamcityValidationProperties` (bound from `teamcity.validation.*`) has no `enabled` flag and no
-"off" state. All five template/step-id fields are **required and must be non-blank**, enforced by
-Bean Validation on the properties class (`@Validated` + `@NotBlank` on the four string fields,
-`@NotEmpty` on `release-family-template-ids`). If any is blank or empty, **the application fails to
-start**.
+TeamCity validation is a **DB-backed feature**: it persists findings and derives its scope from
+`version_line`. It is therefore unavailable in `no-db` / Git-only mode, and its configuration is
+**not required there** — `TeamcityValidationProperties` is registered only when the database is
+enabled (`TeamcityValidationConfig`, `@ConditionalOnDatabaseEnabled`), so a pure Git/no-db
+deployment boots with no `teamcity.validation.*` values at all. See "No-DB / Git-only mode" below.
+
+When the database IS enabled, `TeamcityValidationProperties` (bound from `teamcity.validation.*`)
+has no `enabled` flag and no "off" state. All five template/step-id fields are **required and must
+be non-blank**, enforced by Bean Validation on the properties class (`@Validated` + `@NotBlank` on
+the four string fields, `@NotEmpty` on `release-family-template-ids`). If any is blank or empty,
+**the application fails to start**.
 
 This is deliberate. The validation suite is meaningless without a real `ConfigTemplateCatalog`:
 with blank ids, `isBuildTemplate(...)` never matches any real template, so `ATTACHED_TO_BUILD_TEMPLATE`
@@ -22,10 +28,13 @@ boot.
 Note: declaring the fields as non-null Kotlin `String`s does NOT enforce this on its own — a blank
 YAML value like `gradle-build-template-id:` binds to `""` (Spring converts a null YAML scalar to an
 empty string), which is non-null and would bind fine. The `@NotBlank`/`@NotEmpty` constraints are
-what actually reject blanks at startup. `release-family-template-ids` is additionally
-`Set<@NotBlank String>`, so a blank/whitespace-only element (`[""]`) is rejected too — otherwise it
-would match no real template and push release configs into `notAttachedToBuildTemplate` as false
-WARNINGs.
+what actually reject blanks at startup. Individual `release-family-template-ids` elements must also
+be non-blank: this is enforced by an `@AssertTrue` bean-property check
+(`isReleaseFamilyTemplateIdsAllNonBlank`), so a blank/whitespace-only element (`[""]`) is rejected
+too — otherwise it would match no real template and push release configs into
+`notAttachedToBuildTemplate` as false WARNINGs. (An `@AssertTrue` getter is used rather than a
+`Set<@NotBlank String>` container-element constraint because Kotlin type-use annotations on a
+generic argument are not reliably surfaced to Hibernate Validator.)
 
 ## The bundled baseline is intentionally blank (fail-fast)
 
@@ -42,9 +51,20 @@ teamcity:
     maven-default-build-step-id:
 ```
 
-Because the config is mandatory (above), this baseline **fails startup by design** in any context
-that doesn't override it. The real values are supplied per environment; there is nowhere in this
-repository that carries live TeamCity ids.
+Because the config is mandatory in DB mode, this baseline **fails startup by design** in any
+DB-enabled context that doesn't override it. The real values are supplied per environment; there is
+nowhere in this repository that carries live TeamCity ids. (In `no-db` mode nothing is required —
+see below.)
+
+## No-DB / Git-only mode
+
+A Git-only deployment (`no-db` profile, `components-registry.database.enabled=false`) does **not**
+use TeamCity validation and does **not** need any `teamcity.validation.*` configuration. The
+properties bean and all validation beans are `@ConditionalOnDatabaseEnabled`, so they are absent
+from a no-db context entirely — the blank baseline above is fine, and no per-environment values are
+required. This is verified by `NoDbModeTeamcityValidationOptionalTest`, which boots the no-db
+context with all five `teamcity.validation.*` values blank and asserts the feature's beans are
+absent.
 
 ## Per-environment values (service-config) — required BEFORE deployment
 
@@ -93,6 +113,7 @@ instance in CI.
 
 ## Rollback
 
-There is no config-level "off" switch — the feature is always configured and always runs. To stop
-producing findings, revert the deployment (remove the feature) rather than blanking the config,
-which would fail startup.
+In DB mode there is no config-level "off" switch — the feature is always configured and always
+runs. To stop producing findings, revert the deployment (remove the feature) rather than blanking
+the config, which would fail startup. (A `no-db` deployment never runs validation in the first
+place and needs no config — see "No-DB / Git-only mode".)
