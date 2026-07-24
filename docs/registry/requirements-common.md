@@ -66,6 +66,7 @@
 | SYS-061 | `POST /rest/api/4/admin/service-events` ingests portal-sourced events (portal redeploys, validation-sweep runs) into the shared journal, so the Admin "Events" tab shows both services on one timeline. Authenticated by a shared-secret `X-Service-Event-Token` header (the portal BFF calls CRS tokenless), verified constant-time and **fail-closed** (blank/unset configured token rejects every call 403); method-scoped permitAll at the filter chain so the sibling GET read stays JWT+IMPORT_DATA gated; unknown eventType/status/source → 400 | High | integration-test | ✅ Tested |
 | SYS-064 | The component owner's manager (resolved via employee-service `getManager`) may edit the component and its field-overrides — a fourth, derived condition on `canEditComponent` alongside owner/RM/SC/admin. A directory failure or no-manager answer denies (fail-closed), never grants. `GET /{idOrName}/editors` enumerates the resolved manager (unlike the admin bypass, it is one concrete person per component); `getManager` is 2-minute cached per owner (resolved answers only) and its DB read runs in its own short-lived transaction, closed before the network call | High | unit + integration-test | ✅ Tested |
 | SYS-065 | Desired-set field-override PATCH is echo-safe: re-submitting an UNCHANGED override row (same id, same normalized range) does not re-validate its range, so a component carrying a legacy composite range can still be saved; a CREATE or an actual range change is still validated (composite still rejected) | High | integration-test | ✅ Tested |
+| SYS-067 | When a component's `labels`, `systems`, or `build.requiredTools` is edited, the client sends the complete new list and the stored list is made to match it exactly: entries kept in the list stay, new entries are added, entries left out are removed, and re-sending the same list changes nothing. Applies to all three lists (`component_labels`, `component_systems`, `component_required_tools`) | High | integration-test | ✅ Tested |
 
 ---
 
@@ -2464,3 +2465,46 @@ whole live collection, including legacy composite siblings (via `isIntersect`).
 `SYS-065 value-only edit of composite is accepted`,
 `SYS-065 disjointness still enforced against untouched composite`,
 `SYS-065 valid range change is persisted`.
+
+---
+
+### SYS-067: Editing labels / systems / required tools keeps the entries left in the list
+
+**Priority:** High
+**Test layer:** integration-test
+**Status:** ✅ Tested
+
+**Motivation:**
+`labels`, `systems`, and `build.requiredTools` are lists a user edits as a whole: the save carries the
+complete new list, not a single add or remove. The common edit keeps most entries and adds or drops one,
+so the entries that stay in the list must survive the save intact — losing any of them silently corrupts
+the component's data.
+
+**Description:**
+Saving one of these lists makes the stored rows match the submitted list exactly: an entry present both
+before and after the edit stays, an entry that is new is added, an entry no longer in the list is
+removed. The server compares the submitted list against the current rows and writes only the difference,
+so re-sending the same list performs no writes (idempotent) and sending an empty list clears the list.
+Labels and systems are stored per component; required tools per the component's BASE configuration. All
+three behave identically.
+
+**Acceptance criteria:**
+1. Editing labels / systems / `baseConfiguration.requiredTools` to keep an existing code and add a new
+   one persists BOTH in the respective junction (`component_labels` / `component_systems` /
+   `component_required_tools`).
+2. A mixed edit `[A,B] → [B,C]` keeps the intersection `B`, removes `A`, and adds `C`.
+3. Re-submitting the identical list is a no-op (membership unchanged).
+4. An empty list clears the membership.
+5. The label path holds on real PostgreSQL (Testcontainers), not only H2.
+6. Assertions read persisted junction rows (not the in-memory response projection), so a masked loss
+   cannot pass.
+
+**Test methods:** `Sys067JunctionSyncPreservesExistingTest` (H2) —
+`SYS-067 adding a label preserves the existing labels`,
+`SYS-067 adding a system preserves the existing systems`,
+`SYS-067 adding a required tool preserves the existing required tools`,
+`SYS-067 a mixed edit keeps the intersection, adds the new and drops the removed`,
+`SYS-067 re-submitting the same list is a no-op`,
+`SYS-067 an empty list clears the membership`;
+`Sys067LabelSyncPostgresTest` (Testcontainers PostgreSQL) —
+`SYS-067 adding a label preserves the existing labels on PostgreSQL`.

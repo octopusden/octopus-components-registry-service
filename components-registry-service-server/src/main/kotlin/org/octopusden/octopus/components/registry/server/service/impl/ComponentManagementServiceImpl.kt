@@ -1739,9 +1739,27 @@ class ComponentManagementServiceImpl(
         // row. Canonicalise here too so the persistence layer is the
         // single source of truth for the canonical form.
         val canonical = canonicalizeLabels(desired)
+        // Set-diff, NOT delete-all-then-reinsert. `deleteAllInBatch` bulk-deletes
+        // rows but leaves the entities MANAGED in the persistence context; a
+        // subsequent `save` of a still-present code resolves to a `merge` onto
+        // that managed entity, so Hibernate emits neither an INSERT (it believes
+        // the row exists) nor an UPDATE (immutable @Id/@ManyToOne -> HHH000502) —
+        // the bulk-deleted row is silently never recreated, and an edit keeps
+        // only the newly-added labels. Touching only the true delta (remove
+        // codes no longer desired, insert genuinely new ones) avoids the merge
+        // entirely and is idempotent for an unchanged set.
+        //
+        // Invariant that keeps this safe: `toDelete` (existing − desired) and the
+        // insert set (desired − existing) are disjoint by construction, and each
+        // component is synced at most once per transaction — so a just-deleted
+        // (still-managed) row is never re-saved in the same persistence context.
+        // If a future caller ever re-syncs the same component twice in one tx,
+        // detach `toDelete` (or use a PC-aware delete) before re-inserting.
         val existing = componentLabelRepository.findByComponentId(componentId)
-        if (existing.isNotEmpty()) componentLabelRepository.deleteAllInBatch(existing)
-        canonical.forEach { code ->
+        val existingCodes = existing.map { it.labelCode }.toSet()
+        val toDelete = existing.filter { it.labelCode !in canonical }
+        if (toDelete.isNotEmpty()) componentLabelRepository.deleteAllInBatch(toDelete)
+        (canonical - existingCodes).forEach { code ->
             ensureLabelExists(code)
             componentLabelRepository.save(
                 ComponentLabelEntity(componentId = componentId, labelCode = code),
@@ -1761,9 +1779,13 @@ class ComponentManagementServiceImpl(
         componentId: UUID,
         desired: Set<String>,
     ) {
+        // Set-diff, not delete-all-then-reinsert — see [syncLabels] for the
+        // managed-entity/merge hazard the delete-all pattern hides.
         val existing = componentSystemRepository.findByComponentId(componentId)
-        if (existing.isNotEmpty()) componentSystemRepository.deleteAllInBatch(existing)
-        desired.forEach { code ->
+        val existingCodes = existing.map { it.systemCode }.toSet()
+        val toDelete = existing.filter { it.systemCode !in desired }
+        if (toDelete.isNotEmpty()) componentSystemRepository.deleteAllInBatch(toDelete)
+        (desired - existingCodes).forEach { code ->
             ensureSystemExists(code)
             componentSystemRepository.save(
                 ComponentSystemEntity(componentId = componentId, systemCode = code),
@@ -1780,9 +1802,15 @@ class ComponentManagementServiceImpl(
         configId: UUID,
         desired: List<String>,
     ) {
+        // Set-diff, not delete-all-then-reinsert — see [syncLabels] for the
+        // managed-entity/merge hazard the delete-all pattern hides.
+        val canonicalTools = desired.distinct()
+        val canonicalToolSet = canonicalTools.toSet()
         val existing = componentRequiredToolRepository.findByComponentConfigurationId(configId)
-        if (existing.isNotEmpty()) componentRequiredToolRepository.deleteAllInBatch(existing)
-        desired.distinct().forEach { tool ->
+        val existingNames = existing.map { it.toolName }.toSet()
+        val toDelete = existing.filter { it.toolName !in canonicalToolSet }
+        if (toDelete.isNotEmpty()) componentRequiredToolRepository.deleteAllInBatch(toDelete)
+        canonicalTools.filter { it !in existingNames }.forEach { tool ->
             ensureToolExists(tool)
             componentRequiredToolRepository.save(
                 ComponentRequiredToolEntity(componentConfigurationId = configId, toolName = tool),
