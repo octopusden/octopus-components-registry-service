@@ -1431,10 +1431,6 @@ object id29Step2AggregateAuto : BuildType({
             reuseBuilds = ReuseBuilds.SUCCESSFUL
             onDependencyFailure = FailureAction.ADD_PROBLEM
         }
-        snapshot(id30DeployToOkdQaDevAuto) {
-            reuseBuilds = ReuseBuilds.SUCCESSFUL
-            onDependencyFailure = FailureAction.ADD_PROBLEM
-        }
     }
 })
 
