@@ -1409,6 +1409,12 @@ object id29Step2AggregateAuto : BuildType({
     }
 
     dependencies {
+        // [1.0] Compile & UT included so the single "Build Validation" status also
+        // covers compile + unit tests, not just the [2.x] fan-out.
+        snapshot(id10CompileUtAuto) {
+            reuseBuilds = ReuseBuilds.SUCCESSFUL
+            onDependencyFailure = FailureAction.ADD_PROBLEM
+        }
         snapshot(id20ValidateComponentsRegistryProductionDataAuto) {
             reuseBuilds = ReuseBuilds.SUCCESSFUL
             onDependencyFailure = FailureAction.ADD_PROBLEM
