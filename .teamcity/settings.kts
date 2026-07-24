@@ -65,6 +65,7 @@ project {
     buildType(id18CompatLocalStandGitModeAuto)
     buildType(id20ValidateComponentsRegistryProductionDataAuto)
     buildType(id30DeployToOkdQaDevAuto)
+    buildType(id29Step2AggregateAuto)
     buildType(id40ReleaseManual)
     buildType(id50ReleasePostProcessingAuto)
     buildType(id60DeployToOkdQaGhAuto)
@@ -83,6 +84,7 @@ project {
         id17CompatLocalStandManual,
         id18CompatLocalStandGitModeAuto,
         id30DeployToOkdQaDevAuto,
+        id29Step2AggregateAuto,
         id40ReleaseManual,
         id50ReleasePostProcessingAuto,
         id60DeployToOkdQaGhAuto,
@@ -1377,6 +1379,55 @@ object id30DeployToOkdQaDevAuto : BuildType({
             onDependencyFailure = FailureAction.FAIL_TO_START
             // Reuse a suitable successful [1.0] rather than forcing a fresh one.
             reuseBuilds = ReuseBuilds.SUCCESSFUL
+        }
+    }
+})
+
+object id29Step2AggregateAuto : BuildType({
+    templates(AbsoluteId("RDDepartment_PostGithubStatus"))
+    id("29Step2AggregateAuto")
+    name = "[2.9] Step 2 Aggregate [AUTO]"
+
+    // Surface [1.0]'s build number so the whole chain (id10 = id12 = … = id29)
+    // shows the same version tag in the TC chain view.
+    buildNumberPattern = "%BUILD_NUMBER%"
+
+    params {
+        param("BUILD_NUMBER", "${id10CompileUtAuto.depParamRefs.buildNumber}")
+    }
+
+    vcs {
+        root(AbsoluteId("Octopus_OctopusComponents_OctopusGithubVcsRoot"))
+    }
+
+    triggers {
+        finishBuildTrigger {
+            buildType = "${id10CompileUtAuto.id}"
+            successfulOnly = true
+            branchFilter = "+:*"
+        }
+    }
+
+    dependencies {
+        snapshot(id20ValidateComponentsRegistryProductionDataAuto) {
+            reuseBuilds = ReuseBuilds.SUCCESSFUL
+            onDependencyFailure = FailureAction.ADD_PROBLEM
+        }
+        snapshot(id12IntegrationDbTestsAuto) {
+            reuseBuilds = ReuseBuilds.SUCCESSFUL
+            onDependencyFailure = FailureAction.ADD_PROBLEM
+        }
+        snapshot(id17CompatLocalStandManual) {
+            reuseBuilds = ReuseBuilds.SUCCESSFUL
+            onDependencyFailure = FailureAction.ADD_PROBLEM
+        }
+        snapshot(id18CompatLocalStandGitModeAuto) {
+            reuseBuilds = ReuseBuilds.SUCCESSFUL
+            onDependencyFailure = FailureAction.ADD_PROBLEM
+        }
+        snapshot(id30DeployToOkdQaDevAuto) {
+            reuseBuilds = ReuseBuilds.SUCCESSFUL
+            onDependencyFailure = FailureAction.ADD_PROBLEM
         }
     }
 })
