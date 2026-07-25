@@ -26,9 +26,11 @@ shadowJar {
 }
 
 // Keep the thin `jar` ENABLED: the repo's TeamCity release tooling (extractModuleInfo) requires
-// every module to produce the standard components-registry-cli-<version>.jar, and the maven
-// publication (from components.java) needs it too. Mirrors :components-registry-automation, which
-// also ships a shadowJar while leaving the thin jar in place. (Do NOT set jar.enabled = false here —
+// every module to produce the standard components-registry-cli-<version>.jar. (This module is no
+// longer published to Maven Central — see unpublishedModules in the root build.gradle — so the
+// publication is not a reason any more; the release tooling still is.) Mirrors
+// :components-registry-automation, which also ships a shadowJar while leaving the thin jar in
+// place. (Do NOT set jar.enabled = false here —
 // that broke the [1.0] Compile&UT build: "Artifact components-registry-cli-<version>.jar wasn't
 // produced by this build".)
 jar {

@@ -23,6 +23,20 @@ plugins {
     id 'com.platformlib.gradle-wrapper' version '0.2.6'
 }
 
+// Modules deliberately NOT published to Maven Central. Central is an exchange for artifacts
+// other projects consume as a Maven dependency; these are deployables and internal tooling:
+//   - components-registry-service-server: the service itself. Its deliverable is the docker
+//     image on ghcr; the published jar is a 1.5 MB deploy artifact nobody depends on. (Consumers
+//     reference its openapi/v4.json by git path, not via the artifact.)
+//   - components-registry-cli (crsctl): standalone CLI. README documents building it locally
+//     (`:components-registry-cli:shadowJar`); packaging/distribution is a separate follow-up.
+//     Shadow + Gradle module metadata were dragging its 15.9 MB `-all` fat jar into Central.
+//   - components-registry-compat-test: internal compatibility harness, never a dependency.
+// NOT in this list: components-registry-automation — its TeamCity metarunner resolves
+// `<group>:components-registry-automation:<version>:jar:all` from a Maven repo at build time,
+// so it must stay published (see components-registry-automation/metarunners/).
+def unpublishedModules = ['components-registry-service-server', 'components-registry-cli', 'components-registry-compat-test']
+
 octopusQuality {
     // NOTE: in octopus-quality 2.5.2 `excludeProjects` maps ONLY to coverage exclusion
     // (coverageExcludedProjects) — it does NOT exclude these modules from qualityStatic, which
@@ -288,44 +302,51 @@ configure(subprojects) {
         withSourcesJar()
     }
 
-    publishing {
-        publications {
-            mavenJava(MavenPublication) {
-                from components.java
-                pom {
-                    name.set(project.name)
-                    description.set("Octopus module: ${project.name}")
-                    url.set("https://github.com/octopusden/octopus-components-registry-service.git")
-                    licenses {
-                        license {
-                            name.set("The Apache License, Version 2.0")
-                            url.set("http://www.apache.org/licenses/LICENSE-2.0.txt")
-                        }
-                    }
-                    scm {
+    // Maven Central is for modules other projects consume as a DEPENDENCY. Deployables and
+    // internal tooling are deliberately not published there (see unpublishedModules above):
+    // creating no publication is what keeps them out — `publishToSonatype` then has nothing
+    // to upload for them, while `build`, the docker image and the shadow/boot jars are
+    // untouched.
+    if (!(project.name in unpublishedModules)) {
+        publishing {
+            publications {
+                mavenJava(MavenPublication) {
+                    from components.java
+                    pom {
+                        name.set(project.name)
+                        description.set("Octopus module: ${project.name}")
                         url.set("https://github.com/octopusden/octopus-components-registry-service.git")
-                        connection.set("scm:git://github.com/octopusden/octopus-components-registry-service.git")
-                    }
-                    developers {
-                        developer {
-                            id.set("octopus")
-                            name.set("octopus")
+                        licenses {
+                            license {
+                                name.set("The Apache License, Version 2.0")
+                                url.set("http://www.apache.org/licenses/LICENSE-2.0.txt")
+                            }
+                        }
+                        scm {
+                            url.set("https://github.com/octopusden/octopus-components-registry-service.git")
+                            connection.set("scm:git://github.com/octopusden/octopus-components-registry-service.git")
+                        }
+                        developers {
+                            developer {
+                                id.set("octopus")
+                                name.set("octopus")
+                            }
                         }
                     }
                 }
             }
         }
-    }
 
-    signing {
-        required(gradle.taskGraph.hasTask("publishToSonatype"))
-        sign(publishing.publications)
-        def signingKey = findProperty("signingKey")
-        def signingPassword = findProperty("signingPassword")
-        useInMemoryPgpKeys(
-                signingKey,
-                signingPassword
-        )
+        signing {
+            required(gradle.taskGraph.hasTask("publishToSonatype"))
+            sign(publishing.publications)
+            def signingKey = findProperty("signingKey")
+            def signingPassword = findProperty("signingPassword")
+            useInMemoryPgpKeys(
+                    signingKey,
+                    signingPassword
+            )
+        }
     }
 }
 

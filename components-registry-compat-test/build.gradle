@@ -39,9 +39,6 @@ dependencies {
     testRuntimeOnly "ch.qos.logback:logback-classic:1.3.14"
 }
 
-tasks.named('publish') { enabled = false }
-tasks.named('publishToMavenLocal') { enabled = false }
-
 test {
     onlyIf("at least one of compat.baseline.url / compat.candidate.url is set (partial config triggers explainInvalid)") { compatActivated() }
     // Compat runs hit live stands whose state (cache snapshots, deployments) changes
