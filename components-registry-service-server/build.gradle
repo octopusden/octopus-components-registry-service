@@ -5,6 +5,7 @@ plugins {
     id 'org.jetbrains.kotlin.plugin.jpa'
     id 'java-test-fixtures'
     id 'com.bmuschko.docker-java-application'
+    id 'info.solidsoft.pitest'
 }
 
 apply plugin: 'docker-compose'
@@ -196,6 +197,74 @@ tasks.register('jacocoIntegrationTestReport', org.gradle.testing.jacoco.tasks.Ja
 // to leave this suite's file behind. See root build.gradle (qualityCoverage + publish gating).
 integrationTest.dependsOn bootJar
 integrationTest.finalizedBy jacocoIntegrationTestReport
+
+// Mutation testing (PIT). Coverage answers "was this line executed"; mutation testing answers "would a
+// test have noticed if it behaved differently" — the question a line/branch counter cannot ask. It is the
+// only gate here that fails on an assertion-free test.
+//
+// Scope is deliberately narrow. PIT re-runs the covering tests once per mutant, so it is only affordable
+// over pure logic, and only meaningful where a wrong result is a wrong ANSWER rather than a wrong wiring:
+//   - `..server.util..`   — the version-range partition algorithm, GAV parsing, ownership classification,
+//                           audit diffing, code rendering;
+//   - `..server.mapper..` — entity <-> DTO mapping, where a swapped or dropped field is exactly the defect
+//                           a shallow test misses.
+// Controllers, services, repositories, config and entities are NOT targeted: their behaviour is Spring
+// wiring and DB interaction, where mutants are mostly equivalent or killed only by the heavy suites.
+//
+// Run with `./gradlew :components-registry-service-server:pitest`. NOT wired into `check`, `build` or
+// `qualityCoverage`: on GitHub it runs in its own non-gating workflow (.github/workflows/mutation.yml),
+// like the perf SLA guard, so a slow analysis never sits on the PR critical path.
+pitest {
+    pitestVersion = project['pitest.version']
+    junit5PluginVersion = project['pitest-junit5.version']
+
+    targetClasses = [
+        'org.octopusden.octopus.components.registry.server.util.*',
+        'org.octopusden.octopus.components.registry.server.mapper.*',
+    ]
+    // Broad on purpose: PIT selects, per mutant, only the tests that actually cover the mutated line, so
+    // naming the whole server test tree costs nothing in mutation runs and prevents a mutant from being
+    // reported as "survived" merely because its covering test lives in another package (e.g. a mapper
+    // exercised through a service test).
+    targetTests = ['org.octopusden.octopus.components.registry.server.*']
+
+    // Unit tests only. The `integration`- and `performance`-tagged tests live in the SAME `src/test`
+    // source set and are filtered out by tag in the Gradle `test`/`dbTest`/`perfTest` tasks (root
+    // build.gradle) — PIT runs the JUnit platform itself and does NOT inherit those filters, so without
+    // this it would boot Testcontainers and Spring contexts once per mutant.
+    excludedGroups = ['integration', 'performance']
+    // Compiler-generated comparator/lambda holders (`sortedBy` and friends). Kotlin emits one class per
+    // call site; mutating them produces unactionable report entries — there is no such source line to
+    // write a test against. 40 of 1658 mutants at the time of writing, so this is report hygiene, not a
+    // score adjustment (it moves the score by 1 p.p.).
+    excludedClasses = ['*$$inlined$*']
+    mainSourceSets = [sourceSets.main]
+    testSourceSets = [sourceSets.test]
+
+    threads = 4
+    // Stable output path so a report can be diffed run to run; PIT's default appends a timestamp.
+    timestampedReports = false
+    outputFormats = ['HTML', 'XML']
+    // Incremental analysis: unchanged classes with unchanged tests reuse the previous verdict.
+    historyInputLocation = layout.buildDirectory.file('pitest/history.bin').get().asFile
+    historyOutputLocation = layout.buildDirectory.file('pitest/history.bin').get().asFile
+
+    // Ratchet, same contract as the coverage gates: the measured score minus a small margin. Because the
+    // workflow is non-gating today, this currently fails only the dedicated task/workflow, not the PR.
+    // See docs/registry/quality-baseline.md for the measured value and the re-measure recipe.
+    //
+    // 53 is deliberately NOT a target. The first measurement was 55% (895 of 1618 mutants killed), and
+    // ~24% of mutants are NO_COVERAGE — code in these packages that the UNIT tests never reach, because
+    // this analysis excludes the integration-tagged suite that does cover it. So the number is a floor to
+    // ratchet upward, in two ways that are both real work: kill surviving mutants (weak assertions), and
+    // give the unit-untested paths unit tests. `ConfigurationRowAccessorsKt` (128 of 132 mutants not
+    // covered) and `MappersKt` (31 of 31) are the two worst offenders and the obvious first targets.
+    mutationThreshold = 53
+    // Line coverage of the targeted classes by the selected tests. PIT reports it for free, and it catches
+    // a failure mode the mutation score hides: tests that stop reaching the code at all (a drop here can
+    // even RAISE the mutation score, by removing hard-to-kill mutants from the denominator).
+    coverageThreshold = 78
+}
 
 // Integration test inherits testImplementation configuration which includes transitive dependencies with resources.
 // Gradle's Copy task detects these as duplicates during resource processing.

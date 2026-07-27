@@ -1,0 +1,77 @@
+# INTERNAL / NON-GATING — not part of the merge gate. Runs PIT mutation testing over the pure-logic
+# packages of the server module (`..server.util..`, `..server.mapper..`; scope and rationale in
+# components-registry-service-server/build.gradle).
+#
+# Why it is a workflow of its own rather than a step in `quality`: PIT re-runs the covering tests once
+# per mutant, so it does not belong on the PR critical path while the score is still being calibrated.
+# Promote it into `merge-gate.yml` (add the job to `gate-merge.needs`) once the threshold has held for a
+# few weeks.
+#
+# Unlike the perf SLA guard, this DOES run on pull requests — but only when the targeted sources or the
+# build configuration change. Mutation testing is deterministic (no wall-clock assertions), so it has
+# none of the shared-runner flakiness that keeps `perf-test.yml` off pull_request.
+name: Mutation Testing (non-gating)
+
+on:
+  workflow_dispatch:
+  pull_request:
+    paths:
+      - 'components-registry-service-server/src/main/kotlin/org/octopusden/octopus/components/registry/server/util/**'
+      - 'components-registry-service-server/src/main/kotlin/org/octopusden/octopus/components/registry/server/mapper/**'
+      - 'components-registry-service-server/src/test/kotlin/org/octopusden/octopus/components/registry/server/util/**'
+      - 'components-registry-service-server/src/test/kotlin/org/octopusden/octopus/components/registry/server/mapper/**'
+      - 'components-registry-service-server/build.gradle'
+      - 'gradle.properties'
+      - '.github/workflows/mutation.yml'
+  schedule:
+    # Mondays 06:00 UTC — one hour after the perf SLA guard, so the two never contend for a runner.
+    - cron: '0 6 * * 1'
+
+jobs:
+  mutation-test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up JDK 21
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '21'
+
+      - name: Run mutation testing
+        run: ./gradlew :components-registry-service-server:pitest --no-daemon
+
+      - name: Publish mutation report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: mutation-report
+          path: components-registry-service-server/build/reports/pitest/**
+          if-no-files-found: warn
+
+      - name: Summarise mutation score
+        if: always()
+        run: |
+          report=components-registry-service-server/build/reports/pitest/mutations.xml
+          if [ ! -f "$report" ]; then
+            echo "No mutations.xml produced — see the job log above." >> "$GITHUB_STEP_SUMMARY"
+            exit 0
+          fi
+          total=$(grep -c '<mutation ' "$report" || true)
+          killed=$(grep -c "status='KILLED'" "$report" || true)
+          survived=$(grep -c "status='SURVIVED'" "$report" || true)
+          no_coverage=$(grep -c "status='NO_COVERAGE'" "$report" || true)
+          {
+            echo "### Mutation testing"
+            echo ""
+            echo "| Metric | Value |"
+            echo "|---|---|"
+            echo "| Mutations generated | $total |"
+            echo "| Killed | $killed |"
+            echo "| Survived | $survived |"
+            echo "| Not covered | $no_coverage |"
+            if [ "$total" -gt 0 ]; then
+              echo "| Mutation score | $((killed * 100 / total))% |"
+            fi
+          } >> "$GITHUB_STEP_SUMMARY"
