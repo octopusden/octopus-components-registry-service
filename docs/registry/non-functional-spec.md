@@ -299,6 +299,9 @@ Every PR must pass:
 7. Coverage floors                  (aggregate LINE/BRANCH + per-module LINE/BRANCH)
 ```
 
+Non-gating, reported separately: mutation testing (`mutation.yml`) and the perf SLA guard
+(`perf-test.yml`).
+
 **Coverage as a fitness function.** Coverage is gated in `qualityCoverage` (the GitHub `quality` job)
 over the `test` + `dbTest` exec set — deliberately not in `check`, so TeamCity `[1.0]` stays a
 compile/correctness gate:
@@ -325,6 +328,28 @@ still reports 100% LINE — BRANCH distinguishes "one branch ran" from "both bra
 says anything about whether an outcome was **asserted**: a test with no assertions at all can reach 100% on
 both. That is a different question, and no coverage counter can gate it. The measured values, the snapshot
 they were taken from, and the re-measure recipe live in [`quality-baseline.md`](quality-baseline.md).
+
+**Mutation testing as a fitness function.** Coverage counters answer "did this line run"; they cannot
+answer "would any test have noticed it behaving differently". PIT answers the second question by mutating
+bytecode and re-running the covering tests, and it is therefore the only check here that fails an
+assertion-free test.
+
+| Property | Value |
+|---|---|
+| Scope | `..server.util..`, `..server.mapper..` (pure logic; a wrong result is a wrong *answer*, not wrong wiring) |
+| Task | `:components-registry-service-server:pitest` |
+| Where | `mutation.yml` — non-gating: manual, weekly, and PRs touching the targeted sources or build files |
+| Gates | `mutationThreshold = 53`, `coverageThreshold = 78` (ratchets) |
+| Tests used | the `test` source set only, with the `integration`/`performance` tags excluded |
+
+Controllers, services, repositories, config and entities are **not** targeted: their behaviour is Spring
+wiring and DB interaction, where mutants are largely equivalent or killed only by the heavy suites, at a
+cost PIT cannot amortise (it re-runs tests once per mutant).
+
+The threshold is a floor to raise, not a target that has been met. Two distinct kinds of work raise it:
+killing surviving mutants (assertions that do not check the result) and giving unit tests to the paths in
+these packages that only the integration suite reaches today (`NO_COVERAGE` mutants). Promote the workflow
+into `merge-gate.yml` once the threshold has held for a few weeks.
 
 Production deployment additionally runs:
 ```

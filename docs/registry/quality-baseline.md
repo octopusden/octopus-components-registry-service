@@ -16,6 +16,7 @@ snapshot can be read against the right contract.
 |---|---|---|---|
 | 2026-07-27 | Aggregate coverage floor | LINE ≥ 70%, no BRANCH rule | LINE ≥ 86%, BRANCH ≥ 65% |
 | 2026-07-27 | Per-module coverage floor (`jacocoCoverageFloor`, wired into `qualityCoverage`) | plugin-owned 10% floor only | strict per-module LINE/BRANCH minimums (measured − ~2 p.p.), 10% floor kept underneath |
+| 2026-07-27 | Mutation testing (`pitest`, non-gating `mutation.yml`) | no such check | `mutationThreshold = 53`, `coverageThreshold = 78` over `..server.util..` / `..server.mapper..` |
 | 2026-07-28 | `component-validation` gained a floor (module added by #443, measured on `main` @`82d76d26`: LINE 99.7% = 343/344, BRANCH 85.9% = 128/149) | not gated | LINE ≥ 97%, BRANCH ≥ 83% |
 | 2026-07-28 | Floors-map policy checks moved out of configuration into `verifyCoverageFloorsPolicy` | a map problem failed **every** Gradle invocation | it fails the coverage gate only |
 | 2026-07-29 | Coverage execution data restricted to the tasks the invocation runs (`test`, `dbTest`) | a leftover `integrationTest.exec` could fold in locally, raising the numbers a clean CI run does not have | the gate reads the same data locally and on a fresh agent |
