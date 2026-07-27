@@ -59,6 +59,7 @@ project {
 
     buildType(id10CompileUtAuto)
     buildType(id12IntegrationDbTestsAuto)
+    buildType(id19MutationTestingManual)
     buildType(id15CompatManual)
     buildType(id16CompatTraceReplayManual)
     buildType(id17CompatLocalStandManual)
@@ -394,6 +395,100 @@ object id12IntegrationDbTestsAuto : BuildType({
     // run is now MAIN-ONLY via [1.0]'s schedule → this config's finishBuildTrigger.
     // (The build-number override is handled by the PIN_BUILD_NUMBER step above,
     // not by disabling RUNNER_1720.)
+    disableSettings("TRIGGER_1003", "TRIGGER_1006")
+})
+
+// [1.7] Mutation Testing — PIT over the server's pure-logic packages (`..server.util..`,
+// `..server.mapper..`; scope and thresholds in components-registry-service-server/build.gradle).
+//
+// DELIBERATELY OUTSIDE THE CHAIN. No snapshot dependency in either direction, no finishBuildTrigger:
+// nothing waits for it and it waits for nothing, so it cannot delay or block [2.4] deploy or [4.0]
+// release. That is the point — the mutation score says how well the tests would notice a regression,
+// which is a review concern, not a "is this build shippable" concern.
+//
+// Division of labour with GitHub, which also runs this analysis (.github/workflows/mutation.yml):
+//   - GitHub, every PR touching the targeted paths — the GATE: fast feedback on the diff, and the place
+//     the threshold will become blocking (add the job to `gate-merge.needs`).
+//   - here, weekly on the default branch — the ANALYTICS: a browsable HTML report in the artifact tree
+//     (a GitHub Actions artifact is a zip you must download and unpack) and, via the stats step below,
+//     a mutation-score chart across builds, which GitHub Actions has no equivalent for.
+//     It also covers a blind spot of the GitHub trigger: that workflow only fires on changes to the
+//     server module and the build files, so a change ELSEWHERE that weakens a mutant's fate (e.g. in
+//     component-resolver-core, which the mappers call) does not run it. This weekly build catches that
+//     drift on main.
+object id19MutationTestingManual : BuildType({
+    templates(AbsoluteId("Octopus_OctopusGradleBuild"))
+    id("19MutationTestingManual")
+    name = "[1.7] Mutation Testing [MANUAL]"
+
+    // Scoped to the PIT output only: this config produces no test-results, logs or diagnostics worth
+    // keeping, and publishing `**/build/reports/**` wholesale would drag in every other module's
+    // unrelated reports. The HTML report is published as a directory so it is browsable in place.
+    artifactRules = """
+        components-registry-service-server/build/reports/pitest/** => reports/pitest
+    """.trimIndent()
+
+    params {
+        param("GRADLE_TASK", ":components-registry-service-server:pitest")
+        param("COMPONENTS_REGISTRY_BRANCH", "master")
+    }
+
+    steps {
+        gradle {
+            name = "Gradle Mutation Testing"
+            id = "RUNNER_1768"
+            tasks = "%GRADLE_TASK%"
+            workingDir = "%WORK_DIR%"
+            gradleParams = """
+                --info
+                %GRADLE_STANDARD_PARAMETERS%
+            """.trimIndent()
+            enableStacktrace = true
+            jdkHome = "%env.JAVA_HOME%"
+            jvmArgs = "%JDK_CMDLINE_PARAMETERS%"
+            dockerRunParameters = "--userns=keep-id -e JAVA_HOME=/opt/java/openjdk -v %env.BUILD_ENV%:/opt/BUILD_ENV -v %teamcity.build.checkoutDir%:/home/tcagent/work -v %teamcity.agent.jvm.user.home%:/home/tcagent -w /home/tcagent/work -e TZ=Europe/Brussels"
+            param("org.jfrog.artifactory.selectedDeployableServer.defaultModuleVersionConfiguration", "GLOBAL")
+        }
+        // Turns the score into a tracked TeamCity statistic (charted per build) and puts the headline on
+        // the build overview. Reporting only — the pass/fail verdict stays with the `pitest` task, which
+        // owns mutationThreshold/coverageThreshold.
+        script {
+            name = "Report mutation statistics"
+            id = "REPORT_MUTATION_STATS"
+            scriptContent = "scripts/teamcity/report-mutation-stats.sh"
+        }
+        stepsOrder = arrayListOf("RUNNER_1720", "RUNNER_1768", "REPORT_MUTATION_STATS")
+    }
+
+    failureConditions {
+        // A cold run (no PIT history) took ~8 min on a GitHub runner; 60 min is a generous ceiling that
+        // still fails a hung analysis rather than occupying an agent indefinitely.
+        executionTimeoutMin = 60
+    }
+
+    requirements {
+        doesNotContain("env.OS_TYPE", "WIN", "RQ_2875")
+    }
+
+    triggers {
+        // Weekly, DEFAULT BRANCH ONLY — same shape as [1.0]'s heartbeat, one hour later so the two never
+        // contend for an agent ([1.0]'s Sunday run fans out into the whole [2.x] chain). Per-branch runs
+        // are deliberately absent: per-PR feedback is GitHub's job. Run this config manually to inspect a
+        // specific branch.
+        schedule {
+            schedulingPolicy = weekly {
+                timezone = "UTC"
+                dayOfWeek = ScheduleTrigger.DAY.Sunday
+                hour = 11
+            }
+            branchFilter = "+:<default>"
+            triggerBuild = always()
+        }
+    }
+
+    // Disable the inherited triggers from Octopus_OctopusGradleBuild:
+    //   TRIGGER_1003 — VCS Trigger (would run the analysis on every commit on every branch)
+    //   TRIGGER_1006 — Schedule Trigger (weekly on ALL branches; replaced by the main-only one above)
     disableSettings("TRIGGER_1003", "TRIGGER_1006")
 })
 

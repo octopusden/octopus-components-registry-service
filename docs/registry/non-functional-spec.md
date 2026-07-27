@@ -343,7 +343,8 @@ proof of assertion quality, and the survivor list matters more than the percenta
 |---|---|
 | Scope | `..server.util..`, `..server.mapper..` (pure logic; a wrong result is a wrong *answer*, not wrong wiring) |
 | Task | `:components-registry-service-server:pitest` |
-| Where | `mutation.yml` — non-gating: manual, weekly, and PRs touching the targeted sources or build files |
+| Where (gate) | GitHub `mutation.yml` — non-gating today: manual, weekly, and PRs touching the targeted sources or build files |
+| Where (analytics) | TeamCity `[1.7] Mutation Testing` — weekly on the default branch, outside the build chain: browsable HTML report plus a score chart via `buildStatisticValue` |
 | Gates | `mutationThreshold = 53`, `coverageThreshold = 78` (ratchets) |
 | Tests used | the `test` source set only, with the `integration`/`performance` tags excluded |
 
@@ -355,6 +356,13 @@ The threshold is a floor to raise, not a target that has been met. Two distinct 
 killing surviving mutants (assertions that do not check the result) and giving unit tests to the paths in
 these packages that only the integration suite reaches today (`NO_COVERAGE` mutants). Promote the workflow
 into `merge-gate.yml` once the threshold has held for a few weeks.
+
+The two homes are complementary, not redundant. The GitHub run is the per-change gate; the TeamCity run
+covers a blind spot it structurally has — that workflow only triggers on changes to the server module and
+the build files, so a change elsewhere (say in `component-resolver-core`, which the mappers call) can move
+the score without ever running it. The weekly build on the default branch catches that drift. A release
+gate on the score is deliberately NOT added: releases are cut from the default branch, every commit there
+passed the PR gate, and test quality is fixed in review rather than on the release path.
 
 Production deployment additionally runs:
 ```

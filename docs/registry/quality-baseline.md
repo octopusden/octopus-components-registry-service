@@ -284,6 +284,30 @@ gh run download <PERF_RUN_ID> -R octopusden/octopus-components-registry-service 
 grep -roE "getComponents\(\) perf[^&<]{0,200}" <TMPDIR>/perf-test-report/test-results/perfTest
 ```
 
+### Mutation score
+
+Two sources, by purpose:
+
+- **Per change** — the `mutation-report` artifact of the GitHub `Mutation Testing (non-gating)` run, plus
+  the killed/survived/not-covered table in that job's summary.
+- **Trend over time** — TeamCity `[1.7] Mutation Testing`: the artifact tab serves
+  `reports/pitest/index.html` browsable in place, and the Statistics tab charts `mutationScore` (also
+  `mutationsSurvived`, `mutationsNoCoverage`, …) across builds. Emitted by
+  `scripts/teamcity/report-mutation-stats.sh`.
+
+Locally:
+
+```bash
+./gradlew :components-registry-service-server:pitest
+```
+
+```bash
+grep -c "detected='true'" components-registry-service-server/build/reports/pitest/mutations.xml
+```
+
+Read `detected='true'` rather than `status='KILLED'`: a mutant that hangs is `TIMED_OUT` and still counts
+as detected, which is what `mutationThreshold` is applied to.
+
 ### Baseline debt counts
 
 These come from the working tree, not from CI. One command per file — the counts are the burn-down
