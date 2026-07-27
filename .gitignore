@@ -24,3 +24,7 @@ BOOT-INF/
 # CI helpers invoked from TeamCity build steps live in the repo so they can be
 # reviewed and tested outside TC.
 !scripts/teamcity/*.sh
+# Quality-baseline measurement helpers (docs/registry/quality-baseline.md §7). Tracked because the
+# documented recipe calls them by path — an ignored helper leaves the doc pointing at a file nobody
+# else has.
+!scripts/quality-baseline/*.sh
