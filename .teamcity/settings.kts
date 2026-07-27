@@ -80,6 +80,7 @@ project {
         id10CompileUtAuto,
         id15CompatManual,
         id16CompatTraceReplayManual,
+        id19MutationTestingManual,
         id20ValidateComponentsRegistryProductionDataAuto,
         id12IntegrationDbTestsAuto,
         id17CompatLocalStandManual,
@@ -426,6 +427,7 @@ object id19MutationTestingManual : BuildType({
     // unrelated reports. The HTML report is published as a directory so it is browsable in place.
     artifactRules = """
         components-registry-service-server/build/reports/pitest/** => reports/pitest
+        build/reports/quality/** => reports/quality
     """.trimIndent()
 
     params {
@@ -449,15 +451,43 @@ object id19MutationTestingManual : BuildType({
             dockerRunParameters = "--userns=keep-id -e JAVA_HOME=/opt/java/openjdk -v %env.BUILD_ENV%:/opt/BUILD_ENV -v %teamcity.build.checkoutDir%:/home/tcagent/work -v %teamcity.agent.jvm.user.home%:/home/tcagent -w /home/tcagent/work -e TZ=Europe/Brussels"
             param("org.jfrog.artifactory.selectedDeployableServer.defaultModuleVersionConfiguration", "GLOBAL")
         }
+        // Regenerates build/reports/quality/index.html so the published report set has its documented
+        // single entry point (AGENTS.md §Reports). A separate step rather than an extra task on the line
+        // above: Gradle gives no ordering guarantee between two independent requested tasks, and the index
+        // must be written AFTER the PIT report exists or its section is silently omitted.
+        //
+        // ALWAYS, for the same reason as the stats step below: a threshold failure is exactly when someone
+        // wants to open the report.
+        gradle {
+            name = "Quality reports index"
+            id = "RUNNER_QUALITY_INDEX"
+            executionMode = BuildStep.ExecutionMode.ALWAYS
+            tasks = "qualityReportsIndex"
+            workingDir = "%WORK_DIR%"
+            gradleParams = """
+                --info
+                %GRADLE_STANDARD_PARAMETERS%
+            """.trimIndent()
+            enableStacktrace = true
+            jdkHome = "%env.JAVA_HOME%"
+            jvmArgs = "%JDK_CMDLINE_PARAMETERS%"
+            dockerRunParameters = "--userns=keep-id -e JAVA_HOME=/opt/java/openjdk -v %env.BUILD_ENV%:/opt/BUILD_ENV -v %teamcity.build.checkoutDir%:/home/tcagent/work -v %teamcity.agent.jvm.user.home%:/home/tcagent -w /home/tcagent/work -e TZ=Europe/Brussels"
+        }
         // Turns the score into a tracked TeamCity statistic (charted per build) and puts the headline on
         // the build overview. Reporting only — the pass/fail verdict stays with the `pitest` task, which
         // owns mutationThreshold/coverageThreshold.
+        //
+        // ALWAYS is load-bearing, not defensive: `pitest` FAILS the build when the score drops below
+        // mutationThreshold, and with the default execution mode TeamCity would skip this step precisely
+        // then — so the one score that most needs to land on the chart and in the build status would be
+        // the one that never does. The script tolerates a missing report and never fails the build.
         script {
             name = "Report mutation statistics"
             id = "REPORT_MUTATION_STATS"
+            executionMode = BuildStep.ExecutionMode.ALWAYS
             scriptContent = "scripts/teamcity/report-mutation-stats.sh"
         }
-        stepsOrder = arrayListOf("RUNNER_1720", "RUNNER_1768", "REPORT_MUTATION_STATS")
+        stepsOrder = arrayListOf("RUNNER_1720", "RUNNER_1768", "RUNNER_QUALITY_INDEX", "REPORT_MUTATION_STATS")
     }
 
     failureConditions {
