@@ -209,11 +209,10 @@ pasting it into a `curl` command then puts it in the command text as well. The h
 lookup and the request in one process and passes the header to curl on stdin, so the credential never
 reaches argv, a log, or a transcript.
 
-Export the base URL once — it is internal, so it is deliberately not committed anywhere in this repository:
-
-```bash
-export TC_URL=<teamcity-base-url>
-```
+`TC_URL` is passed **inline on every call**, not exported once: each command here is a separate invocation,
+and in an agent session each one is a fresh shell, so an `export` from a previous step is already gone and
+the helper would exit 2. The base URL is internal and deliberately not committed anywhere in this
+repository — substitute it from the team's CI bookmark.
 
 Build-configuration IDs are `<TC_PROJECT_ID>_<CONFIG>`, where `<CONFIG>` is `10CompileUtAuto`,
 `12IntegrationDbTestsAuto`, `17CompatLocalStandManual`, … as declared in `.teamcity/settings.kts`, and
@@ -222,19 +221,19 @@ Build-configuration IDs are `<TC_PROJECT_ID>_<CONFIG>`, where `<CONFIG>` is `10C
 Last `main` builds of a configuration:
 
 ```bash
-scripts/quality-baseline/tc-get.sh "app/rest/builds?locator=buildType:<TC_PROJECT_ID>_10CompileUtAuto,branch:main,count:3&fields=build(id,number,status,revisions(revision(version)))"
+TC_URL=<teamcity-base-url> scripts/quality-baseline/tc-get.sh "app/rest/builds?locator=buildType:<TC_PROJECT_ID>_10CompileUtAuto,branch:main,count:3&fields=build(id,number,status,revisions(revision(version)))"
 ```
 
 Statistics of one build — `TotalTestCount`, `PassedTestCount`, `IgnoredTestCount`, `BuildDuration`:
 
 ```bash
-scripts/quality-baseline/tc-get.sh "app/rest/builds/id:<BUILD_ID>/statistics"
+TC_URL=<teamcity-base-url> scripts/quality-baseline/tc-get.sh "app/rest/builds/id:<BUILD_ID>/statistics"
 ```
 
 Ignored tests of one build:
 
 ```bash
-scripts/quality-baseline/tc-get.sh "app/rest/testOccurrences?locator=build:(id:<BUILD_ID>),status:UNKNOWN,count:20&fields=testOccurrence(name,status)"
+TC_URL=<teamcity-base-url> scripts/quality-baseline/tc-get.sh "app/rest/testOccurrences?locator=build:(id:<BUILD_ID>),status:UNKNOWN,count:20&fields=testOccurrence(name,status)"
 ```
 
 ### GitHub Actions

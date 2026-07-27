@@ -12,8 +12,11 @@
 # Usage:
 #   TC_URL=<teamcity-base-url> scripts/quality-baseline/tc-get.sh "app/rest/server?fields=version"
 #
+# Pass TC_URL inline on every call. Do not rely on `export`: the documented recipe runs each command as its
+# own invocation, and in an agent session every invocation is a fresh shell, so an earlier export is gone.
+#
 # TC_URL is intentionally not baked in: the host is internal and does not belong in this repository.
-# Take it from the team's CI bookmark and export it in your shell.
+# Take it from the team's CI bookmark.
 #
 # Requires: macOS `security` with a generic password stored under the service name `tc-rest-token`
 # (personal access token; TeamCity guest auth is disabled).
@@ -27,7 +30,7 @@ if [ "$#" -ne 1 ]; then
 fi
 
 if [ -z "${TC_URL:-}" ]; then
-    echo "TC_URL is not set — export the TeamCity base URL (see the team's CI bookmark)." >&2
+    echo "TC_URL is not set — pass it inline: TC_URL=<base-url> $0 <rest-path> (see the team's CI bookmark)." >&2
     exit 2
 fi
 
