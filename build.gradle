@@ -499,9 +499,10 @@ gradle.projectsEvaluated {
                     value = 'COVEREDRATIO'
                     minimum = 0.86
                 }
-                // BRANCH is the counter LINE cannot substitute for: a fully line-covered `if` with only
-                // the true branch exercised still reports 100% LINE. This is the gate that notices a
-                // test which executes a condition without asserting either outcome.
+                // BRANCH is the counter LINE cannot substitute for: a fully line-covered `if` exercised
+                // only on its true path still reports 100% LINE. BRANCH distinguishes "one branch ran"
+                // from "both branches ran" — it says nothing about whether either outcome was asserted,
+                // which is a different question and a different gate (mutation testing).
                 limit {
                     counter = 'BRANCH'
                     value = 'COVEREDRATIO'
@@ -520,8 +521,6 @@ gradle.projectsEvaluated {
     //     coverage stays a `qualityCoverage` (GitHub) concern, as before.
     // Minimums are measured-minus-~2 p.p. ratchets; docs/registry/quality-baseline.md records the
     // measured values, the snapshot they came from, and how to re-measure.
-    // `components-registry-service-core` is absent on purpose: it has no tests of its own, so it has no
-    // per-module report to gate — its classes are covered only through the aggregate above.
     def moduleCoverageRatchet = [
         'components-registry-service-server'      : [line: 0.87, branch: 0.68],
         'components-registry-service-client'      : [line: 0.94, branch: 0.63],
@@ -531,27 +530,40 @@ gradle.projectsEvaluated {
         'component-resolver-api'                  : [line: 0.68, branch: 0.28],
         'components-registry-api'                 : [line: 0.14, branch: 0.07],
     ]
-    // Both directions of the map must stay honest, so neither a rename nor a new module can quietly
-    // remove a gate. NOTE: both checks assume `projectsEvaluated` sees the whole project tree, which holds
-    // because configuration-on-demand is off (it is not set in gradle.properties). If it is ever enabled,
-    // these guards must move to a task action — under configure-on-demand a narrow invocation would
-    // evaluate only some projects and the checks would fire spuriously.
-    def ratchetableProjects = testTargets.findAll { !it.sourceSets.test.allSource.isEmpty() }
-    def unratcheted = ratchetableProjects*.name - moduleCoverageRatchet.keySet()
+    // Escape hatch: a coverage module that OWNS tests but is deliberately left ungated goes here, with the
+    // reason. Empty today, and `components-registry-service-core` deliberately does not need an entry — it
+    // has no test sources at all, so the source-keyed check below already accounts for it (and will demand
+    // a decision the moment someone gives it tests). Every other module that owns tests must be in the
+    // ratchet map: absent from both is a configuration error, not a default.
+    def coverageRatchetExempt = [:]
+
+    // The map is checked against reality in BOTH directions, keyed on TEST SOURCES rather than on the
+    // presence of a `test` task. The Kotlin/Java plugins register `test` even for a module with no test
+    // code, and a JacocoCoverageVerification with empty execution data is SKIPPED, not failed — so keying
+    // on the task would let a module delete every test and keep a green ratchet, while the ~2 p.p. of
+    // aggregate headroom absorbs a small module's loss. Keying on sources makes that state fail loudly.
+    // NOTE: both checks assume `projectsEvaluated` sees the whole project tree, which holds because
+    // configuration-on-demand is off (it is not set in gradle.properties). If it is ever enabled, these
+    // guards must move into a task action — under configure-on-demand a narrow invocation evaluates only
+    // some projects and the checks would fire spuriously.
+    def ratchetableNames = testTargets.findAll { !it.sourceSets.test.allSource.isEmpty() }*.name
+    def unratcheted = ratchetableNames - moduleCoverageRatchet.keySet() - coverageRatchetExempt.keySet()
     if (unratcheted) {
         throw new GradleException(
             "coverage modules with tests but no ratchet: ${unratcheted.join(', ')} — measure them (see " +
                 "docs/registry/quality-baseline.md §7) and add entries to moduleCoverageRatchet in build.gradle")
     }
+    def ratchetedWithoutTests = moduleCoverageRatchet.keySet() - ratchetableNames
+    if (ratchetedWithoutTests) {
+        throw new GradleException(
+            "coverage ratchet is configured for ${ratchetedWithoutTests.join(', ')}, which has no test " +
+                "sources — the ratchet task would SKIP on empty JaCoCo execution data and gate nothing. " +
+                "Restore the tests, or (if the module is intentionally untested) move it to " +
+                "coverageRatchetExempt in build.gradle with the reason")
+    }
     def ratchetTaskPaths = []
     moduleCoverageRatchet.each { moduleName, thresholds ->
         def p = testTargets.find { it.name == moduleName }
-        if (p == null) {
-            // Fail loudly: a renamed/removed module must not silently drop its coverage ratchet.
-            throw new GradleException(
-                "coverage ratchet is configured for '$moduleName', which is not a coverage module with a " +
-                    "`test` task — update moduleCoverageRatchet in build.gradle")
-        }
         // Only `dbTest` — deliberately NOT `integrationTest`, for the reason spelled out at
         // `heavyTestTaskPaths` above: the FatJar boot FT must not be pulled into the GitHub coverage job
         // (timing-sensitive on shared runners, and it piles a second full-app JVM onto the co-scheduled

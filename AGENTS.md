@@ -140,8 +140,8 @@ All existing v1/v2/v3 endpoints (34 endpoints, 28 Feign client methods) must rem
 - Treat unit-test coverage and FT/integration coverage as separate concerns.
 - Generic GitHub quality checks should enforce only coverage that GitHub actually measures reliably.
 - FT or OKD coverage should be enforced only in the environment that really runs those scenarios.
-- Gate BRANCH as well as LINE: LINE alone cannot see a condition that is executed but never asserted both
-  ways, which is exactly the gap a generated test tends to leave.
+- Gate BRANCH as well as LINE: LINE alone cannot see a conditional taken on only one path. Note what
+  neither counter can see — whether any outcome was asserted; an assertion-free test can reach 100% on both.
 - Record measured coverage in `docs/registry/quality-baseline.md` when it moves materially, so a later
   "before / after" comparison has a dated reference rather than a recollection.
 

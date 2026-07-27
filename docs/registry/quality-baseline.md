@@ -194,57 +194,96 @@ Test counts from the same artifact, by module (source sets `test` = 1069, `dbTes
 
 ### 7. How to re-measure
 
-TeamCity (server host from the team's CI bookmark; personal token from the macOS Keychain — anonymous
-access is disabled):
+Every command below is a **single standalone invocation** — no pipes, no `&&`/`;`, no command
+substitution, no redirects, no loops. That is the repository's mandatory shell form (see `AGENTS.md`
+§Shell Command Safety), and an agent following this recipe must be able to copy each line as-is. Where a
+value from one step feeds the next, substitute it by hand into the `<PLACEHOLDER>`.
+
+### TeamCity
+
+The server host is in the team's CI bookmark; anonymous access is disabled, so requests need the personal
+token. Read it out of the macOS Keychain as its own step and paste the value into `<TOKEN>` below:
 
 ```bash
-TC="<teamcity-base-url>"
-T=$(security find-generic-password -s tc-rest-token -w)
-B=RnDProcessesAutomation_Octopus_OctopusComponentsRegistryService
-# last main builds of a config
-curl -s -H "Authorization: Bearer $T" -H "Accept: application/json" \
-  "$TC/app/rest/builds?locator=buildType:${B}_10CompileUtAuto,branch:main,count:3&fields=build(id,number,status,revisions(revision(version)))"
-# statistics (TotalTestCount / PassedTestCount / IgnoredTestCount / BuildDuration)
-curl -s -H "Authorization: Bearer $T" -H "Accept: application/json" "$TC/app/rest/builds/id:<ID>/statistics"
-# ignored tests
-curl -s -H "Authorization: Bearer $T" -H "Accept: application/json" \
-  "$TC/app/rest/testOccurrences?locator=build:(id:<ID>),status:UNKNOWN,count:20&fields=testOccurrence(name,status)"
+security find-generic-password -s tc-rest-token -w
 ```
 
-GitHub Actions — coverage and static-analysis numbers come from the Quality Gates artifacts, not
-from the job logs:
+Build-configuration IDs are `<TC_PROJECT_ID>_<CONFIG>`, where `<CONFIG>` is `10CompileUtAuto`,
+`12IntegrationDbTestsAuto`, `17CompatLocalStandManual`, … as declared in `.teamcity/settings.kts`, and
+`<TC_PROJECT_ID>` is the project id from that same file.
+
+Last `main` builds of a configuration:
 
 ```bash
-gh run list --branch main --limit 12 \
-  --json workflowName,conclusion,createdAt,databaseId,headSha
+curl -s -H "Authorization: Bearer <TOKEN>" -H "Accept: application/json" "<TC_URL>/app/rest/builds?locator=buildType:<TC_PROJECT_ID>_10CompileUtAuto,branch:main,count:3&fields=build(id,number,status,revisions(revision(version)))"
+```
+
+Statistics of one build — `TotalTestCount`, `PassedTestCount`, `IgnoredTestCount`, `BuildDuration`:
+
+```bash
+curl -s -H "Authorization: Bearer <TOKEN>" -H "Accept: application/json" "<TC_URL>/app/rest/builds/id:<BUILD_ID>/statistics"
+```
+
+Ignored tests of one build:
+
+```bash
+curl -s -H "Authorization: Bearer <TOKEN>" -H "Accept: application/json" "<TC_URL>/app/rest/testOccurrences?locator=build:(id:<BUILD_ID>),status:UNKNOWN,count:20&fields=testOccurrence(name,status)"
+```
+
+### GitHub Actions
+
+Coverage and static-analysis numbers come from the Quality Gates **artifacts**, not from the job logs.
+Find the run:
+
+```bash
+gh run list --branch main --limit 12 --json workflowName,conclusion,createdAt,databaseId,headSha
+```
+
+Download its artifacts. Use a `<TMPDIR>` **outside** the repository — `gh run download` unpacks
+module-shaped directories that otherwise land in the working tree:
+
+```bash
 gh run download <QUALITY_RUN_ID> -R octopusden/octopus-components-registry-service --dir <TMPDIR>
-# aggregate counters:
-#   <TMPDIR>/coverage-reports/build/reports/jacoco/overallCoverage/jacocoOverallCoverageReport.xml
-# per-module counters:
-#   <TMPDIR>/coverage-reports/<module>/build/reports/jacoco/test/jacocoTestReport.xml
-# static analysis:
-#   <TMPDIR>/static-analysis-reports/<module>/build/reports/{checkstyle,pmd,detekt,ktlint}/*.xml
 ```
 
-Read only the **top-level** `<counter>` elements of a JaCoCo report (direct children of `<report>`);
-the nested per-package/class counters must not be summed.
+Then read these files:
 
-The perf median comes from the `perf-test-report` artifact of the `Performance SLA` run, in
-`system-err` (not `system-out`, not the job log):
+| Metric | Path under `<TMPDIR>` |
+|---|---|
+| Aggregate JaCoCo counters | `coverage-reports/build/reports/jacoco/overallCoverage/jacocoOverallCoverageReport.xml` |
+| Per-module JaCoCo counters | `coverage-reports/<module>/build/reports/jacoco/test/jacocoTestReport.xml` |
+| Per-module test counts | `coverage-reports/<module>/build/test-results/<sourceSet>/TEST-*.xml` |
+| Static-analysis violations | `static-analysis-reports/<module>/build/reports/<tool>/*.xml` for `checkstyle`, `pmd`, `detekt`, `ktlint` |
+
+Read only the **top-level** `<counter>` elements of a JaCoCo report (the direct children of `<report>`);
+the nested per-package and per-class counters must not be summed.
+
+### Perf median
+
+From the `perf-test-report` artifact of the `Performance SLA` run, in `system-err` — not `system-out`, and
+not the job log:
 
 ```bash
 gh run download <PERF_RUN_ID> -R octopusden/octopus-components-registry-service --dir <TMPDIR>
-grep -oE 'getComponents\(\) perf[^&<]{0,200}' \
-  <TMPDIR>/perf-test-report/test-results/perfTest/TEST-*.xml
 ```
-
-Baseline debt counts come from the working tree, not from CI:
 
 ```bash
-for f in $(find . -name detekt-baseline.xml -not -path '*/build/*'); do echo -n "$f "; grep -c '<ID>' $f; done
-for f in $(find . -name ktlint-baseline.xml -not -path '*/build/*'); do echo -n "$f "; grep -c '<error ' $f; done
-wc -l components-registry-service-server/archunit_violation_store/*
+grep -roE "getComponents\(\) perf[^&<]{0,200}" <TMPDIR>/perf-test-report/test-results/perfTest
 ```
 
-Use `--dir <TMPDIR>` outside the repository: `gh run download` unpacks module-shaped directories that
-otherwise land in the working tree.
+### Baseline debt counts
+
+These come from the working tree, not from CI. One command per file — the counts are the burn-down
+numbers in §4:
+
+```bash
+grep -rc "<ID>" --include=detekt-baseline.xml --exclude-dir=build .
+```
+
+```bash
+grep -rc "<error " --include=ktlint-baseline.xml --exclude-dir=build .
+```
+
+```bash
+wc -l components-registry-service-server/archunit_violation_store/3e61e124-fe37-40db-9ea6-91a90f6afc18
+```
