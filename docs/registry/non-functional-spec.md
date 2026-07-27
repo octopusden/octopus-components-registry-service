@@ -331,8 +331,13 @@ they were taken from, and the re-measure recipe live in [`quality-baseline.md`](
 
 **Mutation testing as a fitness function.** Coverage counters answer "did this line run"; they cannot
 answer "would any test have noticed it behaving differently". PIT answers the second question by mutating
-bytecode and re-running the covering tests, and it is therefore the only check here that fails an
-assertion-free test.
+bytecode and re-running the covering tests, which makes it the only check here that can surface a test
+exercising code without checking the result.
+
+Read the asymmetry carefully: a **surviving** mutant is solid evidence that nothing noticed the change,
+while a **killed** mutant only means something noticed — possibly an incidental exception rather than a
+deliberate assertion. PIT does not inspect tests for assertions, so the score is a signal to act on, not a
+proof of assertion quality, and the survivor list matters more than the percentage.
 
 | Property | Value |
 |---|---|

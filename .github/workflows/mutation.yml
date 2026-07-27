@@ -7,10 +7,19 @@
 # Promote it into `merge-gate.yml` (add the job to `gate-merge.needs`) once the threshold has held for a
 # few weeks.
 #
-# Unlike the perf SLA guard, this DOES run on pull requests — but only when the targeted sources or the
-# build configuration change. Mutation testing is deterministic (no wall-clock assertions), so it has
-# none of the shared-runner flakiness that keeps `perf-test.yml` off pull_request.
+# Unlike the perf SLA guard, this DOES run on pull requests — but only when the targeted sources, the
+# server's tests, or the build configuration change. Mutation testing is deterministic (no wall-clock
+# assertions), so it has none of the shared-runner flakiness that keeps `perf-test.yml` off pull_request.
+# Cost: a cold run is ~8 min on a GitHub runner; PIT's incremental history (cached below) brings a warm
+# run down to well under a minute locally.
 name: Mutation Testing (non-gating)
+
+# This job executes PR-controlled build logic (`./gradlew ... pitest` runs the repository's own Gradle
+# scripts and tests from the PR head). Pin the token down to read-only regardless of the repository or
+# organisation default, so a malicious or mistaken build script cannot write to the repo, publish
+# packages, or touch other workflows.
+permissions:
+  contents: read
 
 on:
   workflow_dispatch:
@@ -18,8 +27,11 @@ on:
     paths:
       - 'components-registry-service-server/src/main/kotlin/org/octopusden/octopus/components/registry/server/util/**'
       - 'components-registry-service-server/src/main/kotlin/org/octopusden/octopus/components/registry/server/mapper/**'
-      - 'components-registry-service-server/src/test/kotlin/org/octopusden/octopus/components/registry/server/util/**'
-      - 'components-registry-service-server/src/test/kotlin/org/octopusden/octopus/components/registry/server/mapper/**'
+      # The whole server test tree, not just the tests that sit next to the targeted classes: `targetTests`
+      # covers `..server.*`, and a large share of mutants is killed by tests elsewhere (at the time of
+      # writing, 243 by `..server.service.impl..` alone). Weakening one of those tests changes the score,
+      # so it has to trigger this workflow.
+      - 'components-registry-service-server/src/test/**'
       - 'components-registry-service-server/build.gradle'
       - 'gradle.properties'
       - '.github/workflows/mutation.yml'
@@ -38,6 +50,19 @@ jobs:
         with:
           distribution: temurin
           java-version: '21'
+
+      # PIT's incremental analysis reuses the previous verdict for classes whose bytecode and covering
+      # tests are unchanged. The history file lives under `build/`, so without this every runner starts
+      # cold. Rolling key: the exact key never hits (it carries the SHA), so each run restores the newest
+      # prefix match and then saves its own updated history.
+      - name: Restore PIT incremental history
+        uses: actions/cache@v4
+        with:
+          path: components-registry-service-server/build/pitest/history.bin
+          key: pitest-history-${{ github.ref_name }}-${{ github.sha }}
+          restore-keys: |
+            pitest-history-${{ github.ref_name }}-
+            pitest-history-main-
 
       - name: Run mutation testing
         run: ./gradlew :components-registry-service-server:pitest --no-daemon
@@ -59,7 +84,12 @@ jobs:
             exit 0
           fi
           total=$(grep -c '<mutation ' "$report" || true)
+          # Count PIT's own notion of "detected" (the attribute), NOT status='KILLED'. A mutant that hangs
+          # is TIMED_OUT and still detected, so counting KILLED alone reports a lower score than the one
+          # `mutationThreshold` is applied to — a discrepancy that only shows up near the threshold.
+          detected=$(grep -c "detected='true'" "$report" || true)
           killed=$(grep -c "status='KILLED'" "$report" || true)
+          timed_out=$(grep -c "status='TIMED_OUT'" "$report" || true)
           survived=$(grep -c "status='SURVIVED'" "$report" || true)
           no_coverage=$(grep -c "status='NO_COVERAGE'" "$report" || true)
           {
@@ -68,10 +98,12 @@ jobs:
             echo "| Metric | Value |"
             echo "|---|---|"
             echo "| Mutations generated | $total |"
-            echo "| Killed | $killed |"
+            echo "| Detected (the score's numerator) | $detected |"
+            echo "| — killed | $killed |"
+            echo "| — timed out | $timed_out |"
             echo "| Survived | $survived |"
             echo "| Not covered | $no_coverage |"
             if [ "$total" -gt 0 ]; then
-              echo "| Mutation score | $((killed * 100 / total))% |"
+              echo "| Mutation score | $((detected * 100 / total))% |"
             fi
           } >> "$GITHUB_STEP_SUMMARY"

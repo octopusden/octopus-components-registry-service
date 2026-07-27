@@ -198,9 +198,13 @@ tasks.register('jacocoIntegrationTestReport', org.gradle.testing.jacoco.tasks.Ja
 integrationTest.dependsOn bootJar
 integrationTest.finalizedBy jacocoIntegrationTestReport
 
-// Mutation testing (PIT). Coverage answers "was this line executed"; mutation testing answers "would a
+// Mutation testing (PIT). Coverage answers "was this line executed"; mutation testing answers "would any
 // test have noticed if it behaved differently" — the question a line/branch counter cannot ask. It is the
-// only gate here that fails on an assertion-free test.
+// only check here that can surface a test which exercises code without checking the result.
+//
+// It is evidence, not proof: a mutant can be detected by an incidental exception rather than by a
+// deliberate assertion, so a surviving mutant reliably means "nothing noticed this change", while a killed
+// one only means "something noticed". Read the survivor list, not just the score.
 //
 // Scope is deliberately narrow. PIT re-runs the covering tests once per mutant, so it is only affordable
 // over pure logic, and only meaningful where a wrong result is a wrong ANSWER rather than a wrong wiring:
