@@ -531,6 +531,18 @@ gradle.projectsEvaluated {
         'component-resolver-api'                  : [line: 0.68, branch: 0.28],
         'components-registry-api'                 : [line: 0.14, branch: 0.07],
     ]
+    // Both directions of the map must stay honest, so neither a rename nor a new module can quietly
+    // remove a gate. NOTE: both checks assume `projectsEvaluated` sees the whole project tree, which holds
+    // because configuration-on-demand is off (it is not set in gradle.properties). If it is ever enabled,
+    // these guards must move to a task action — under configure-on-demand a narrow invocation would
+    // evaluate only some projects and the checks would fire spuriously.
+    def ratchetableProjects = testTargets.findAll { !it.sourceSets.test.allSource.isEmpty() }
+    def unratcheted = ratchetableProjects*.name - moduleCoverageRatchet.keySet()
+    if (unratcheted) {
+        throw new GradleException(
+            "coverage modules with tests but no ratchet: ${unratcheted.join(', ')} — measure them (see " +
+                "docs/registry/quality-baseline.md §7) and add entries to moduleCoverageRatchet in build.gradle")
+    }
     def ratchetTaskPaths = []
     moduleCoverageRatchet.each { moduleName, thresholds ->
         def p = testTargets.find { it.name == moduleName }
@@ -544,7 +556,8 @@ gradle.projectsEvaluated {
         // `heavyTestTaskPaths` above: the FatJar boot FT must not be pulled into the GitHub coverage job
         // (timing-sensitive on shared runners, and it piles a second full-app JVM onto the co-scheduled
         // Postgres containers — GH issue #424). Its exec file is still folded in by `coverageExecData`
-        // when a run that DID execute it (TeamCity) leaves one behind.
+        // when a run that DID execute it (TeamCity) leaves one behind — which can only widen the local
+        // pass margin, never cause a false failure, since the thresholds were calibrated without it.
         def heavyForModule = ['dbTest'].findAll { p.tasks.findByName(it) != null }
         p.tasks.register('jacocoCoverageRatchet', org.gradle.testing.jacoco.tasks.JacocoCoverageVerification) {
             group = 'verification'
