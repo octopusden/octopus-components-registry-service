@@ -33,6 +33,10 @@ on:
       # so it has to trigger this workflow.
       - 'components-registry-service-server/src/test/**'
       - 'components-registry-service-server/build.gradle'
+      # `settings.gradle` too, not just the module build file and the version properties: the PIT plugin
+      # is declared in its `pluginManagement` block, so a plugin-version or resolution change there
+      # alters what this workflow actually runs.
+      - 'settings.gradle'
       - 'gradle.properties'
       - '.github/workflows/mutation.yml'
   schedule:
