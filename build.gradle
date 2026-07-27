@@ -380,6 +380,11 @@ def writeQualityReportsIndex = {
             ],
             'Tests': [
                     [pattern: '**/build/reports/tests/**/index.html', artifactPrefix: 'tests']
+            ],
+            // Only present after `:components-registry-service-server:pitest` has run (its own workflow,
+            // not `build`), so on an ordinary build this section is simply absent from the index.
+            'Mutation Testing': [
+                    [pattern: '**/build/reports/pitest/index.html', artifactPrefix: 'pitest']
             ]
     ]
 
