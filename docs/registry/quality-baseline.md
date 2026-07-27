@@ -201,11 +201,18 @@ value from one step feeds the next, substitute it by hand into the `<PLACEHOLDER
 
 ### TeamCity
 
-The server host is in the team's CI bookmark; anonymous access is disabled, so requests need the personal
-token. Read it out of the macOS Keychain as its own step and paste the value into `<TOKEN>` below:
+Anonymous access is disabled, so every request needs the personal token from the macOS Keychain. Go through
+[`scripts/quality-baseline/tc-get.sh`](../../scripts/quality-baseline/tc-get.sh) — **never** read the token
+out and paste it into a command. `security find-generic-password -w` prints the secret to stdout, which puts
+it in terminal scrollback, shell history and (in an agent session) the tool output that gets recorded;
+pasting it into a `curl` command then puts it in the command text as well. The helper does the Keychain
+lookup and the request in one process and passes the header to curl on stdin, so the credential never
+reaches argv, a log, or a transcript.
+
+Export the base URL once — it is internal, so it is deliberately not committed anywhere in this repository:
 
 ```bash
-security find-generic-password -s tc-rest-token -w
+export TC_URL=<teamcity-base-url>
 ```
 
 Build-configuration IDs are `<TC_PROJECT_ID>_<CONFIG>`, where `<CONFIG>` is `10CompileUtAuto`,
@@ -215,19 +222,19 @@ Build-configuration IDs are `<TC_PROJECT_ID>_<CONFIG>`, where `<CONFIG>` is `10C
 Last `main` builds of a configuration:
 
 ```bash
-curl -s -H "Authorization: Bearer <TOKEN>" -H "Accept: application/json" "<TC_URL>/app/rest/builds?locator=buildType:<TC_PROJECT_ID>_10CompileUtAuto,branch:main,count:3&fields=build(id,number,status,revisions(revision(version)))"
+scripts/quality-baseline/tc-get.sh "app/rest/builds?locator=buildType:<TC_PROJECT_ID>_10CompileUtAuto,branch:main,count:3&fields=build(id,number,status,revisions(revision(version)))"
 ```
 
 Statistics of one build — `TotalTestCount`, `PassedTestCount`, `IgnoredTestCount`, `BuildDuration`:
 
 ```bash
-curl -s -H "Authorization: Bearer <TOKEN>" -H "Accept: application/json" "<TC_URL>/app/rest/builds/id:<BUILD_ID>/statistics"
+scripts/quality-baseline/tc-get.sh "app/rest/builds/id:<BUILD_ID>/statistics"
 ```
 
 Ignored tests of one build:
 
 ```bash
-curl -s -H "Authorization: Bearer <TOKEN>" -H "Accept: application/json" "<TC_URL>/app/rest/testOccurrences?locator=build:(id:<BUILD_ID>),status:UNKNOWN,count:20&fields=testOccurrence(name,status)"
+scripts/quality-baseline/tc-get.sh "app/rest/testOccurrences?locator=build:(id:<BUILD_ID>),status:UNKNOWN,count:20&fields=testOccurrence(name,status)"
 ```
 
 ### GitHub Actions
