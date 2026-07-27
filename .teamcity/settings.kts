@@ -425,8 +425,15 @@ object id19MutationTestingManual : BuildType({
     // Scoped to the PIT output only: this config produces no test-results, logs or diagnostics worth
     // keeping, and publishing `**/build/reports/**` wholesale would drag in every other module's
     // unrelated reports. The HTML report is published as a directory so it is browsable in place.
+    //
+    // The LEADING wildcard is deliberate. TeamCity drops the static part of the path before the first
+    // wildcard, so `components-registry-service-server/build/reports/pitest/** => reports/pitest` would
+    // flatten to `reports/pitest/index.html` — while `qualityReportsIndex` links reports by their
+    // REPO-RELATIVE path (`../pitest/components-registry-service-server/build/reports/pitest/index.html`),
+    // leaving a dead link. Starting the pattern with `**` preserves the whole relative structure, which is
+    // also why [1.0] publishes `**/build/reports/** => reports` rather than a static prefix.
     artifactRules = """
-        components-registry-service-server/build/reports/pitest/** => reports/pitest
+        **/build/reports/pitest/** => reports/pitest
         build/reports/quality/** => reports/quality
     """.trimIndent()
 
