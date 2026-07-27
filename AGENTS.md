@@ -127,7 +127,17 @@ All existing v1/v2/v3 endpoints (34 endpoints, 28 Feign client methods) must rem
 - Kotlin checks (detekt, ktlint) are **blocking** with module-level baselines.
 - Groovy CodeNarc is **report-only** — do not make blocking without explicit decision.
 - **SpotBugs intentionally disabled** in `build.gradle` via `tasks.matching { it.name.startsWith('spotbugs') }.configureEach { enabled = false }` (the plugin itself stays applied because it's owned by the `octopus-quality` convention plugin). Bytecode-flow analysis gave high false-positive rate on Kotlin lateinit / DSL getter / test code; the per-language tools above already cover the same ground. Do not re-enable without an explicit policy decision.
-- JaCoCo coverage: per-module minimum 10%, overall weighted minimum 70%.
+- JaCoCo coverage, all enforced in `qualityCoverage` (the GitHub `quality` job) and **not** in `check`,
+  so TeamCity `[1.0]` does not gate coverage:
+  - aggregate **LINE ≥ 86%** and **BRANCH ≥ 65%** (`jacocoOverallCoverageVerification`);
+  - per-module strict **LINE/BRANCH ratchet** (`<module>:jacocoCoverageRatchet`), thresholds set to the
+    measured value minus ~2 p.p. — see [`docs/registry/quality-baseline.md`](docs/registry/quality-baseline.md)
+    for the measured numbers and the re-measure recipe;
+  - the plugin-owned per-module 10% floor stays underneath (it is wired off `test` and must keep working
+    without the heavy suites).
+  These are **ratchets**: raise them when coverage rises, and never lower one without saying so in the PR
+  description. A module renamed or dropped without updating `moduleCoverageRatchet` in `build.gradle`
+  fails configuration loudly rather than silently losing its gate.
 - **ArchUnit** architecture fitness functions in `components-registry-service-server` (`server/architecture/ArchitectureFitnessTest.kt`, runs in the fast `test` gate). Scope is **structural**: four package-placement rules (`@RestController`/`@Repository`/`@Entity`/`@Service`) plus one **frozen** layering rule (controllers must not use Spring Data repositories directly). The layering rule's pre-existing accesses are baselined in `archunit_violation_store/` — treat it like `detekt-baseline.xml`, as a **ratchet**: **new** violations fail the build (`freeze.refreeze=false`); the store is **immutable in normal runs** (`allowStoreUpdate=false`), so updating the baseline is a deliberate, flags-flipped regenerate + diff-review (this also stops a rule-text change from silently re-recording a fresh baseline). Runtime/framework policy is intentionally NOT checked here — v4 authorization is deferred to a Spring-context test (TD-017), package cycles to TD-016, and the DB-source/Groovy boundary to TD-019. See `docs/registry/non-functional-spec.md` §5.3.
 
 ## CI Workflows
@@ -140,7 +150,12 @@ All existing v1/v2/v3 endpoints (34 endpoints, 28 Feign client methods) must rem
 - Treat unit-test coverage and FT/integration coverage as separate concerns.
 - Generic GitHub quality checks should enforce only coverage that GitHub actually measures reliably.
 - FT or OKD coverage should be enforced only in the environment that really runs those scenarios.
-- The repository uses both a low per-module coverage floor and an overall weighted coverage threshold.
+- The repository layers three coverage gates: a low plugin-owned per-module floor, a strict per-module
+  LINE/BRANCH ratchet, and an aggregate LINE/BRANCH threshold (see Quality Gates above).
+- Gate BRANCH as well as LINE. LINE alone cannot see a condition that is executed but never asserted
+  both ways, which is exactly the gap a generated test tends to leave.
+- Record measured coverage in `docs/registry/quality-baseline.md` when it moves materially, so a later
+  "before / after" comparison has a dated reference rather than a recollection.
 
 ## Reports
 

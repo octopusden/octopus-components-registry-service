@@ -429,7 +429,7 @@ gradle.projectsEvaluated {
     def coverageProjects = subprojects.findAll {
         // components-registry-cli is a standalone CLI tool (like -automation): much of its code is
         // Clikt wiring / main() / gated interactive auth paths that unit coverage can't meaningfully
-        // reach. Excluded from the aggregate 70% gate, consistent with octopusQuality.excludeProjects.
+        // reach. Excluded from the aggregate coverage gate, consistent with octopusQuality.excludeProjects.
         !(it.name in ['components-registry-automation', 'components-registry-compat-test', 'test-common', 'components-registry-cli'])
     }
     def testTargets = coverageProjects.findAll { it.tasks.findByName('test') != null }
@@ -482,7 +482,7 @@ gradle.projectsEvaluated {
 
     tasks.register('jacocoOverallCoverageVerification', org.gradle.testing.jacoco.tasks.JacocoCoverageVerification) {
         group = 'verification'
-        description = 'Verifies aggregated JaCoCo line coverage >= 70% across all coverage modules (test + dbTest, plus integrationTest.exec when present)'
+        description = 'Verifies aggregated JaCoCo LINE >= 86% and BRANCH >= 65% across all coverage modules (test + dbTest, plus integrationTest.exec when present)'
         dependsOn(testTargets.collect { "${it.path}:test" })
         dependsOn(heavyTestTaskPaths)
         executionData.from(coverageExecData(testTargets))
@@ -491,13 +491,87 @@ gradle.projectsEvaluated {
         violationRules {
             rule {
                 element = 'BUNDLE'
+                // Ratchets, not targets: each minimum is the measured aggregate coverage minus ~2 p.p.
+                // of headroom (see docs/registry/quality-baseline.md for the measured values and the
+                // recipe to re-measure). Raise them when coverage rises; never lower one silently.
                 limit {
                     counter = 'LINE'
                     value = 'COVEREDRATIO'
-                    minimum = 0.70
+                    minimum = 0.86
+                }
+                // BRANCH is the counter LINE cannot substitute for: a fully line-covered `if` with only
+                // the true branch exercised still reports 100% LINE. This is the gate that notices a
+                // test which executes a condition without asserting either outcome.
+                limit {
+                    counter = 'BRANCH'
+                    value = 'COVEREDRATIO'
+                    minimum = 0.65
                 }
             }
         }
+    }
+
+    // Per-module coverage ratchet. The plugin-owned `jacocoTestCoverageVerification` keeps its lenient
+    // 10% floor (it is wired off `test` and must stay runnable without the heavy suites); this task adds
+    // the strict per-module LINE/BRANCH minimums on top, in a task of our own so that:
+    //   - it declares the heavy suites it needs (`dependsOn`), so a standalone invocation measures the
+    //     same exec set as CI instead of failing on missing dbTest coverage, and
+    //   - it never runs as part of `check`/`test`, so TeamCity [1.0] (`clean build …`) is unaffected —
+    //     coverage stays a `qualityCoverage` (GitHub) concern, as before.
+    // Minimums are measured-minus-~2 p.p. ratchets; docs/registry/quality-baseline.md records the
+    // measured values, the snapshot they came from, and how to re-measure.
+    // `components-registry-service-core` is absent on purpose: it has no tests of its own, so it has no
+    // per-module report to gate — its classes are covered only through the aggregate above.
+    def moduleCoverageRatchet = [
+        'components-registry-service-server'      : [line: 0.87, branch: 0.68],
+        'components-registry-service-client'      : [line: 0.94, branch: 0.63],
+        'component-resolver-core'                 : [line: 0.78, branch: 0.60],
+        'components-registry-dsl'                 : [line: 0.79, branch: 0.45],
+        'components-registry-service-light-client': [line: 0.77, branch: 0.43],
+        'component-resolver-api'                  : [line: 0.68, branch: 0.28],
+        'components-registry-api'                 : [line: 0.14, branch: 0.07],
+    ]
+    def ratchetTaskPaths = []
+    moduleCoverageRatchet.each { moduleName, thresholds ->
+        def p = testTargets.find { it.name == moduleName }
+        if (p == null) {
+            // Fail loudly: a renamed/removed module must not silently drop its coverage ratchet.
+            throw new GradleException(
+                "coverage ratchet is configured for '$moduleName', which is not a coverage module with a " +
+                    "`test` task — update moduleCoverageRatchet in build.gradle")
+        }
+        // Only `dbTest` — deliberately NOT `integrationTest`, for the reason spelled out at
+        // `heavyTestTaskPaths` above: the FatJar boot FT must not be pulled into the GitHub coverage job
+        // (timing-sensitive on shared runners, and it piles a second full-app JVM onto the co-scheduled
+        // Postgres containers — GH issue #424). Its exec file is still folded in by `coverageExecData`
+        // when a run that DID execute it (TeamCity) leaves one behind.
+        def heavyForModule = ['dbTest'].findAll { p.tasks.findByName(it) != null }
+        p.tasks.register('jacocoCoverageRatchet', org.gradle.testing.jacoco.tasks.JacocoCoverageVerification) {
+            group = 'verification'
+            description = "Verifies ${moduleName} JaCoCo LINE >= ${(thresholds.line * 100) as int}% " +
+                "and BRANCH >= ${(thresholds.branch * 100) as int}% (ratchet)"
+            dependsOn("${p.path}:test")
+            heavyForModule.each { dependsOn("${p.path}:$it") }
+            executionData.from(coverageExecData([p]))
+            sourceDirectories.from(files(p.sourceSets.main.allSource.srcDirs))
+            classDirectories.from(files(p.sourceSets.main.output))
+            violationRules {
+                rule {
+                    element = 'BUNDLE'
+                    limit {
+                        counter = 'LINE'
+                        value = 'COVEREDRATIO'
+                        minimum = thresholds.line
+                    }
+                    limit {
+                        counter = 'BRANCH'
+                        value = 'COVEREDRATIO'
+                        minimum = thresholds.branch
+                    }
+                }
+            }
+        }
+        ratchetTaskPaths << "${p.path}:jacocoCoverageRatchet"
     }
 
     // Per-module jacoco (registered by octopus-quality off the `test` task) must also
@@ -528,6 +602,7 @@ gradle.projectsEvaluated {
         dependsOn(heavyTestTaskPaths)
         dependsOn('jacocoOverallCoverageReport')
         dependsOn('jacocoOverallCoverageVerification')
+        dependsOn(ratchetTaskPaths)
     }
 
     // Part A.7: gate publish + image push on the server fat-jar FT. dockerPushImage HARD-depends
