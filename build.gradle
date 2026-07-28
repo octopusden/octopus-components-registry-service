@@ -23,19 +23,24 @@ plugins {
     id 'com.platformlib.gradle-wrapper' version '0.2.6'
 }
 
-// Modules deliberately NOT published to Maven Central. Central is an exchange for artifacts
-// other projects consume as a Maven dependency; these are deployables and internal tooling:
-//   - components-registry-service-server: the service itself. Its deliverable is the docker
-//     image on ghcr; the published jar is a 1.5 MB deploy artifact nobody depends on. (Consumers
-//     reference its openapi/v4.json by git path, not via the artifact.)
-//   - components-registry-cli (crsctl): standalone CLI. README documents building it locally
-//     (`:components-registry-cli:shadowJar`); packaging/distribution is a separate follow-up.
-//     Shadow + Gradle module metadata were dragging its 15.9 MB `-all` fat jar into Central.
-//   - components-registry-compat-test: internal compatibility harness, never a dependency.
-// NOT in this list: components-registry-automation — its TeamCity metarunner resolves
-// `<group>:components-registry-automation:<version>:jar:all` from a Maven repo at build time,
-// so it must stay published (see components-registry-automation/metarunners/).
-def unpublishedModules = ['components-registry-service-server', 'components-registry-cli', 'components-registry-compat-test']
+// Modules published to Maven Central — an allowlist, so a module that is not listed is not
+// published. Central is for artifacts other projects consume as a Maven dependency; NOT listed
+// here on purpose: components-registry-service-server and components-registry-cli (deployables,
+// shipped as a docker image / built locally per the CLI README) and components-registry-compat-test
+// (internal harness). components-registry-automation IS listed even though it is tooling: its
+// TeamCity metarunner resolves `<group>:components-registry-automation:<version>:jar:all` from a
+// Maven repo at build time (see components-registry-automation/metarunners/).
+def centralPublishedModules = [
+        'component-resolver-api',
+        'component-resolver-core',
+        'components-registry-api',
+        'components-registry-dsl',
+        'components-registry-service-client',
+        'components-registry-service-light-client',
+        'components-registry-service-core',
+        'test-common',
+        'components-registry-automation',
+] as Set
 
 octopusQuality {
     // NOTE: in octopus-quality 2.5.2 `excludeProjects` maps ONLY to coverage exclusion
@@ -302,12 +307,10 @@ configure(subprojects) {
         withSourcesJar()
     }
 
-    // Maven Central is for modules other projects consume as a DEPENDENCY. Deployables and
-    // internal tooling are deliberately not published there (see unpublishedModules above):
-    // creating no publication is what keeps them out — `publishToSonatype` then has nothing
-    // to upload for them, while `build`, the docker image and the shadow/boot jars are
-    // untouched.
-    if (!(project.name in unpublishedModules)) {
+    // Only allowlisted modules get a publication (see centralPublishedModules above); for the
+    // rest `publishToSonatype` has nothing to upload, while `build`, the docker image and the
+    // shadow/boot jars are unaffected.
+    if (project.name in centralPublishedModules) {
         publishing {
             publications {
                 mavenJava(MavenPublication) {
@@ -436,6 +439,21 @@ ${sectionsHtml}
 </body>
 </html>
 """
+}
+
+// Fail the build if any module publishes to Maven Central outside the allowlist. A
+// publication-surface reduction has no test of its own: without this guard, dropping the
+// allowlist check or adding a module-level `publishing {}` block silently starts pushing a
+// deployable to Central again, and it is only noticed at the next quota audit.
+gradle.projectsEvaluated {
+    def actual = subprojects.findAll { !it.publishing.publications.isEmpty() }*.name as Set
+    if (actual != centralPublishedModules) {
+        throw new GradleException(
+                "Maven Central publication set drifted.\n" +
+                        "  allowlisted: ${centralPublishedModules.sort()}\n" +
+                        "  publishing:  ${actual.sort()}\n" +
+                        "Update `centralPublishedModules` in the root build.gradle only if the change is intentional.")
+    }
 }
 
 // Aggregate JaCoCo tasks and coverage gate wired in projectsEvaluated (outside any task

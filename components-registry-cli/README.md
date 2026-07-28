@@ -16,6 +16,7 @@ stderr, and a small, pinned set of process exit codes.
 | Anonymous reads — `components`, `component`, `meta` (except `meta employees`), `whoami` | **Works out of the box.** No login or token required. |
 | `login` / `logout` / `audit` / `meta employees` | **Gated.** These need an authenticated identity. The device-flow `login` depends on a pending Keycloak **public device-flow client** (Part C spike) that does not exist yet, so the auth path is **not usable end-to-end** today. |
 | Release / Homebrew tap / macOS notarization | **Separate follow-up.** Not part of this module yet. |
+| Prebuilt download | **Not available yet — build locally (below).** This module is not published to Maven Central: a Maven coordinate is the wrong channel for a CLI, and the fat jar cost ~16 MB of the org's monthly Central quota per release. The intended channel is a GitHub Release asset attached to the release the pipeline already creates; until that exists, build the jar locally. |
 
 Anonymous read commands are fully functional now. Everything under the "Auth (gated)" heading below
 is implemented in the CLI but blocked on the OIDC client provisioning.
@@ -31,7 +32,7 @@ Produce the fat jar:
 ```
 
 The runnable fat jar uses the `all` classifier (the thin `…-<version>.jar` is the plain library
-jar, kept for the repo's release tooling and Maven publication):
+jar, kept for the repo's release tooling):
 
 ```
 components-registry-cli/build/libs/components-registry-cli-1.0-SNAPSHOT-all.jar
