@@ -54,6 +54,11 @@ object VersionRangePartition {
     private val SINGLE_VERSION_PATTERN = Regex("^\\[([^,\\[\\]()]+)\\]$")
     internal const val ALL_VERSIONS_SENTINEL = "(,0),[0,)"
 
+    // Top-level boundary between two segments of a composite: a comma sitting between a bracket-close
+    // and a bracket-open (`),(`, `],[`, `),[`, `],(`). Zero-width look-around so `split` removes only
+    // the comma, letting the fragments rejoin to the exact input.
+    private val COMPOSITE_BOUNDARY = Regex("(?<=[\\])]),(?=[\\[(])")
+
     internal fun normalize(range: String): String = range.trim().replace(Regex("\\s+"), "")
 
     /** True for the all-versions shapes (null / `(,0),[0,)` / `(,)`). */
@@ -95,6 +100,35 @@ object VersionRangePartition {
 
     // Matches a comma-form segment `[a,b)` OR a single-version segment `[x]` inside a composite.
     private val SEGMENT_GLOBAL = Regex("[\\[(][^()\\[\\],]*,[^()\\[\\],]*[\\])]|\\[[^()\\[\\],]+\\]")
+
+    /**
+     * Strictly decompose a (possibly composite) range into its canonical single-segment strings for a
+     * DESTRUCTIVE rewrite. Unlike [toSegments] — which `mapNotNull`s a lenient regex scan and can
+     * SILENTLY DROP an unparseable fragment — this partitions the ENTIRE normalized input on the
+     * top-level segment boundary and requires every fragment to parse as one single segment; anything
+     * malformed throws [IllegalArgumentException] so a caller mutating rows aborts WITHOUT writing.
+     * A non-composite input returns a single element. Renders `[x,x]` as `[x]`. Does NOT check that
+     * the segments are mutually disjoint — that is the caller's concern.
+     */
+    internal fun splitCompositeStrict(range: String): List<String> {
+        val n = normalize(range)
+        require(n.isNotEmpty()) { "Cannot split a blank version range" }
+        val fragments = n.split(COMPOSITE_BOUNDARY)
+        val segments =
+            fragments.map { fragment ->
+                parseSegment(fragment)
+                    ?: throw IllegalArgumentException(
+                        "Range '$range' is not a clean composite of single segments — fragment " +
+                            "'$fragment' is not a valid single Maven segment",
+                    )
+            }
+        // Defence in depth: the fragments must rejoin to the exact normalized input (guards against a
+        // future boundary-regex change that consumes more than the delimiter comma).
+        check(fragments.joinToString(",") == n) {
+            "Range '$range' did not fully decompose into single segments"
+        }
+        return segments.map { render(it) }
+    }
 
     internal fun render(seg: Segment): String {
         // The unbounded-both interval IS all-versions — render the canonical sentinel so an
