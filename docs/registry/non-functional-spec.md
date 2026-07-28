@@ -296,13 +296,31 @@ Every PR must pass:
 4. Integration tests                (DB queries, transactions)
 5. Contract tests                   (Feign client compatibility)
 6. API snapshot tests               (v1/v2/v3 response structure)
+7. Coverage ratchets                (aggregate LINE/BRANCH + per-module LINE/BRANCH)
 ```
+
+**Coverage as a fitness function.** Coverage is gated in `qualityCoverage` (the GitHub `quality` job)
+over the `test` + `dbTest` exec set — deliberately not in `check`, so TeamCity `[1.0]` stays a
+compile/correctness gate:
+
+| Gate | Task | Rule |
+|---|---|---|
+| Aggregate | `jacocoOverallCoverageVerification` | LINE ≥ 86%, BRANCH ≥ 65% |
+| Per module (strict) | `<module>:jacocoCoverageRatchet` | per-module LINE/BRANCH minimums, set to measured − ~2 p.p. |
+| Per module (floor) | `<module>:jacocoTestCoverageVerification` | plugin-owned 10% floor, kept underneath |
+
+Both new gates are **ratchets**: they encode the coverage already achieved so a change cannot quietly
+erode it. BRANCH is gated alongside LINE because a fully line-covered conditional taken only on one path
+still reports 100% LINE — BRANCH distinguishes "one branch ran" from "both branches ran". Neither counter
+says anything about whether an outcome was **asserted**: a test with no assertions at all can reach 100% on
+both. That is a different question, and no coverage counter can gate it. The measured values, the snapshot
+they were taken from, and the re-measure recipe live in [`quality-baseline.md`](quality-baseline.md).
 
 Production deployment additionally runs:
 ```
-7. Smoke test: health check + basic read
-8. Canary: 10% traffic → monitor error rate for 10 min
-9. Full rollout if error rate < 0.1%
+8. Smoke test: health check + basic read
+9. Canary: 10% traffic → monitor error rate for 10 min
+10. Full rollout if error rate < 0.1%
 ```
 
 ## 6. Observability

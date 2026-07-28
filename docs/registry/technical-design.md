@@ -557,8 +557,11 @@ The build splits tests by JUnit 5 tag so the heavy DB suite runs off the critica
   GitHub PRs under `qualityCoverage` (the `quality` job), so coverage **and** correctness
   are still gated on every PR.
 
-JaCoCo aggregates `test` + `dbTest` + `integrationTest` exec data, so the 70% coverage gate
-is unchanged. All `Test` tasks set `TESTCONTAINERS_RYUK_DISABLED=true` (the Ryuk reaper
+JaCoCo aggregates `test` + `dbTest` + `integrationTest` exec data, so splitting the suites did
+not cost coverage. The gates on that data are the aggregate LINE/BRANCH thresholds plus the
+per-module ratchet described in [`non-functional-spec.md`](non-functional-spec.md) §5.10.
+
+All `Test` tasks set `TESTCONTAINERS_RYUK_DISABLED=true` (the Ryuk reaper
 can't mount the docker socket on Podman-rootless CI agents). `dockerPushImage` depends on
 the fat-jar `integrationTest` and Maven `publish` is ordered after it, so a broken boot jar
 is never published/pushed.
