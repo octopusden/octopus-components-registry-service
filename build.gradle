@@ -474,11 +474,15 @@ gradle.projectsEvaluated {
     // sources), but that says nothing about whether the data was actually produced. This task closes the
     // remaining case for both the aggregate and the per-module gates by asserting, at execution time,
     // that each coverage module left exec data behind.
-    // Keyed on test SOURCES, like the ratchet map below and for the same reason: a module can own a
-    // `test` task without owning any test code (`components-registry-service-core` does), and such a
-    // module legitimately produces no exec data. Asserting over every `testTargets` entry would fail the
-    // build for the one module that is correctly untested.
+    // THE definition of "a module the coverage gates apply to", computed once and used by every guard
+    // below (this task and the two ratchet-map checks). Keyed on test SOURCES, not on the presence of a
+    // `test` task: the Kotlin/Java plugins register `test` even for a module with no test code
+    // (`components-registry-service-core`), and such a module legitimately produces no exec data — keying
+    // on the task would fail the build for the one module that is correctly untested. Single definition on
+    // purpose: two copies of this predicate could drift apart under editing, and each guard would then be
+    // protecting a different set of modules than the others.
     def modulesWithTests = testTargets.findAll { !it.sourceSets.test.allSource.isEmpty() }
+    def moduleNamesWithTests = modulesWithTests*.name
     if (modulesWithTests.isEmpty()) {
         throw new GradleException(
             "no coverage modules with tests resolved — the aggregate coverage gate would silently pass on " +
@@ -574,23 +578,23 @@ gradle.projectsEvaluated {
     // ratchet map: absent from both is a configuration error, not a default.
     def coverageRatchetExempt = [:]
 
-    // The map is checked against reality in BOTH directions, keyed on TEST SOURCES rather than on the
-    // presence of a `test` task. The Kotlin/Java plugins register `test` even for a module with no test
-    // code, and a JacocoCoverageVerification with empty execution data is SKIPPED, not failed — so keying
-    // on the task would let a module delete every test and keep a green ratchet, while the ~2 p.p. of
-    // aggregate headroom absorbs a small module's loss. Keying on sources makes that state fail loudly.
+    // The map is checked against reality in BOTH directions, against `moduleNamesWithTests` (defined with
+    // the exec-data guard above — one definition of "module the gates apply to", deliberately not a second
+    // copy of the predicate). Why test SOURCES and not the presence of a `test` task: a
+    // JacocoCoverageVerification with empty execution data is SKIPPED, not failed, so keying on the task
+    // would let a module delete every test and keep a green ratchet, while the ~2 p.p. of aggregate
+    // headroom absorbs a small module's loss. Keying on sources makes that state fail loudly.
     // NOTE: both checks assume `projectsEvaluated` sees the whole project tree, which holds because
     // configuration-on-demand is off (it is not set in gradle.properties). If it is ever enabled, these
     // guards must move into a task action — under configure-on-demand a narrow invocation evaluates only
     // some projects and the checks would fire spuriously.
-    def ratchetableNames = testTargets.findAll { !it.sourceSets.test.allSource.isEmpty() }*.name
-    def unratcheted = ratchetableNames - moduleCoverageRatchet.keySet() - coverageRatchetExempt.keySet()
+    def unratcheted = moduleNamesWithTests - moduleCoverageRatchet.keySet() - coverageRatchetExempt.keySet()
     if (unratcheted) {
         throw new GradleException(
             "coverage modules with tests but no ratchet: ${unratcheted.join(', ')} — measure them (see " +
                 "docs/registry/quality-baseline.md §7) and add entries to moduleCoverageRatchet in build.gradle")
     }
-    def ratchetedWithoutTests = moduleCoverageRatchet.keySet() - ratchetableNames
+    def ratchetedWithoutTests = moduleCoverageRatchet.keySet() - moduleNamesWithTests
     if (ratchetedWithoutTests) {
         throw new GradleException(
             "coverage ratchet is configured for ${ratchetedWithoutTests.join(', ')}, which has no test " +
