@@ -1385,7 +1385,7 @@ object id30DeployToOkdQaDevAuto : BuildType({
 
 object id29Step2AggregateAuto : BuildType({
     templates(AbsoluteId("RDDepartment_PostGithubStatus"))
-    id("29Step2AggregateAuto")
+    id("30Step2AggregateAuto")
     name = "[3.0] Step 2 Aggregate [AUTO]"
 
     // Surface [1.0]'s build number so the whole chain (id10 = id12 = … = id29)
