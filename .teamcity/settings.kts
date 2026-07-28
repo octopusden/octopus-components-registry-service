@@ -1386,7 +1386,7 @@ object id30DeployToOkdQaDevAuto : BuildType({
 object id29Step2AggregateAuto : BuildType({
     templates(AbsoluteId("RDDepartment_PostGithubStatus"))
     id("29Step2AggregateAuto")
-    name = "[2.9] Step 2 Aggregate [AUTO]"
+    name = "[3.0] Step 2 Aggregate [AUTO]"
 
     // Surface [1.0]'s build number so the whole chain (id10 = id12 = … = id29)
     // shows the same version tag in the TC chain view.
