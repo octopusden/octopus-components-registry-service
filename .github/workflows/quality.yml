@@ -9,7 +9,7 @@ on:
 
 jobs:
   quality:
-    uses: octopusden/octopus-base/.github/workflows/common-java-gradle-quality-gates.yml@v2.4.1
+    uses: octopusden/octopus-base/.github/workflows/common-java-gradle-quality-gates.yml@v2.5.2
     with:
       java-version: '21'
     secrets: inherit

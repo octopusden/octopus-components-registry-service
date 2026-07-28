@@ -24,7 +24,7 @@ plugins {
 }
 
 octopusQuality {
-    // NOTE: in octopus-quality 2.4.1 `excludeProjects` maps ONLY to coverage exclusion
+    // NOTE: in octopus-quality 2.5.2 `excludeProjects` maps ONLY to coverage exclusion
     // (coverageExcludedProjects) — it does NOT exclude these modules from qualityStatic, which
     // runs checkstyle/pmd/codenarc/detekt/ktlint over ALL subprojects. These four are excluded
     // from the aggregate coverage gate (CLI/automation/compat-test/test-common are tooling/test
@@ -149,7 +149,7 @@ configure(subprojects) {
 
     if (!project.name.equalsIgnoreCase("components-registry-service-light-client")) {
         apply plugin: 'org.jetbrains.kotlin.jvm'
-        // octopus-quality 2.4.1 self-applies the Java/Groovy analysers (checkstyle/pmd — now gated
+        // octopus-quality 2.5.2 self-applies the Java/Groovy analysers (checkstyle/pmd — now gated
         // to Java-source modules — plus codenarc/spotbugs/jacoco). Per its documented consumer
         // contract it merely *configures* detekt/ktlint reactively via plugins.withId(...) — they
         // must be APPLIED here or the Kotlin static-analysis gate silently does nothing (checkstyle/
