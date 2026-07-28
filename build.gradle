@@ -464,6 +464,43 @@ gradle.projectsEvaluated {
         })
     }
 
+    // A JaCoCo verification task with EMPTY execution data is SKIPPED, not failed — Gradle's own
+    // `onlyIf` on the task, which a consumer cannot override (specs are AND-ed). So every coverage gate
+    // here has a silent-pass mode: if the exec files are absent, `qualityCoverage` goes green having
+    // measured nothing. Observed, not theorised: pointing the exec glob at a non-existent name makes
+    // `jacocoOverallCoverageVerification` SKIP after a full unit-test run, with BUILD SUCCESSFUL.
+    //
+    // The per-module ratchet is protected structurally (its map is checked against modules that own test
+    // sources), but that says nothing about whether the data was actually produced. This task closes the
+    // remaining case for both the aggregate and the per-module gates by asserting, at execution time,
+    // that each coverage module left exec data behind.
+    // Keyed on test SOURCES, like the ratchet map below and for the same reason: a module can own a
+    // `test` task without owning any test code (`components-registry-service-core` does), and such a
+    // module legitimately produces no exec data. Asserting over every `testTargets` entry would fail the
+    // build for the one module that is correctly untested.
+    def modulesWithTests = testTargets.findAll { !it.sourceSets.test.allSource.isEmpty() }
+    if (modulesWithTests.isEmpty()) {
+        throw new GradleException(
+            "no coverage modules with tests resolved — the aggregate coverage gate would silently pass on " +
+                "empty execution data; check octopusQuality.excludeProjects and coverageProjects in build.gradle")
+    }
+    def execDataByModule = modulesWithTests.collectEntries { p -> [(p.name): coverageExecData([p])] }
+    tasks.register('verifyCoverageDataPresent') {
+        group = 'verification'
+        description = 'Fails when a coverage module produced no JaCoCo execution data (JaCoCo verification SKIPS silently on empty data)'
+        dependsOn(testTargets.collect { "${it.path}:test" })
+        dependsOn(heavyTestTaskPaths)
+        doLast {
+            def missing = execDataByModule.findAll { name, execFiles -> execFiles.isEmpty() }*.key
+            if (missing) {
+                throw new GradleException(
+                    "no JaCoCo execution data for: ${missing.join(', ')}. The coverage gates would have " +
+                        "been SKIPPED rather than failed, passing without measuring anything. Check that the " +
+                        "module's tests ran and that the JaCoCo agent is attached.")
+            }
+        }
+    }
+
     tasks.register('jacocoOverallCoverageReport', org.gradle.testing.jacoco.tasks.JacocoReport) {
         group = 'verification'
         description = 'Aggregated JaCoCo report across all coverage modules (test + dbTest, plus integrationTest.exec when present)'
@@ -561,6 +598,16 @@ gradle.projectsEvaluated {
                 "Restore the tests, or (if the module is intentionally untested) move it to " +
                 "coverageRatchetExempt in build.gradle with the reason")
     }
+    // A threshold of zero is not a ratchet, it is the absence of one — and it reads as a configured gate,
+    // which is worse than no gate at all. (Sibling repos have both shapes of this: a coverage minimum of
+    // 0.00 with the gate "enabled", and a CVE gate whose fail-on score is above the top of the CVSS scale.)
+    def nonRatchets = moduleCoverageRatchet.findAll { name, t -> t.line <= 0 || t.branch <= 0 }*.key
+    if (nonRatchets) {
+        throw new GradleException(
+            "coverage ratchet thresholds must be > 0 — ${nonRatchets.join(', ')} would be a gate that " +
+                "cannot fail. Measure the module (docs/registry/quality-baseline.md §7) and set a real " +
+                "floor, or move it to coverageRatchetExempt with the reason")
+    }
     def ratchetTaskPaths = []
     moduleCoverageRatchet.each { moduleName, thresholds ->
         def p = testTargets.find { it.name == moduleName }
@@ -628,6 +675,8 @@ gradle.projectsEvaluated {
         dependsOn('jacocoOverallCoverageReport')
         dependsOn('jacocoOverallCoverageVerification')
         dependsOn(ratchetTaskPaths)
+        // Without this, an empty-exec-data run reports every coverage gate as SKIPPED and passes.
+        dependsOn('verifyCoverageDataPresent')
     }
 
     // Part A.7: gate publish + image push on the server fat-jar FT. dockerPushImage HARD-depends
