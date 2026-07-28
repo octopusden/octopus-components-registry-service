@@ -1,11 +1,5 @@
 # Common System Requirements
 
-## Status
-
-**Draft** | Date: 2026-03-16
-
----
-
 ## Summary Table
 
 | ID      | Title                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                   | Priority | Layer | Status |
@@ -68,10 +62,11 @@
 | SYS-057 | `GET /rest/api/4/health/statistics` returns registry-wide counts (`totalComponents`, `activeComponents`) and people-dimension breakdowns (`componentsByOwner`, `componentsByReleaseManager`, `componentsBySecurityChampion`) computed via SQL GROUP BY (never by loading all components into memory); ACCESS_COMPONENTS-gated; counts + people only (problem/validation aggregation is portal-owned)                                                                                                                                                                                                                                                                                                                                                                                                                                    | High | integration-test | ✅ Tested |
 | SYS-058 | Artifact-ID ownership is modelled explicitly as a per-component LIST of `(group-list, mode ∈ {EXPLICIT, ALL_EXCEPT_CLAIMED, ALL}, version range)` mappings (`component_artifact_mappings` + `_tokens`), replacing the opaque regex `component_artifact_ids`. Cross-component uniqueness is decided deterministically from the stored modes (restores legacy validator #24/#25), enforced on v4 create/update (409); per-range overrides REPLACE the base for their range; v1–v3 wire renders the primary mapping; migration classifies DSL patterns into modes strictly (no escape hatch)                                                                                                                                                                                                                                               | High | unit + integration-test | ✅ Tested |
 | SYS-059 | `POST /rest/api/4/versions/preview` renders a `DetailedComponentVersion` from ad-hoc Jira formats (base + per-range overrides) and an input version, with no persistence and no component lookup — reusing the persisted-path render seam (including `normalizeVersion` canonicalization) so output matches `detailed-version` for the same effective config. Range is resolved server-side; `line`/`build` mirror `minor`/`release` and `minor`/`release` default to `$major`/`$major.$minor` when blank; hotfix coordinate gated on caller-supplied `hotfixEnabled` (VCS-derived), not format presence; custom `versionPrefix`/`versionFormat` render the wrapped `jiraVersion`; padding is template-driven (no `buildSystem`); blank/non-numeric version or malformed range → 400, a version matching no format → 404; authenticated-only | High | unit + integration-test | ✅ Tested |
-| SYS-060 | An append-only `service_event` journal persists operational events — CRS redeploys (STARTUP + build version), and every components-migration / history-migration / TeamCity-resync run (RUNNING→COMPLETED/FAILED, one row per run) — which previously lived only in an in-memory slot + logs and were lost on restart. **Any job failure (including executor-rejected submission) writes a FAILED row with the error**; a run whose pod dies mid-flight is reconciled to FAILED("interrupted by restart") on next startup (single-pod). Writes are best-effort (`REQUIRES_NEW` + swallow) so journaling never rolls back or crashes the observed job. `GET /rest/api/4/admin/service-events` returns the paginated journal (filter by type/source/status/time), IMPORT_DATA-gated; a scheduled daily prune enforces retention           | High | unit + integration-test | ✅ Tested |
-| SYS-061 | `POST /rest/api/4/admin/service-events` ingests portal-sourced events (portal redeploys, validation-sweep runs) into the shared journal, so the Admin "Events" tab shows both services on one timeline. Authenticated by a shared-secret `X-Service-Event-Token` header (the portal BFF calls CRS tokenless), verified constant-time and **fail-closed** (blank/unset configured token rejects every call 403); method-scoped permitAll at the filter chain so the sibling GET read stays JWT+IMPORT_DATA gated; unknown eventType/status/source → 400                                                                                                                                                                                                                                                                                  | High | integration-test | ✅ Tested |
-| SYS-064 | The component owner's manager (resolved via employee-service `getManager`) may edit the component and its field-overrides — a fourth, derived condition on `canEditComponent` alongside owner/RM/SC/admin. A directory failure or no-manager answer denies (fail-closed), never grants. `GET /{idOrName}/editors` enumerates the resolved manager (unlike the admin bypass, it is one concrete person per component); `getManager` is 2-minute cached per owner (resolved answers only) and its DB read runs in its own short-lived transaction, closed before the network call                                                                                                                                                                                                                                                         | High | unit + integration-test | ✅ Tested |
-| SYS-065 | Desired-set field-override PATCH is echo-safe: re-submitting an UNCHANGED override row (same id, same normalized range) does not re-validate its range, so a component carrying a legacy composite range can still be saved; a CREATE or an actual range change is still validated (composite still rejected)                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                           | High | integration-test | ✅ Tested |
+| SYS-060 | An append-only `service_event` journal persists operational events — CRS redeploys (STARTUP + build version), and every components-migration / history-migration / TeamCity-resync run (RUNNING→COMPLETED/FAILED, one row per run) — which previously lived only in an in-memory slot + logs and were lost on restart. **Any job failure (including executor-rejected submission) writes a FAILED row with the error**; a run whose pod dies mid-flight is reconciled to FAILED("interrupted by restart") on next startup (single-pod). Writes are best-effort (`REQUIRES_NEW` + swallow) so journaling never rolls back or crashes the observed job. `GET /rest/api/4/admin/service-events` returns the paginated journal (filter by type/source/status/time), IMPORT_DATA-gated; a scheduled daily prune enforces retention | High | unit + integration-test | ✅ Tested |
+| SYS-061 | `POST /rest/api/4/admin/service-events` ingests portal-sourced events (portal redeploys, validation-sweep runs) into the shared journal, so the Admin "Events" tab shows both services on one timeline. Authenticated by a shared-secret `X-Service-Event-Token` header (the portal BFF calls CRS tokenless), verified constant-time and **fail-closed** (blank/unset configured token rejects every call 403); method-scoped permitAll at the filter chain so the sibling GET read stays JWT+IMPORT_DATA gated; unknown eventType/status/source → 400 | High | integration-test | ✅ Tested |
+| SYS-064 | The component owner's manager (resolved via employee-service `getManager`) may edit the component and its field-overrides — a fourth, derived condition on `canEditComponent` alongside owner/RM/SC/admin. A directory failure or no-manager answer denies (fail-closed), never grants. `GET /{idOrName}/editors` enumerates the resolved manager (unlike the admin bypass, it is one concrete person per component); `getManager` is 2-minute cached per owner (resolved answers only) and its DB read runs in its own short-lived transaction, closed before the network call | High | unit + integration-test | ✅ Tested |
+| SYS-065 | Desired-set field-override PATCH is echo-safe: re-submitting an UNCHANGED override row (same id, same normalized range) does not re-validate its range, so a component carrying a legacy composite range can still be saved; a CREATE or an actual range change is still validated (composite still rejected) | High | integration-test | ✅ Tested |
+| SYS-067 | When a component's `labels`, `systems`, or `build.requiredTools` is edited, the client sends the complete new list and the stored list is made to match it exactly: entries kept in the list stay, new entries are added, entries left out are removed, and re-sending the same list changes nothing. Applies to all three lists (`component_labels`, `component_systems`, `component_required_tools`) | High | integration-test | ✅ Tested |
 | SYS-075 | `component-validation` module: `ATTACHED_TO_BUILD_TEMPLATE` is OK when exactly one build configuration is attached to a build template, WARNING when more than one is (ambiguous), WARNING when none is (always applicable)                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                             | High | unit-test | ✅ Tested |
 | SYS-076 | `component-validation` module: `OVERRIDES_DEFAULT_BUILD_STEP` is NOT_APPLICABLE with no attached configuration, WARNING if any attached configuration's default build step is overridden, OK if all are inherited                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                       | High | unit-test | ✅ Tested |
 | SYS-077 | `component-validation` module: `HAS_CUSTOM_BUILD_STEP` is WARNING when any uninherited build step across every configuration (attached to a template or not) resolves any tool version at all — Java or Maven, whichever it uses; OK otherwise                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                          | High | unit-test | ✅ Tested |
@@ -2742,6 +2737,49 @@ whole live collection, including legacy composite siblings (via `isIntersect`).
 `SYS-065 value-only edit of composite is accepted`,
 `SYS-065 disjointness still enforced against untouched composite`,
 `SYS-065 valid range change is persisted`.
+
+---
+
+### SYS-067: Editing labels / systems / required tools keeps the entries left in the list
+
+**Priority:** High
+**Test layer:** integration-test
+**Status:** ✅ Tested
+
+**Motivation:**
+`labels`, `systems`, and `build.requiredTools` are lists a user edits as a whole: the save carries the
+complete new list, not a single add or remove. The common edit keeps most entries and adds or drops one,
+so the entries that stay in the list must survive the save intact — losing any of them silently corrupts
+the component's data.
+
+**Description:**
+Saving one of these lists makes the stored rows match the submitted list exactly: an entry present both
+before and after the edit stays, an entry that is new is added, an entry no longer in the list is
+removed. The server compares the submitted list against the current rows and writes only the difference,
+so re-sending the same list performs no writes (idempotent) and sending an empty list clears the list.
+Labels and systems are stored per component; required tools per the component's BASE configuration. All
+three behave identically.
+
+**Acceptance criteria:**
+1. Editing labels / systems / `baseConfiguration.requiredTools` to keep an existing code and add a new
+   one persists BOTH in the respective junction (`component_labels` / `component_systems` /
+   `component_required_tools`).
+2. A mixed edit `[A,B] → [B,C]` keeps the intersection `B`, removes `A`, and adds `C`.
+3. Re-submitting the identical list is a no-op (membership unchanged).
+4. An empty list clears the membership.
+5. The label path holds on real PostgreSQL (Testcontainers), not only H2.
+6. Assertions read persisted junction rows (not the in-memory response projection), so a masked loss
+   cannot pass.
+
+**Test methods:** `Sys067JunctionSyncPreservesExistingTest` (H2) —
+`SYS-067 adding a label preserves the existing labels`,
+`SYS-067 adding a system preserves the existing systems`,
+`SYS-067 adding a required tool preserves the existing required tools`,
+`SYS-067 a mixed edit keeps the intersection, adds the new and drops the removed`,
+`SYS-067 re-submitting the same list is a no-op`,
+`SYS-067 an empty list clears the membership`;
+`Sys067LabelSyncPostgresTest` (Testcontainers PostgreSQL) —
+`SYS-067 adding a label preserves the existing labels on PostgreSQL`.
 
 ### SYS-085: TC validation — repeated-run persistence
 

@@ -45,9 +45,9 @@ PRD (why?) ──→ FS (what?) ──→ TDD (how?)
 |-----|----------|
 | [ADR-000](adr/000-migrate-git-to-db-ui.md) | Migrate from Git-based DSL to Database + Web UI (overarching decision) |
 | [ADR-001](adr/001-storage-postgresql.md) | PostgreSQL as storage engine (vs MySQL, MongoDB) |
-| [ADR-002](adr/002-backend-language.md) | Kotlin vs Java 21 for new code (Proposed) |
+| [ADR-002](adr/002-backend-language.md) | Kotlin vs Java 21 for new code (Accepted) |
 | [ADR-003](adr/003-ui-stack-react19.md) | React 19 + Vite + shadcn/ui for the web UI |
-| [ADR-004](adr/004-auth-keycloak.md) | octopus-security-common + Keycloak integration (Implemented 2026‑04‑28, PR #150) |
+| [ADR-004](adr/004-auth-keycloak.md) | octopus-security-common + Keycloak integration (Implemented) |
 | [ADR-005](adr/005-audit-log.md) | Custom audit_log + Domain Events (vs Hibernate Envers) |
 | [ADR-006](adr/006-api-versioning-v4.md) | New API v4 for CRUD; v1/v2/v3 unchanged |
 | [ADR-007](adr/007-dual-read-migration.md) | Component-Source Routing — per-component migration strategy |
@@ -55,9 +55,14 @@ PRD (why?) ──→ FS (what?) ──→ TDD (how?)
 | [ADR-009](adr/009-ui-repository-strategy.md) | ~~UI repository strategy — monorepo vs separate repo~~ — Superseded by ADR-012 |
 | [ADR-010](adr/010-schema-extensibility.md) | ~~Hybrid schema extensibility — Columns + JSONB~~ — Superseded by ADR-014 |
 | [ADR-011](adr/011-field-configuration.md) | Configurable field visibility, defaults, multi-org support (Proposed) |
-| [ADR-012](adr/012-portal-architecture.md) | UI extracted to `octopus-components-management-portal` as a Spring Cloud Gateway BFF (Accepted 2026‑04‑14, PR #147) |
+| [ADR-012](adr/012-portal-architecture.md) | UI extracted to `octopus-components-management-portal` as a Spring Cloud Gateway BFF (Accepted) |
 | [ADR-013](adr/013-cutover-strategy.md) | Cutover strategy — staged removal of Git resolver, `component_source` table, and JGit (Proposed) |
-| [ADR-014](adr/014-schema-v2.md) | Schema v2 (Model A') — wide typed `component_configurations` + sparse overrides, replaces JSONB metadata (Accepted, PRs #191/#192) |
+| [ADR-014](adr/014-schema-v2.md) | Schema v2 (Model A') — wide typed `component_configurations` + sparse overrides, replaces JSONB metadata (Accepted) |
+| [ADR-015](adr/015-employee-service-runtime-validation.md) | Employee-service runtime validation of person fields (Accepted) |
+| [ADR-016](adr/016-admin-config-as-code.md) | Admin configuration as code — field-config + component-defaults (Accepted, amends ADR-011) |
+| [ADR-017](adr/017-artifact-ownership-modes.md) | Explicit artifact-ID ownership model (modes) (Accepted) |
+| [ADR-018](adr/018-decoupled-version-model.md) | Decoupled version model — supported versions vs per-attribute overrides (Accepted) |
+| [ADR-019](adr/019-feedback.md) | User feedback storage, transport, and security (Accepted) |
 
 ### Action Items
 
@@ -131,12 +136,11 @@ docs/registry/
 ├── technical-design.md        ← Technical Design Document
 ├── schema-spec.md             ← Canonical v2 schema reference (Model A')
 ├── api-compat-deltas.md       ← v1/v2/v3 endpoint compat surface + kill-list
-├── compat-residual-clusters.md ← Open compat residuals tracked by MIG-NNN
 ├── requirements-common.md     ← SYS-NNN registry (system / API behaviour)
 ├── requirements-migration.md  ← MIG-NNN registry (Git → DB contracts)
 ├── requirements-resolver.md   ← RES-NNN registry (DB vs Git resolver parity)
 ├── ft-db-testing-plan.md      ← FT-DB profile test plan
-├── adr/                       ← Architecture Decision Records (000–014)
+├── adr/                       ← Architecture Decision Records (000–019)
 ├── tech-debt/                 ← Numbered TD-NNN entries
 ├── deployment/                ← OKD + local Postgres deployment workspace
 ├── diagrams/                  ← Mermaid architecture + ERD diagrams

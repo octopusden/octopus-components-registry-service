@@ -11,7 +11,7 @@ pluginManagement {
         id 'org.jetbrains.kotlin.plugin.jpa'            version settings['kotlin.version']
         id 'io.gitlab.arturbosch.detekt'                version settings['detekt.version']
         id 'org.jlleitschuh.gradle.ktlint'              version settings['ktlint-gradle.version']
-        id 'org.octopusden.octopus-quality'             version '2.3.5'
+        id 'org.octopusden.octopus-quality'             version '2.4.1'
         id 'com.bmuschko.docker-java-application'       version settings['gradle-docker-plugin.version']
         id 'com.github.johnrengelman.shadow'            version '8.1.1'
         id 'org.octopusden.octopus.oc-template'         version settings['octopus-oc-template.version']

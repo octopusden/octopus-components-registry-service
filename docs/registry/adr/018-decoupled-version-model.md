@@ -2,10 +2,8 @@
 
 ## Status
 
-**Accepted** (PR-2 of the version-model plan — migration to the decoupled model). Refines and
-promotes the frozen design spec `docs/registry/version-model-spec-DRAFT.md` (which it supersedes as
-the authoritative record), incorporating the three plan-review-3 corrections and the results of
-pre-migration audits A1/A2.
+**Accepted.** This ADR is the authoritative decision record; the detailed design companion (case
+matrix M1–M8, validations V1–V6) is `docs/registry/version-model-spec.md`.
 
 Implementation: layer 1 (supported coverage) + layer 2 (ALL_VERSIONS base default + containment
 overrides) at migration time, plus the coverage-gate rewire on both read paths
@@ -128,7 +126,7 @@ Model a component's configuration as **two independent layers**:
 
 ### Three refinements (plan-review-3) — authoritative here
 
-- **(a) Containment scope (shipped, TD-010 / PR #377).** The containment predicate
+- **(a) Containment scope (shipped, TD-010).** The containment predicate
   (`EntityMappers.rangeApplies`) is used **only on the range-VIEW enumeration path**. The
   single-version `resolve` hot path (`toResolvedEscrowModuleConfig` / `ComponentCodeRenderer
   .renderResolved`) continues to use **point** containment (`containsVersion`) and is untouched. The
@@ -236,13 +234,11 @@ never renders `explicit` / `external` / `securityGroups.read` inside a per-range
 
 ## Related
 
-- `docs/registry/version-model-spec-DRAFT.md` — detailed design + case matrix M1–M8 / validations
-  V1–V6 (superseded by this ADR as the authoritative record).
-- `docs/registry/tech-debt/010-range-applies-containment.md` — TD-010 containment predicate (shipped,
-  CRS PR #377).
-- CRS PR #376 — `/as-code` returns text/plain 404 (not 500) for an unresolvable version.
-- Portal PR #138 — version-range editor UX (sticky conflict toasts, persistent value-409 banner,
-  readable ownership diff, As-Code default version + friendly out-of-range hint, "All versions" base
-  label).
+- `docs/registry/version-model-spec.md` — detailed design companion: case matrix M1–M8 /
+  validations V1–V6 (this ADR is the authoritative decision record).
+- `docs/registry/tech-debt/010-range-applies-containment.md` — TD-010 containment predicate (shipped).
+- `/as-code` returns text/plain 404 (not 500) for an unresolvable version.
+- Portal version-range editor UX (sticky conflict toasts, persistent value-409 banner, readable
+  ownership diff, As-Code default version + friendly out-of-range hint, "All versions" base label).
 - ADR-014 (schema-v2), ADR-012 (portal architecture / BFF boundary), ADR-017 (artifact-ownership
   modes).

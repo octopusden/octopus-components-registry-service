@@ -1,11 +1,5 @@
 # Resolver Behavior Requirements
 
-## Status
-
-**Draft** | Date: 2026-03-18
-
----
-
 ## Summary Table
 
 | ID | Title | Priority | Layer | Status |

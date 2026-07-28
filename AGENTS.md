@@ -173,8 +173,17 @@ Architecture Decision Records and design docs in this repo live in `docs/registr
 - `functional-spec.md` — functional specification
 - `non-functional-spec.md` — performance, availability, async-job SLAs
 - `requirements-{common,migration,resolver}.md` — numbered requirements (`SYS-NNN`, `MIG-NNN`, `RES-NNN` for resolver parity)
-- `adr/` — 19 ADRs (000–018), including ADR-012 (Portal architecture, canonical), ADR-013 (Cutover strategy, Proposed), ADR-014 (Schema v2), ADR-015 (Employee-service runtime validation), ADR-016 (Admin config-as-code), ADR-017 (Artifact-ownership modes), ADR-018 (Decoupled version model)
+- `adr/` — ADRs (000–019), including ADR-012 (Portal architecture, canonical), ADR-013 (Cutover strategy, Proposed), ADR-014 (Schema v2), ADR-015 (Employee-service runtime validation), ADR-016 (Admin config-as-code), ADR-017 (Artifact-ownership modes), ADR-018 (Decoupled version model), ADR-019 (Feedback)
 - `tech-debt/` — numbered tech-debt entries (`TD-NNN`)
+
+### Docs & comments: state, not history
+
+Documentation and code comments capture the **current state** and **non-obvious "why"** — an
+invariant, a gotcha, a reason the obvious approach was rejected. They do **not** carry history:
+"used to / previously / no longer", CI build numbers, PR/ticket references, or dates. That belongs in
+git and PR descriptions. Exceptions are deliberate and few: the consumer-facing
+[`api-changelog.md`](docs/registry/api-changelog.md), the ADR lifecycle (superseded ADRs are kept on
+purpose), and dated audit snapshots archived under `.github/audit/`.
 
 ## Tech Debt Tracking
 

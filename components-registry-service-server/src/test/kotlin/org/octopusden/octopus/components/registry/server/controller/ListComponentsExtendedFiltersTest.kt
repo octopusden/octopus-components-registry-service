@@ -140,7 +140,7 @@ class ListComponentsExtendedFiltersTest {
         create(baseBody(match, ""","clientCode":"ACME_PORTAL""""))
         create(baseBody(other, ""","clientCode":"OTHER_CC""""))
         create(baseBody(third, ""","clientCode":"THIRD_CC""""))
-        // Exact: a partial value no longer matches (was a substring LIKE pre-SYS-046).
+        // Exact match, not substring: a partial value must not match.
         val partial = names("clientCode" to "ACME")
         assertFalse(partial.contains(match), "partial 'ACME' must not match 'ACME_PORTAL' after LIKE→IN; got $partial")
         // Exact single value matches only the exact code.
@@ -280,7 +280,7 @@ class ListComponentsExtendedFiltersTest {
         entity.componentGroup = group
         componentRepository.save(entity)
 
-        // Exact: the bare suffix no longer matches (was a substring LIKE pre-SYS-046).
+        // Exact match, not substring: the bare suffix must not match.
         assert(!names("groupKey" to unique).contains(inGroup)) {
             "partial groupKey '$unique' must not match '$groupKey' after LIKE→IN"
         }

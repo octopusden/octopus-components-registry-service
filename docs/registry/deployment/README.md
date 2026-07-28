@@ -1,7 +1,8 @@
-# Deployment Research Workspace
+# Deployment
 
-This directory collects the deployment-related inputs and working documents for onboarding
-`components-registry-ui` to OKD and for defining a local developer setup with a working database.
+Deployment inputs and operator runbooks for the Components Registry Service backend on OKD, plus the
+local developer setup with a working database. (The web UI lives in
+`octopus-components-management-portal` — see [ADR-012](../adr/012-portal-architecture.md).)
 
 ## Files
 
@@ -17,8 +18,7 @@ This directory collects the deployment-related inputs and working documents for 
 
 ## Scope
 
-The goal is not only to deploy a demo UI on a test OKD environment, but also to define:
-
+- deploy the CRS backend to a test OKD environment
 - a local developer setup with a working database on a laptop
 - a repeatable path for QA and production
 - a reusable approach for a similar setup in another organization

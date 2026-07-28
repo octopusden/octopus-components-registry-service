@@ -31,9 +31,6 @@ import org.octopusden.octopus.components.registry.core.dto.VersionedComponent
 import org.octopusden.octopus.components.registry.core.exceptions.NotFoundException
 
 interface ComponentsRegistryServiceClient {
-    /**
-     * Get all components.
-     */
     @RequestLine("GET /rest/api/3/components")
     fun getComponents(): Collection<ComponentV3>
 
