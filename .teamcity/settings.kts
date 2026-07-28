@@ -59,7 +59,7 @@ project {
 
     buildType(id10CompileUtAuto)
     buildType(id12IntegrationDbTestsAuto)
-    buildType(id19MutationTestingManual)
+    buildType(id11MutationTestingAuto)
     buildType(id15CompatManual)
     buildType(id16CompatTraceReplayManual)
     buildType(id17CompatLocalStandManual)
@@ -80,7 +80,7 @@ project {
         id10CompileUtAuto,
         id15CompatManual,
         id16CompatTraceReplayManual,
-        id19MutationTestingManual,
+        id11MutationTestingAuto,
         id20ValidateComponentsRegistryProductionDataAuto,
         id12IntegrationDbTestsAuto,
         id17CompatLocalStandManual,
@@ -399,7 +399,7 @@ object id12IntegrationDbTestsAuto : BuildType({
     disableSettings("TRIGGER_1003", "TRIGGER_1006")
 })
 
-// [1.7] Mutation Testing — PIT over the server's pure-logic packages (`..server.util..`,
+// [1.1] Mutation Testing — PIT over the server's pure-logic packages (`..server.util..`,
 // `..server.mapper..`; scope and thresholds in components-registry-service-server/build.gradle).
 //
 // DELIBERATELY OUTSIDE THE CHAIN. No snapshot dependency in either direction, no finishBuildTrigger:
@@ -417,10 +417,10 @@ object id12IntegrationDbTestsAuto : BuildType({
 //     server module and the build files, so a change ELSEWHERE that weakens a mutant's fate (e.g. in
 //     component-resolver-core, which the mappers call) does not run it. This weekly build catches that
 //     drift on main.
-object id19MutationTestingManual : BuildType({
+object id11MutationTestingAuto : BuildType({
     templates(AbsoluteId("Octopus_OctopusGradleBuild"))
-    id("19MutationTestingManual")
-    name = "[1.7] Mutation Testing [MANUAL]"
+    id("11MutationTestingAuto")
+    name = "[1.1] Mutation Testing [AUTO]"
 
     // Scoped to the PIT output only: this config produces no test-results, logs or diagnostics worth
     // keeping, and publishing `**/build/reports/**` wholesale would drag in every other module's
@@ -507,11 +507,26 @@ object id19MutationTestingManual : BuildType({
         doesNotContain("env.OS_TYPE", "WIN", "RQ_2875")
     }
 
+    // Explicit empty block, exactly as [1.5]/[1.6] carry it: neutralise any snapshot dependency the parent
+    // template (Octopus_OctopusGradleBuild) might inject. The template declares none today (checked via
+    // REST), but "off the chain" is this config's whole point, and leaving it implicit means a future
+    // template change would quietly pull [1.1] into the chain — where a failing mutation score could hold
+    // up [2.4] deploy or [4.0] release. Pinning the invariant here keeps it local and reviewable.
+    dependencies {
+    }
+
     triggers {
         // Weekly, DEFAULT BRANCH ONLY — same shape as [1.0]'s heartbeat, one hour later so the two never
         // contend for an agent ([1.0]'s Sunday run fans out into the whole [2.x] chain). Per-branch runs
         // are deliberately absent: per-PR feedback is GitHub's job. Run this config manually to inspect a
         // specific branch.
+        //
+        // This schedule is why the name carries [AUTO] rather than [MANUAL] despite the config sitting
+        // outside the chain: [AUTO] in this project means "fires by itself" (like [1.0]'s VCS+schedule and
+        // the [2.x] finishBuildTriggers), while the [1.5]/[1.6] compat pair is [MANUAL] precisely because
+        // their inherited schedule is disabled and only an operator starts them. Dropping this trigger
+        // would leave the score chart empty unless somebody remembered to press the button, which is the
+        // one thing this config exists to avoid.
         schedule {
             schedulingPolicy = weekly {
                 timezone = "UTC"

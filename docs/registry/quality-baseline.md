@@ -290,7 +290,7 @@ Two sources, by purpose:
 
 - **Per change** — the `mutation-report` artifact of the GitHub `Mutation Testing (non-gating)` run, plus
   the killed/survived/not-covered table in that job's summary.
-- **Trend over time** — TeamCity `[1.7] Mutation Testing`: the artifact tab serves
+- **Trend over time** — TeamCity `[1.1] Mutation Testing`: the artifact tab serves
   `reports/pitest/index.html` browsable in place, and the Statistics tab charts `mutationScore` (also
   `mutationsSurvived`, `mutationsNoCoverage`, …) across builds. Emitted by
   `scripts/teamcity/report-mutation-stats.sh`.

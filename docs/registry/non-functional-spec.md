@@ -344,7 +344,7 @@ proof of assertion quality, and the survivor list matters more than the percenta
 | Scope | `..server.util..`, `..server.mapper..` (pure logic; a wrong result is a wrong *answer*, not wrong wiring) |
 | Task | `:components-registry-service-server:pitest` |
 | Where (gate) | GitHub `mutation.yml` — non-gating today: manual, weekly, and PRs touching the targeted sources or build files |
-| Where (analytics) | TeamCity `[1.7] Mutation Testing` — weekly on the default branch, outside the build chain: browsable HTML report plus a score chart via `buildStatisticValue` |
+| Where (analytics) | TeamCity `[1.1] Mutation Testing` — weekly on the default branch, outside the build chain: browsable HTML report plus a score chart via `buildStatisticValue` |
 | Gates | `mutationThreshold = 53`, `coverageThreshold = 78` (ratchets) |
 | Tests used | the `test` source set only, with the `integration`/`performance` tags excluded |
 
