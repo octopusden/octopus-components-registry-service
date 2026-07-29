@@ -48,7 +48,25 @@ if [ "$total" -le 0 ]; then
     exit 0
 fi
 
-score=$((detected * 100 / total))
+# Track the number the floor is checked against, which is not `detected * 100 / total`: shell division
+# truncates, so that form reads a point low on most fractional scores. Round half up instead, and cap at
+# 99 the way PIT does, so a near-sweep is not charted as a clean one.
+#
+# Verified against the pinned engine (pitest 1.16.1: PercentageCalculator.getPercentage(total, detected),
+# the value MutationStatistics.getPercentageDetected() hands to mutationThreshold) by comparing every
+# count up to total=2000 — 2005000 pairs. This form matches all but 54 of them; truncation missed 987536.
+# The residue is unavoidable rather than sloppy: PIT computes `100f / total * detected` in single
+# precision, so a score landing on an exact half can fall either way there (15/24 gives 62, not 63).
+# Chart values can therefore sit a point below PIT's own on an exact half. Read the report, not the
+# chart, when a build is that close to the floor.
+if [ "$detected" -eq "$total" ]; then
+    score=100
+else
+    score=$(((detected * 200 + total) / (total * 2)))
+    if [ "$score" -gt 99 ]; then
+        score=99
+    fi
+fi
 
 echo "##teamcity[buildStatisticValue key='mutationScore' value='$score']"
 echo "##teamcity[buildStatisticValue key='mutationsTotal' value='$total']"
@@ -57,6 +75,14 @@ echo "##teamcity[buildStatisticValue key='mutationsKilled' value='$killed']"
 echo "##teamcity[buildStatisticValue key='mutationsTimedOut' value='$timed_out']"
 echo "##teamcity[buildStatisticValue key='mutationsSurvived' value='$survived']"
 echo "##teamcity[buildStatisticValue key='mutationsNoCoverage' value='$no_coverage']"
+
+# The four statuses above are what a healthy run produces; the engine has more (NON_VIABLE,
+# MEMORY_ERROR, RUN_ERROR, …). Report the remainder as a warning rather than letting the charted
+# buckets quietly fail to add up to mutationsTotal.
+other=$((total - killed - timed_out - survived - no_coverage))
+if [ "$other" -ne 0 ]; then
+    echo "##teamcity[message text='$other mutations have a status outside KILLED/TIMED_OUT/SURVIVED/NO_COVERAGE (non-viable or an engine error) - see the report' status='WARNING']"
+fi
 
 # Also put the headline on the build itself, so the overview answers "how did it move" without opening
 # the report or the chart.

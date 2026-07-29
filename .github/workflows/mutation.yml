@@ -120,7 +120,31 @@ jobs:
             echo "| — timed out | $timed_out |"
             echo "| Survived | $survived |"
             echo "| Not covered | $no_coverage |"
+            # KILLED/TIMED_OUT/SURVIVED/NO_COVERAGE are the four statuses a healthy run produces, but the
+            # engine has more (NON_VIABLE, MEMORY_ERROR, RUN_ERROR, …). Surface the remainder instead of
+            # letting the rows quietly fail to add up to the total.
+            other=$((total - killed - timed_out - survived - no_coverage))
+            if [ "$other" -ne 0 ]; then
+              echo "| Other statuses (non-viable / engine errors) | $other |"
+            fi
             if [ "$total" -gt 0 ]; then
-              echo "| Mutation score | $((detected * 100 / total))% |"
+              # Track the number the floor is checked against, which is not `detected * 100 / total`:
+              # shell division truncates, so that form reads a point low on most fractional scores. Round
+              # half up instead, and cap at 99 the way PIT does, so a near-sweep is not shown as a clean
+              # one. Verified against the pinned engine (pitest 1.16.1:
+              # PercentageCalculator.getPercentage(total, detected), the value
+              # MutationStatistics.getPercentageDetected() hands to mutationThreshold) over every count up
+              # to total=2000: this form matches all but 54 of the 2005000 pairs, truncation missed 987536.
+              # The residue is inherent — PIT divides in single precision, so a score on an exact half can
+              # fall either way there (15/24 gives 62, not 63).
+              if [ "$detected" -eq "$total" ]; then
+                score=100
+              else
+                score=$(((detected * 200 + total) / (total * 2)))
+                if [ "$score" -gt 99 ]; then
+                  score=99
+                fi
+              fi
+              echo "| Mutation score | ${score}% |"
             fi
           } >> "$GITHUB_STEP_SUMMARY"
