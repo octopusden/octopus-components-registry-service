@@ -7,6 +7,13 @@ policy test, property-based version-model tests, `src/main`→`src/test` PR gate
 Purpose: a "before / after" reference. Add a new dated section below rather than editing an old one —
 each snapshot must stay reproducible from the recipe in [§7](#7-how-to-re-measure).
 
+This file is deliberately the exception to the rule stated in [README.md](README.md) that `docs/registry/`
+describes the system as it is today: a measurement is meaningless without the date and the commit it was
+taken at, and a "before / after" claim needs both readings side by side. So dated entries accumulate here
+and are never rewritten. Where a number appears here it is a **record of what a threshold was on that
+date**, not the authority for what it is now: the enforced value lives in the build configuration and
+only there, so read a row below as history and the configuration as truth.
+
 ## Gate changes since the baseline
 
 Measured values move only when the code changes; this table records when a **gate** changed, so a later
