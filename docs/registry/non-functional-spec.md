@@ -296,7 +296,7 @@ Every PR must pass:
 4. Integration tests                (DB queries, transactions)
 5. Contract tests                   (Feign client compatibility)
 6. API snapshot tests               (v1/v2/v3 response structure)
-7. Coverage ratchets                (aggregate LINE/BRANCH + per-module LINE/BRANCH)
+7. Coverage floors                  (aggregate LINE/BRANCH + per-module LINE/BRANCH)
 ```
 
 **Coverage as a fitness function.** Coverage is gated in `qualityCoverage` (the GitHub `quality` job)
@@ -305,12 +305,22 @@ compile/correctness gate:
 
 | Gate | Task | Rule |
 |---|---|---|
-| Aggregate | `jacocoOverallCoverageVerification` | LINE ≥ 86%, BRANCH ≥ 65% |
-| Per module (strict) | `<module>:jacocoCoverageRatchet` | per-module LINE/BRANCH minimums, set to measured − ~2 p.p. |
-| Per module (floor) | `<module>:jacocoTestCoverageVerification` | plugin-owned 10% floor, kept underneath |
+| Aggregate | `jacocoOverallCoverageVerification` | LINE and BRANCH floors across all coverage modules |
+| Per module (strict) | `<module>:jacocoCoverageFloor` | per-module LINE floor plus an optional BRANCH floor, each set a little below the measured value |
+| Per module (lenient) | `<module>:jacocoTestCoverageVerification` | the convention plugin's own low floor, kept underneath |
 
-Both new gates are **ratchets**: they encode the coverage already achieved so a change cannot quietly
-erode it. BRANCH is gated alongside LINE because a fully line-covered conditional taken only on one path
+The thresholds themselves are not repeated here: they live in `build.gradle` — the aggregate minimums in
+`jacocoOverallCoverageVerification`'s violation rules, the per-module ones in `moduleCoverageFloors` — so
+this section describes the mechanism and stays correct when a floor is raised.
+
+Both new gates are **floors**: they encode the coverage already achieved so a change cannot quietly
+erode it. They are floors and not ratchets, and the naming says so deliberately — nothing in the build
+prevents lowering a number, so monotonicity rests on the threshold being visible in the diff and on the
+rule that lowering one is stated in the PR. Enforcing it mechanically means comparing against the target
+branch, which belongs in a coverage service rather than in hand-rolled Git plumbing inside a build script.
+A companion `verifyCoverageFloorsPolicy` task validates the map itself: every module that owns tests has a
+floor or a stated exemption, every entry declares a required `line` and an optional `branch` in (0, 1],
+no unknown keys, and no module is both floored and exempt. BRANCH is gated alongside LINE because a fully line-covered conditional taken only on one path
 still reports 100% LINE — BRANCH distinguishes "one branch ran" from "both branches ran". Neither counter
 says anything about whether an outcome was **asserted**: a test with no assertions at all can reach 100% on
 both. That is a different question, and no coverage counter can gate it. The measured values, the snapshot

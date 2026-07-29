@@ -14,10 +14,13 @@ snapshot can be read against the right contract.
 
 | Date | Change | Gate before | Gate after |
 |---|---|---|---|
-| 2026-07-27 | Aggregate coverage ratchet | LINE ≥ 70%, no BRANCH rule | LINE ≥ 86%, BRANCH ≥ 65% |
-| 2026-07-27 | Per-module coverage ratchet (`jacocoCoverageRatchet`, wired into `qualityCoverage`) | plugin-owned 10% floor only | strict per-module LINE/BRANCH minimums (measured − ~2 p.p.), 10% floor kept underneath |
-| 2026-07-28 | `component-validation` entered the ratchet (module added by #443, measured on `main` @`82d76d26`: LINE 99.7% = 343/344, BRANCH 85.9% = 128/149) | not gated | LINE ≥ 97%, BRANCH ≥ 83% |
-| 2026-07-28 | Ratchet-map policy checks moved out of configuration into `verifyCoverageRatchetPolicy` | a map problem failed **every** Gradle invocation | it fails the coverage gate only |
+| 2026-07-27 | Aggregate coverage floor | LINE ≥ 70%, no BRANCH rule | LINE ≥ 86%, BRANCH ≥ 65% |
+| 2026-07-27 | Per-module coverage floor (`jacocoCoverageFloor`, wired into `qualityCoverage`) | plugin-owned 10% floor only | strict per-module LINE/BRANCH minimums (measured − ~2 p.p.), 10% floor kept underneath |
+| 2026-07-28 | `component-validation` gained a floor (module added by #443, measured on `main` @`82d76d26`: LINE 99.7% = 343/344, BRANCH 85.9% = 128/149) | not gated | LINE ≥ 97%, BRANCH ≥ 83% |
+| 2026-07-28 | Floors-map policy checks moved out of configuration into `verifyCoverageFloorsPolicy` | a map problem failed **every** Gradle invocation | it fails the coverage gate only |
+| 2026-07-29 | Coverage execution data restricted to the tasks the invocation runs (`test`, `dbTest`) | a leftover `integrationTest.exec` could fold in locally, raising the numbers a clean CI run does not have | the gate reads the same data locally and on a fresh agent |
+| 2026-07-29 | Floors-map contract validated (`line` required, `branch` optional, values in (0, 1], no unknown keys, exemptions need a reason, no module both floored and exempt) | only `> 0` was checked | a malformed entry fails the gate with a precise message instead of failing late in JaCoCo or being silently ignored |
+| 2026-07-29 | Toolchain moved on after the snapshot: `octopus-quality` and `octopus-base` are now 2.5.2 (was 2.4.1 in the snapshot above) | — | measurements taken now sit on a different convention-plugin version than the recorded baseline; account for that before reading a delta |
 
 ---
 
@@ -29,10 +32,11 @@ labels/systems/tools on edit (set-diff sync) [SYS-067] (#454)`) — `origin/main
 **Sources:** TeamCity chain `3.0.9-4407` (2026-07-24, the last `main` chain), GitHub Actions runs on
 `main` @ `1ecab7a2`, and the report artifacts those runs published.
 
-**Tool versions at this snapshot** (they own the thresholds, so a bump can move the numbers):
+**Tool versions at this snapshot** (recorded because they own part of the numbers: the per-module 10% floor
+belongs to the convention plugin, so a bump can move measurements without any change in this repository):
 `octopus-quality` 2.4.1, shared workflows `octopus-base@v2.4.1`, detekt 1.23.8, ktlint-gradle 14.0.1,
-Gradle 8.6, Java 21. Dependabot PRs proposing `octopus-base` 2.5.1 were open at snapshot time — if the
-plugin-owned per-module coverage floor changes there, re-measure before comparing.
+Gradle 8.6, Java 21. Compare a later measurement against these versions, not against the versions in use
+today — where they differ, re-measure before drawing a conclusion from the delta.
 
 ### 1. TeamCity — `main` chain 3.0.9-4407
 

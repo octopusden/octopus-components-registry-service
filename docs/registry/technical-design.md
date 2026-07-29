@@ -589,9 +589,13 @@ The build splits tests by JUnit 5 tag so the heavy DB suite runs off the critica
   GitHub PRs under `qualityCoverage` (the `quality` job), so coverage **and** correctness
   are still gated on every PR.
 
-JaCoCo aggregates `test` + `dbTest` + `integrationTest` exec data, so splitting the suites did
-not cost coverage. The gates on that data are the aggregate LINE/BRANCH thresholds plus the
-per-module ratchet described in [`non-functional-spec.md`](non-functional-spec.md) §5.10.
+JaCoCo aggregates the exec data of the test tasks the coverage invocation actually runs —
+`test` + `dbTest` — so splitting the fast and heavy suites did not cost coverage. The FatJar
+`integrationTest` is **not** part of it: the coverage job never runs it (TeamCity-only), and
+reading its exec file "if present" made the gate depend on whether a local run had left one
+behind, which could only raise the numbers a clean agent reports. The gates on that data are
+the aggregate LINE/BRANCH thresholds plus the per-module floors described in
+[`non-functional-spec.md`](non-functional-spec.md) §5.10.
 
 All `Test` tasks set `TESTCONTAINERS_RYUK_DISABLED=true` (the Ryuk reaper
 can't mount the docker socket on Podman-rootless CI agents). `dockerPushImage` depends on
