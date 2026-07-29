@@ -73,14 +73,14 @@ project {
     buildType(id70DeployToOkdProdManual_2)
     buildType(WL_Validation_id)
 
-    // Display order mirrors the numbering: [1.0] first, then the two on-demand
-    // manual compat builds ([1.5]/[1.6]), then the AUTO fan-out that all triggers
+    // Display order mirrors the numbering: [1.0] first, then [1.1] (off-chain, scheduled), then the two
+    // on-demand manual compat builds ([1.5]/[1.6]), then the AUTO fan-out that all triggers
     // in parallel off [1.0] ([2.0]–[2.4]), then the release chain ([4.0]+).
     buildTypesOrder = arrayListOf(
         id10CompileUtAuto,
+        id11MutationTestingAuto,
         id15CompatManual,
         id16CompatTraceReplayManual,
-        id11MutationTestingAuto,
         id20ValidateComponentsRegistryProductionDataAuto,
         id12IntegrationDbTestsAuto,
         id17CompatLocalStandManual,
@@ -407,6 +407,16 @@ object id12IntegrationDbTestsAuto : BuildType({
 // release. That is the point — the mutation score says how well the tests would notice a regression,
 // which is a review concern, not a "is this build shippable" concern.
 //
+// Limit of that guarantee, stated because it is easy to assume otherwise: this config uses the shared
+// template, and TeamCity does not allow a build type to drop an inherited setting — snapshot
+// dependencies in particular cannot be overridden. An empty `dependencies {}` block would generate
+// nothing and neutralise nothing, so none is written here. What holds instead: the template declares no
+// dependencies (verified via REST), and were it ever to gain one, EVERY config using it inherits it —
+// [1.0] and the whole [2.x] fan-out included — which makes that a project-wide, visible change rather
+// than a silent capture of this one build. A hard local invariant would mean not using the template,
+// paying for it by re-implementing %WORK_DIR%, %GRADLE_STANDARD_PARAMETERS%, %JDK_CMDLINE_PARAMETERS%,
+// the docker wiring and the RUNNER_1720 meta-runner; not worth it for that trade.
+//
 // Division of labour with GitHub, which also runs this analysis (.github/workflows/mutation.yml):
 //   - GitHub, every PR touching the targeted paths — the GATE: fast feedback on the diff, and the place
 //     the threshold will become blocking (add the job to `gate-merge.needs`).
@@ -505,14 +515,6 @@ object id11MutationTestingAuto : BuildType({
 
     requirements {
         doesNotContain("env.OS_TYPE", "WIN", "RQ_2875")
-    }
-
-    // Explicit empty block, exactly as [1.5]/[1.6] carry it: neutralise any snapshot dependency the parent
-    // template (Octopus_OctopusGradleBuild) might inject. The template declares none today (checked via
-    // REST), but "off the chain" is this config's whole point, and leaving it implicit means a future
-    // template change would quietly pull [1.1] into the chain — where a failing mutation score could hold
-    // up [2.4] deploy or [4.0] release. Pinning the invariant here keeps it local and reviewable.
-    dependencies {
     }
 
     triggers {
