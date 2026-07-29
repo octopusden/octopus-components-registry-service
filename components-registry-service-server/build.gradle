@@ -239,8 +239,8 @@ pitest {
     excludedGroups = ['integration', 'performance']
     // Compiler-generated comparator/lambda holders (`sortedBy` and friends). Kotlin emits one class per
     // call site; mutating them produces unactionable report entries — there is no such source line to
-    // write a test against. 40 of 1658 mutants at the time of writing, so this is report hygiene, not a
-    // score adjustment (it moves the score by 1 p.p.).
+    // write a test against. Report hygiene, not a score adjustment: the excluded set is a small fraction
+    // of the total.
     excludedClasses = ['*$$inlined$*']
     mainSourceSets = [sourceSets.main]
     testSourceSets = [sourceSets.test]
@@ -253,18 +253,16 @@ pitest {
     historyInputLocation = layout.buildDirectory.file('pitest/history.bin').get().asFile
     historyOutputLocation = layout.buildDirectory.file('pitest/history.bin').get().asFile
 
-    // A FLOOR, same contract as the coverage floors: the measured score minus a small margin. It is not a
-    // ratchet and is not called one — nothing here stops someone lowering 53 to 30 and staying green, so
-    // holding the number is a review property (it is in the diff) rather than a build property.
-    // Failing it currently stops only this task and its workflow, not the PR, because that workflow is
-    // non-gating. See docs/registry/quality-baseline.md for the measured value and the re-measure recipe.
+    // A FLOOR, same contract as the coverage floors: the measured score minus a small margin, and NOT a
+    // target that has been met. It is not a ratchet either, and is not called one — nothing here stops
+    // someone lowering the number and staying green, so holding it is a review property (the threshold is
+    // in the diff) rather than a build property. Failing it currently stops only this task and its
+    // workflow, not the PR, because that workflow is non-gating.
     //
-    // 53 is deliberately NOT a target. The first measurement was 55% (895 of 1618 mutants detected), and
-    // ~24% of mutants are NO_COVERAGE — code in these packages that the UNIT tests never reach, because
-    // this analysis excludes the integration-tagged suite that does cover it. So the number is a floor to
-    // raise, in two ways that are both real work: kill surviving mutants (weak assertions), and give the
-    // unit-untested paths unit tests. `ConfigurationRowAccessorsKt` (128 of 132 mutants not covered) and
-    // `MappersKt` (31 of 31) are the two worst offenders and the obvious first targets.
+    // Two distinct kinds of work raise it, and the report tells them apart: killing SURVIVED mutants means
+    // strengthening assertions, while NO_COVERAGE means the unit tests never reach that code at all (this
+    // analysis excludes the integration-tagged suite that does cover it). Measured values, the modules
+    // that dominate each bucket, and the re-measure recipe: docs/registry/quality-baseline.md.
     mutationThreshold = 53
     // Line coverage of the targeted classes by the selected tests. PIT reports it for free, and it catches
     // a failure mode the mutation score hides: tests that stop reaching the code at all (a drop here can

@@ -290,9 +290,12 @@ Two sources, by purpose:
 
 - **Per change** — the `mutation-report` artifact of the GitHub `Mutation Testing (non-gating)` run, plus
   the killed/survived/not-covered table in that job's summary.
-- **Trend over time** — TeamCity `[1.1] Mutation Testing`: the artifact tab serves
-  `reports/pitest/index.html` browsable in place, and the Statistics tab charts `mutationScore` (also
-  `mutationsSurvived`, `mutationsNoCoverage`, …) across builds. Emitted by
+- **Trend over time** — TeamCity `[1.1] Mutation Testing`: the artifact tab serves the HTML report
+  browsable in place at
+  `reports/pitest/components-registry-service-server/build/reports/pitest/index.html` — the artifact rule
+  starts with `**`, so the repository-relative path is preserved under `reports/pitest` rather than
+  flattened (that is also what makes the unified report index's link resolve). The Statistics tab charts
+  `mutationScore` (also `mutationsSurvived`, `mutationsNoCoverage`, …) across builds, emitted by
   `scripts/teamcity/report-mutation-stats.sh`.
 
 Locally:

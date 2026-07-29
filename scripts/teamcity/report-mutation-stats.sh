@@ -31,6 +31,10 @@ fi
 # PIT marks every mutation with detected='true|false'. `detected` — not status='KILLED' — is what the
 # mutation score and mutationThreshold are computed from: a mutant that hangs is TIMED_OUT and still
 # detected, so counting KILLED alone under-reports.
+#
+# The same counting exists in .github/workflows/mutation.yml, which writes a job summary instead of
+# TeamCity service messages. Deliberate duplication for two different CI consumers — but they diverged
+# once already, so a change here belongs there in the same commit.
 total=$(grep -c '<mutation ' "$report")
 detected=$(grep -c "detected='true'" "$report")
 killed=$(grep -c "status='KILLED'" "$report")

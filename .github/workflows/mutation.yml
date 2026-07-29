@@ -14,6 +14,13 @@
 # run down to well under a minute locally.
 name: Mutation Testing (non-gating)
 
+# One run per ref: pushing again to a PR supersedes the previous analysis, and an 8-minute mutation run on
+# a commit nobody is looking at any more is pure agent time. The scheduled run on the default branch gets
+# its own group key, so a weekly run is never cancelled by PR activity.
+concurrency:
+  group: mutation-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
 # This job executes PR-controlled build logic (`./gradlew ... pitest` runs the repository's own Gradle
 # scripts and tests from the PR head). Pin the token down to read-only regardless of the repository or
 # organisation default, so a malicious or mistaken build script cannot write to the repo, publish
@@ -91,6 +98,12 @@ jobs:
           # Count PIT's own notion of "detected" (the attribute), NOT status='KILLED'. A mutant that hangs
           # is TIMED_OUT and still detected, so counting KILLED alone reports a lower score than the one
           # `mutationThreshold` is applied to — a discrepancy that only shows up near the threshold.
+          #
+          # The same counting exists in scripts/teamcity/report-mutation-stats.sh, which emits TeamCity
+          # service messages instead of a job summary. The duplication is deliberate — two different CI
+          # consumers, a few greps each — but the two must agree: they diverged once already (KILLED here
+          # vs detected there), so a change to the counting on one side belongs on the other in the same
+          # commit.
           detected=$(grep -c "detected='true'" "$report" || true)
           killed=$(grep -c "status='KILLED'" "$report" || true)
           timed_out=$(grep -c "status='TIMED_OUT'" "$report" || true)
