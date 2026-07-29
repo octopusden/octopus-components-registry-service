@@ -190,9 +190,10 @@ tasks.register('jacocoIntegrationTestReport', org.gradle.testing.jacoco.tasks.Ja
 // runs on TeamCity [1.0] only, because dockerPushImage HARD-depends on it (so it gates
 // publish/push). It is NOT triggered by `qualityCoverage` (i.e. NOT run on GH PRs) — it boots
 // the packaged jar in a separate JVM (in-memory H2) and makes timing-sensitive startup/fail-fast
-// assertions that flake on shared GH-hosted runners (GH issue #424). Its coverage still folds
-// into the aggregate when present (root build.gradle coverageExecData). See root build.gradle
-// (qualityCoverage + publish gating).
+// assertions that flake on shared GH-hosted runners (GH issue #424). Its coverage is NOT folded into
+// the coverage gates either: `coverageExecData` in the root build reads only the exec data of the test
+// tasks a coverage invocation actually runs, so the gate cannot depend on whether a local run happened
+// to leave this suite's file behind. See root build.gradle (qualityCoverage + publish gating).
 integrationTest.dependsOn bootJar
 integrationTest.finalizedBy jacocoIntegrationTestReport
 
