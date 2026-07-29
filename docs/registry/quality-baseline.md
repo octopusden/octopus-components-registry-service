@@ -327,3 +327,33 @@ grep -rc "<error " --include=ktlint-baseline.xml --exclude-dir=build .
 ```bash
 wc -l components-registry-service-server/archunit_violation_store/3e61e124-fe37-40db-9ea6-91a90f6afc18
 ```
+
+---
+
+## Snapshot 2026-07-29 — mutation testing, first measurement
+
+**Code under measurement:** `ci/mutation-testing` @ `557d07d8`, rebased on `main` @ `080cdb31`.
+**Source:** the GitHub `mutation-test` job of run `30461966571` — the first run on a CI agent, so these
+are the numbers the floors were calibrated against, not a local-only reading.
+
+| Metric | Value |
+|---|---|
+| Mutants generated | 1618 |
+| Killed (`detected='true'`) | 896 → **mutation score 55%** |
+| No coverage | 381 |
+| Test strength (score over covered mutants only) | 72% |
+| Line coverage of the mutated classes | 82% |
+| Floors in force | `mutationThreshold = 53`, `coverageThreshold = 78` |
+| Job duration | 8m38s |
+
+Two readings worth keeping:
+
+- **Score 55% and test strength 72% are different questions.** The gap is the 381 no-coverage mutants —
+  code unit tests never reach (some of it covered by the tag-excluded integration suite). Raising the
+  score can therefore mean either writing assertions or reaching new code, and the report separates them.
+- **The weakest area is the v1/v2/v3 mapper layer**, not the utilities: the largest single cluster is 407
+  mutants at 26% killed, dominated by "removed call to setX" survivors. That is the wire path, so it is
+  where the next assertions pay off most — see the follow-up notes in the PR that introduced this check.
+
+A run costs about as long as `tests-coverage`, which is why the GitHub check triggers on the targeted
+paths only and TeamCity `[1.1]` carries the weekly whole-repository backstop.
