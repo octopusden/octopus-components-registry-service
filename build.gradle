@@ -23,6 +23,34 @@ plugins {
     id 'com.platformlib.gradle-wrapper' version '0.2.6'
 }
 
+// Modules published to Maven Central — an allowlist, so a module that is not listed is not
+// published. Central is for artifacts other projects consume as a Maven dependency.
+//
+// Deliberately NOT listed:
+//   components-registry-service-server, components-registry-cli — deployables (docker image on
+//     ghcr / built locally per the CLI README);
+//   components-registry-compat-test — internal harness;
+//   component-validation — pure validation library with no external consumer yet. The server
+//     depends on it as `project(':component-validation')`, which needs no publication, and it has
+//     never been on Central (it was added after the last release). Publishing it would start
+//     costing quota for something nobody can resolve; add it here the moment a consumer outside
+//     this repository needs it as a dependency.
+//
+// components-registry-automation IS listed even though it is tooling: its TeamCity metarunner
+// resolves `<group>:components-registry-automation:<version>:jar:all` from a Maven repo at build
+// time (see components-registry-automation/metarunners/).
+def centralPublishedModules = [
+        'component-resolver-api',
+        'component-resolver-core',
+        'components-registry-api',
+        'components-registry-dsl',
+        'components-registry-service-client',
+        'components-registry-service-light-client',
+        'components-registry-service-core',
+        'test-common',
+        'components-registry-automation',
+] as Set
+
 octopusQuality {
     // NOTE: in octopus-quality 2.5.2 `excludeProjects` maps ONLY to coverage exclusion
     // (coverageExcludedProjects) — it does NOT exclude these modules from qualityStatic, which
@@ -288,44 +316,49 @@ configure(subprojects) {
         withSourcesJar()
     }
 
-    publishing {
-        publications {
-            mavenJava(MavenPublication) {
-                from components.java
-                pom {
-                    name.set(project.name)
-                    description.set("Octopus module: ${project.name}")
-                    url.set("https://github.com/octopusden/octopus-components-registry-service.git")
-                    licenses {
-                        license {
-                            name.set("The Apache License, Version 2.0")
-                            url.set("http://www.apache.org/licenses/LICENSE-2.0.txt")
-                        }
-                    }
-                    scm {
+    // Only allowlisted modules get a publication (see centralPublishedModules above); for the
+    // rest `publishToSonatype` has nothing to upload, while `build`, the docker image and the
+    // shadow/boot jars are unaffected.
+    if (project.name in centralPublishedModules) {
+        publishing {
+            publications {
+                mavenJava(MavenPublication) {
+                    from components.java
+                    pom {
+                        name.set(project.name)
+                        description.set("Octopus module: ${project.name}")
                         url.set("https://github.com/octopusden/octopus-components-registry-service.git")
-                        connection.set("scm:git://github.com/octopusden/octopus-components-registry-service.git")
-                    }
-                    developers {
-                        developer {
-                            id.set("octopus")
-                            name.set("octopus")
+                        licenses {
+                            license {
+                                name.set("The Apache License, Version 2.0")
+                                url.set("http://www.apache.org/licenses/LICENSE-2.0.txt")
+                            }
+                        }
+                        scm {
+                            url.set("https://github.com/octopusden/octopus-components-registry-service.git")
+                            connection.set("scm:git://github.com/octopusden/octopus-components-registry-service.git")
+                        }
+                        developers {
+                            developer {
+                                id.set("octopus")
+                                name.set("octopus")
+                            }
                         }
                     }
                 }
             }
         }
-    }
 
-    signing {
-        required(gradle.taskGraph.hasTask("publishToSonatype"))
-        sign(publishing.publications)
-        def signingKey = findProperty("signingKey")
-        def signingPassword = findProperty("signingPassword")
-        useInMemoryPgpKeys(
-                signingKey,
-                signingPassword
-        )
+        signing {
+            required(gradle.taskGraph.hasTask("publishToSonatype"))
+            sign(publishing.publications)
+            def signingKey = findProperty("signingKey")
+            def signingPassword = findProperty("signingPassword")
+            useInMemoryPgpKeys(
+                    signingKey,
+                    signingPassword
+            )
+        }
     }
 }
 
@@ -416,6 +449,45 @@ ${sectionsHtml}
 </html>
 """
 }
+
+// POLICY check, run in a task action rather than at configuration time: a publication-policy
+// problem must fail the release, not every Gradle invocation (`build`, `test`, `dependencies`,
+// IDE sync) — the same reasoning as the coverage-policy checks below. Wired into the publish
+// path, so a drift cannot reach Central: re-adding a publication for an excluded module, or
+// dropping the allowlist check itself, fails before anything is uploaded.
+def centralPublicationPolicyProblems = {
+    def actual = subprojects.findAll { !it.publishing.publications.isEmpty() }*.name as Set
+    if (actual != centralPublishedModules) {
+        return ["Maven Central publication set drifted.\n" +
+                    "  allowlisted: ${centralPublishedModules.sort()}\n" +
+                    "  publishing:  ${actual.sort()}\n" +
+                    "Update `centralPublishedModules` in the root build.gradle only if the change is intentional."]
+    }
+    return []
+}
+
+def verifyCentralPublicationPolicy = tasks.register('verifyCentralPublicationPolicy') {
+    group = 'verification'
+    description = 'Fails if the set of modules publishing to Maven Central differs from the allowlist.'
+    doLast {
+        def problems = centralPublicationPolicyProblems()
+        if (problems) {
+            throw new GradleException(problems.join('\n\n'))
+        }
+        logger.lifecycle("Maven Central publication set matches the allowlist (${centralPublishedModules.size()} modules).")
+    }
+}
+
+// `publishToSonatype` only exists with -Pnexus, and `publish` is per-project — match by name so
+// the gate attaches wherever it is present without forcing either to be created.
+gradle.projectsEvaluated {
+    allprojects { proj ->
+        proj.tasks.matching { it.name in ['publishToSonatype', 'publish', 'publishToMavenLocal'] }.configureEach {
+            dependsOn verifyCentralPublicationPolicy
+        }
+    }
+}
+
 
 // Aggregate JaCoCo tasks and coverage gate wired in projectsEvaluated (outside any task
 // configuration action) so the task container is still mutable.
