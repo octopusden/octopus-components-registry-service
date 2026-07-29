@@ -309,9 +309,9 @@ compile/correctness gate:
 | Per module (strict) | `<module>:jacocoCoverageFloor` | per-module LINE floor plus an optional BRANCH floor, each set a little below the measured value |
 | Per module (lenient) | `<module>:jacocoTestCoverageVerification` | the convention plugin's own low floor, kept underneath |
 
-The thresholds themselves are not repeated here: they live in `build.gradle`
-(`moduleCoverageFloors` and the aggregate rule), so this section describes the mechanism and stays correct
-when a floor is raised.
+The thresholds themselves are not repeated here: they live in `build.gradle` — the aggregate minimums in
+`jacocoOverallCoverageVerification`'s violation rules, the per-module ones in `moduleCoverageFloors` — so
+this section describes the mechanism and stays correct when a floor is raised.
 
 Both new gates are **floors**: they encode the coverage already achieved so a change cannot quietly
 erode it. They are floors and not ratchets, and the naming says so deliberately — nothing in the build
