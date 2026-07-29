@@ -54,11 +54,14 @@ fi
 #
 # Verified against the pinned engine (pitest 1.16.1: PercentageCalculator.getPercentage(total, detected),
 # the value MutationStatistics.getPercentageDetected() hands to mutationThreshold) by comparing every
-# count up to total=2000 — 2005000 pairs. This form matches all but 54 of them; truncation missed 987536.
-# The residue is unavoidable rather than sloppy: PIT computes `100f / total * detected` in single
-# precision, so a score landing on an exact half can fall either way there (15/24 gives 62, not 63).
-# Chart values can therefore sit a point below PIT's own on an exact half. Read the report, not the
-# chart, when a build is that close to the floor.
+# count up to total=20000. This form matches except on a score landing on an exact half; truncation was
+# wrong on roughly half of all counts.
+#
+# That residue is unavoidable rather than sloppy: PIT divides in single precision (`100f / total *
+# detected`), so an exact half falls below the rounding point there — 15/24 gives 62, not 63. Every
+# deviation found was in that one direction, so this value never reads above PIT's own, only a point
+# below it on an exact half. When a build sits that close to the floor, read the report rather than the
+# chart.
 if [ "$detected" -eq "$total" ]; then
     score=100
 else
