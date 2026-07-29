@@ -570,6 +570,7 @@ gradle.projectsEvaluated {
         'components-registry-service-light-client': [line: 0.77, branch: 0.43],
         'component-resolver-api'                  : [line: 0.68, branch: 0.28],
         'components-registry-api'                 : [line: 0.14, branch: 0.07],
+        'component-validation'                    : [line: 0.97, branch: 0.83],
     ]
     // Escape hatch: a coverage module that OWNS tests but is deliberately left ungated goes here, with the
     // reason. Empty today, and `components-registry-service-core` deliberately does not need an entry — it
@@ -584,37 +585,57 @@ gradle.projectsEvaluated {
     // JacocoCoverageVerification with empty execution data is SKIPPED, not failed, so keying on the task
     // would let a module delete every test and keep a green ratchet, while the ~2 p.p. of aggregate
     // headroom absorbs a small module's loss. Keying on sources makes that state fail loudly.
-    // NOTE: both checks assume `projectsEvaluated` sees the whole project tree, which holds because
-    // configuration-on-demand is off (it is not set in gradle.properties). If it is ever enabled, these
-    // guards must move into a task action — under configure-on-demand a narrow invocation evaluates only
-    // some projects and the checks would fire spuriously.
-    def unratcheted = moduleNamesWithTests - moduleCoverageRatchet.keySet() - coverageRatchetExempt.keySet()
-    if (unratcheted) {
-        throw new GradleException(
-            "coverage modules with tests but no ratchet: ${unratcheted.join(', ')} — measure them (see " +
-                "docs/registry/quality-baseline.md §7) and add entries to moduleCoverageRatchet in build.gradle")
-    }
-    def ratchetedWithoutTests = moduleCoverageRatchet.keySet() - moduleNamesWithTests
-    if (ratchetedWithoutTests) {
-        throw new GradleException(
-            "coverage ratchet is configured for ${ratchetedWithoutTests.join(', ')}, which has no test " +
-                "sources — the ratchet task would SKIP on empty JaCoCo execution data and gate nothing. " +
+    //
+    // POLICY checks, run in a task action wired into `qualityCoverage` — deliberately NOT at
+    // configuration time: a coverage-policy problem must fail the coverage gate, not every Gradle
+    // invocation (`build`, `test`, `dependencies`, IDE sync).
+    def ratchetPolicyProblems = {
+        def problems = []
+        def unratcheted = moduleNamesWithTests - moduleCoverageRatchet.keySet() - coverageRatchetExempt.keySet()
+        if (unratcheted) {
+            problems << ("coverage modules with tests but no ratchet: ${unratcheted.join(', ')} — measure them " +
+                "(see docs/registry/quality-baseline.md §7) and add entries to moduleCoverageRatchet in build.gradle")
+        }
+        def ratchetedWithoutTests = moduleCoverageRatchet.keySet() - moduleNamesWithTests
+        if (ratchetedWithoutTests) {
+            problems << ("coverage ratchet is configured for ${ratchetedWithoutTests.join(', ')}, which has no " +
+                "test sources — the ratchet task would SKIP on empty JaCoCo execution data and gate nothing. " +
                 "Restore the tests, or (if the module is intentionally untested) move it to " +
-                "coverageRatchetExempt in build.gradle with the reason")
-    }
-    // A threshold of zero is not a ratchet, it is the absence of one — and it reads as a configured gate,
-    // which is worse than no gate at all. (Sibling repos have both shapes of this: a coverage minimum of
-    // 0.00 with the gate "enabled", and a CVE gate whose fail-on score is above the top of the CVSS scale.)
-    def nonRatchets = moduleCoverageRatchet.findAll { name, t -> t.line <= 0 || t.branch <= 0 }*.key
-    if (nonRatchets) {
-        throw new GradleException(
-            "coverage ratchet thresholds must be > 0 — ${nonRatchets.join(', ')} would be a gate that " +
-                "cannot fail. Measure the module (docs/registry/quality-baseline.md §7) and set a real " +
+                "coverageRatchetExempt with the reason")
+        }
+        // A threshold of zero is not a ratchet, it is the absence of one — and it reads as a configured
+        // gate, which is worse than no gate at all. (Sibling repos have both shapes of this: a coverage
+        // minimum of 0.00 with the gate "enabled", and a CVE gate whose fail-on score sits above the top
+        // of the CVSS scale.)
+        def nonRatchets = moduleCoverageRatchet.findAll { name, t -> t.line <= 0 || t.branch <= 0 }*.key
+        if (nonRatchets) {
+            problems << ("coverage ratchet thresholds must be > 0 — ${nonRatchets.join(', ')} would be a gate " +
+                "that cannot fail. Measure the module (docs/registry/quality-baseline.md §7) and set a real " +
                 "floor, or move it to coverageRatchetExempt with the reason")
+        }
+        problems
     }
+    tasks.register('verifyCoverageRatchetPolicy') {
+        group = 'verification'
+        description = 'Fails when the per-module coverage ratchet map disagrees with the modules that own tests, or carries a zero threshold'
+        doLast {
+            def problems = ratchetPolicyProblems()
+            if (problems) {
+                throw new GradleException(problems.join('\n'))
+            }
+        }
+    }
+
     def ratchetTaskPaths = []
     moduleCoverageRatchet.each { moduleName, thresholds ->
         def p = testTargets.find { it.name == moduleName }
+        // A key that resolves to nothing — module removed, renamed, misspelled, or newly excluded from
+        // coverage — is skipped here rather than dereferenced. Reporting it is `verifyCoverageRatchetPolicy`'s
+        // job (`ratchetedWithoutTests` covers it), so a stale key fails the gate with a readable message
+        // instead of aborting configuration with a null-dereference.
+        if (p == null) {
+            return
+        }
         // Only `dbTest` — deliberately NOT `integrationTest`, for the reason spelled out at
         // `heavyTestTaskPaths` above: the FatJar boot FT must not be pulled into the GitHub coverage job
         // (timing-sensitive on shared runners, and it piles a second full-app JVM onto the co-scheduled
@@ -681,6 +702,7 @@ gradle.projectsEvaluated {
         dependsOn(ratchetTaskPaths)
         // Without this, an empty-exec-data run reports every coverage gate as SKIPPED and passes.
         dependsOn('verifyCoverageDataPresent')
+        dependsOn('verifyCoverageRatchetPolicy')
     }
 
     // Part A.7: gate publish + image push on the server fat-jar FT. dockerPushImage HARD-depends

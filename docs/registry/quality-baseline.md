@@ -16,6 +16,8 @@ snapshot can be read against the right contract.
 |---|---|---|---|
 | 2026-07-27 | Aggregate coverage ratchet | LINE ≥ 70%, no BRANCH rule | LINE ≥ 86%, BRANCH ≥ 65% |
 | 2026-07-27 | Per-module coverage ratchet (`jacocoCoverageRatchet`, wired into `qualityCoverage`) | plugin-owned 10% floor only | strict per-module LINE/BRANCH minimums (measured − ~2 p.p.), 10% floor kept underneath |
+| 2026-07-28 | `component-validation` entered the ratchet (module added by #443, measured on `main` @`82d76d26`: LINE 99.7% = 343/344, BRANCH 85.9% = 128/149) | not gated | LINE ≥ 97%, BRANCH ≥ 83% |
+| 2026-07-28 | Ratchet-map policy checks moved out of configuration into `verifyCoverageRatchetPolicy` | a map problem failed **every** Gradle invocation | it fails the coverage gate only |
 
 ---
 
