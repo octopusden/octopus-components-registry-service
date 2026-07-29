@@ -39,16 +39,21 @@ plugins {
 // components-registry-automation IS listed even though it is tooling: its TeamCity metarunner
 // resolves `<group>:components-registry-automation:<version>:jar:all` from a Maven repo at build
 // time (see components-registry-automation/metarunners/).
-def centralPublishedModules = [
-        'component-resolver-api',
-        'component-resolver-core',
-        'components-registry-api',
-        'components-registry-dsl',
-        'components-registry-service-client',
-        'components-registry-service-light-client',
-        'components-registry-service-core',
-        'test-common',
-        'components-registry-automation',
+// Allowlist PROJECT PATHS, not names. A Set of names collapses two modules that share a
+// simple name, and the root project's name is a repository-level string rather than a module
+// name, so it cannot sit here meaningfully. `as Set` is load-bearing: in Groovy a Set is never
+// equal to a List even with identical elements, so declaring this as a plain list would fail
+// the check on every publish.
+def centralPublishedProjects = [
+        ':component-resolver-api',
+        ':component-resolver-core',
+        ':components-registry-api',
+        ':components-registry-dsl',
+        ':components-registry-service-client',
+        ':components-registry-service-light-client',
+        ':components-registry-service-core',
+        ':test-common',
+        ':components-registry-automation',
 ] as Set
 
 octopusQuality {
@@ -316,10 +321,10 @@ configure(subprojects) {
         withSourcesJar()
     }
 
-    // Only allowlisted modules get a publication (see centralPublishedModules above); for the
+    // Only allowlisted modules get a publication (see centralPublishedProjects above); for the
     // rest `publishToSonatype` has nothing to upload, while `build`, the docker image and the
     // shadow/boot jars are unaffected.
-    if (project.name in centralPublishedModules) {
+    if (project.path in centralPublishedProjects) {
         publishing {
             publications {
                 mavenJava(MavenPublication) {
@@ -456,12 +461,18 @@ ${sectionsHtml}
 // path, so a drift cannot reach Central: re-adding a publication for an excluded module, or
 // dropping the allowlist check itself, fails before anything is uploaded.
 def centralPublicationPolicyProblems = {
-    def actual = subprojects.findAll { !it.publishing.publications.isEmpty() }*.name as Set
-    if (actual != centralPublishedModules) {
+    // allprojects, NOT subprojects: the root is a publishable project like any other, and a
+    // publication added there would otherwise be invisible to this check. The plugin test comes
+    // first because reading `publishing` throws on a project without maven-publish — the root
+    // does not have it, since it is applied inside `configure(subprojects)`.
+    def actual = allprojects.findAll {
+        it.plugins.hasPlugin('maven-publish') && !it.publishing.publications.isEmpty()
+    }*.path as Set
+    if (actual != centralPublishedProjects) {
         return ["Maven Central publication set drifted.\n" +
-                    "  allowlisted: ${centralPublishedModules.sort()}\n" +
+                    "  allowlisted: ${centralPublishedProjects.sort()}\n" +
                     "  publishing:  ${actual.sort()}\n" +
-                    "Update `centralPublishedModules` in the root build.gradle only if the change is intentional."]
+                    "Update `centralPublishedProjects` in the root build.gradle only if the change is intentional."]
     }
     return []
 }
@@ -474,7 +485,7 @@ def verifyCentralPublicationPolicy = tasks.register('verifyCentralPublicationPol
         if (problems) {
             throw new GradleException(problems.join('\n\n'))
         }
-        logger.lifecycle("Maven Central publication set matches the allowlist (${centralPublishedModules.size()} modules).")
+        logger.lifecycle("Maven Central publication set matches the allowlist (${centralPublishedProjects.size()} projects).")
     }
 }
 
@@ -482,6 +493,13 @@ def verifyCentralPublicationPolicy = tasks.register('verifyCentralPublicationPol
 // the gate attaches wherever it is present without forcing either to be created.
 gradle.projectsEvaluated {
     allprojects { proj ->
+        // Hook the task TYPE first: every concrete publish task extends AbstractPublishToMaven,
+        // so `publishMavenJavaPublicationToSonatypeRepository` and friends are covered too.
+        // Matching only the aggregates by name left the policy bypassable by invoking a leaf
+        // task directly.
+        proj.tasks.withType(AbstractPublishToMaven).configureEach {
+            dependsOn verifyCentralPublicationPolicy
+        }
         proj.tasks.matching { it.name in ['publishToSonatype', 'publish', 'publishToMavenLocal'] }.configureEach {
             dependsOn verifyCentralPublicationPolicy
         }
