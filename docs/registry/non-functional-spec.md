@@ -305,9 +305,13 @@ compile/correctness gate:
 
 | Gate | Task | Rule |
 |---|---|---|
-| Aggregate | `jacocoOverallCoverageVerification` | LINE ≥ 86%, BRANCH ≥ 65% |
-| Per module (strict) | `<module>:jacocoCoverageFloor` | per-module LINE/BRANCH minimums, set to measured − ~2 p.p.; `branch` optional |
-| Per module (floor) | `<module>:jacocoTestCoverageVerification` | plugin-owned 10% floor, kept underneath |
+| Aggregate | `jacocoOverallCoverageVerification` | LINE and BRANCH floors across all coverage modules |
+| Per module (strict) | `<module>:jacocoCoverageFloor` | per-module LINE floor plus an optional BRANCH floor, each set a little below the measured value |
+| Per module (lenient) | `<module>:jacocoTestCoverageVerification` | the convention plugin's own low floor, kept underneath |
+
+The thresholds themselves are not repeated here: they live in `build.gradle`
+(`moduleCoverageFloors` and the aggregate rule), so this section describes the mechanism and stays correct
+when a floor is raised.
 
 Both new gates are **floors**: they encode the coverage already achieved so a change cannot quietly
 erode it. They are floors and not ratchets, and the naming says so deliberately — nothing in the build
