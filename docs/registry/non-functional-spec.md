@@ -345,7 +345,7 @@ proof of assertion quality, and the survivor list matters more than the percenta
 | Task | `:components-registry-service-server:pitest` |
 | Where (signal) | GitHub `mutation.yml` — a **check, not a gate**: it reports on the PR but is absent from `gate-merge.needs`, so a red run does not block a merge. Promoting it into the merge gate is the deliberate next step, not the current state |
 | Where (analytics) | TeamCity `[1.1] Mutation Testing` — weekly on the default branch, outside the build chain: browsable HTML report plus a score chart via `buildStatisticValue` |
-| Thresholds | `mutationThreshold = 53`, `coverageThreshold = 78` — **floors**, not ratchets: nothing in the build stops a lowered number, so holding them is a review property |
+| Thresholds | `mutationThreshold` and `coverageThreshold`, both **floors** rather than ratchets: nothing in the build stops a lowered number, so holding them is a review property. The values live in the `pitest {}` block; they are not repeated here |
 | Tests used | the `test` source set only, with the `integration`/`performance` tags excluded |
 
 Controllers, services, repositories, config and entities are **not** targeted: their behaviour is Spring
