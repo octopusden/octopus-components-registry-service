@@ -604,6 +604,14 @@ gradle.projectsEvaluated {
     // invocation (`build`, `test`, `dependencies`, IDE sync).
     def floorPolicyProblems = {
         def problems = []
+        // The two top-level maps are checked before anything reads them, for the same reason every entry is:
+        // the first unchecked read is where a config mistake stops being a reportable problem and becomes a
+        // stack trace. If either is not a map there is nothing further worth saying, so report and stop.
+        if (!(moduleCoverageFloors instanceof Map) || !(coverageFloorsExempt instanceof Map)) {
+            return ["moduleCoverageFloors and coverageFloorsExempt must both be maps of module name -> " +
+                        "thresholds / reason; got ${moduleCoverageFloors.getClass().simpleName} and " +
+                        "${coverageFloorsExempt.getClass().simpleName}"]
+        }
         def unfloored = moduleNamesWithTests - moduleCoverageFloors.keySet() - coverageFloorsExempt.keySet()
         if (unfloored) {
             problems << ("coverage modules with tests but no floor: ${unfloored.join(', ')} — measure them " +
@@ -702,12 +710,20 @@ gradle.projectsEvaluated {
         // counters the entry actually declares — a line-only entry must not silently become BRANCH >= 0,
         // which JaCoCo satisfies unconditionally and which would read as a branch gate in the report.
         //
-        // Only WELL-FORMED values are consumed here. Registration happens at configuration time, before
-        // `verifyCoverageFloorsPolicy` can report anything, so a malformed value used to abort the build
-        // with whatever Groovy made of it — `line: 'oops'` produced `For input string: "oopsoops…"`, since
-        // String * 100 repeats the string — instead of the policy task's precise message. Skipping bad
-        // values here keeps the diagnosis where it belongs: the entry is reported by the policy check, and
-        // a module whose floor is unusable simply gets no floor task rather than breaking configuration.
+        // Nothing about the entry is trusted before it is checked, because registration happens at
+        // configuration time — before `verifyCoverageFloorsPolicy` can report anything. Two levels of
+        // malformed input both used to abort the build with whatever Groovy made of them instead of the
+        // policy task's precise message:
+        //   - a non-Map entry (`'module': 'oops'`) → `No such property: line for class: java.lang.String`
+        //     on the very first read;
+        //   - a non-numeric value (`line: 'oops'`) → `For input string: "oopsoops…"`, since String * 100
+        //     repeats the string.
+        // So the shape is checked first, then each value, and anything unusable is skipped here: the entry
+        // is still reported by the policy check, while a module whose floors are unusable simply gets no
+        // floor task rather than breaking configuration for everyone.
+        if (!(thresholds instanceof Map)) {
+            return
+        }
         def wellFormed = { v -> v instanceof Number && v > 0 && v <= 1 }
         def declaredCounters = ['LINE': thresholds.line, 'BRANCH': thresholds.branch]
             .findAll { counter, value -> wellFormed(value) }
