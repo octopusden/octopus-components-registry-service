@@ -13,7 +13,7 @@ import org.octopusden.octopus.components.registry.server.service.ImportService
 import org.octopusden.octopus.components.registry.server.service.impl.ComponentRegistryResolverImpl
 import org.octopusden.octopus.components.registry.server.service.impl.ComponentRoutingResolver
 import org.octopusden.octopus.components.registry.server.service.impl.ConfigSyncService
-import org.octopusden.octopus.components.registry.server.teamcity.TeamcitySyncService
+import org.octopusden.octopus.components.registry.server.teamcity.sync.TeamcitySyncService
 import org.octopusden.octopus.components.registry.test.BaseComponentsRegistryServiceTest
 import org.springframework.beans.factory.annotation.Autowired
 import org.springframework.boot.test.context.SpringBootTest

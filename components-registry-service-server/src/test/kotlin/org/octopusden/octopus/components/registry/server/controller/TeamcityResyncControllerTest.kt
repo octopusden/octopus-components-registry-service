@@ -16,10 +16,10 @@ import org.octopusden.octopus.components.registry.server.service.MigrationConfli
 import org.octopusden.octopus.components.registry.server.service.MigrationLifecycleGate
 import org.octopusden.octopus.components.registry.server.support.adminJwt
 import org.octopusden.octopus.components.registry.server.support.editorJwt
-import org.octopusden.octopus.components.registry.server.teamcity.StartTeamcitySyncResult
-import org.octopusden.octopus.components.registry.server.teamcity.TeamcitySyncJobService
-import org.octopusden.octopus.components.registry.server.teamcity.TeamcitySyncJobState
-import org.octopusden.octopus.components.registry.server.teamcity.TeamcitySyncResult
+import org.octopusden.octopus.components.registry.server.teamcity.sync.StartTeamcitySyncResult
+import org.octopusden.octopus.components.registry.server.teamcity.sync.TeamcitySyncJobService
+import org.octopusden.octopus.components.registry.server.teamcity.sync.TeamcitySyncJobState
+import org.octopusden.octopus.components.registry.server.teamcity.sync.TeamcitySyncResult
 import org.springframework.beans.factory.annotation.Autowired
 import org.springframework.boot.test.autoconfigure.web.servlet.AutoConfigureMockMvc
 import org.springframework.boot.test.context.SpringBootTest

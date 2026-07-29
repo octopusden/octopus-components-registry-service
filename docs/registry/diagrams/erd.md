@@ -2,7 +2,9 @@
 
 Entity-relationship diagram of the v2 schema baseline (`V1__schema.sql`). The full column-by-column specification lives in [schema-spec.md](../schema-spec.md); the design rationale is in [ADR-014](../adr/014-schema-v2.md).
 
-25 tables across 7 groups. The diagram is split into views to stay readable.
+25 tables across 7 groups. The diagram is split into views to stay readable. Tables added by
+migrations after the baseline (`teamcity_project`, `version_line`, `teamcity_validation`,
+`service_event`) are diagrammed separately under [Post-v2 additions](#post-v2-additions) below.
 
 ## Core + per-version configurations
 
@@ -195,6 +197,53 @@ Audit and operational state — not part of the component model proper.
 | `registry_config` | Singleton-shaped key/value table for runtime configuration (e.g. field-visibility overrides). |
 | `dependency_mappings` | Component → component dependency mapping registry (SYS-037). |
 | `git_history_import_state` | Per-component cursor for the `/migrate-history` backfill job (MIG-026). |
+
+## Post-v2 additions
+
+Tables added by migrations after the v2 baseline — not part of the 25-table count above. See
+[schema-spec.md §10](../schema-spec.md#10-post-v2-additions) and
+[technical-design.md §6](../technical-design.md#6-architecture) for behavior/lifecycle.
+
+```mermaid
+erDiagram
+    components ||--o{ version_line : "1:N"
+    teamcity_project ||--o{ version_line : "1:N"
+    teamcity_project ||--o{ teamcity_validation : "1:N (by project_id, not FK)"
+
+    teamcity_project {
+        uuid id PK
+        string project_id UK
+    }
+    version_line {
+        uuid id PK
+        uuid component_id FK
+        string version "nullable — TC PROJECT_VERSION, sync-owned"
+        uuid teamcity_project_id FK
+    }
+    teamcity_validation {
+        string project_id PK
+        string type PK "e.g. USES_OLD_JAVA_VERSION"
+        string status "WARNING | ERROR"
+        string message
+        timestamp updated_at
+    }
+    service_event {
+        uuid id PK
+        string event_type
+        string source
+        string status
+        timestamp started_at
+        timestamp finished_at
+        string correlation_id
+        text detail "JSON"
+    }
+```
+
+`teamcity_validation` keys on `project_id` (a plain string, matching `teamcity_project.project_id`)
+rather than a foreign key to `teamcity_project.id` — findings are latest-only and replaced
+wholesale per run, so there's no child-row lifecycle to protect with an FK; the query side joins
+back to components via `version_line`, not `teamcity_project` directly (which is append-only and
+would include projects no longer linked to anything).
 
 ## Resolve algorithm in one line
 

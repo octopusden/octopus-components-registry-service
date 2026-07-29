@@ -9,6 +9,10 @@ import org.mockito.Mockito.`when`
 import org.octopusden.octopus.components.registry.server.service.JobState
 import org.octopusden.octopus.components.registry.server.service.MigrationConflictException
 import org.octopusden.octopus.components.registry.server.service.MigrationLifecycleGate
+import org.octopusden.octopus.components.registry.server.teamcity.sync.StartTeamcitySyncResult
+import org.octopusden.octopus.components.registry.server.teamcity.sync.TeamcitySyncJobService
+import org.octopusden.octopus.components.registry.server.teamcity.sync.TeamcitySyncJobState
+import org.octopusden.octopus.components.registry.server.teamcity.sync.TeamcitySyncScheduler
 import java.time.Instant
 
 /**
@@ -40,7 +44,12 @@ class TeamcitySyncSchedulerTest {
     @DisplayName("weeklyResync calls startAsync and returns normally on isNewlyStarted=true")
     fun startsFreshJob() {
         val jobService = mock(TeamcitySyncJobService::class.java)
-        `when`(jobService.startAsync("scheduler")).thenReturn(StartTeamcitySyncResult(startedState("job-1"), isNewlyStarted = true))
+        `when`(jobService.startAsync("scheduler")).thenReturn(
+            StartTeamcitySyncResult(
+                startedState("job-1"),
+                isNewlyStarted = true,
+            ),
+        )
 
         TeamcitySyncScheduler(jobService).weeklyResync()
 
@@ -51,7 +60,12 @@ class TeamcitySyncSchedulerTest {
     @DisplayName("weeklyResync swallows isNewlyStarted=false (same-kind attach) without throwing")
     fun swallowsSameKindAttach() {
         val jobService = mock(TeamcitySyncJobService::class.java)
-        `when`(jobService.startAsync("scheduler")).thenReturn(StartTeamcitySyncResult(startedState("job-2"), isNewlyStarted = false))
+        `when`(jobService.startAsync("scheduler")).thenReturn(
+            StartTeamcitySyncResult(
+                startedState("job-2"),
+                isNewlyStarted = false,
+            ),
+        )
 
         // Must NOT throw — catching the same-kind attach in @Scheduled is the entire point.
         TeamcitySyncScheduler(jobService).weeklyResync()

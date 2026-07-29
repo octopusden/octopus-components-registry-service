@@ -18,6 +18,15 @@ refresh it with `./gradlew :components-registry-service-server:generateOpenApiDo
 
 ## Unreleased
 
+- **TeamCity validation surfaced in the API — coordinated deploy required.** `TeamcityProjectResponse`
+  gains `validations: List<ValidationResponse>` (`type` + `status` + optional `message` +
+  optional `updatedAt`, e.g. `USES_OLD_JAVA_VERSION` / `WARNING`), and new admin endpoints
+  `GET /rest/api/4/admin/teamcity-validations` and `.../summary` expose per-project findings
+  (`@permissionEvaluator.canImport()`). Findings are populated by a new post-sync + on-demand
+  validation job — see [Upgrade note](deployment/tc-validation-upgrade-note.md) for the required
+  `teamcity.validation.*` configuration. **This service must be deployed together with the
+  components-management-portal release that understands this contract** — do not roll it out
+  independently.
 - **`TeamcityProjectResponse.projectVersion` added (nullable).** Component detail
   (`GET /rest/api/4/components/{id}`) now exposes `teamcityProjects[].projectVersion` — the
   TeamCity `PROJECT_VERSION` release line a linked project belongs to, or null when it declares

@@ -894,6 +894,45 @@
         ],
         "type" : "object"
       },
+      "ComponentTeamcityValidationRow" : {
+        "properties" : {
+          "componentId" : {
+            "format" : "uuid",
+            "type" : "string"
+          },
+          "componentName" : {
+            "type" : "string"
+          },
+          "message" : {
+            "type" : "string"
+          },
+          "projectId" : {
+            "type" : "string"
+          },
+          "projectUrl" : {
+            "type" : "string"
+          },
+          "status" : {
+            "type" : "string"
+          },
+          "type" : {
+            "type" : "string"
+          },
+          "updatedAt" : {
+            "format" : "date-time",
+            "type" : "string"
+          }
+        },
+        "required" : [
+          "componentId",
+          "componentName",
+          "projectId",
+          "status",
+          "type",
+          "updatedAt"
+        ],
+        "type" : "object"
+      },
       "ComponentUpdateRequest" : {
         "properties" : {
           "archived" : {
@@ -1945,6 +1984,32 @@
         ],
         "type" : "object"
       },
+      "MigrationConflictResponse" : {
+        "properties" : {
+          "activeJobId" : {
+            "type" : "string"
+          },
+          "activeKind" : {
+            "type" : "string"
+          },
+          "code" : {
+            "type" : "string"
+          },
+          "kind" : {
+            "type" : "string"
+          },
+          "message" : {
+            "type" : "string"
+          }
+        },
+        "required" : [
+          "activeKind",
+          "code",
+          "kind",
+          "message"
+        ],
+        "type" : "object"
+      },
       "MigrationJobResponse" : {
         "properties" : {
           "currentComponent" : {
@@ -2594,12 +2659,19 @@
           "sortOrder" : {
             "format" : "int32",
             "type" : "integer"
+          },
+          "validations" : {
+            "items" : {
+              "$ref" : "#/components/schemas/ValidationResponse"
+            },
+            "type" : "array"
           }
         },
         "required" : [
           "id",
           "projectId",
-          "sortOrder"
+          "sortOrder",
+          "validations"
         ],
         "type" : "object"
       },
@@ -2691,6 +2763,117 @@
         ],
         "type" : "object"
       },
+      "TeamcityValidationJobResponse" : {
+        "properties" : {
+          "errorMessage" : {
+            "type" : "string"
+          },
+          "finishedAt" : {
+            "format" : "date-time",
+            "type" : "string"
+          },
+          "id" : {
+            "type" : "string"
+          },
+          "kind" : {
+            "type" : "string"
+          },
+          "result" : {
+            "$ref" : "#/components/schemas/TeamcityValidationResult"
+          },
+          "startedAt" : {
+            "format" : "date-time",
+            "type" : "string"
+          },
+          "state" : {
+            "enum" : [
+              "RUNNING",
+              "COMPLETED",
+              "FAILED"
+            ],
+            "type" : "string"
+          }
+        },
+        "required" : [
+          "id",
+          "kind",
+          "startedAt",
+          "state"
+        ],
+        "type" : "object"
+      },
+      "TeamcityValidationResult" : {
+        "properties" : {
+          "errors" : {
+            "items" : {
+              "type" : "string"
+            },
+            "type" : "array"
+          },
+          "failed" : {
+            "format" : "int32",
+            "type" : "integer"
+          },
+          "projectsWithIssues" : {
+            "format" : "int32",
+            "type" : "integer"
+          },
+          "removed" : {
+            "format" : "int32",
+            "type" : "integer"
+          },
+          "scanned" : {
+            "format" : "int32",
+            "type" : "integer"
+          },
+          "succeeded" : {
+            "format" : "int32",
+            "type" : "integer"
+          }
+        },
+        "required" : [
+          "errors",
+          "failed",
+          "projectsWithIssues",
+          "removed",
+          "scanned",
+          "succeeded"
+        ],
+        "type" : "object"
+      },
+      "TeamcityValidationSummaryResponse" : {
+        "properties" : {
+          "byStatus" : {
+            "additionalProperties" : {
+              "format" : "int32",
+              "type" : "integer"
+            },
+            "type" : "object"
+          },
+          "byType" : {
+            "additionalProperties" : {
+              "format" : "int32",
+              "type" : "integer"
+            },
+            "type" : "object"
+          },
+          "componentsWithIssues" : {
+            "format" : "int32",
+            "type" : "integer"
+          },
+          "findings" : {
+            "format" : "int32",
+            "type" : "integer"
+          }
+        },
+        "required" : [
+          "byStatus",
+          "byType",
+          "componentsWithIssues",
+          "findings"
+        ],
+        "type" : "object"
+      },
       "User" : {
         "properties" : {
           "groups" : {
@@ -2713,6 +2896,28 @@
           "groups",
           "roles",
           "username"
+        ],
+        "type" : "object"
+      },
+      "ValidationResponse" : {
+        "properties" : {
+          "message" : {
+            "type" : "string"
+          },
+          "status" : {
+            "type" : "string"
+          },
+          "type" : {
+            "type" : "string"
+          },
+          "updatedAt" : {
+            "format" : "date-time",
+            "type" : "string"
+          }
+        },
+        "required" : [
+          "status",
+          "type"
         ],
         "type" : "object"
       },
@@ -3349,7 +3554,7 @@
     },
     "/rest/api/4/admin/feedback" : {
       "get" : {
-        "operationId" : "list_1",
+        "operationId" : "listFeedback",
         "parameters" : [
           {
             "in" : "query",
@@ -5083,7 +5288,7 @@
     },
     "/rest/api/4/admin/service-events" : {
       "get" : {
-        "operationId" : "list",
+        "operationId" : "listServiceEvents",
         "parameters" : [
           {
             "in" : "query",
@@ -5373,7 +5578,7 @@
       "post" : {
         "operationId" : "startTeamcitySync",
         "responses" : {
-          "200" : {
+          "202" : {
             "content" : {
               "*/*" : {
                 "schema" : {
@@ -5381,7 +5586,7 @@
                 }
               }
             },
-            "description" : "OK"
+            "description" : "A new TC resync job was started"
           },
           "400" : {
             "content" : {
@@ -5407,11 +5612,18 @@
             "content" : {
               "*/*" : {
                 "schema" : {
-                  "$ref" : "#/components/schemas/ErrorResponse"
+                  "oneOf" : [
+                    {
+                      "$ref" : "#/components/schemas/TeamcitySyncJobResponse"
+                    },
+                    {
+                      "$ref" : "#/components/schemas/MigrationConflictResponse"
+                    }
+                  ]
                 }
               }
             },
-            "description" : "Conflict"
+            "description" : "Same-kind attach: a TC resync is already running, body is the in-flight TeamcitySyncJobResponse. Cross-kind conflict: another migration kind (components migration, history migration, or TC validation) is running, body is a MigrationConflictResponse describing which one."
           },
           "413" : {
             "content" : {
@@ -5566,6 +5778,445 @@
         },
         "tags" : [
           "admin-controller-v-4"
+        ]
+      }
+    },
+    "/rest/api/4/admin/teamcity-validation" : {
+      "post" : {
+        "operationId" : "startTeamcityValidation",
+        "responses" : {
+          "202" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/TeamcityValidationJobResponse"
+                }
+              }
+            },
+            "description" : "A new TC validation job was started"
+          },
+          "400" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description" : "Bad Request"
+          },
+          "404" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description" : "Not Found"
+          },
+          "409" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "oneOf" : [
+                    {
+                      "$ref" : "#/components/schemas/TeamcityValidationJobResponse"
+                    },
+                    {
+                      "$ref" : "#/components/schemas/MigrationConflictResponse"
+                    }
+                  ]
+                }
+              }
+            },
+            "description" : "Same-kind attach: a TC validation is already running, body is the in-flight TeamcityValidationJobResponse. Cross-kind conflict: another migration kind (components migration, history migration, or TC resync) is running, body is a MigrationConflictResponse describing which one."
+          },
+          "413" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description" : "Payload Too Large"
+          },
+          "425" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description" : "Too Early"
+          },
+          "500" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description" : "Internal Server Error"
+          },
+          "501" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description" : "Not Implemented"
+          },
+          "502" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description" : "Bad Gateway"
+          }
+        },
+        "tags" : [
+          "admin-controller-v-4"
+        ]
+      }
+    },
+    "/rest/api/4/admin/teamcity-validation/job" : {
+      "get" : {
+        "operationId" : "getTeamcityValidationJob",
+        "responses" : {
+          "200" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/TeamcityValidationJobResponse"
+                }
+              }
+            },
+            "description" : "OK"
+          },
+          "400" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description" : "Bad Request"
+          },
+          "404" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description" : "Not Found"
+          },
+          "409" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description" : "Conflict"
+          },
+          "413" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description" : "Payload Too Large"
+          },
+          "425" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description" : "Too Early"
+          },
+          "500" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description" : "Internal Server Error"
+          },
+          "501" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description" : "Not Implemented"
+          },
+          "502" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description" : "Bad Gateway"
+          }
+        },
+        "tags" : [
+          "admin-controller-v-4"
+        ]
+      }
+    },
+    "/rest/api/4/admin/teamcity-validations" : {
+      "get" : {
+        "operationId" : "listTeamcityValidations",
+        "parameters" : [
+          {
+            "in" : "query",
+            "name" : "type",
+            "required" : false,
+            "schema" : {
+              "items" : {
+                "type" : "string"
+              },
+              "type" : "array"
+            }
+          },
+          {
+            "in" : "query",
+            "name" : "status",
+            "required" : false,
+            "schema" : {
+              "type" : "string"
+            }
+          },
+          {
+            "in" : "query",
+            "name" : "component",
+            "required" : false,
+            "schema" : {
+              "type" : "string"
+            }
+          }
+        ],
+        "responses" : {
+          "200" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "items" : {
+                    "$ref" : "#/components/schemas/ComponentTeamcityValidationRow"
+                  },
+                  "type" : "array"
+                }
+              }
+            },
+            "description" : "OK"
+          },
+          "400" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description" : "Bad Request"
+          },
+          "404" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description" : "Not Found"
+          },
+          "409" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description" : "Conflict"
+          },
+          "413" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description" : "Payload Too Large"
+          },
+          "425" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description" : "Too Early"
+          },
+          "500" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description" : "Internal Server Error"
+          },
+          "501" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description" : "Not Implemented"
+          },
+          "502" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description" : "Bad Gateway"
+          }
+        },
+        "tags" : [
+          "teamcity-validation-controller-v-4"
+        ]
+      }
+    },
+    "/rest/api/4/admin/teamcity-validations/summary" : {
+      "get" : {
+        "operationId" : "getTeamcityValidationsSummary",
+        "responses" : {
+          "200" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/TeamcityValidationSummaryResponse"
+                }
+              }
+            },
+            "description" : "OK"
+          },
+          "400" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description" : "Bad Request"
+          },
+          "404" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description" : "Not Found"
+          },
+          "409" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description" : "Conflict"
+          },
+          "413" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description" : "Payload Too Large"
+          },
+          "425" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description" : "Too Early"
+          },
+          "500" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description" : "Internal Server Error"
+          },
+          "501" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description" : "Not Implemented"
+          },
+          "502" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description" : "Bad Gateway"
+          }
+        },
+        "tags" : [
+          "teamcity-validation-controller-v-4"
         ]
       }
     },

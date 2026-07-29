@@ -26,6 +26,7 @@ rootProject.name = 'components-registry-service'
 
 include ':component-resolver-api'
 include ':component-resolver-core'
+include ':component-validation'
 include ':components-registry-api'
 include ':components-registry-dsl'
 include ':components-registry-automation'

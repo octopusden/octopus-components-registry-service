@@ -19,6 +19,7 @@ import org.octopusden.octopus.components.registry.server.service.MigrationPhase
 import org.octopusden.octopus.components.registry.server.service.StartMigrationResult
 import org.octopusden.octopus.components.registry.server.support.adminJwt
 import org.octopusden.octopus.components.registry.server.support.editorJwt
+import org.octopusden.octopus.components.registry.server.teamcity.sync.TeamcitySyncJobService
 import org.springframework.beans.factory.annotation.Autowired
 import org.springframework.boot.test.autoconfigure.web.servlet.AutoConfigureMockMvc
 import org.springframework.boot.test.context.SpringBootTest
@@ -82,7 +83,7 @@ class AdminControllerV4SecurityTest {
     @MockBean
     @Suppress("UnusedPrivateProperty")
     private lateinit var teamcitySyncJobService:
-        org.octopusden.octopus.components.registry.server.teamcity.TeamcitySyncJobService
+        TeamcitySyncJobService
 
     /**
      * Mocked so the `/reload-config` positive path does not trigger a real Spring Cloud

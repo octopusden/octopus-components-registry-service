@@ -1,5 +1,6 @@
 package org.octopusden.octopus.components.registry.server.controller
 
+import io.swagger.v3.oas.annotations.Operation
 import org.octopusden.octopus.components.registry.server.config.ConditionalOnDatabaseEnabled
 import org.octopusden.octopus.components.registry.server.dto.v4.ServiceEventFilter
 import org.octopusden.octopus.components.registry.server.dto.v4.ServiceEventResponse
@@ -36,6 +37,7 @@ class ServiceEventControllerV4(
      * window over `started_at`.
      */
     @GetMapping
+    @Operation(operationId = "listServiceEvents")
     fun list(
         @RequestParam(required = false) eventType: String?,
         @RequestParam(required = false) category: String?,

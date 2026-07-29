@@ -34,6 +34,15 @@ pathToConfig: file://${components-registry.groovy-path}
 employee-service:
   enabled: false
 
+teamcity:
+  validation:
+    gradle-build-template-id: FIXTURE_GRADLE_TEMPLATE
+    maven-build-template-id: FIXTURE_MAVEN_TEMPLATE
+    release-family-template-ids:
+      - FIXTURE_RELEASE_TEMPLATE
+    gradle-default-build-step-id: FIXTURE_GRADLE_STEP
+    maven-default-build-step-id: FIXTURE_MAVEN_STEP
+
 eureka.client.enabled: false
 
 management:

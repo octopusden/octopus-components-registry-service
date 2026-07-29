@@ -407,6 +407,7 @@ data class TeamcityProjectResponse(
     val sortOrder: Int,
     @field:Schema(nullable = true)
     val projectVersion: String? = null,
+    val validations: List<ValidationResponse> = emptyList(),
 )
 
 data class TeamcityProjectRequest(

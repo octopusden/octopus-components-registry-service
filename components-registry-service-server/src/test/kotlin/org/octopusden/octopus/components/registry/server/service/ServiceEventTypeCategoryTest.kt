@@ -25,7 +25,14 @@ class ServiceEventTypeCategoryTest {
     fun `namesOf returns exactly the members of a category`() {
         assertEquals(listOf("ONBOARDING_VIDEO_VIEW"), ServiceEventType.namesOf(ServiceEventCategory.USER))
         assertEquals(
-            setOf("STARTUP", "MIGRATION_COMPONENTS", "MIGRATION_HISTORY", "TEAMCITY_RESYNC", "VALIDATION_SWEEP"),
+            setOf(
+                "STARTUP",
+                "MIGRATION_COMPONENTS",
+                "MIGRATION_HISTORY",
+                "TEAMCITY_RESYNC",
+                "TEAMCITY_VALIDATION",
+                "VALIDATION_SWEEP",
+            ),
             ServiceEventType.namesOf(ServiceEventCategory.SYSTEM).toSet(),
         )
     }

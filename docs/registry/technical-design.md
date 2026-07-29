@@ -403,6 +403,38 @@ lived only in an in-memory `AtomicReference` (single-pod, lost on restart) + log
 - **Schema:** `V4__add_service_event.sql` (+ Hibernate `ddl-auto` in the flyway-disabled
   envs; `detail` is `TEXT`+`@JdbcTypeCode(JSON)` mirroring `audit_log`).
 
+### 6.7 TeamCity validation (SYS-075–084)
+A new pure-Kotlin module, `component-validation` (no Spring/DB/TeamCity-client/IO — see
+[TD-018](tech-debt/018-component-validation-version-resolver-value-coverage.md) for its one tracked follow-up), inspects each
+registered TeamCity project's build configs/steps and reports seven findings per project
+(`ATTACHED_TO_BUILD_TEMPLATE`, `OVERRIDES_DEFAULT_BUILD_STEP`, `HAS_CUSTOM_BUILD_STEP`,
+`USES_OLD_JAVA_VERSION`, `MULTIPLE_JAVA_VERSIONS`, `MULTIPLE_MAVEN_VERSIONS`,
+`JAVA_HOME_NOT_FROM_ENV`). The server owns both
+IO edges; the module stays `server → component-validation` (one-way dependency).
+
+- **Fetch:** `EnrichedTcProjectFetcher` pulls one enriched project at a time by project id (build
+  configs + steps + template ancestry + parameters), short-TTL cached (`teamcity.validation.cache-ttl-minutes`,
+  default 30 min), decoupled from the existing sync engine. The cache is invalidated whenever a
+  TeamCity sync completes, so a post-sync validation run never serves a pre-sync snapshot.
+- **Persist (`V7__add_teamcity_validation.sql`):** `teamcity_validation (project_id, type, status,
+  message, updated_at)`, PK `(project_id, type)`. Only WARNING/ERROR are stored (OK/NOT_APPLICABLE
+  are not); **latest-only** — each run replaces that project's rows via a bulk delete + insert (not
+  a derived load-then-remove, to avoid a stale managed instance colliding with the next insert for
+  the same id) and prunes rows for projects no longer linked to any component (via `version_line`,
+  not the append-only `teamcity_project` table).
+- **Triggers:** `POST /admin/teamcity-validation` and automatically after a TeamCity sync completes
+  (`TeamcitySyncCompletedEvent` → `TeamcityValidationSyncListener`). TC sync and TC validation are
+  mutually exclusive via the shared single-pod `MigrationLifecycleGate` (`TC_VALIDATION` job kind).
+- **Read:** component detail embeds `{type, status, message, updatedAt}` per linked project
+  (`TeamcityProjectResponse.validations`); the admin dashboard
+  (`GET /rest/api/4/admin/teamcity-validations` + `.../summary`, IMPORT_DATA-gated) is
+  component-centric — it joins stored findings back to their owning component(s) via
+  `version_line` and counts distinct components per check.
+- **Configuration:** `teamcity.validation.*` (`TeamcityValidationProperties`) — template/default-step
+  ids used by the module's `TemplateCatalog`. See the
+  [upgrade note](deployment/tc-validation-upgrade-note.md) for required values and the coordinated
+  deploy requirement with components-management-portal.
+
 ## 7. Data Migration
 
 ### 7.1 Migration Strategy: Component-Source Routing

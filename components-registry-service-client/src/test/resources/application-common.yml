@@ -56,3 +56,12 @@ octopus-security:
       - IMPORT_DATA
       - ACCESS_AUDIT
       - EDIT_METADATA
+
+teamcity:
+  validation:
+    gradle-build-template-id: FIXTURE_GRADLE_TEMPLATE
+    maven-build-template-id: FIXTURE_MAVEN_TEMPLATE
+    release-family-template-ids:
+      - FIXTURE_RELEASE_TEMPLATE
+    gradle-default-build-step-id: FIXTURE_GRADLE_STEP
+    maven-default-build-step-id: FIXTURE_MAVEN_STEP

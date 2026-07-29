@@ -6,6 +6,8 @@ import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.Assertions.assertTrue
 import org.junit.jupiter.api.DisplayName
 import org.junit.jupiter.api.Test
+import org.octopusden.octopus.components.registry.server.teamcity.sync.TcProject
+import org.octopusden.octopus.components.registry.server.teamcity.sync.mapTcProjectsToComponentMatches
 import java.util.UUID
 import org.octopusden.octopus.infrastructure.teamcity.client.dto.TeamcityBuildType as ExternalTeamcityBuildType
 import org.octopusden.octopus.infrastructure.teamcity.client.dto.TeamcityBuildTypes as ExternalTeamcityBuildTypes
@@ -15,8 +17,8 @@ import org.octopusden.octopus.infrastructure.teamcity.client.dto.TeamcityPropert
 import org.octopusden.octopus.infrastructure.teamcity.client.dto.TeamcityProperty as ExternalTeamcityProperty
 
 /**
- * Unit tests for the pure mapper inside [ExternalTcProjectFetcher]. The HTTP side
- * is exercised separately by `teamcity-client/TeamcityClassicClientTest` against a
+ * Unit tests for the pure mapper inside [org.octopusden.octopus.components.registry.server.teamcity.sync.ExternalTcProjectFetcher].
+ * The HTTP side is exercised separately by `teamcity-client/TeamcityClassicClientTest` against a
  * real TC; here we cover only the mapping rules CRS layers on top.
  */
 class ExternalTcProjectFetcherTest {
@@ -237,7 +239,8 @@ class ExternalTcProjectFetcherTest {
                 buildTypes = listOf(buildType(id = "Build1", legacyTemplateId = "CustomReleaseTpl")),
             ),
         )
-        val result = mapTcProjectsToComponentMatches(projects, mapOf("foo" to fooUuid), cdReleaseTemplateId = "CustomReleaseTpl")
+        val result =
+            mapTcProjectsToComponentMatches(projects, mapOf("foo" to fooUuid), cdReleaseTemplateId = "CustomReleaseTpl")
         assertEquals(true, result[fooUuid]!!.single().hasCdReleaseBuild)
     }
 
