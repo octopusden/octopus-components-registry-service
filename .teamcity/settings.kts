@@ -418,8 +418,9 @@ object id12IntegrationDbTestsAuto : BuildType({
 // the docker wiring and the RUNNER_1720 meta-runner; not worth it for that trade.
 //
 // Division of labour with GitHub, which also runs this analysis (.github/workflows/mutation.yml):
-//   - GitHub, every PR touching the targeted paths — the GATE: fast feedback on the diff, and the place
-//     the threshold will become blocking (add the job to `gate-merge.needs`).
+//   - GitHub, every PR touching the targeted paths — the per-change SIGNAL: fast feedback on the diff.
+//     Not a gate today: the job is absent from `gate-merge.needs`, so a red run is visible but does not
+//     block a merge. Adding it there is what would make the threshold blocking.
 //   - here, weekly on the default branch — the ANALYTICS: a browsable HTML report in the artifact tree
 //     (a GitHub Actions artifact is a zip you must download and unpack) and, via the stats step below,
 //     a mutation-score chart across builds, which GitHub Actions has no equivalent for.
