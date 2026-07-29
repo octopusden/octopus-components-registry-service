@@ -357,7 +357,8 @@ killing surviving mutants (assertions that do not check the result) and giving u
 these packages that only the integration suite reaches today (`NO_COVERAGE` mutants). Promote the workflow
 into `merge-gate.yml` once the threshold has held for a few weeks.
 
-The two homes are complementary, not redundant. The GitHub run is the per-change gate; the TeamCity run
+The two homes are complementary, not redundant. The GitHub run is the per-change check (reporting, not
+blocking); the TeamCity run
 covers a blind spot it structurally has — that workflow only triggers on changes to the server module and
 the build files, so a change elsewhere (say in `component-resolver-core`, which the mappers call) can move
 the score without ever running it. The weekly build on the default branch catches that drift. A release

@@ -2,7 +2,8 @@
 #
 # Publishes PIT mutation numbers as TeamCity build statistics, so the server draws them as charts over
 # builds (Statistics tab). That trend is the reason the mutation analysis runs in TeamCity at all: the
-# per-PR gate lives on GitHub, while TeamCity keeps the browsable HTML report and the history.
+# per-PR check lives on GitHub (reporting, not blocking a merge), while TeamCity keeps the browsable HTML
+# report and the history.
 #
 # Usage (as a TeamCity script step, after the Gradle step):
 #   scripts/teamcity/report-mutation-stats.sh [path/to/mutations.xml]
