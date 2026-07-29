@@ -570,8 +570,6 @@ gradle.projectsEvaluated {
         'components-registry-service-light-client': [line: 0.77, branch: 0.43],
         'component-resolver-api'                  : [line: 0.68, branch: 0.28],
         'components-registry-api'                 : [line: 0.14, branch: 0.07],
-        // Measured 2026-07-28 on main @82d76d26, right after the module landed: LINE 99.7% (343/344),
-        // BRANCH 85.9% (128/149). A pure-Kotlin library with no Spring or IO — dense tests come cheap here.
         'component-validation'                    : [line: 0.97, branch: 0.83],
     ]
     // Escape hatch: a coverage module that OWNS tests but is deliberately left ungated goes here, with the
@@ -588,13 +586,9 @@ gradle.projectsEvaluated {
     // would let a module delete every test and keep a green ratchet, while the ~2 p.p. of aggregate
     // headroom absorbs a small module's loss. Keying on sources makes that state fail loudly.
     //
-    // These are POLICY checks and they run in a TASK ACTION wired into `qualityCoverage`, not at
-    // configuration time. The first version threw during `projectsEvaluated`, which broke EVERY Gradle
-    // invocation — `build`, `test`, `dependencies`, IDE sync — over a coverage-policy problem. That is
-    // exactly what happened when #443 landed straight after #463: it added `component-validation` with
-    // tests, the map had no entry for it, and `main` stopped configuring at all. The gate must fail; the
-    // repository must stay usable. Running in a task action also removes the configuration-on-demand
-    // caveat the first version had to carry.
+    // POLICY checks, run in a task action wired into `qualityCoverage` — deliberately NOT at
+    // configuration time: a coverage-policy problem must fail the coverage gate, not every Gradle
+    // invocation (`build`, `test`, `dependencies`, IDE sync).
     def ratchetPolicyProblems = {
         def problems = []
         def unratcheted = moduleNamesWithTests - moduleCoverageRatchet.keySet() - coverageRatchetExempt.keySet()
@@ -635,6 +629,13 @@ gradle.projectsEvaluated {
     def ratchetTaskPaths = []
     moduleCoverageRatchet.each { moduleName, thresholds ->
         def p = testTargets.find { it.name == moduleName }
+        // A key that resolves to nothing — module removed, renamed, misspelled, or newly excluded from
+        // coverage — is skipped here rather than dereferenced. Reporting it is `verifyCoverageRatchetPolicy`'s
+        // job (`ratchetedWithoutTests` covers it), so a stale key fails the gate with a readable message
+        // instead of aborting configuration with a null-dereference.
+        if (p == null) {
+            return
+        }
         // Only `dbTest` — deliberately NOT `integrationTest`, for the reason spelled out at
         // `heavyTestTaskPaths` above: the FatJar boot FT must not be pulled into the GitHub coverage job
         // (timing-sensitive on shared runners, and it piles a second full-app JVM onto the co-scheduled
