@@ -446,8 +446,8 @@ gradle.projectsEvaluated {
     // the co-scheduled dbTest Postgres Testcontainers in the same coverage job — code-unrelated
     // red (GH issue #424). It stays TeamCity-only, where it still runs and gates publish/push
     // via `dockerPushImage`'s hard dependency (see components-registry-service-server/build.gradle).
-    // Its coverage is NOT lost: `coverageExecData` below still includes `integrationTest.exec`
-    // when present, so any run that DID execute it (TeamCity) folds that coverage in.
+    // Its coverage is deliberately not folded in either — see `coverageExecData` below for why reading a
+    // file this invocation did not produce makes the gate non-deterministic.
     def heavyTestTaskPaths = []
     subprojects.each { sp ->
         ['dbTest'].each { tn ->
@@ -514,7 +514,7 @@ gradle.projectsEvaluated {
 
     tasks.register('jacocoOverallCoverageReport', org.gradle.testing.jacoco.tasks.JacocoReport) {
         group = 'verification'
-        description = 'Aggregated JaCoCo report across all coverage modules (test + dbTest, plus integrationTest.exec when present)'
+        description = 'Aggregated JaCoCo report across all coverage modules (test + dbTest)'
         dependsOn(testTargets.collect { "${it.path}:test" })
         dependsOn(heavyTestTaskPaths)
         executionData.from(coverageExecData(testTargets))
@@ -530,7 +530,7 @@ gradle.projectsEvaluated {
 
     tasks.register('jacocoOverallCoverageVerification', org.gradle.testing.jacoco.tasks.JacocoCoverageVerification) {
         group = 'verification'
-        description = 'Verifies aggregated JaCoCo LINE >= 86% and BRANCH >= 65% across all coverage modules (test + dbTest, plus integrationTest.exec when present)'
+        description = 'Verifies aggregated JaCoCo LINE >= 86% and BRANCH >= 65% across all coverage modules (test + dbTest)'
         dependsOn(testTargets.collect { "${it.path}:test" })
         dependsOn(heavyTestTaskPaths)
         executionData.from(coverageExecData(testTargets))
@@ -701,7 +701,19 @@ gradle.projectsEvaluated {
         // `branch` is optional (see the contract validation in floorPolicyProblems), so only gate the
         // counters the entry actually declares — a line-only entry must not silently become BRANCH >= 0,
         // which JaCoCo satisfies unconditionally and which would read as a branch gate in the report.
-        def declaredCounters = ['LINE': thresholds.line, 'BRANCH': thresholds.branch].findAll { k, v -> v != null }
+        //
+        // Only WELL-FORMED values are consumed here. Registration happens at configuration time, before
+        // `verifyCoverageFloorsPolicy` can report anything, so a malformed value used to abort the build
+        // with whatever Groovy made of it — `line: 'oops'` produced `For input string: "oopsoops…"`, since
+        // String * 100 repeats the string — instead of the policy task's precise message. Skipping bad
+        // values here keeps the diagnosis where it belongs: the entry is reported by the policy check, and
+        // a module whose floor is unusable simply gets no floor task rather than breaking configuration.
+        def wellFormed = { v -> v instanceof Number && v > 0 && v <= 1 }
+        def declaredCounters = ['LINE': thresholds.line, 'BRANCH': thresholds.branch]
+            .findAll { counter, value -> wellFormed(value) }
+        if (declaredCounters.isEmpty()) {
+            return
+        }
         p.tasks.register('jacocoCoverageFloor', org.gradle.testing.jacoco.tasks.JacocoCoverageVerification) {
             group = 'verification'
             description = "Verifies ${moduleName} JaCoCo " +
@@ -740,10 +752,13 @@ gradle.projectsEvaluated {
         def p = project(":$name")
         p.tasks.matching { it.name in ['jacocoTestReport', 'jacocoTestCoverageVerification'] }.configureEach {
             mustRunAfter(p.tasks.matching { it.name in ['dbTest', 'integrationTest'] })
-            // `test.exec` is already wired by the octopus-quality plugin; add ONLY the heavy
-            // exec files so inputs stay clean (JaCoCo would OR-merge a duplicate harmlessly).
+            // `test.exec` is already wired by the octopus-quality plugin; add ONLY `dbTest.exec` so
+            // inputs stay clean (JaCoCo would OR-merge a duplicate harmlessly). `integrationTest.exec` is
+            // excluded here for the same determinism reason as in `coverageExecData`: this invocation does
+            // not run that suite, so reading a leftover file would make the plugin-owned per-module floor
+            // depend on what happens to be on disk.
             executionData.from(files(p.fileTree(p.layout.buildDirectory) {
-                include 'jacoco/dbTest.exec', 'jacoco/integrationTest.exec'
+                include 'jacoco/dbTest.exec'
             }))
         }
     }
