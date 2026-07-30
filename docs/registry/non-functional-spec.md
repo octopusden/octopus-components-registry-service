@@ -299,6 +299,9 @@ Every PR must pass:
 7. Coverage floors                  (aggregate LINE/BRANCH + per-module LINE/BRANCH)
 ```
 
+Non-gating, reported separately: mutation testing (`mutation.yml`) and the perf SLA guard
+(`perf-test.yml`).
+
 **Coverage as a fitness function.** Coverage is gated in `qualityCoverage` (the GitHub `quality` job)
 over the `test` + `dbTest` exec set — deliberately not in `check`, so TeamCity `[1.0]` stays a
 compile/correctness gate:
@@ -325,6 +328,42 @@ still reports 100% LINE — BRANCH distinguishes "one branch ran" from "both bra
 says anything about whether an outcome was **asserted**: a test with no assertions at all can reach 100% on
 both. That is a different question, and no coverage counter can gate it. The measured values, the snapshot
 they were taken from, and the re-measure recipe live in [`quality-baseline.md`](quality-baseline.md).
+
+**Mutation testing as a fitness function.** Coverage counters answer "did this line run"; they cannot
+answer "would any test have noticed it behaving differently". PIT answers the second question by mutating
+bytecode and re-running the covering tests, which makes it the only check here that can surface a test
+exercising code without checking the result.
+
+Read the asymmetry carefully: a **surviving** mutant is solid evidence that nothing noticed the change,
+while a **killed** mutant only means something noticed — possibly an incidental exception rather than a
+deliberate assertion. PIT does not inspect tests for assertions, so the score is a signal to act on, not a
+proof of assertion quality, and the survivor list matters more than the percentage.
+
+| Property | Value |
+|---|---|
+| Scope | `..server.util..`, `..server.mapper..` (pure logic; a wrong result is a wrong *answer*, not wrong wiring) |
+| Task | `:components-registry-service-server:pitest` |
+| Where (signal) | GitHub `mutation.yml` — a **check, not a gate**: it reports on the PR but is absent from `gate-merge.needs`, so a red run does not block a merge. Promoting it into the merge gate is the deliberate next step, not the current state |
+| Where (analytics) | TeamCity `[1.1] Mutation Testing` — weekly on the default branch, outside the build chain: browsable HTML report plus a score chart via `buildStatisticValue` |
+| Thresholds | `mutationThreshold` and `coverageThreshold`, both **floors** rather than ratchets: nothing in the build stops a lowered number, so holding them is a review property. The values live in the `pitest {}` block; they are not repeated here |
+| Tests used | the `test` source set only, with the `integration`/`performance` tags excluded |
+
+Controllers, services, repositories, config and entities are **not** targeted: their behaviour is Spring
+wiring and DB interaction, where mutants are largely equivalent or killed only by the heavy suites, at a
+cost PIT cannot amortise (it re-runs tests once per mutant).
+
+The threshold is a floor to raise, not a target that has been met. Two distinct kinds of work raise it:
+killing surviving mutants (assertions that do not check the result) and giving unit tests to the paths in
+these packages that only the integration suite reaches today (`NO_COVERAGE` mutants). Promote the workflow
+into `merge-gate.yml` once the threshold has held for a few weeks.
+
+The two homes are complementary, not redundant. The GitHub run is the per-change check (reporting, not
+blocking); the TeamCity run
+covers a blind spot it structurally has — that workflow only triggers on changes to the server module and
+the build files, so a change elsewhere (say in `component-resolver-core`, which the mappers call) can move
+the score without ever running it. The weekly build on the default branch catches that drift. A release
+gate on the score is deliberately NOT added: releases are cut from the default branch, every commit there
+passed the PR gate, and test quality is fixed in review rather than on the release path.
 
 Production deployment additionally runs:
 ```

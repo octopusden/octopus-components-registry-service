@@ -7,6 +7,13 @@ policy test, property-based version-model tests, `src/main`→`src/test` PR gate
 Purpose: a "before / after" reference. Add a new dated section below rather than editing an old one —
 each snapshot must stay reproducible from the recipe in [§7](#7-how-to-re-measure).
 
+This file is deliberately the exception to the rule stated in [README.md](README.md) that `docs/registry/`
+describes the system as it is today: a measurement is meaningless without the date and the commit it was
+taken at, and a "before / after" claim needs both readings side by side. So dated entries accumulate here
+and are never rewritten. Where a number appears here it is a **record of what a threshold was on that
+date**, not the authority for what it is now: the enforced value lives in the build configuration and
+only there, so read a row below as history and the configuration as truth.
+
 ## Gate changes since the baseline
 
 Measured values move only when the code changes; this table records when a **gate** changed, so a later
@@ -16,6 +23,7 @@ snapshot can be read against the right contract.
 |---|---|---|---|
 | 2026-07-27 | Aggregate coverage floor | LINE ≥ 70%, no BRANCH rule | LINE ≥ 86%, BRANCH ≥ 65% |
 | 2026-07-27 | Per-module coverage floor (`jacocoCoverageFloor`, wired into `qualityCoverage`) | plugin-owned 10% floor only | strict per-module LINE/BRANCH minimums (measured − ~2 p.p.), 10% floor kept underneath |
+| 2026-07-27 | Mutation testing (`pitest`, non-gating `mutation.yml`) | no such check | `mutationThreshold = 53`, `coverageThreshold = 78` over `..server.util..` / `..server.mapper..` |
 | 2026-07-28 | `component-validation` gained a floor (module added by #443, measured on `main` @`82d76d26`: LINE 99.7% = 343/344, BRANCH 85.9% = 128/149) | not gated | LINE ≥ 97%, BRANCH ≥ 83% |
 | 2026-07-28 | Floors-map policy checks moved out of configuration into `verifyCoverageFloorsPolicy` | a map problem failed **every** Gradle invocation | it fails the coverage gate only |
 | 2026-07-29 | Coverage execution data restricted to the tasks the invocation runs (`test`, `dbTest`) | a leftover `integrationTest.exec` could fold in locally, raising the numbers a clean CI run does not have | the gate reads the same data locally and on a fresh agent |
@@ -283,6 +291,33 @@ gh run download <PERF_RUN_ID> -R octopusden/octopus-components-registry-service 
 grep -roE "getComponents\(\) perf[^&<]{0,200}" <TMPDIR>/perf-test-report/test-results/perfTest
 ```
 
+### Mutation score
+
+Two sources, by purpose:
+
+- **Per change** — the `mutation-report` artifact of the GitHub `Mutation Testing (non-gating)` run, plus
+  the killed/survived/not-covered table in that job's summary.
+- **Trend over time** — TeamCity `[1.1] Mutation Testing`: the artifact tab serves the HTML report
+  browsable in place at
+  `reports/pitest/components-registry-service-server/build/reports/pitest/index.html` — the artifact rule
+  starts with `**`, so the repository-relative path is preserved under `reports/pitest` rather than
+  flattened (that is also what makes the unified report index's link resolve). The Statistics tab charts
+  `mutationScore` (also `mutationsSurvived`, `mutationsNoCoverage`, …) across builds, emitted by
+  `scripts/teamcity/report-mutation-stats.sh`.
+
+Locally:
+
+```bash
+./gradlew :components-registry-service-server:pitest
+```
+
+```bash
+grep -c "detected='true'" components-registry-service-server/build/reports/pitest/mutations.xml
+```
+
+Read `detected='true'` rather than `status='KILLED'`: a mutant that hangs is `TIMED_OUT` and still counts
+as detected, which is what `mutationThreshold` is applied to.
+
 ### Baseline debt counts
 
 These come from the working tree, not from CI. One command per file — the counts are the burn-down
@@ -299,3 +334,33 @@ grep -rc "<error " --include=ktlint-baseline.xml --exclude-dir=build .
 ```bash
 wc -l components-registry-service-server/archunit_violation_store/3e61e124-fe37-40db-9ea6-91a90f6afc18
 ```
+
+---
+
+## Snapshot 2026-07-29 — mutation testing, first measurement
+
+**Code under measurement:** `ci/mutation-testing` @ `557d07d8`, rebased on `main` @ `080cdb31`.
+**Source:** the GitHub `mutation-test` job of run `30461966571` — the first run on a CI agent, so these
+are the numbers the floors were calibrated against, not a local-only reading.
+
+| Metric | Value |
+|---|---|
+| Mutants generated | 1618 |
+| Killed (`detected='true'`) | 896 → **mutation score 55%** |
+| No coverage | 381 |
+| Test strength (score over covered mutants only) | 72% |
+| Line coverage of the mutated classes | 82% |
+| Floors in force | `mutationThreshold = 53`, `coverageThreshold = 78` |
+| Job duration | 8m38s |
+
+Two readings worth keeping:
+
+- **Score 55% and test strength 72% are different questions.** The gap is the 381 no-coverage mutants —
+  code unit tests never reach (some of it covered by the tag-excluded integration suite). Raising the
+  score can therefore mean either writing assertions or reaching new code, and the report separates them.
+- **The weakest area is the v1/v2/v3 mapper layer**, not the utilities: the largest single cluster is 407
+  mutants at 26% killed, dominated by "removed call to setX" survivors. That is the wire path, so it is
+  where the next assertions pay off most — see the follow-up notes in the PR that introduced this check.
+
+A run costs about as long as `tests-coverage`, which is why the GitHub check triggers on the targeted
+paths only and TeamCity `[1.1]` carries the weekly whole-repository backstop.

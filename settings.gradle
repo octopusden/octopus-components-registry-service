@@ -9,6 +9,7 @@ pluginManagement {
         id 'org.jetbrains.kotlin.jvm'                   version settings['kotlin.version']
         id 'org.jetbrains.kotlin.plugin.spring'         version settings['kotlin.version']
         id 'org.jetbrains.kotlin.plugin.jpa'            version settings['kotlin.version']
+        id 'info.solidsoft.pitest'                      version settings['pitest-plugin.version']
         id 'io.gitlab.arturbosch.detekt'                version settings['detekt.version']
         id 'org.jlleitschuh.gradle.ktlint'              version settings['ktlint-gradle.version']
         id 'org.octopusden.octopus-quality'             version '2.5.2'

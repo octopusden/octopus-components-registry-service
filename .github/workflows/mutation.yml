@@ -1,0 +1,150 @@
+# INTERNAL / NON-GATING — not part of the merge gate. Runs PIT mutation testing over the pure-logic
+# packages of the server module (`..server.util..`, `..server.mapper..`; scope and rationale in
+# components-registry-service-server/build.gradle).
+#
+# Why it is a workflow of its own rather than a step in `quality`: PIT re-runs the covering tests once
+# per mutant, so it does not belong on the PR critical path while the score is still being calibrated.
+# Promote it into `merge-gate.yml` (add the job to `gate-merge.needs`) once the threshold has held for a
+# few weeks.
+#
+# Unlike the perf SLA guard, this DOES run on pull requests — but only when the targeted sources, the
+# server's tests, or the build configuration change. Mutation testing is deterministic (no wall-clock
+# assertions), so it has none of the shared-runner flakiness that keeps `perf-test.yml` off pull_request.
+# Cost: a cold run is ~8 min on a GitHub runner; PIT's incremental history (cached below) brings a warm
+# run down to well under a minute locally.
+name: Mutation Testing (non-gating)
+
+# One run per ref: pushing again to a PR supersedes the previous analysis, and an 8-minute mutation run on
+# a commit nobody is looking at any more is pure agent time. The scheduled run on the default branch gets
+# its own group key, so a weekly run is never cancelled by PR activity.
+concurrency:
+  group: mutation-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+# This job executes PR-controlled build logic (`./gradlew ... pitest` runs the repository's own Gradle
+# scripts and tests from the PR head). Pin the token down to read-only regardless of the repository or
+# organisation default, so a malicious or mistaken build script cannot write to the repo, publish
+# packages, or touch other workflows.
+permissions:
+  contents: read
+
+on:
+  workflow_dispatch:
+  pull_request:
+    paths:
+      - 'components-registry-service-server/src/main/kotlin/org/octopusden/octopus/components/registry/server/util/**'
+      - 'components-registry-service-server/src/main/kotlin/org/octopusden/octopus/components/registry/server/mapper/**'
+      # The whole server test tree, not just the tests that sit next to the targeted classes: `targetTests`
+      # covers `..server.*`, and a large share of mutants is killed by tests elsewhere (at the time of
+      # writing, 243 by `..server.service.impl..` alone). Weakening one of those tests changes the score,
+      # so it has to trigger this workflow.
+      - 'components-registry-service-server/src/test/**'
+      - 'components-registry-service-server/build.gradle'
+      # `settings.gradle` too, not just the module build file and the version properties: the PIT plugin
+      # is declared in its `pluginManagement` block, so a plugin-version or resolution change there
+      # alters what this workflow actually runs.
+      - 'settings.gradle'
+      - 'gradle.properties'
+      - '.github/workflows/mutation.yml'
+  schedule:
+    # Mondays 06:00 UTC — one hour after the perf SLA guard, so the two never contend for a runner.
+    - cron: '0 6 * * 1'
+
+jobs:
+  mutation-test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up JDK 21
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '21'
+
+      # PIT's incremental analysis reuses the previous verdict for classes whose bytecode and covering
+      # tests are unchanged. The history file lives under `build/`, so without this every runner starts
+      # cold. Rolling key: the exact key never hits (it carries the SHA), so each run restores the newest
+      # prefix match and then saves its own updated history.
+      - name: Restore PIT incremental history
+        uses: actions/cache@v4
+        with:
+          path: components-registry-service-server/build/pitest/history.bin
+          key: pitest-history-${{ github.ref_name }}-${{ github.sha }}
+          restore-keys: |
+            pitest-history-${{ github.ref_name }}-
+            pitest-history-main-
+
+      - name: Run mutation testing
+        run: ./gradlew :components-registry-service-server:pitest --no-daemon
+
+      - name: Publish mutation report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: mutation-report
+          path: components-registry-service-server/build/reports/pitest/**
+          if-no-files-found: warn
+
+      - name: Summarise mutation score
+        if: always()
+        run: |
+          report=components-registry-service-server/build/reports/pitest/mutations.xml
+          if [ ! -f "$report" ]; then
+            echo "No mutations.xml produced — see the job log above." >> "$GITHUB_STEP_SUMMARY"
+            exit 0
+          fi
+          total=$(grep -c '<mutation ' "$report" || true)
+          # Count PIT's own notion of "detected" (the attribute), NOT status='KILLED'. A mutant that hangs
+          # is TIMED_OUT and still detected, so counting KILLED alone reports a lower score than the one
+          # `mutationThreshold` is applied to — a discrepancy that only shows up near the threshold.
+          #
+          # The same counting exists in scripts/teamcity/report-mutation-stats.sh, which emits TeamCity
+          # service messages instead of a job summary. The duplication is deliberate — two different CI
+          # consumers, a few greps each — but the two must agree: they diverged once already (KILLED here
+          # vs detected there), so a change to the counting on one side belongs on the other in the same
+          # commit.
+          detected=$(grep -c "detected='true'" "$report" || true)
+          killed=$(grep -c "status='KILLED'" "$report" || true)
+          timed_out=$(grep -c "status='TIMED_OUT'" "$report" || true)
+          survived=$(grep -c "status='SURVIVED'" "$report" || true)
+          no_coverage=$(grep -c "status='NO_COVERAGE'" "$report" || true)
+          {
+            echo "### Mutation testing"
+            echo ""
+            echo "| Metric | Value |"
+            echo "|---|---|"
+            echo "| Mutations generated | $total |"
+            echo "| Detected (the score's numerator) | $detected |"
+            echo "| — killed | $killed |"
+            echo "| — timed out | $timed_out |"
+            echo "| Survived | $survived |"
+            echo "| Not covered | $no_coverage |"
+            # KILLED/TIMED_OUT/SURVIVED/NO_COVERAGE are the four statuses a healthy run produces, but the
+            # engine has more (NON_VIABLE, MEMORY_ERROR, RUN_ERROR, …). Surface the remainder instead of
+            # letting the rows quietly fail to add up to the total.
+            other=$((total - killed - timed_out - survived - no_coverage))
+            if [ "$other" -ne 0 ]; then
+              echo "| Other statuses (non-viable / engine errors) | $other |"
+            fi
+            if [ "$total" -gt 0 ]; then
+              # Track the number the floor is checked against, which is not `detected * 100 / total`:
+              # shell division truncates, so that form reads a point low on most fractional scores. Round
+              # half up instead, and cap at 99 the way PIT does, so a near-sweep is not shown as a clean
+              # one. Verified against the pinned engine (pitest 1.16.1:
+              # PercentageCalculator.getPercentage(total, detected), the value
+              # MutationStatistics.getPercentageDetected() hands to mutationThreshold) over every count up
+              # to total=20000: this form matches except on a score landing on an exact half, where PIT
+              # divides in single precision and so falls below the rounding point (15/24 gives 62, not
+              # 63). Every deviation found was in that one direction, never above PIT's own number.
+              if [ "$detected" -eq "$total" ]; then
+                score=100
+              else
+                score=$(((detected * 200 + total) / (total * 2)))
+                if [ "$score" -gt 99 ]; then
+                  score=99
+                fi
+              fi
+              echo "| Mutation score | ${score}% |"
+            fi
+          } >> "$GITHUB_STEP_SUMMARY"

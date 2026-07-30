@@ -59,6 +59,7 @@ project {
 
     buildType(id10CompileUtAuto)
     buildType(id12IntegrationDbTestsAuto)
+    buildType(id11MutationTestingAuto)
     buildType(id15CompatManual)
     buildType(id16CompatTraceReplayManual)
     buildType(id17CompatLocalStandManual)
@@ -72,11 +73,12 @@ project {
     buildType(id70DeployToOkdProdManual_2)
     buildType(WL_Validation_id)
 
-    // Display order mirrors the numbering: [1.0] first, then the two on-demand
-    // manual compat builds ([1.5]/[1.6]), then the AUTO fan-out that all triggers
+    // Display order mirrors the numbering: [1.0] first, then [1.1] (off-chain, scheduled), then the two
+    // on-demand manual compat builds ([1.5]/[1.6]), then the AUTO fan-out that all triggers
     // in parallel off [1.0] ([2.0]–[2.4]), then the release chain ([4.0]+).
     buildTypesOrder = arrayListOf(
         id10CompileUtAuto,
+        id11MutationTestingAuto,
         id15CompatManual,
         id16CompatTraceReplayManual,
         id20ValidateComponentsRegistryProductionDataAuto,
@@ -394,6 +396,154 @@ object id12IntegrationDbTestsAuto : BuildType({
     // run is now MAIN-ONLY via [1.0]'s schedule → this config's finishBuildTrigger.
     // (The build-number override is handled by the PIN_BUILD_NUMBER step above,
     // not by disabling RUNNER_1720.)
+    disableSettings("TRIGGER_1003", "TRIGGER_1006")
+})
+
+// [1.1] Mutation Testing — PIT over the server's pure-logic packages (`..server.util..`,
+// `..server.mapper..`; scope and thresholds in components-registry-service-server/build.gradle).
+//
+// DELIBERATELY OUTSIDE THE CHAIN. No snapshot dependency in either direction, no finishBuildTrigger:
+// nothing waits for it and it waits for nothing, so it cannot delay or block [2.4] deploy or [4.0]
+// release. That is the point — the mutation score says how well the tests would notice a regression,
+// which is a review concern, not a "is this build shippable" concern.
+//
+// Limit of that guarantee, stated because it is easy to assume otherwise: this config uses the shared
+// template, and TeamCity does not allow a build type to drop an inherited setting — snapshot
+// dependencies in particular cannot be overridden. An empty `dependencies {}` block would generate
+// nothing and neutralise nothing, so none is written here. What holds instead: the template declares no
+// dependencies (verified via REST), and were it ever to gain one, EVERY config using it inherits it —
+// [1.0] and the whole [2.x] fan-out included — which makes that a project-wide, visible change rather
+// than a silent capture of this one build. A hard local invariant would mean not using the template,
+// paying for it by re-implementing %WORK_DIR%, %GRADLE_STANDARD_PARAMETERS%, %JDK_CMDLINE_PARAMETERS%,
+// the docker wiring and the RUNNER_1720 meta-runner; not worth it for that trade.
+//
+// Division of labour with GitHub, which also runs this analysis (.github/workflows/mutation.yml):
+//   - GitHub, every PR touching the targeted paths — the per-change SIGNAL: fast feedback on the diff.
+//     Not a gate today: the job is absent from `gate-merge.needs`, so a red run is visible but does not
+//     block a merge. Adding it there is what would make the threshold blocking.
+//   - here, weekly on the default branch — the ANALYTICS: a browsable HTML report in the artifact tree
+//     (a GitHub Actions artifact is a zip you must download and unpack) and, via the stats step below,
+//     a mutation-score chart across builds, which GitHub Actions has no equivalent for.
+//     It also covers a blind spot of the GitHub trigger: that workflow only fires on changes to the
+//     server module and the build files, so a change ELSEWHERE that weakens a mutant's fate (e.g. in
+//     component-resolver-core, which the mappers call) does not run it. This weekly build catches that
+//     drift on main.
+object id11MutationTestingAuto : BuildType({
+    templates(AbsoluteId("Octopus_OctopusGradleBuild"))
+    id("11MutationTestingAuto")
+    name = "[1.1] Mutation Testing [AUTO]"
+
+    // Scoped to the PIT output only: this config produces no test-results, logs or diagnostics worth
+    // keeping, and publishing `**/build/reports/**` wholesale would drag in every other module's
+    // unrelated reports. The HTML report is published as a directory so it is browsable in place.
+    //
+    // The LEADING wildcard is deliberate. TeamCity drops the static part of the path before the first
+    // wildcard, so `components-registry-service-server/build/reports/pitest/** => reports/pitest` would
+    // flatten to `reports/pitest/index.html` — while `qualityReportsIndex` links reports by their
+    // REPO-RELATIVE path (`../pitest/components-registry-service-server/build/reports/pitest/index.html`),
+    // leaving a dead link. Starting the pattern with `**` preserves the whole relative structure, which is
+    // also why [1.0] publishes `**/build/reports/** => reports` rather than a static prefix.
+    artifactRules = """
+        **/build/reports/pitest/** => reports/pitest
+        build/reports/quality/** => reports/quality
+    """.trimIndent()
+
+    params {
+        param("GRADLE_TASK", ":components-registry-service-server:pitest")
+        param("COMPONENTS_REGISTRY_BRANCH", "master")
+    }
+
+    steps {
+        gradle {
+            name = "Gradle Mutation Testing"
+            id = "RUNNER_1768"
+            tasks = "%GRADLE_TASK%"
+            workingDir = "%WORK_DIR%"
+            gradleParams = """
+                --info
+                %GRADLE_STANDARD_PARAMETERS%
+            """.trimIndent()
+            enableStacktrace = true
+            jdkHome = "%env.JAVA_HOME%"
+            jvmArgs = "%JDK_CMDLINE_PARAMETERS%"
+            dockerRunParameters = "--userns=keep-id -e JAVA_HOME=/opt/java/openjdk -v %env.BUILD_ENV%:/opt/BUILD_ENV -v %teamcity.build.checkoutDir%:/home/tcagent/work -v %teamcity.agent.jvm.user.home%:/home/tcagent -w /home/tcagent/work -e TZ=Europe/Brussels"
+            param("org.jfrog.artifactory.selectedDeployableServer.defaultModuleVersionConfiguration", "GLOBAL")
+        }
+        // Regenerates build/reports/quality/index.html so the published report set has its documented
+        // single entry point (AGENTS.md §Reports). A separate step rather than an extra task on the line
+        // above: Gradle gives no ordering guarantee between two independent requested tasks, and the index
+        // must be written AFTER the PIT report exists or its section is silently omitted.
+        //
+        // ALWAYS, for the same reason as the stats step below: a threshold failure is exactly when someone
+        // wants to open the report.
+        gradle {
+            name = "Quality reports index"
+            id = "RUNNER_QUALITY_INDEX"
+            executionMode = BuildStep.ExecutionMode.ALWAYS
+            tasks = "qualityReportsIndex"
+            workingDir = "%WORK_DIR%"
+            gradleParams = """
+                --info
+                %GRADLE_STANDARD_PARAMETERS%
+            """.trimIndent()
+            enableStacktrace = true
+            jdkHome = "%env.JAVA_HOME%"
+            jvmArgs = "%JDK_CMDLINE_PARAMETERS%"
+            dockerRunParameters = "--userns=keep-id -e JAVA_HOME=/opt/java/openjdk -v %env.BUILD_ENV%:/opt/BUILD_ENV -v %teamcity.build.checkoutDir%:/home/tcagent/work -v %teamcity.agent.jvm.user.home%:/home/tcagent -w /home/tcagent/work -e TZ=Europe/Brussels"
+        }
+        // Turns the score into a tracked TeamCity statistic (charted per build) and puts the headline on
+        // the build overview. Reporting only — the pass/fail verdict stays with the `pitest` task, which
+        // owns mutationThreshold/coverageThreshold.
+        //
+        // ALWAYS is load-bearing, not defensive: `pitest` FAILS the build when the score drops below
+        // mutationThreshold, and with the default execution mode TeamCity would skip this step precisely
+        // then — so the one score that most needs to land on the chart and in the build status would be
+        // the one that never does. The script tolerates a missing report and never fails the build.
+        script {
+            name = "Report mutation statistics"
+            id = "REPORT_MUTATION_STATS"
+            executionMode = BuildStep.ExecutionMode.ALWAYS
+            scriptContent = "scripts/teamcity/report-mutation-stats.sh"
+        }
+        stepsOrder = arrayListOf("RUNNER_1720", "RUNNER_1768", "RUNNER_QUALITY_INDEX", "REPORT_MUTATION_STATS")
+    }
+
+    failureConditions {
+        // A cold run (no PIT history) took ~8 min on a GitHub runner; 60 min is a generous ceiling that
+        // still fails a hung analysis rather than occupying an agent indefinitely.
+        executionTimeoutMin = 60
+    }
+
+    requirements {
+        doesNotContain("env.OS_TYPE", "WIN", "RQ_2875")
+    }
+
+    triggers {
+        // Weekly, DEFAULT BRANCH ONLY — same shape as [1.0]'s heartbeat, one hour later so the two never
+        // contend for an agent ([1.0]'s Sunday run fans out into the whole [2.x] chain). Per-branch runs
+        // are deliberately absent: per-PR feedback is GitHub's job. Run this config manually to inspect a
+        // specific branch.
+        //
+        // This schedule is why the name carries [AUTO] rather than [MANUAL] despite the config sitting
+        // outside the chain: [AUTO] in this project means "fires by itself" (like [1.0]'s VCS+schedule and
+        // the [2.x] finishBuildTriggers), while the [1.5]/[1.6] compat pair is [MANUAL] precisely because
+        // their inherited schedule is disabled and only an operator starts them. Dropping this trigger
+        // would leave the score chart empty unless somebody remembered to press the button, which is the
+        // one thing this config exists to avoid.
+        schedule {
+            schedulingPolicy = weekly {
+                timezone = "UTC"
+                dayOfWeek = ScheduleTrigger.DAY.Sunday
+                hour = 11
+            }
+            branchFilter = "+:<default>"
+            triggerBuild = always()
+        }
+    }
+
+    // Disable the inherited triggers from Octopus_OctopusGradleBuild:
+    //   TRIGGER_1003 — VCS Trigger (would run the analysis on every commit on every branch)
+    //   TRIGGER_1006 — Schedule Trigger (weekly on ALL branches; replaced by the main-only one above)
     disableSettings("TRIGGER_1003", "TRIGGER_1006")
 })
 
