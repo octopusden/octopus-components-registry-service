@@ -65,7 +65,7 @@ project {
     buildType(id18CompatLocalStandGitModeAuto)
     buildType(id20ValidateComponentsRegistryProductionDataAuto)
     buildType(id30DeployToOkdQaDevAuto)
-    buildType(id29Step2AggregateAuto)
+    buildType(id30Step2AggregateAuto)
     buildType(id40ReleaseManual)
     buildType(id50ReleasePostProcessingAuto)
     buildType(id60DeployToOkdQaGhAuto)
@@ -84,7 +84,7 @@ project {
         id17CompatLocalStandManual,
         id18CompatLocalStandGitModeAuto,
         id30DeployToOkdQaDevAuto,
-        id29Step2AggregateAuto,
+        id30Step2AggregateAuto,
         id40ReleaseManual,
         id50ReleasePostProcessingAuto,
         id60DeployToOkdQaGhAuto,
@@ -1383,7 +1383,7 @@ object id30DeployToOkdQaDevAuto : BuildType({
     }
 })
 
-object id29Step2AggregateAuto : BuildType({
+object id30Step2AggregateAuto : BuildType({
     templates(AbsoluteId("RDDepartment_PostGithubStatus"))
     id("30Step2AggregateAuto")
     name = "[3.0] Step 2 Aggregate [AUTO]"
