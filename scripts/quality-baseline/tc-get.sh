@@ -18,8 +18,12 @@
 # TC_URL is intentionally not baked in: the host is internal and does not belong in this repository.
 # Take it from the team's CI bookmark.
 #
-# Requires: macOS `security` with a generic password stored under the service name `tc-rest-token`
-# (personal access token; TeamCity guest auth is disabled).
+# Requires: macOS `security` with the personal access token stored as a generic password (TeamCity guest
+# auth is disabled). The service name defaults to `teamcity-token` and can be overridden with
+# TC_TOKEN_SERVICE — a hard-coded name is a trap worth avoiding, because a stale one fails exactly like a
+# revoked token, and the misdiagnosis costs more than the lookup. Distinguish the three signals: HTTP 401
+# means the host answered and the token is wrong, curl exit 6 means the VPN is off, and HTTP 000 means the
+# base URL is wrong.
 
 set -euo pipefail
 
@@ -37,9 +41,12 @@ fi
 rest_path=${1#/}
 base_url=${TC_URL%/}
 
-if ! token=$(security find-generic-password -s tc-rest-token -w 2>/dev/null); then
-    echo "no Keychain entry for service 'tc-rest-token' — create one with your TeamCity token:" >&2
-    echo "  security add-generic-password -s tc-rest-token -a \"\$USER\" -w" >&2
+token_service=${TC_TOKEN_SERVICE:-teamcity-token}
+
+if ! token=$(security find-generic-password -s "$token_service" -w 2>/dev/null); then
+    echo "no Keychain entry for service '$token_service' — create one with your TeamCity token:" >&2
+    echo "  security add-generic-password -s $token_service -a \"\$USER\" -w" >&2
+    echo "or point at an existing entry: TC_TOKEN_SERVICE=<service> $0 <rest-path>" >&2
     exit 3
 fi
 
