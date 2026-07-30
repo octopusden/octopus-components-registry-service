@@ -6,11 +6,20 @@ on:
 
 jobs:
   build:
-    uses: octopusden/octopus-base/.github/workflows/common-java-gradle-release.yml@v2.5.2
+    uses: octopusden/octopus-base/.github/workflows/common-java-gradle-release.yml@v2.6.2
     with:
       flow-type: hybrid
       java-version: '21'
       commit-hash: ${{ github.event.client_payload.commit }}
       build-version: ${{ github.event.client_payload.project_version }}
       docker-image: components-registry-service
+      # Exempt from the Maven Central publication guard that v2.6.x adds. Measured on this
+      # branch: of the nine published coordinates, exactly one trips the guard —
+      # components-registry-automation, whose -all.jar is 19.75 MB and carries the shadow
+      # classifier. It must keep publishing because its TeamCity metarunner resolves
+      # ${group}:components-registry-automation:${version}:jar:all from a Maven repository at
+      # build time (components-registry-automation/metarunners/). Every other coordinate is a
+      # thin library well under the 8 MB default, so the threshold is deliberately left alone
+      # rather than raised — raising it would weaken the guard for all of them.
+      fat-jar-publication-allowlist: components-registry-automation
     secrets: inherit
