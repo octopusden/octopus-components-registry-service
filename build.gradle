@@ -57,6 +57,31 @@ def centralPublishedProjects = [
 ] as Set
 
 octopusQuality {
+    // Regression guard on what this repository publishes to Maven Central, provided by the shared
+    // policy from octopus-base v2.7.0. This repository hand-rolled a task of exactly that name
+    // until this commit; the plugin registers the same name, so the deletion and the version bump
+    // cannot be separated — keeping both fails configuration.
+    //
+    // The declared set is INDEPENDENT of `centralPublishedProjects` above, which stays because it
+    // gates publication creation at `if (project.path in centralPublishedProjects)`. The old guard
+    // compared that same list against the projects that publish, so both sides always moved
+    // together and editing it could never be reported as drift; only a publication arriving by
+    // another route, or a path naming a project that does not exist, was catchable. Declaring the
+    // expected coordinates separately is what makes an edit to that list detectable.
+    publication {
+        enforceCentralPublications.set(true)
+        centralPublications.set([
+            ':component-resolver-api|mavenJava|org.octopusden.octopus.infrastructure:component-resolver-api|[jar, jar:javadoc, jar:sources]',
+            ':component-resolver-core|mavenJava|org.octopusden.octopus.infrastructure:component-resolver-core|[jar, jar:javadoc, jar:sources]',
+            ':components-registry-api|mavenJava|org.octopusden.octopus.infrastructure:components-registry-api|[jar, jar:javadoc, jar:sources]',
+            ':components-registry-automation|mavenJava|org.octopusden.octopus.components.registry.automation:components-registry-automation|[jar, jar:all, jar:javadoc, jar:sources, zip:metarunners]',
+            ':components-registry-dsl|mavenJava|org.octopusden.octopus.infrastructure:components-registry-dsl|[jar, jar:javadoc, jar:sources]',
+            ':components-registry-service-client|mavenJava|org.octopusden.octopus.infrastructure:components-registry-service-client|[jar, jar:javadoc, jar:sources, jar:test-fixtures]',
+            ':components-registry-service-core|mavenJava|org.octopusden.octopus.infrastructure:components-registry-service-core|[jar, jar:javadoc, jar:sources]',
+            ':components-registry-service-light-client|mavenJava|org.octopusden.octopus.infrastructure:components-registry-service-light-client|[jar, jar:javadoc, jar:sources, jar:test-fixtures]',
+            ':test-common|mavenJava|org.octopusden.octopus.infrastructure:test-common|[jar, jar:javadoc, jar:sources, jar:test-fixtures]',
+        ] as Set)
+    }
     // NOTE: in octopus-quality 2.5.2 `excludeProjects` maps ONLY to coverage exclusion
     // (coverageExcludedProjects) — it does NOT exclude these modules from qualityStatic, which
     // runs checkstyle/pmd/codenarc/detekt/ktlint over ALL subprojects. These four are excluded
@@ -459,58 +484,6 @@ ${sectionsHtml}
 </html>
 """
 }
-
-// POLICY check, run in a task action rather than at configuration time: a publication-policy
-// problem must fail the release, not every Gradle invocation (`build`, `test`, `dependencies`,
-// IDE sync) — the same reasoning as the coverage-policy checks below. Wired into the publish
-// path, so a drift cannot reach Central: re-adding a publication for an excluded module, or
-// dropping the allowlist check itself, fails before anything is uploaded.
-def centralPublicationPolicyProblems = {
-    // allprojects, NOT subprojects: the root is a publishable project like any other, and a
-    // publication added there would otherwise be invisible to this check. The plugin test comes
-    // first because reading `publishing` throws on a project without maven-publish — the root
-    // does not have it, since it is applied inside `configure(subprojects)`.
-    def actual = allprojects.findAll {
-        it.plugins.hasPlugin('maven-publish') && !it.publishing.publications.isEmpty()
-    }*.path as Set
-    if (actual != centralPublishedProjects) {
-        return ["Maven Central publication set drifted.\n" +
-                    "  allowlisted: ${centralPublishedProjects.sort()}\n" +
-                    "  publishing:  ${actual.sort()}\n" +
-                    "Update `centralPublishedProjects` in the root build.gradle only if the change is intentional."]
-    }
-    return []
-}
-
-def verifyCentralPublicationPolicy = tasks.register('verifyCentralPublicationPolicy') {
-    group = 'verification'
-    description = 'Fails if the set of modules publishing to Maven Central differs from the allowlist.'
-    doLast {
-        def problems = centralPublicationPolicyProblems()
-        if (problems) {
-            throw new GradleException(problems.join('\n\n'))
-        }
-        logger.lifecycle("Maven Central publication set matches the allowlist (${centralPublishedProjects.size()} projects).")
-    }
-}
-
-// `publishToSonatype` only exists with -Pnexus, and `publish` is per-project — match by name so
-// the gate attaches wherever it is present without forcing either to be created.
-gradle.projectsEvaluated {
-    allprojects { proj ->
-        // Hook the task TYPE first: every concrete publish task extends AbstractPublishToMaven,
-        // so `publishMavenJavaPublicationToSonatypeRepository` and friends are covered too.
-        // Matching only the aggregates by name left the policy bypassable by invoking a leaf
-        // task directly.
-        proj.tasks.withType(AbstractPublishToMaven).configureEach {
-            dependsOn verifyCentralPublicationPolicy
-        }
-        proj.tasks.matching { it.name in ['publishToSonatype', 'publish', 'publishToMavenLocal'] }.configureEach {
-            dependsOn verifyCentralPublicationPolicy
-        }
-    }
-}
-
 
 // Aggregate JaCoCo tasks and coverage gate wired in projectsEvaluated (outside any task
 // configuration action) so the task container is still mutable.
