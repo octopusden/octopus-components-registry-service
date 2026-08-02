@@ -12,7 +12,7 @@
 #               where the spec is present but was written afterwards to
 #               describe whatever got built — a record, not an agreement.
 #
-# Both are skipped when the PR is explicitly marked no-spec-impact.
+# Both are skipped when the PR carries the no-spec-impact label.
 #
 # Configuration is entirely by environment so the script stays byte-identical
 # across repositories; only the workflow that calls it differs.
@@ -21,7 +21,6 @@
 #   BEHAVIOR_RE           ERE selecting behaviour-change paths     (required)
 #   BEHAVIOR_EXCLUDE_RE   ERE subtracted from the above            (optional)
 #   SPEC_RE               ERE selecting spec paths                 (required)
-#   PR_BODY               pull request body, for the escape hatch  (optional)
 #   PR_LABELS             pull request labels, a JSON array        (optional)
 #   ESCAPE                escape marker, default no-spec-impact    (optional)
 #
@@ -34,7 +33,6 @@ BASE_REF="${BASE_REF:?BASE_REF is required}"
 BEHAVIOR_RE="${BEHAVIOR_RE:?BEHAVIOR_RE is required}"
 SPEC_RE="${SPEC_RE:?SPEC_RE is required}"
 BEHAVIOR_EXCLUDE_RE="${BEHAVIOR_EXCLUDE_RE:-}"
-PR_BODY="${PR_BODY:-}"
 PR_LABELS="${PR_LABELS:-}"
 ESCAPE="${ESCAPE:-no-spec-impact}"
 
@@ -49,90 +47,44 @@ behaviour_paths() { select_paths "$BEHAVIOR_RE" "$BEHAVIOR_EXCLUDE_RE"; }
 spec_paths() { select_paths "$SPEC_RE"; }
 
 # --- escape hatch ------------------------------------------------------------
-# Only an explicitly TICKED checkbox opts out. Searching the body for the bare
-# token would be catastrophic rather than merely loose: the PR template puts the
-# phrase in every body, and any prose mentioning it — including prose saying it
-# does NOT apply — would silently disable the gate for that PR.
+# The opt-out is a label, and only a label.
 #
-# A ticked box that is quoted as an example or commented out is not consent, so
-# fenced code blocks and HTML comments are removed before the body is searched.
-# What survives is filtered to ticked-box lines (any bullet, exactly one
-# non-space character between the brackets, so "[ ]" and "[  ]" are out), and
-# the token must then appear as a whole word on such a line.
-strip_markup() {
-  awk '
-    {
-      line = $0
-      if (in_comment) {
-        p = index(line, "-->")
-        if (p == 0) next
-        line = substr(line, p + 3)
-        in_comment = 0
-      }
-      while ((s = index(line, "<!--")) > 0) {
-        rest = substr(line, s + 4)
-        e = index(rest, "-->")
-        if (e == 0) { line = substr(line, 1, s - 1); in_comment = 1; break }
-        line = substr(line, 1, s - 1) substr(rest, e + 3)
-      }
-      if (line ~ /^[[:space:]]*(```|~~~)/) { in_fence = !in_fence; next }
-      if (in_fence) next
-      # An indented line is a code block only outside a list. Inside one it is
-      # a nested item, and nesting a box under a parent bullet ("- Spec:" then
-      # an indented box) is ordinary markdown that must still count. Outside a
-      # list, four spaces or a tab is what markdown renders as a literal block,
-      # so a box written there is being shown rather than ticked.
-      # Up to three leading spaces still reads as a top-level list item; four
-      # is where markdown switches to code. Written as optional spaces rather
-      # than an interval because not every awk accepts either an interval or
-      # an empty alternative.
-      if (line ~ /^ ? ? ?([-*+]|[0-9]+\.)[ \t]/) {
-        in_list = 1
-      } else if (line ~ /^(    |\t)/) {
-        if (!in_list) next
-      } else if (line !~ /^[[:space:]]*$/) {
-        in_list = 0
-      }
-      print line
-    }
-  '
-}
-
-ticked_box='^[[:space:]]*[-*][[:space:]]*\[[^][:space:]]\]'
-token="(^|[^A-Za-z0-9_-])${ESCAPE}([^A-Za-z0-9_-]|$)"
-
-body_opt_out=$(printf '%s\n' "$PR_BODY" | strip_markup | grep -iE "$ticked_box" \
-  | grep -qiE "$token" && echo yes || echo no)
-
-# Labels arrive as a JSON array and are parsed as one. The marker must be a
-# label in its own right: a word-boundary match would accept the namespaced
-# "area:no-spec-impact", and splitting on punctuation would accept a single
-# label whose name happens to contain commas. Both are different labels that
-# merely contain the token.
+# It also used to read a ticked checkbox out of the PR body. That cost five
+# review rounds and seven false opt-outs: prose merely mentioning the marker,
+# unticked boxes, boxes inside code fences, boxes inside HTML comments, boxes in
+# indented blocks, and finally a list-versus-code state machine that went stale
+# across blank lines and fences. Each fix opened the next hole, because deciding
+# whether a checkbox is "really ticked" means deciding how the body renders, and
+# that is a markdown parser. This script is not going to be one.
+#
+# A label carries no such ambiguity. It is structured data, it is visible in the
+# PR header and in list views, applying it is a deliberate act recorded in the
+# timeline, and a reviewer can apply it rather than the author self-declaring.
+# Switching the gate off should look like that.
+#
+# The marker must be a label in its own right: a word-boundary match would
+# accept the namespaced "area:no-spec-impact", and splitting on punctuation
+# would accept a single label whose name contains commas. Both are different
+# labels that merely contain the token.
 #
 # If jq is missing or the value is not an array the comparison simply fails,
 # leaving the gate enforced — the safe direction.
-label_opt_out=no
 if [[ -n "${PR_LABELS//[[:space:]]/}" ]] &&
   printf '%s' "$PR_LABELS" | jq -e --arg e "$ESCAPE" '
     type == "array" and any(.[]; type == "string" and (ascii_downcase == ($e | ascii_downcase)))
   ' >/dev/null 2>&1; then
-  label_opt_out=yes
-fi
-
-if [[ "$body_opt_out" == yes || "$label_opt_out" == yes ]]; then
-  echo "spec-gate: skipped — PR is marked ${ESCAPE}."
+  echo "spec-gate: skipped — PR carries the ${ESCAPE} label."
   exit 0
 fi
 
 # --- what this PR changes ----------------------------------------------------
-# Behaviour counts a path however it appears. A spec counts only if its content
-# actually changed: `--numstat` reports 0/0 for a pure rename, so renumbering an
-# unrelated ADR must not stand in for writing a spec.
+# Behaviour counts a path however it appears; a spec has to have really changed.
 #
-# This is still path-based, and path-based checking cannot tell whether the spec
-# a PR touched has anything to do with the behaviour it changed. That last mile
-# is the reviewer's job; the gate only guarantees there is something to review.
+# Either way this is path-based, and path-based checking cannot tell whether the
+# spec a PR touched has anything to do with the behaviour it changed. That last
+# mile is the reviewer's job; the gate only guarantees there is something to
+# review.
+#
 # Ask git for machine-readable status rather than parsing --numstat, whose
 # rename notation ("docs/{a.md => b.md}", "{docs => openspec}/a.md") is display
 # text: an ordinary path that merely contains " => " is indistinguishable from

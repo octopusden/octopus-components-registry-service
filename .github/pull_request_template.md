@@ -15,9 +15,14 @@ Link the SYS-NNN / MIG-NNN / RES-NNN entry or spec this PR implements.
 
 Spec:
 
-- [ ] no-spec-impact — this PR changes no observable behaviour (refactor,
-      tests, build/CI, dependency bump, docs-only). Ticking this skips the
-      spec gate; leave it unticked otherwise.
+<!--
+No requirement needed? Apply the `no-spec-impact` label — that, and only that,
+skips the gate. Use it for changes with no observable behaviour: refactors,
+tests, build/CI, dependency bumps, docs. A checkbox here does nothing; the
+opt-out is a label so that it is visible on the PR, recorded in the timeline,
+and can be applied by a reviewer rather than only self-declared.
+-->
+
 
 ## Verification
 

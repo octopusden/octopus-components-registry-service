@@ -71,7 +71,6 @@ jobs:
           # api-changelog.md is included because it is the document this repo
           # instructs contributors to update on any v4 surface change.
           SPEC_RE: '^(docs/registry/(prd|technical-design|api-changelog)\.md$|docs/registry/.*-spec\.md$|docs/registry/requirements-.*\.md$|docs/registry/adr/|docs/features/|openspec/)'
-          PR_BODY: ${{ github.event.pull_request.body }}
           PR_LABELS: ${{ toJson(github.event.pull_request.labels.*.name) }}
 
   gate-merge:

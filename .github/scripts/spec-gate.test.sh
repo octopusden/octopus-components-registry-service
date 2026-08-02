@@ -103,17 +103,19 @@ run_case
 commit "impl" frontend/src/pages/Foo.tsx
 expect 1 "behaviour change with no spec delta fails spec-delta"
 
-# 6. Escape hatch via PR body.
-run_case
-commit "impl" frontend/src/pages/Foo.tsx
-export PR_BODY=$'Refactor only.\n- [x] no-spec-impact\n'
-expect 0 "no-spec-impact in PR body skips both gates"
-
-# 7. Escape hatch via label.
+# 6. The label opt-out.
 run_case
 commit "impl" frontend/src/pages/Foo.tsx
 export PR_LABELS='["dependencies","no-spec-impact"]'
-expect 0 "no-spec-impact label skips both gates"
+expect 0 "the no-spec-impact label skips both gates"
+
+# 7. The PR body is not an opt-out channel at all. A ticked box in the body was
+# the old escape hatch and is deliberately inert now — deciding whether one is
+# "really ticked" meant parsing markdown, which leaked seven false opt-outs.
+run_case
+commit "impl" frontend/src/pages/Foo.tsx
+export PR_BODY=$'- [x] no-spec-impact\n'
+expect 1 "a ticked box in the PR body does not opt out"
 
 # 8. Generated files are not behaviour.
 run_case
@@ -255,89 +257,32 @@ commit "build step" components-registry-automation/metarunners/OctopusComponents
 expect 0 "automation metarunners are not behaviour"
 
 # --- escape-hatch abuse ------------------------------------------------------
-# The opt-out is the one thing that can switch the gate off, so everything that
-# is not a deliberately ticked box must fail to trigger it.
+# The label is the only thing that can switch the gate off, so anything that is
+# not that exact label must fail to trigger it.
 
-# 25. Prose mentioning the marker — including prose denying it applies.
-run_case
-commit "impl" frontend/src/pages/Foo.tsx
-export PR_BODY='This PR does NOT have no-spec-impact status; it changes behaviour.'
-expect 1 "prose mentioning the marker does not opt out"
-
-# 26. Unchecked box, asterisk bullet.
-run_case
-commit "impl" frontend/src/pages/Foo.tsx
-export PR_BODY=$'* [ ] no-spec-impact'
-expect 1 "unchecked asterisk box does not opt out"
-
-# 27. Unchecked box with irregular spacing.
-run_case
-commit "impl" frontend/src/pages/Foo.tsx
-export PR_BODY=$'-  [  ] no-spec-impact'
-expect 1 "unchecked box with wide brackets does not opt out"
-
-# 28. The verbatim PR template, untouched — the common case, and the one that
-# would kill the gate on every single PR if the marker matched loosely.
-run_case
-commit "impl" frontend/src/pages/Foo.tsx
-export PR_BODY=$'## Spec\n\nSpec:\n\n- [ ] no-spec-impact — this PR changes no observable behaviour (refactor,\n      tests, build/CI, dependency bump, docs-only). Ticking this skips the\n      spec gate; leave it unticked otherwise.\n'
-expect 1 "the unticked PR template does not opt out"
-
-# 29. Ticked box with trailing template prose still opts out.
-run_case
-commit "impl" frontend/src/pages/Foo.tsx
-export PR_BODY=$'- [x] no-spec-impact — this PR changes no observable behaviour.'
-expect 0 "ticked box with trailing prose opts out"
-
-# 30. Any tick mark, any bullet.
-run_case
-commit "impl" frontend/src/pages/Foo.tsx
-export PR_BODY=$'* [X] no-spec-impact'
-expect 0 "ticked asterisk box opts out"
-
-# 30a. A ticked box commented out is not consent — "comment out this section"
-# is an ordinary markdown habit.
-run_case
-commit "impl" frontend/src/pages/Foo.tsx
-export PR_BODY=$'Refactor only.\n\n<!--\n- [x] no-spec-impact\n-->\n'
-expect 1 "ticked box inside an HTML comment does not opt out"
-
-# 30b. Nor is a ticked box quoted as an example of the format.
-run_case
-commit "impl" frontend/src/pages/Foo.tsx
-export PR_BODY=$'Example of the checkbox format:\n\n```\n- [x] no-spec-impact\n```\n\nDo not actually skip.\n'
-expect 1 "ticked box inside a code fence does not opt out"
-
-# 30b-i. An indented code block is a code block too.
-run_case
-commit "impl" frontend/src/pages/Foo.tsx
-export PR_BODY=$'Some explanatory text.\n\n    - [x] no-spec-impact\n\nMore text.\n'
-expect 1 "ticked box in an indented code block does not opt out"
-
-# 30b-ii. A box nested under a parent bullet is a list item, not code, and is
-# an ordinary way to write this. The indented-code rule must not swallow it.
-run_case
-commit "impl" frontend/src/pages/Foo.tsx
-export PR_BODY=$'- Spec:\n    - [x] no-spec-impact\n'
-expect 0 "a box nested under a parent bullet still opts out"
-
-# 30c. A namespaced label merely ends in the token; it is a different label.
+# 25. A namespaced label merely ends in the token; it is a different label.
 run_case
 commit "impl" frontend/src/pages/Foo.tsx
 export PR_LABELS='["area:no-spec-impact","bug"]'
 expect 1 "a namespaced label does not opt out"
 
-# 30c-i. One label whose name contains commas is one label, not three.
+# 26. One label whose name contains commas is one label, not three.
 run_case
 commit "impl" frontend/src/pages/Foo.tsx
 export PR_LABELS='["foo,no-spec-impact,bar"]'
 expect 1 "a label containing the token between commas does not opt out"
 
-# 30d. The marker as a label in its own right still does.
+# 27. Non-string noise in the array must not opt out on its own.
 run_case
 commit "impl" frontend/src/pages/Foo.tsx
-export PR_LABELS='["bug","no-spec-impact"]'
-expect 0 "the exact label still opts out"
+export PR_LABELS='[null,7,{"name":"no-spec-impact"}]'
+expect 1 "non-string label entries do not opt out"
+
+# 28. The marker as a label in its own right still does, alongside noise.
+run_case
+commit "impl" frontend/src/pages/Foo.tsx
+export PR_LABELS='[null,"bug","NO-SPEC-IMPACT"]'
+expect 0 "the exact label opts out regardless of case or neighbours"
 
 # --- ordering loopholes ------------------------------------------------------
 
