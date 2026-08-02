@@ -278,6 +278,19 @@ commit "impl" frontend/src/pages/Foo.tsx
 export PR_LABELS='[null,7,{"name":"no-spec-impact"}]'
 expect 1 "non-string label entries do not opt out"
 
+# 27a. A large label array must not make the gate spin. The obvious blank-check
+# on the raw value is quadratic in bash 3.2 and cost 15 seconds at 800 labels;
+# GitHub allows up to 100 per PR, so this stays well inside a realistic bound.
+run_case
+commit "impl" frontend/src/pages/Foo.tsx
+export PR_LABELS="$(awk 'BEGIN { printf "["; for (i = 0; i < 400; i++) printf "\"label-%d\",", i; printf "\"no-spec-impact\"]" }')"
+started=$(date +%s)
+expect 0 "a large label array opts out without spinning"
+if [[ $(( $(date +%s) - started )) -gt 5 ]]; then
+  FAIL=$((FAIL + 1))
+  printf 'FAIL a large label array took over 5s\n'
+fi
+
 # 28. The marker as a label in its own right still does, alongside noise.
 run_case
 commit "impl" frontend/src/pages/Foo.tsx

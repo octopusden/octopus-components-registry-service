@@ -67,10 +67,12 @@ spec_paths() { select_paths "$SPEC_RE"; }
 # would accept a single label whose name contains commas. Both are different
 # labels that merely contain the token.
 #
-# If jq is missing or the value is not an array the comparison simply fails,
-# leaving the gate enforced — the safe direction.
-if [[ -n "${PR_LABELS//[[:space:]]/}" ]] &&
-  printf '%s' "$PR_LABELS" | jq -e --arg e "$ESCAPE" '
+# If jq is missing, the input is empty, or the value is not an array, the
+# comparison simply fails and the gate stays enforced — the safe direction. jq
+# already exits non-zero on empty, blank and `[]` input, so no guard precedes
+# it: the obvious `[[ -n "${PR_LABELS//[[:space:]]/}" ]]` is quadratic in bash
+# 3.2, where 800 labels took 15 seconds of spinning CPU.
+if printf '%s' "$PR_LABELS" | jq -e --arg e "$ESCAPE" '
     type == "array" and any(.[]; type == "string" and (ascii_downcase == ($e | ascii_downcase)))
   ' >/dev/null 2>&1; then
   echo "spec-gate: skipped — PR carries the ${ESCAPE} label."
