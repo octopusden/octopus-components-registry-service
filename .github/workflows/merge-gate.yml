@@ -3,6 +3,12 @@ name: Merge Gate
 
 on:
   pull_request:
+    # labeled/unlabeled are not in the default set. Without them the spec gate's
+    # opt-out is one-way: label, push to trigger a run, get a green skip, then
+    # remove the label — the same SHA keeps the stale green and merges without
+    # either a spec or the label that excused it. Re-running the whole gate on a
+    # label change costs a build, which is the cheaper side of that trade.
+    types: [ opened, synchronize, reopened, labeled, unlabeled ]
 
 jobs:
   build:

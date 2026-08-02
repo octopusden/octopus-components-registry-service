@@ -383,6 +383,23 @@ git commit -qm "add a file under an oddly named directory"
 commit "impl" frontend/src/pages/Foo.tsx
 expect 1 "a path containing the rename arrow is not treated as a spec"
 
+# 37. A base that does not resolve must fail, not read as an empty diff. This
+# is the shape where the gate knows least and would otherwise say "ok".
+run_case
+commit "impl" frontend/src/pages/Foo.tsx
+export BASE_REF='origin/no-such-branch'
+expect 1 "an unresolvable base ref fails instead of passing"
+export BASE_REF='main'
+
+# 38. git C-quotes a path holding a control character, and every pattern here
+# is anchored, so a quoted path matches nothing. Refuse rather than wave it by.
+run_case
+mkdir -p frontend/src/pages
+printf 'code' > "$(printf 'frontend/src/pages/Foo\tBar.tsx')"
+git add -A
+git commit -qm "behaviour with a tab in the filename"
+expect 1 "a control character in a path fails closed"
+
 # 24. Parity with the workflow. The gate is configured by environment, so the
 # regexes above exist twice: here and in merge-gate.yml. Nothing else would
 # notice them drifting apart — a widened path in one copy and not the other

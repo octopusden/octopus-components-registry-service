@@ -46,6 +46,13 @@ select_paths() {
 behaviour_paths() { select_paths "$BEHAVIOR_RE" "$BEHAVIOR_EXCLUDE_RE"; }
 spec_paths() { select_paths "$SPEC_RE"; }
 
+# die <check> <detail> — every failure exit goes through here, so a gate that
+# cannot do its job reports that rather than falling through to success.
+die() {
+  printf 'spec-gate: FAILED (%s)\n\n%s\n' "$1" "$2" >&2
+  exit 1
+}
+
 # --- escape hatch ------------------------------------------------------------
 # The opt-out is a label, and only a label.
 #
@@ -98,20 +105,50 @@ fi
 # including binary edits, which --numstat reports as "-" and which arithmetic
 # would silently read as zero.
 #
-# Paths containing tabs or newlines are quoted by git in this mode, so splitting
-# on tabs is safe. Combined diffs (merge commits) use two-letter statuses such
-# as "AA"; those fall through to the single-path branch, which is correct.
+# Combined diffs (merge commits) use two-letter statuses such as "AA"; those
+# fall through to the single-path branch, which is correct.
 spec_candidate_paths() {
-  git "$@" --name-status -M | awk -F'\t' '
+  awk -F'\t' '
     $1 == "R100"                  { next }
     $1 ~ /^R[0-9]+$/ && NF >= 3   { print $3; next }
     NF >= 2                       { print $2 }
   '
 }
 
-changed=$(git diff --name-only "${BASE_REF}...HEAD")
+# git C-quotes any path holding a control character, so it reaches us as
+# "src/x\tY.tsx" — leading quote and all. Every path pattern in this gate is
+# anchored, so such a path matches nothing and would slip through as "no
+# behaviour change". Refuse to judge instead of judging wrongly.
+reject_quoted_paths() {
+  local paths="$1" context="$2" quoted
+  quoted=$(printf '%s\n' "$paths" | grep '^"' || true)
+  [[ -z "$quoted" ]] && return 0
+  die "unreadable path" "$(
+    printf 'git had to quote these %s paths, which means they contain control\n' "$context"
+    printf 'characters. This gate matches paths by anchored pattern and cannot\n'
+    printf 'classify a quoted path, so it will not pretend to have checked them:\n\n'
+    printf '%s\n' "$quoted" | sed 's/^/  /'
+    printf '\nRename them.\n'
+  )"
+}
+
+# Every git invocation is checked. An unresolvable base or a failed diff yields
+# an empty list, and an empty list reads as "nothing changed" — the gate would
+# report success precisely when it knows least. Note the `|| die` has to sit in
+# the parent shell: a die inside $( ) would only exit the subshell.
+git rev-parse --verify --quiet "${BASE_REF}^{commit}" >/dev/null ||
+  die "configuration" "BASE_REF (${BASE_REF}) does not resolve to a commit.
+The workflow must fetch the base branch before running this gate."
+
+changed=$(git diff --name-only "${BASE_REF}...HEAD") ||
+  die "git" "git diff against ${BASE_REF} failed; refusing to rule on an incomplete diff."
+name_status=$(git diff --name-status -M "${BASE_REF}...HEAD") ||
+  die "git" "git diff --name-status against ${BASE_REF} failed; refusing to rule on an incomplete diff."
+
+reject_quoted_paths "$changed" "changed"
+
 changed_behaviour=$(printf '%s\n' "$changed" | behaviour_paths)
-changed_spec=$(spec_candidate_paths diff "${BASE_REF}...HEAD" | spec_paths)
+changed_spec=$(printf '%s\n' "$name_status" | spec_candidate_paths | spec_paths)
 
 if [[ -z "$changed_behaviour" ]]; then
   echo "spec-gate: no behaviour change in this PR — nothing to gate."
@@ -137,15 +174,26 @@ fi
 first_spec=-1
 first_behaviour=-1
 idx=0
+# Collect the revisions up front so a failure here is caught in the parent
+# shell; inside the loop's process substitution it would be invisible.
+revs=$(git rev-list --reverse "${BASE_REF}..HEAD") ||
+  die "git" "git rev-list ${BASE_REF}..HEAD failed; refusing to rule on an incomplete history."
+
 while read -r sha; do
   [[ -n "$sha" ]] || continue
-  files=$(git show --pretty=format: --name-only "$sha")
+
+  files=$(git show --pretty=format: --name-only "$sha") ||
+    die "git" "git show failed for ${sha}; refusing to rule on an incomplete history."
+  commit_status=$(git show --pretty=format: --name-status -M "$sha") ||
+    die "git" "git show --name-status failed for ${sha}; refusing to rule on an incomplete history."
+  reject_quoted_paths "$files" "committed"
+
   if [[ $first_behaviour -lt 0 ]] && [[ -n "$(printf '%s\n' "$files" | behaviour_paths)" ]]; then
     first_behaviour=$idx
     behaviour_sha=$sha
   fi
   if [[ $first_spec -lt 0 ]] &&
-    [[ -n "$(spec_candidate_paths show --pretty=format: "$sha" | spec_paths)" ]]; then
+    [[ -n "$(printf '%s\n' "$commit_status" | spec_candidate_paths | spec_paths)" ]]; then
     first_spec=$idx
     spec_sha=$sha
   fi
@@ -154,7 +202,9 @@ while read -r sha; do
   # and the commit is inert here, but a conflict resolution can carry real edits
   # that exist nowhere else on the branch — skipping merges would make that code
   # invisible to the ordering check and hand back a false pass.
-done < <(git rev-list --reverse "${BASE_REF}..HEAD")
+done <<EOF
+$revs
+EOF
 
 if [[ $first_behaviour -ge 0 && ( $first_spec -lt 0 || $first_spec -ge $first_behaviour ) ]]; then
   if [[ $first_spec -eq $first_behaviour ]]; then
