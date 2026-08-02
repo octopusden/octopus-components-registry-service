@@ -47,15 +47,32 @@ fi
 rest_path=${1#/}
 base_url=${TC_URL%/}
 
-token_service=${TC_TOKEN_SERVICE:-teamcity-token}
+# Two names are tried, not one. `teamcity-token` is what current entries use, but every version of this
+# script until now told people to create `tc-rest-token`, so that is what a colleague who followed the
+# instructions actually has. Defaulting to a single name would fail for them with the same misleading
+# "no entry" message this change exists to remove — it would just move the trap rather than close it.
+# TC_TOKEN_SERVICE still overrides both, and then only that name is tried.
+token_services=${TC_TOKEN_SERVICE:-"teamcity-token tc-rest-token"}
 
 # `security` exits non-zero for a missing entry, a locked keychain and a denied access prompt alike, so
-# report what it said rather than asserting which one it was — that guess is the very mistake this helper
-# exists to stop. Its diagnostic goes to stderr; the secret is only ever on stdout.
-if ! token=$(security find-generic-password -s "$token_service" -w); then
-    echo "could not read the TeamCity token from Keychain service '$token_service' (missing entry, locked keychain, or access denied — see the message above)." >&2
-    printf 'create it:  security add-generic-password -s %s -a "$USER" -w\n' "$token_service" >&2
-    printf 'or use another entry:  TC_URL=%s TC_TOKEN_SERVICE=<service> %s %s\n' "${TC_URL}" "$0" "$rest_path" >&2
+# its own message is the only thing that distinguishes them — never assert which it was. Suppressed while
+# probing candidates, because "not found" is expected for all but one; the last failure is re-run
+# unsuppressed below so its diagnostic reaches the operator. The secret is only ever on stdout.
+token=""
+for token_service in $token_services; do
+    if token=$(security find-generic-password -s "$token_service" -w 2>/dev/null); then
+        break
+    fi
+    token=""
+done
+
+if [ -z "$token" ]; then
+    for token_service in $token_services; do
+        security find-generic-password -s "$token_service" -w >/dev/null || true
+    done
+    echo "could not read the TeamCity token from any of these Keychain services: $token_services (missing entry, locked keychain, or access denied — see the messages above)." >&2
+    printf 'create one:  security add-generic-password -s %s -a "$USER" -w\n' "${token_services%% *}" >&2
+    printf 'or point at an existing entry:  TC_URL=%s TC_TOKEN_SERVICE=<service> %s %s\n' "${TC_URL}" "$0" "$rest_path" >&2
     exit 3
 fi
 
