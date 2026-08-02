@@ -28,9 +28,55 @@ jobs:
       enable-dependency-check: false
     secrets: inherit
 
+  # Spec discipline gate. Makes AGENTS.md § Technical Requirements Tracking
+  # rule 2 ("requirements first, then implementation") enforceable rather than
+  # advisory. Script is byte-identical with the Portal copy; only this config
+  # differs.
+  spec-gate:
+    name: spec / gate
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          # The gate reads commit ordering on the branch, not just the diff,
+          # so the default shallow clone is not enough.
+          fetch-depth: 0
+      # The gate has its own suite; run it here so a broken gate fails loudly
+      # instead of silently waving every PR through.
+      - run: bash .github/scripts/spec-gate.test.sh
+      - run: git fetch --no-tags origin "+refs/heads/${GITHUB_BASE_REF}:refs/remotes/origin/${GITHUB_BASE_REF}"
+      - run: .github/scripts/spec-gate.sh
+        env:
+          BASE_REF: origin/${{ github.base_ref }}
+          # Behaviour = shipped module sources and their resources. Resources
+          # are included deliberately: Flyway migrations change observable
+          # schema, and the octopus-security role-to-permission mapping that
+          # decides who may edit what lives in application.yml. compat-test
+          # and test-common carry no src/main, so they need no exclusion.
+          #
+          # Excluded: the test and functional-test profile configs, which live
+          # in src/main/resources but configure only those profiles, and the
+          # generated OpenAPI document, which follows a Kotlin change that is
+          # itself gated (mirrors the Portal's exclusion of its vendored copy).
+          #
+          # Keep in exact parity with the constants in spec-gate.test.sh; the
+          # suite fails if these drift.
+          # components-registry-automation keeps its runtime configuration in
+          # data/ rather than src/main — supported groupIds and systems,
+          # version-name and product-type mappings. The module is still
+          # deployed, so that file is behaviour. Its okd/ stand template and
+          # metarunners/ build steps are not.
+          BEHAVIOR_RE: '^([^/]+/src/main/(kotlin|java|resources)/|components-registry-automation/data/)'
+          BEHAVIOR_EXCLUDE_RE: '(/(application|bootstrap)-(test|ft-db)\.yml$|/openapi/v4\.json$)'
+          # api-changelog.md is included because it is the document this repo
+          # instructs contributors to update on any v4 surface change.
+          SPEC_RE: '^(docs/registry/(prd|technical-design|api-changelog)\.md$|docs/registry/.*-spec\.md$|docs/registry/requirements-.*\.md$|docs/registry/adr/|docs/features/|openspec/)'
+          PR_BODY: ${{ github.event.pull_request.body }}
+          PR_LABELS: ${{ toJson(github.event.pull_request.labels.*.name) }}
+
   gate-merge:
     name: gate/merge
-    needs: [ build, quality, security ]
+    needs: [ build, quality, security, spec-gate ]
     if: always()
     runs-on: ubuntu-latest
     steps:
