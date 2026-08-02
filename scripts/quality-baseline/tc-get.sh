@@ -21,9 +21,15 @@
 # Requires: macOS `security` with the personal access token stored as a generic password (TeamCity guest
 # auth is disabled). The service name defaults to `teamcity-token` and can be overridden with
 # TC_TOKEN_SERVICE — a hard-coded name is a trap worth avoiding, because a stale one fails exactly like a
-# revoked token, and the misdiagnosis costs more than the lookup. Distinguish the three signals: HTTP 401
-# means the host answered and the token is wrong, curl exit 6 means the VPN is off, and HTTP 000 means the
-# base URL is wrong.
+# revoked token, and the misdiagnosis costs more than the lookup.
+#
+# Reading the two failures this can hand you, since they get conflated:
+#   * `curl: (22) ... error: 401` plus TeamCity's own body — the host answered and rejected the token.
+#     Suspect the wrong Keychain entry before concluding the token was revoked.
+#   * `curl: (6) Could not resolve host` — the name did not resolve: VPN down, DNS down, or a wrong host in
+#     TC_URL. Exit 6 alone does not tell you which.
+# This script prints no status code of its own (no --write-out), so a bare `000` is not something you will
+# see here — that belongs to hand-rolled curl invocations.
 
 set -euo pipefail
 
@@ -43,10 +49,13 @@ base_url=${TC_URL%/}
 
 token_service=${TC_TOKEN_SERVICE:-teamcity-token}
 
-if ! token=$(security find-generic-password -s "$token_service" -w 2>/dev/null); then
-    echo "no Keychain entry for service '$token_service' — create one with your TeamCity token:" >&2
-    echo "  security add-generic-password -s $token_service -a \"\$USER\" -w" >&2
-    echo "or point at an existing entry: TC_TOKEN_SERVICE=<service> $0 <rest-path>" >&2
+# `security` exits non-zero for a missing entry, a locked keychain and a denied access prompt alike, so
+# report what it said rather than asserting which one it was — that guess is the very mistake this helper
+# exists to stop. Its diagnostic goes to stderr; the secret is only ever on stdout.
+if ! token=$(security find-generic-password -s "$token_service" -w); then
+    echo "could not read the TeamCity token from Keychain service '$token_service' (missing entry, locked keychain, or access denied — see the message above)." >&2
+    printf 'create it:  security add-generic-password -s %s -a "$USER" -w\n' "$token_service" >&2
+    printf 'or use another entry:  TC_URL=%s TC_TOKEN_SERVICE=<service> %s %s\n' "${TC_URL}" "$0" "$rest_path" >&2
     exit 3
 fi
 
