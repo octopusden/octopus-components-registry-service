@@ -402,8 +402,27 @@ git commit -qm "spec with a non-ascii filename"
 commit "impl" frontend/src/pages/Foo.tsx
 expect 0 "a non-ascii spec filename is read, not rejected"
 
-# 38. git C-quotes a path holding a control character, and every pattern here
-# is anchored, so a quoted path matches nothing. Refuse rather than wave it by.
+# 37b. git also C-quotes a name containing a double quote. That is a legal
+# filename, not a control character, and must be read rather than refused.
+run_case
+mkdir -p docs/features
+echo spec > 'docs/features/a"b.md'
+git add -A
+git commit -qm 'spec with a quote in the name'
+commit "impl" frontend/src/pages/Foo.tsx
+expect 0 "a double quote in a spec filename is read, not rejected"
+
+# 37c. Same for a backslash.
+run_case
+mkdir -p docs/features
+echo spec > 'docs/features/a\b.md'
+git add -A
+git commit -qm 'spec with a backslash in the name'
+commit "impl" frontend/src/pages/Foo.tsx
+expect 0 "a backslash in a spec filename is read, not rejected"
+
+# 38. A newline or tab in a path cannot be classified by line-based filters, so
+# the gate refuses to rule rather than silently treating it as nothing.
 run_case
 mkdir -p frontend/src/pages
 printf 'code' > "$(printf 'frontend/src/pages/Foo\tBar.tsx')"

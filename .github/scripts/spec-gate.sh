@@ -93,48 +93,62 @@ fi
 # spec a PR touched has anything to do with the behaviour it changed. That last
 # mile is the reviewer's job; the gate only guarantees there is something to
 # review.
-#
-# Ask git for machine-readable status rather than parsing --numstat, whose
-# rename notation ("docs/{a.md => b.md}", "{docs => openspec}/a.md") is display
-# text: an ordinary path that merely contains " => " is indistinguishable from
-# it, and rewriting such a path can forge a spec that was never touched. Here
-# the rename destination is its own field, so nothing has to be inferred.
-#
-# A pure rename (R100 — identical content) is not a spec change; renumbering an
-# unrelated ADR must not stand in for writing one. Any other status counts,
-# including binary edits, which --numstat reports as "-" and which arithmetic
-# would silently read as zero.
-#
-# Combined diffs (merge commits) use two-letter statuses such as "AA"; those
-# fall through to the single-path branch, which is correct.
-spec_candidate_paths() {
-  awk -F'\t' '
-    $1 == "R100"                  { next }
-    $1 ~ /^R[0-9]+$/ && NF >= 3   { print $3; next }
-    NF >= 2                       { print $2 }
-  '
-}
 
-# git_paths — every path-listing call goes through here so that quoting is
-# consistent and deliberate. `core.quotePath=false` stops git escaping
-# non-ASCII, which it does by default: `docs/features/архитектура.md` would
-# otherwise arrive quoted and be rejected below as unreadable. Control
-# characters are still quoted, which is exactly the set we want to refuse.
+# --- reading paths from git --------------------------------------------------
+# Paths are read NUL-delimited. git's default output C-quotes a path not only
+# for control characters but also for a quote or a backslash in the name, and
+# for non-ASCII unless core.quotePath is off — so "is it quoted" says nothing
+# useful about whether the name is legitimate. Telling those cases apart means
+# decoding git's escape syntax, and a decoder that is subtly wrong rejects
+# ordinary filenames. `-z` removes the question: the bytes arrive as they are.
+#
+# `core.quotePath=false` stays for the diagnostics, which are read by humans.
 git_paths() { git -c core.quotePath=false "$@"; }
 
-# git C-quotes any path holding a control character, so it reaches us as
-# "src/x\tY.tsx" — leading quote and all. Every path pattern in this gate is
-# anchored, so such a path matches nothing and would slip through as "no
-# behaviour change". Refuse to judge instead of judging wrongly.
-reject_quoted_paths() {
-  local paths="$1" context="$2" quoted
-  quoted=$(printf '%s\n' "$paths" | grep '^"' || true)
-  [[ -z "$quoted" ]] && return 0
+# A newline or tab in a path still has to be refused, because every filter here
+# is line-based and would silently mis-split such a path. Those go to BAD and
+# stop the gate rather than being dropped.
+#
+# PATHS and BAD are globals: the readers run in the parent shell so that a die
+# actually ends the run, which it would not do from inside $( ).
+classify_path() {
+  case $1 in
+    *$'\n'* | *$'\t'* | *$'\r'*) BAD+="$1"$'\n' ;;
+    *) PATHS+="$1"$'\n' ;;
+  esac
+}
+
+read_nul_paths() {
+  local p
+  PATHS='' BAD=''
+  while IFS= read -r -d '' p; do classify_path "$p"; done < "$1"
+}
+
+# read_nul_status — `--name-status -M`, applying the rename rules. R100 means
+# identical content, so renumbering an unrelated ADR is not a spec change; any
+# other rename counts at its destination, which is the third field. Combined
+# diffs (merge commits) use two-letter statuses such as "AA" and carry a single
+# path; those take the non-rename branch, which is correct.
+read_nul_status() {
+  local status p dest
+  PATHS='' BAD=''
+  while IFS= read -r -d '' status; do
+    IFS= read -r -d '' p || break
+    if [[ $status == R[0-9]* ]]; then
+      IFS= read -r -d '' dest || break
+      [[ $status == R100 ]] && continue
+      p=$dest
+    fi
+    classify_path "$p"
+  done < "$1"
+}
+
+reject_bad_paths() {
+  [[ -z "$BAD" ]] && return 0
   die "unreadable path" "$(
-    printf 'git had to quote these %s paths, which means they contain control\n' "$context"
-    printf 'characters. This gate matches paths by anchored pattern and cannot\n'
-    printf 'classify a quoted path, so it will not pretend to have checked them:\n\n'
-    printf '%s\n' "$quoted" | sed 's/^/  /'
+    printf 'These %s paths contain a newline or a tab. Every path filter in this\n' "$1"
+    printf 'gate is line-based, so it will not pretend to have classified them:\n\n'
+    printf '%s' "$BAD" | sed 's/^/  /'
     printf '\nRename them.\n'
   )"
 }
@@ -147,15 +161,22 @@ git rev-parse --verify --quiet "${BASE_REF}^{commit}" >/dev/null ||
   die "configuration" "BASE_REF (${BASE_REF}) does not resolve to a commit.
 The workflow must fetch the base branch before running this gate."
 
-changed=$(git_paths diff --name-only "${BASE_REF}...HEAD") ||
+# NUL-delimited output goes through files rather than $( ), which drops NUL
+# bytes — and via a file the exit status is still checked in the parent shell.
+tmpdir=$(mktemp -d) || die "environment" "cannot create a temporary directory."
+trap 'rm -rf "$tmpdir"' EXIT
+
+git_paths diff -z --name-only "${BASE_REF}...HEAD" > "$tmpdir/changed" ||
   die "git" "git diff against ${BASE_REF} failed; refusing to rule on an incomplete diff."
-name_status=$(git_paths diff --name-status -M "${BASE_REF}...HEAD") ||
+read_nul_paths "$tmpdir/changed"
+reject_bad_paths "changed"
+changed_behaviour=$(printf '%s' "$PATHS" | behaviour_paths)
+
+git_paths diff -z --name-status -M "${BASE_REF}...HEAD" > "$tmpdir/status" ||
   die "git" "git diff --name-status against ${BASE_REF} failed; refusing to rule on an incomplete diff."
-
-reject_quoted_paths "$changed" "changed"
-
-changed_behaviour=$(printf '%s\n' "$changed" | behaviour_paths)
-changed_spec=$(printf '%s\n' "$name_status" | spec_candidate_paths | spec_paths)
+read_nul_status "$tmpdir/status"
+reject_bad_paths "changed"
+changed_spec=$(printf '%s' "$PATHS" | spec_paths)
 
 if [[ -z "$changed_behaviour" ]]; then
   echo "spec-gate: no behaviour change in this PR — nothing to gate."
@@ -189,18 +210,23 @@ revs=$(git rev-list --reverse "${BASE_REF}..HEAD") ||
 while read -r sha; do
   [[ -n "$sha" ]] || continue
 
-  files=$(git_paths show --pretty=format: --name-only "$sha") ||
+  git_paths show --pretty=format: -z --name-only "$sha" > "$tmpdir/c-files" ||
     die "git" "git show failed for ${sha}; refusing to rule on an incomplete history."
-  commit_status=$(git_paths show --pretty=format: --name-status -M "$sha") ||
-    die "git" "git show --name-status failed for ${sha}; refusing to rule on an incomplete history."
-  reject_quoted_paths "$files" "committed"
+  read_nul_paths "$tmpdir/c-files"
+  reject_bad_paths "committed"
+  commit_files="$PATHS"
 
-  if [[ $first_behaviour -lt 0 ]] && [[ -n "$(printf '%s\n' "$files" | behaviour_paths)" ]]; then
+  git_paths show --pretty=format: -z --name-status -M "$sha" > "$tmpdir/c-status" ||
+    die "git" "git show --name-status failed for ${sha}; refusing to rule on an incomplete history."
+  read_nul_status "$tmpdir/c-status"
+  reject_bad_paths "committed"
+
+  if [[ $first_behaviour -lt 0 ]] && [[ -n "$(printf '%s' "$commit_files" | behaviour_paths)" ]]; then
     first_behaviour=$idx
     behaviour_sha=$sha
   fi
   if [[ $first_spec -lt 0 ]] &&
-    [[ -n "$(printf '%s\n' "$commit_status" | spec_candidate_paths | spec_paths)" ]]; then
+    [[ -n "$(printf '%s' "$PATHS" | spec_paths)" ]]; then
     first_spec=$idx
     spec_sha=$sha
   fi
