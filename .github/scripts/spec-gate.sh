@@ -115,6 +115,13 @@ spec_candidate_paths() {
   '
 }
 
+# git_paths — every path-listing call goes through here so that quoting is
+# consistent and deliberate. `core.quotePath=false` stops git escaping
+# non-ASCII, which it does by default: `docs/features/архитектура.md` would
+# otherwise arrive quoted and be rejected below as unreadable. Control
+# characters are still quoted, which is exactly the set we want to refuse.
+git_paths() { git -c core.quotePath=false "$@"; }
+
 # git C-quotes any path holding a control character, so it reaches us as
 # "src/x\tY.tsx" — leading quote and all. Every path pattern in this gate is
 # anchored, so such a path matches nothing and would slip through as "no
@@ -140,9 +147,9 @@ git rev-parse --verify --quiet "${BASE_REF}^{commit}" >/dev/null ||
   die "configuration" "BASE_REF (${BASE_REF}) does not resolve to a commit.
 The workflow must fetch the base branch before running this gate."
 
-changed=$(git diff --name-only "${BASE_REF}...HEAD") ||
+changed=$(git_paths diff --name-only "${BASE_REF}...HEAD") ||
   die "git" "git diff against ${BASE_REF} failed; refusing to rule on an incomplete diff."
-name_status=$(git diff --name-status -M "${BASE_REF}...HEAD") ||
+name_status=$(git_paths diff --name-status -M "${BASE_REF}...HEAD") ||
   die "git" "git diff --name-status against ${BASE_REF} failed; refusing to rule on an incomplete diff."
 
 reject_quoted_paths "$changed" "changed"
@@ -182,9 +189,9 @@ revs=$(git rev-list --reverse "${BASE_REF}..HEAD") ||
 while read -r sha; do
   [[ -n "$sha" ]] || continue
 
-  files=$(git show --pretty=format: --name-only "$sha") ||
+  files=$(git_paths show --pretty=format: --name-only "$sha") ||
     die "git" "git show failed for ${sha}; refusing to rule on an incomplete history."
-  commit_status=$(git show --pretty=format: --name-status -M "$sha") ||
+  commit_status=$(git_paths show --pretty=format: --name-status -M "$sha") ||
     die "git" "git show --name-status failed for ${sha}; refusing to rule on an incomplete history."
   reject_quoted_paths "$files" "committed"
 

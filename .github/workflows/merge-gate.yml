@@ -8,7 +8,12 @@ on:
     # remove the label — the same SHA keeps the stale green and merges without
     # either a spec or the label that excused it. Re-running the whole gate on a
     # label change costs a build, which is the cheaper side of that trade.
-    types: [ opened, synchronize, reopened, labeled, unlabeled ]
+    # `edited` is here for retargeting: changing a PR's base branch fires that
+    # and nothing else, so without it a PR moved from a feature base onto main
+    # keeps a green verdict computed against the old base. It also fires on
+    # title and body edits, which re-runs the build for nothing — the price of
+    # not carrying a result that answers a question no longer being asked.
+    types: [ opened, synchronize, reopened, labeled, unlabeled, edited ]
 
 jobs:
   build:

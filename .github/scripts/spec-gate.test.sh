@@ -391,6 +391,17 @@ export BASE_REF='origin/no-such-branch'
 expect 1 "an unresolvable base ref fails instead of passing"
 export BASE_REF='main'
 
+# 37a. A non-ASCII filename is ordinary, not unreadable. git quotes it by
+# default, so without core.quotePath=false the gate would reject a perfectly
+# normal spec — the same mechanism that must still reject control characters.
+run_case
+mkdir -p docs/features
+echo spec > "docs/features/архитектура.md"
+git add -A
+git commit -qm "spec with a non-ascii filename"
+commit "impl" frontend/src/pages/Foo.tsx
+expect 0 "a non-ascii spec filename is read, not rejected"
+
 # 38. git C-quotes a path holding a control character, and every pattern here
 # is anchored, so a quoted path matches nothing. Refuse rather than wave it by.
 run_case
