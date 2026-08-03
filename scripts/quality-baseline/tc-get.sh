@@ -54,6 +54,19 @@ base_url=${TC_URL%/}
 # TC_TOKEN_SERVICE still overrides both, and then only that name is tried.
 token_services=${TC_TOKEN_SERVICE:-"teamcity-token tc-rest-token"}
 
+# Turn xtrace OFF for the rest of this script, and restore it afterwards only if it was on.
+# `bash -x tc-get.sh` is the first thing anyone reaches for when TeamCity access misbehaves — and
+# tracing echoes EXPANDED arguments, so both the assignment below and the printf that builds the
+# Authorization header would print the token in clear text to stderr, into scrollback or a captured
+# log. Everything this script does to keep the secret out of argv is undone by that one flag. A
+# comment warning against it would not survive contact with someone debugging at speed, so the
+# script disables tracing itself rather than asking. The diagnostics worth seeing — which service
+# names were tried, what `security` said, what curl said — are printed explicitly and are unaffected.
+case $- in
+    *x*) __tc_xtrace_was_on=1; set +x ;;
+    *)   __tc_xtrace_was_on=0 ;;
+esac
+
 # `security` exits non-zero for a missing entry, a locked keychain and a denied access prompt alike, so
 # its own message is the only thing that distinguishes them — never assert which it was. Suppressed while
 # probing candidates, because "not found" is expected for all but one; the last failure is re-run
@@ -83,3 +96,8 @@ printf 'header = "Authorization: Bearer %s"\n' "$token" |
         --silent --show-error --fail-with-body \
         --header 'Accept: application/json' \
         "$base_url/$rest_path"
+__tc_rc=$?
+
+# Restore tracing for whatever called us, but only if it was on to begin with.
+[ "$__tc_xtrace_was_on" = 1 ] && set -x
+exit $__tc_rc
