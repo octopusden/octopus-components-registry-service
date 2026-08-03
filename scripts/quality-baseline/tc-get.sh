@@ -52,7 +52,18 @@ base_url=${TC_URL%/}
 # instructions actually has. Defaulting to a single name would fail for them with the same misleading
 # "no entry" message this change exists to remove — it would just move the trap rather than close it.
 # TC_TOKEN_SERVICE still overrides both, and then only that name is tried.
-token_services=${TC_TOKEN_SERVICE:-"teamcity-token tc-rest-token"}
+# An ARRAY, not a space-separated string, and always expanded quoted. A scalar iterated as
+# `for x in $list` is word-split AND glob-expanded, which breaks the override this script exists to
+# make trustworthy: TC_TOKEN_SERVICE="my custom token" would be looked up as three separate services
+# `my`, `custom` and `token` — never finding the entry, and printing remediation for the wrong name —
+# and TC_TOKEN_SERVICE="tc-*-token" would silently become whatever matching FILE happened to sit in
+# the current directory. Keychain service names may legitimately contain spaces, so neither is
+# hypothetical. Quoted array expansion does neither.
+if [ -n "${TC_TOKEN_SERVICE:-}" ]; then
+    token_services=("$TC_TOKEN_SERVICE")
+else
+    token_services=(teamcity-token tc-rest-token)
+fi
 
 # Turn xtrace OFF for the rest of this script, and restore it afterwards only if it was on.
 # `bash -x tc-get.sh` is the first thing anyone reaches for when TeamCity access misbehaves — and
@@ -71,8 +82,12 @@ esac
 # its own message is the only thing that distinguishes them — never assert which it was. Suppressed while
 # probing candidates, because "not found" is expected for all but one; the last failure is re-run
 # unsuppressed below so its diagnostic reaches the operator. The secret is only ever on stdout.
+# Note the cost: on total failure each candidate is queried twice. Output is not duplicated (the
+# first loop's stderr is discarded), but if an entry exists behind an access-control prompt, the
+# second query may prompt again. Accepted deliberately — a silent "not found" for a locked or
+# denied entry is the misdiagnosis this whole change exists to stop.
 token=""
-for token_service in $token_services; do
+for token_service in "${token_services[@]}"; do
     if token=$(security find-generic-password -s "$token_service" -w 2>/dev/null); then
         break
     fi
@@ -80,11 +95,13 @@ for token_service in $token_services; do
 done
 
 if [ -z "$token" ]; then
-    for token_service in $token_services; do
+    for token_service in "${token_services[@]}"; do
         security find-generic-password -s "$token_service" -w >/dev/null || true
     done
-    echo "could not read the TeamCity token from any of these Keychain services: $token_services (missing entry, locked keychain, or access denied — see the messages above)." >&2
-    printf 'create one:  security add-generic-password -s %s -a "$USER" -w\n' "${token_services%% *}" >&2
+    echo "could not read the TeamCity token from any of these Keychain services: ${token_services[*]} (missing entry, locked keychain, or access denied — see the messages above)." >&2
+    # %q quotes the name for the shell, so a service name containing spaces produces a command that
+# actually creates THAT name when pasted, instead of silently creating one called "my".
+printf 'create one:  security add-generic-password -s %q -a "$USER" -w\n' "${token_services[0]}" >&2
     printf 'or point at an existing entry:  TC_URL=%s TC_TOKEN_SERVICE=<service> %s %s\n' "${TC_URL}" "$0" "$rest_path" >&2
     exit 3
 fi
