@@ -90,18 +90,31 @@ This does **not** depend on RMS's published `client` Gradle artifact (`org.octop
 
 **Inspiration:** `octopus-components-management-portal`'s `ReleaseManagementClient.kt` calls the same endpoint family for the same reason. Portal is reactive (WebFlux) and uses `WebClient`/`Mono`; CRS is a blocking Spring MVC app (Boot `3.2.2`), so the equivalent CRS client uses a blocking `RestClient` call instead.
 
-### 2. Range collapsing — line-aware, per-attribute, leading gaps free, only the highest line's trailing run open-ended
+### 2. How ACTUAL ranges are built from RMS's builds
 
-Two independent collapsing passes, one for Java and one for Maven, each over its own filtered build list from Decision 1. Per attribute:
+Run separately for Java and for Maven. Three steps:
 
-- **Builds are first grouped by major-version line**, computed via the existing `NumericVersionFactory`/`IVersionInfo` (the same utility backing `EscrowExpressionContext.getMajor()`/`getMinor()` elsewhere in CRS — not a new "line" concept invented for this feature, and not tied to CRS's currently-configured range boundaries, which can change over time). A run never crosses a line boundary, even if the values on either side happen to be equal.
-- Within a line, a run starts at the first build carrying a given value. **Java values are normalized before comparison** — `"1.8"` and `"8"` must compare equal, reusing the existing `JavaVersion.isEight` logic (`ToolVersion.kt`) rather than treating them as two different values that would otherwise fabricate a spurious run boundary. Maven has no equivalent dual-spelling and needs no normalization.
-- A run ends where the next differently-valued build starts, **or where the line itself ends, whichever comes first.** A lower line's run does not need a value change to end — the line boundary itself ends it, which is what keeps a gap like `[3.0,3.4)` free regardless of whether line 2's and line 3's actual values happen to match.
-- The highest-version run of the **highest known line only** is open-ended (no upper bound) — intentional, not a defect (see worked example). Every other line's last run is bounded by the next line's start.
+**Step 1 — Sort builds into version lines.**
+Every build belongs to a "line" — its major version (the `2` in `2.5`, the `3` in `3.4`, etc.). CRS already has a tool for this (`NumericVersionFactory`/`IVersionInfo` — the same one behind `EscrowExpressionContext.getMajor()`/`getMinor()` elsewhere in CRS), so this isn't a new concept. Builds from different lines are **never** grouped together, even if they happen to record the same Java/Maven version.
 
-This is a new, small pure function — not a forced reuse of `VersionRangePartition.partition`, which solves a different problem (splitting *already-known* segments at the union of *other ranges'* edges, not grouping raw sorted points into contiguous runs). It reuses `VersionRangePartition`'s internal (module-visible) `Segment`/`render`/`parseSegment` helpers for consistent bracket rendering, and the existing `numericVersionComparator` (`EntityMappers.kt`) for ordering.
+**Step 2 — Within each line, group consecutive builds that share the same value.**
+Java values are normalized first — `"1.8"` and `"8"` are treated as the same version (reusing the existing `JavaVersion.isEight` check), so they don't accidentally look like two different values. Maven doesn't need this.
 
-**Why the leading/trailing asymmetry:** ACTUAL only ever projects *forward* from the most recent known state — the highest-version build is the most relevant data point absent newer information, so it's treated as still applying beyond itself until proven otherwise. A leading gap has no prior state to project *from*; there is nothing before the first build to anchor a projection on. The two ends are not symmetric because the reasoning is inherently directional (recency), not simply "RMS has no data here."
+**Step 3 — Work out where each group's range starts and ends.**
+- **Start:** at its first build. Anything before that — nothing was ever built there — is left uncovered and stays freely editable.
+- **End:** wherever the value changes, *or* wherever the line itself ends — whichever comes first. So a line's last group always stops at the next line's boundary, even if the value never actually changed there.
+- **One exception:** the last group of the *highest known line* has no end at all. It stays open, covering every version from there onward — including versions that haven't been built yet.
+
+That exception is the only place where "no data" is treated differently depending on which side it's on:
+
+| Where the gap is | Treated as | Why |
+|---|---|---|
+| Before the first-ever build | Free / editable | There's no earlier decision to carry forward |
+| After the most recent build | Covered / not editable | The most recent value is our best guess until something newer replaces it |
+
+RMS's data is a timeline of what actually happened. The newest known value is treated as "probably still true" until proven otherwise — but there's no equivalent guess to make about a stretch that comes *before* anything was ever recorded.
+
+**Implementation note:** this is a small, new function, not a reuse of `VersionRangePartition.partition` (that one solves a different problem — splitting already-known ranges around other ranges' edges, not grouping raw points into runs). It does reuse a couple of `VersionRangePartition`'s existing helper functions for consistent range formatting, and the version comparator already used elsewhere in CRS.
 
 ### 3. Display caching — scheduled sweep + in-memory report
 
@@ -128,13 +141,17 @@ Warnings are computed at read time (bounded — a handful of configured rows aga
 
 The block-override check (Part B) does not read the display cache (Decision 3). It makes its own synchronous RMS call at write time, for only the attribute being written (Decision 1).
 
-**Only a confirmed 200-response with no matching builds counts as "ACTUAL is null → write permitted."** Any other outcome — 404, timeout, 5xx, connection failure — is treated as fail-closed (write rejected). This is a deliberate departure from Decision 1's read-side precedent (Portal's `ReleaseManagementClient` treats 404 as "no data"): that mapping is correct for a read-only sweep ("unknown to RMS ⇒ nothing to report") but wrong for a gate, where the same mapping would mean "unknown/misconfigured ⇒ allow the write." The client's return contract must let the two call sites — sweep and write gate — distinguish "confirmed empty" from "ambiguous/failed," since they treat the same underlying HTTP outcomes differently.
+**Only a confirmed 200-response with no matching builds counts as "ACTUAL is null → write permitted."** 
+
+Any other outcome — 404, timeout, 5xx, connection failure — is treated as fail-closed (write rejected). This is a deliberate departure from Decision 1's read-side precedent (Portal's `ReleaseManagementClient` treats 404 as "no data"): that mapping is correct for a read-only sweep ("unknown to RMS ⇒ nothing to report") but wrong for a gate, where the same mapping would mean "unknown/misconfigured ⇒ allow the write." The client's return contract must let the two call sites — sweep and write gate — distinguish "confirmed empty" from "ambiguous/failed," since they treat the same underlying HTTP outcomes differently.
 
 ### 6. RMS integration disabled/unconfigured must not silently disable enforcement
 
-If `release-management-service.enabled=false` or the URL is blank, the write gate treats this the same as "RMS unreachable" (fail-closed, per Decision 5) — it does not skip the check. This is called out explicitly because the properties pattern borrowed from `EmployeeServiceProperties` (Decision 11) is an "inert by default" pattern designed for an enrichment lookup, where silently doing nothing is safe; applied uncritically to a correctness gate, the same default would mean a misconfigured deployment silently enforces nothing while reporting itself healthy.
+If RMS integration is turned off, or its URL is blank, saves are still blocked. CRS treats "not configured" exactly the same as "RMS is unreachable" (Decision 5) — it does **not** skip the check and let saves through.
 
-The disabled/unconfigured case is additionally surfaced to operators as **distinct** from a genuine RMS reachability failure — same fail-closed HTTP outcome for the caller, different log/diagnostic signal — so an operator isn't left guessing whether CRS's dependency is down or simply never configured. See Risks for the rollout implication.
+Why call this out on its own: the config pattern being reused here (from `EmployeeServiceProperties`) was built for a nice-to-have feature, where "not configured → quietly do nothing" is a safe default. That default is wrong here — for a correctness check, "quietly do nothing" would mean a misconfigured environment silently stops enforcing anything at all, while still looking perfectly healthy.
+
+One more detail for operators: "not configured" and "RMS is down" produce the same outcome for the person trying to save (blocked), but they're logged differently — so whoever's investigating can tell which one it actually is, instead of guessing. See Risks for what this means at rollout time.
 
 ### 7. Fail-soft (display) vs. fail-closed (edits)
 
@@ -194,10 +211,10 @@ Both are mapped in `ControllerExceptionHandler.kt`.
 
 ## Risks / Trade-offs
 
-- **DEFAULT can become effectively frozen at whatever value ACTUAL reports**, for a component with RC/RELEASE history covering the whole `ALL_VERSIONS` scope with a single consistent value — DEFAULT can still be rewritten to *match* ACTUAL (per the unified rule), but not diverge from it. Accepted as the intended enforcement, not a defect, per the goals of Part B.
-- **Per-instance cache duplication.** With more than one CRS replica, each replica's sweep runs independently — RMS call volume scales with replica count, and two replicas can briefly disagree on cached ACTUAL within the sweep interval. Accepted: display already tolerates staleness by design (Decision 7).
-- **Sweep cost is doubled, not single.** Decision 3's 2-calls-per-component sweep, run on a schedule across every component, is a second, independent RMS sweep alongside Portal's own existing one for an unrelated purpose. This needs a concurrency bound and timeout budget at implementation time, not an unbounded fan-out.
-- **Cold cache after restart/deploy.** The first sweep after a rollout is a full pass over every component before the cache is warm. Accepted as a one-time cost per deploy.
-- **Write-path latency and transaction exposure.** Every edit to `javaVersion`/`mavenVersion` now costs one synchronous RMS round-trip inside an open DB transaction (Decision 9's transaction hazard). Needs a tight, explicit timeout at implementation time — an unbounded or generously-timed call here is a real availability risk under load, not just a UX latency concern.
-- **Version-scheme mismatch.** RMS build-version strings can include forms CRS's own `NumericVersionFactory` may not parse the same way a fallback comparator would. `numericVersionComparator` (`EntityMappers.kt`) silently falls back to a weaker comparator on a parse failure — the collapsing utility (Decision 2) inherits this risk and needs an explicit test case for RMS versions CRS's own factory can't parse.
-- **Rollout dependency on configuration.** Per Decision 6/11, a deploy of this feature to an environment where RMS integration isn't yet configured rejects every `javaVersion`/`mavenVersion` write in that environment. Configuration must land in or before the same deploy — this is an operational sequencing risk, not just a code concern.
+- **DEFAULT can get "stuck" agreeing with ACTUAL.** If a component's build history covers every version with one consistent value, DEFAULT can still be rewritten *to* that same value — just never to something different. This is the feature working as intended (that's the whole point of Part B), not a defect.
+- **Multiple CRS instances mean separate caches.** If CRS runs on more than one replica, each one refreshes its own copy of ACTUAL independently. For a short window, two replicas could show slightly different data. This is fine — the display already tolerates being briefly out of date (Decision 7).
+- **This doubles how often RMS gets called, not just adds to it.** Every sweep cycle makes two calls per component (Java + Maven) — and Portal already runs its own separate, unrelated RMS sweep today. Implementation needs a cap on how many run at once and a timeout per call, not an unbounded fan-out across every component.
+- **First load after a restart/deploy is slow.** Right after a deploy, the cache is empty and has to refresh from scratch for every component before it's warm. A one-time cost per deploy — expected, not a concern.
+- **Saving now waits on a network call, mid-transaction.** Every save of `javaVersion`/`mavenVersion` has to ask RMS first, while a database transaction is still open (see the transaction hazard in Decision 9). If that call is slow, it holds a DB connection and row locks the whole time. This needs a short, strictly-enforced timeout — otherwise it's a real availability risk under load, not just a minor delay.
+- **RMS and CRS might not agree on how to read a version string.** Some version strings RMS sends may not parse the way CRS's own `NumericVersionFactory` expects. When that happens elsewhere in CRS today, `numericVersionComparator` (`EntityMappers.kt`) quietly falls back to a weaker comparison — this feature's collapsing logic (Decision 2) inherits that same risk, and needs its own test for version strings CRS can't parse cleanly.
+- **This won't enforce anything until RMS's URL is configured everywhere.** Once deployed, any environment that hasn't set up the RMS connection yet will reject every `javaVersion`/`mavenVersion` save (Decision 6/11) until it's configured. The rollout needs to land that configuration with, or before, the code — not after.
