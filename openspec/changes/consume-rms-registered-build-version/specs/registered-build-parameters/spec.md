@@ -1,94 +1,153 @@
 ## Purpose
 
-Defines how CRS's v4 API exposes the Java/Maven version RMS actually recorded as used for a component's builds, and how that data gates edits to CRS's own configured Java/Maven version.
+Defines how CRS's v4 API exposes RMS's registered ("ACTUAL") Java/Maven version alongside a component's manually configured (DEFAULT/OVERRIDDEN) values, and how ACTUAL gates writes to those configured values.
 
 ## ADDED Requirements
 
-### Requirement: Registered value is exposed as a list of ranges
+### Requirement: ACTUAL is exposed as independent per-attribute ranges
 
-CRS's v4 component detail response SHALL include RMS's registered Java and Maven version for the component, expressed as a list of version ranges — never a single scalar value.
+CRS's v4 component detail response SHALL include RMS's registered Java version and Maven version as two independent lists of version ranges. A range boundary in one attribute's list SHALL NOT depend on the other attribute's value changing.
+
+#### Scenario: Independent attribute boundaries
+
+- **WHEN** a component's Java version changes at version `3.0` but its Maven version does not
+- **THEN** the Java range list has a boundary at `3.0` and the Maven range list does not
 
 #### Scenario: Multiple version lines with different registered values
 
 - **WHEN** a component has RC/RELEASE builds recording Java 11 for its `1.x` line and Java 17 for its `2.x` line
-- **THEN** the response lists both ranges, each with its own registered Java version
-
-#### Scenario: Consecutive same-value builds collapse into one range
-
-- **WHEN** several consecutive RC/RELEASE builds all recorded the same Java and Maven version
-- **THEN** they are represented as a single range in the response, not one entry per build
+- **THEN** the Java range list shows both ranges, each with its own value
 
 ### Requirement: Only RC/RELEASE builds are considered
 
-The registered value SHALL be derived only from RMS builds with status `RC` or `RELEASE`. Builds in any other status SHALL NOT influence the registered value or the ranges shown.
+ACTUAL SHALL be derived only from RMS builds with status `RC` or `RELEASE`. Builds in any other status SHALL NOT influence ACTUAL or its ranges.
 
 #### Scenario: A BUILD-status build is ignored
 
 - **WHEN** a component has a build with status `BUILD` recording a Java version different from the surrounding RC/RELEASE builds
-- **THEN** that build does not appear in, or alter, the registered ranges
+- **THEN** that build does not appear in, or alter, the ACTUAL ranges
 
-### Requirement: A range with no recorded value is distinguished from an unreachable RMS
+### Requirement: A leading gap before the first build stays uncovered
 
-The response SHALL distinguish "RMS has no recorded value for this range" (a null registered value) from "RMS could not be reached" (the whole field unavailable). A caller must never read one as the other.
+For a given attribute, a range starts at the first build carrying a value. Any stretch before that first build (nothing was ever built there) SHALL NOT be part of any ACTUAL range.
 
-#### Scenario: RMS explicitly has no data for a range
+#### Scenario: Never-built prefix is not covered
 
-- **WHEN** RMS's RC/RELEASE builds for a range never recorded a Java version
-- **THEN** that range's registered Java version is shown as null, not as unavailable
+- **WHEN** a version line's earliest RC/RELEASE build carrying a Java version is at `2.5`, and no earlier version in that line was ever built
+- **THEN** ACTUAL has no range covering versions before `2.5` in that line
 
-#### Scenario: RMS is unreachable
+### Requirement: The last observed run is open-ended
 
-- **WHEN** RMS cannot be reached at the time the cached report was last refreshed
-- **THEN** the registered-value field is marked unavailable for the affected component(s), and the rest of the component response is returned normally
+The highest-version ACTUAL run for a given attribute SHALL be open-ended (no upper bound) rather than capped at the highest build RMS has seen. This applies even to versions that do not yet exist.
 
-### Requirement: Display is served from a periodically refreshed cache
+#### Scenario: A future, unbuilt version line is covered by the last known value
 
-The registered-value display SHALL be served from a cache that is refreshed on a schedule, not recomputed per request. A failed refresh SHALL retain the previously cached data rather than clearing it.
+- **WHEN** the last RC/RELEASE build RMS has recorded for a component's Java version is at `3.4`, and no build exists at or beyond `4.0`
+- **THEN** ACTUAL's Java range for that value extends from `3.4` with no upper bound, and covers `4.0` and beyond
 
-#### Scenario: A failed refresh does not blank the display
+### Requirement: A DEFAULT/OVERRIDDEN row that disagrees with ACTUAL is flagged as a warning, never blocked retroactively
 
-- **WHEN** a scheduled refresh fails to reach RMS
-- **THEN** the previously cached registered ranges continue to be served, and the report indicates the refresh failed and when it was last attempted
+A stored DEFAULT or OVERRIDDEN value that disagrees with an intersecting ACTUAL range SHALL be shown with a warning indicator in the detail response. This applies regardless of how the mismatch arose (predates ACTUAL data, or was exposed by deleting an override) and SHALL NOT cause the stored value to be altered, cleared, or rejected after the fact.
+
+#### Scenario: A pre-existing override warns instead of blocking
+
+- **WHEN** an OVERRIDDEN range's configured Java version was set before RMS ever recorded a build for that range, and RMS's ACTUAL for an intersecting sub-range later reports a different value
+- **THEN** the override row is shown with a warning and its stored value is unchanged
+
+#### Scenario: Deleting an override can reveal a warning, not an error
+
+- **WHEN** a field override is deleted and the range falls back to a value (DEFAULT, or a shadowing override) that disagrees with ACTUAL for that range
+- **THEN** the deletion succeeds, and the resulting row is shown with a warning on the next read — the deletion itself is never rejected
+
+### Requirement: The components list view shows one rollup value per attribute
+
+The list/summary response SHALL show a single value per attribute: the maximum version number seen across all of that attribute's ACTUAL ranges, not the value of the most recent range.
+
+#### Scenario: Maximum, not most recent
+
+- **WHEN** a component's ACTUAL Java ranges are `[1.0,2.0)` → 17 and `[2.0,)` → 11 (an older line recorded a numerically higher value than the current line)
+- **THEN** the summary rollup shows 17
+
+### Requirement: Display degrades gracefully when RMS is unreachable
+
+If RMS cannot be reached when the cached ACTUAL report was last refreshed, the affected component(s) SHALL report ACTUAL as unavailable, distinguishable from ACTUAL being null, and the rest of the component response SHALL still be returned.
+
+#### Scenario: RMS unreachable at read time
+
+- **WHEN** RMS could not be reached during the most recent scheduled refresh
+- **THEN** the component response returns normally with ACTUAL marked unavailable, not blank and not a request failure
 
 #### Scenario: Cache staleness is visible
 
-- **WHEN** a caller inspects the registered-value report
-- **THEN** it can tell when the data was last successfully generated, separately from when the last refresh attempt occurred
+- **WHEN** a caller inspects the ACTUAL report
+- **THEN** it can tell when the data was last successfully generated, separately from when the last refresh attempt occurred, and whether the last attempt failed
 
-### Requirement: Editing a range is blocked where RMS has a registered value
+### Requirement: Writing DEFAULT or OVERRIDDEN is blocked when it intersects a non-null ACTUAL range
 
-Editing the configured `javaVersion` or `mavenVersion` for a version range SHALL be rejected if RMS's registered value for any part of that range is non-null, for that same attribute. This check SHALL be evaluated per range and per attribute — a registered Java version does not block editing Maven version, and vice versa.
+Creating or updating a DEFAULT or OVERRIDDEN value for a range SHALL be rejected if ACTUAL for that same attribute is non-null for any part of the range being written. This check is evaluated per range and per attribute.
 
-#### Scenario: Base configuration edit blocked by a registered value
+#### Scenario: OVERRIDDEN write blocked by an intersecting ACTUAL range
 
-- **WHEN** an editor attempts to set the base (default) `javaVersion` while RMS has registered a non-null Java version for any range of that component
-- **THEN** the edit is rejected
+- **WHEN** an editor attempts to create or update a `build.javaVersion` field override for a version range, and ACTUAL's Java value for an intersecting range is non-null
+- **THEN** the write is rejected
 
-#### Scenario: Field-override edit blocked by an intersecting registered range
+#### Scenario: DEFAULT write blocked by any non-null ACTUAL anywhere, even a fully-shadowed range
 
-- **WHEN** an editor attempts to create or update a `build.javaVersion` field override for a specific version range, and RMS's registered Java version for an intersecting range is non-null
-- **THEN** the edit is rejected
+- **WHEN** an editor attempts to write the DEFAULT (`ALL_VERSIONS`) Java version, and ACTUAL's Java value is non-null for some range — even a range that is already fully covered by an existing OVERRIDDEN row, such that the DEFAULT write would not change what is actually served there
+- **THEN** the write is still rejected
 
 #### Scenario: Independent attributes
 
-- **WHEN** RMS has registered a non-null Java version for a range but no Maven version for that same range
-- **THEN** editing the Maven version override for that range is still permitted, only the Java version edit is blocked
+- **WHEN** ACTUAL's Java value is non-null for a range but its Maven value is null for that same range
+- **THEN** writing the Maven override for that range is still permitted; only the Java write is blocked
 
-### Requirement: Editing is permitted where RMS has no registered value
+#### Scenario: Write permitted where ACTUAL is null for that range
 
-- **WHEN** RMS's registered value for the specific range and attribute being edited is null
-- **THEN** the edit is permitted, unaffected by registered values on other, non-intersecting ranges
+- **WHEN** ACTUAL for the specific range and attribute being written is null
+- **THEN** the write is permitted, unaffected by ACTUAL values on other, non-intersecting ranges
 
-### Requirement: Edits are checked live, not against the cached display
+#### Scenario: A never-built future line remains writable only until RMS says otherwise
 
-Every edit attempt to `javaVersion`/`mavenVersion` SHALL check RMS's registered value with a live call at write time, independent of the cached report used for display.
+- **WHEN** a range being written falls entirely within a leading gap (never built) or entirely beyond where RMS has any data at all for that attribute
+- **THEN** the write is permitted — but per the open-ended rule above, once ACTUAL's last run exists and is open-ended, any range at or beyond that run's start is blocked, not free
 
-#### Scenario: A just-registered value blocks an edit before the next display refresh
+### Requirement: Deleting a field override requires no ACTUAL check
 
-- **WHEN** RMS registers a new non-null value for a range moments after the last display-cache refresh, before the edit is attempted
-- **THEN** the edit is still rejected, even though the cached display has not yet caught up
+`deleteFieldOverride` SHALL NOT be gated by ACTUAL. Deletion never introduces a new configured value — any resulting mismatch is surfaced by the warning requirement above, not prevented here.
 
-### Requirement: RMS unavailability at write time blocks the edit
+#### Scenario: Deletion is always permitted
 
-- **WHEN** the live RMS call made to evaluate an edit fails or times out
-- **THEN** the edit is rejected, with a response distinguishable from a rejection caused by an explicit non-null registered value
+- **WHEN** an editor deletes a `build.javaVersion` or `build.mavenVersion` field override, regardless of what ACTUAL reports for that range
+- **THEN** the deletion succeeds
+
+### Requirement: Writes are checked live, never against the cached display
+
+Every write attempt to `javaVersion`/`mavenVersion` SHALL check ACTUAL with a live call at write time, independent of the cached report used for display.
+
+#### Scenario: A just-registered value blocks a write before the next display refresh
+
+- **WHEN** RMS registers a new non-null value for a range moments after the last display-cache refresh, before a write is attempted
+- **THEN** the write is still rejected, even though the cached display has not yet caught up
+
+### Requirement: An ambiguous or failed live check fails closed
+
+Only a confirmed response with no matching builds for the range/attribute in question counts as "ACTUAL is null → write permitted." Any other outcome from the live call — an error response, a timeout, or a connection failure — SHALL reject the write.
+
+#### Scenario: RMS unreachable at write time
+
+- **WHEN** the live RMS call made to evaluate a write fails or times out
+- **THEN** the write is rejected, distinguishable in the response from a rejection caused by an explicit non-null ACTUAL value
+
+#### Scenario: An ambiguous response is not read as "no data"
+
+- **WHEN** the live RMS call returns a response that does not clearly confirm zero matching builds (e.g. an error status)
+- **THEN** the write is rejected rather than treated as ACTUAL being null
+
+### Requirement: A disabled or unconfigured RMS integration does not silently disable enforcement
+
+When RMS integration is disabled or its URL is unconfigured, the write gate SHALL reject writes the same way it does for an unreachable RMS, rather than skipping the check.
+
+#### Scenario: Integration disabled
+
+- **WHEN** RMS integration is disabled (or its base URL is blank) and an editor attempts to write `javaVersion`/`mavenVersion`
+- **THEN** the write is rejected, the same as if the live call had failed
