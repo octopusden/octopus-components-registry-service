@@ -66,8 +66,23 @@ class RMSBuildParametersServiceTest {
         val failedReport = service.currentReport()
 
         assertEquals(goodReport.components, failedReport.components)
+        assertEquals(goodReport.unavailableComponents, failedReport.unavailableComponents)
         assertEquals(goodReport.generatedAt, failedReport.generatedAt)
         assertNotNull(failedReport.refreshError)
+    }
+
+    @Test
+    @DisplayName("when the very first sweep ever fails, generatedAt stays null while lastAttemptAt is set")
+    fun `the first sweep failing leaves generatedAt null but sets lastAttemptAt`() {
+        val provider = EligibleComponentsProvider { throw RuntimeException("boom") }
+        val service = RMSBuildParametersService(RMSClient { RMSBuildsResult.Available(emptyList()) }, provider, props())
+
+        service.refresh()
+
+        val report = service.currentReport()
+        assertNull(report.generatedAt, "never having succeeded must not be confused with having succeeded a while ago")
+        assertNotNull(report.lastAttemptAt)
+        assertNotNull(report.refreshError)
     }
 
     @Test
@@ -266,6 +281,59 @@ class RMSBuildParametersServiceTest {
         assertEquals(setOf("throws"), report.unavailableComponents)
         assertTrue(report.components.containsKey("good"))
         assertNull(report.refreshError, "one component throwing must not fail the whole sweep")
+    }
+
+    @Test
+    @DisplayName("a component with prior good data keeps it even when a later call throws, not just when it returns Unavailable")
+    fun `a previously-available component retains its stale data when a later call throws`() {
+        var shouldThrow = false
+        val client =
+            RMSClient {
+                if (shouldThrow) throw RuntimeException("boom") else RMSBuildsResult.Available(listOf(RMSBuild("1", "17", null)))
+            }
+        val service = RMSBuildParametersService(client, EligibleComponentsProvider { listOf("comp-a") }, props())
+
+        service.refresh()
+        val goodRanges = service.currentReport().components.getValue("comp-a")
+
+        shouldThrow = true
+        service.refresh()
+
+        val report = service.currentReport()
+        assertEquals(goodRanges, report.components["comp-a"])
+        assertTrue(report.unavailableComponents.isEmpty())
+    }
+
+    @Test
+    @DisplayName("a sweepConcurrency of zero is coerced up rather than failing to build the executor")
+    fun `sweepConcurrency of zero does not break the sweep`() {
+        val service =
+            RMSBuildParametersService(
+                RMSClient { RMSBuildsResult.Available(listOf(RMSBuild("1", "17", null))) },
+                EligibleComponentsProvider { listOf("comp-a") },
+                props(sweepConcurrency = 0),
+            )
+
+        service.refresh()
+
+        val report = service.currentReport()
+        assertNull(report.refreshError)
+        assertTrue(report.components.containsKey("comp-a"))
+    }
+
+    @Test
+    @DisplayName("an empty eligible-components list sweeps cleanly with no components and no failures")
+    fun `an empty eligible list produces a clean, empty report`() {
+        val client = RMSClient { throw AssertionError("must not be called when there are no eligible components") }
+        val service = RMSBuildParametersService(client, EligibleComponentsProvider { emptyList() }, props())
+
+        service.refresh()
+
+        val report = service.currentReport()
+        assertNotNull(report.generatedAt)
+        assertNull(report.refreshError)
+        assertTrue(report.components.isEmpty())
+        assertTrue(report.unavailableComponents.isEmpty())
     }
 
     @Test
