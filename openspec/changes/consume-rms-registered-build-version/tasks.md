@@ -1,25 +1,27 @@
 ## 1. Range-collapsing utility (sequential-run, per attribute)
 
-- [ ] 1.1 Write failing unit tests for `RmsBuildRangeCollapser`:
-  - [ ] 1.1.1 Builds are sorted by real version order (existing comparator), then walked once per attribute — no version-format-dependent bucketing of any kind.
-  - [ ] 1.1.2 A run starts at the first build carrying a (normalized) non-null value.
-  - [ ] 1.1.3 A run extends through consecutive same-valued builds, bridging any stretch where nothing was built at all in between.
-  - [ ] 1.1.4 A build with a **different** non-null value ends the current run and starts a new one.
-  - [ ] 1.1.5 A build with a **null** value ends the current run and starts no new one.
-  - [ ] 1.1.6 A null build between two runs of the *same* value still splits them into two separate ranges — values never bridge across an explicit null observation.
-  - [ ] 1.1.7 Only a run containing the single highest-version build in the whole fetched history is open-ended, and only if that build's value is non-null.
-  - [ ] 1.1.8 If the highest-version build in the history is null, no run is open-ended — the last non-null run closes at its own last member.
-  - [ ] 1.1.9 A single-build run renders as `[x]`.
-  - [ ] 1.1.10 Java `"1.8"`/`"8"` compare as equal (generalizing `JavaVersion.isEight` from `ToolVersion.kt` into a full major-version-extraction rule).
-  - [ ] 1.1.11 A longer Java form like `"17.0.9"` reads as major version 17 (defensive normalization, not a confirmed real case).
-  - [ ] 1.1.12 Maven values compare via the existing Maven version comparator, not raw string equality.
-  - [ ] 1.1.13 The Maven token `"LATEST"` is its own distinct value (never equal to a numbered version) and always wins a max comparison against any numbered version.
-  - [ ] 1.1.14 A version string CRS's own `NumericVersionFactory` cannot parse is excluded/flagged, not silently mis-ordered via the fallback comparator.
-- [ ] 1.2 Implement `components-registry-service-server/.../util/RmsBuildRangeCollapser.kt`:
-  - [ ] 1.2.1 Two independent passes — one for Java, one for Maven — each over the same sorted build list.
-  - [ ] 1.2.2 A single linear walk per pass: track one "current run" (value + start), close/open runs per the rules above.
-  - [ ] 1.2.3 Reuse `VersionRangePartition`'s internal `Segment`/`render`/`parseSegment` helpers for consistent range rendering.
-- [ ] 1.3 Confirm tests pass. No Spring context required — this is a pure function.
+- [x] 1.1 Write failing unit tests for `RmsBuildRangeCollapser`:
+  - [x] 1.1.1 Builds are sorted by real version order (existing comparator), then walked once per attribute — no version-format-dependent bucketing of any kind.
+  - [x] 1.1.2 A run starts at the first build carrying a (normalized) non-null value.
+  - [x] 1.1.3 A run extends through consecutive same-valued builds, bridging any stretch where nothing was built at all in between.
+  - [x] 1.1.4 A build with a **different** non-null value ends the current run and starts a new one.
+  - [x] 1.1.5 A build with a **null** value ends the current run and starts no new one.
+  - [x] 1.1.6 A null build between two runs of the *same* value still splits them into two separate ranges — values never bridge across an explicit null observation.
+  - [x] 1.1.7 Only a run containing the single highest-version build in the whole fetched history is open-ended, and only if that build's value is non-null.
+  - [x] 1.1.8 If the highest-version build in the history is null, no run is open-ended — the last non-null run closes at its own last member.
+  - [x] 1.1.9 A single-build run renders open-ended, `[x,)` — build versions in a run are always distinct, so a run's upper bound is always the *next* build's version (or nothing), never equal to its own start.
+  - [x] 1.1.10 Java `"1.8"`/`"8"` compare as equal (generalizing `JavaVersion.isEight` from `ToolVersion.kt` into a full major-version-extraction rule).
+  - [x] 1.1.11 A longer Java form like `"17.0.9"` reads as major version 17 (defensive normalization, not a confirmed real case).
+  - [x] 1.1.12 Maven values compare via the existing Maven version comparator, not raw string equality.
+  - [x] 1.1.13 The Maven token `"LATEST"` is its own distinct value (never equal to a numbered version) and always wins a max comparison against any numbered version.
+  - [x] 1.1.14 A version string CRS's own `NumericVersionFactory` cannot parse is excluded/flagged, not silently mis-ordered via the fallback comparator.
+- [x] 1.2 Implement, as separate units:
+  - [x] 1.2.1 `util/RmsBuildRangeCollapser.kt` — attribute-agnostic collapsing; the caller runs it twice, once per attribute, passing in that attribute's `valuesEqual`.
+  - [x] 1.2.2 `util/JavaVersionComparator.kt` — major-version extraction and equality.
+  - [x] 1.2.3 `util/MavenVersionComparator.kt` — version-aware equality/comparison, `LATEST` handling.
+  - [x] 1.2.4 A single linear walk in `collapse()`: track one "current run" (value + start), close/open runs per the rules above.
+  - [x] 1.2.5 Reuse `VersionRangePartition`'s internal `Segment`/`render` helpers for consistent range rendering; `defaultVersionCompare` reused by `MavenVersionComparator`.
+- [x] 1.3 Confirm tests pass. No Spring context required — these are pure functions. (`RmsBuildRangeCollapserTest`, `JavaVersionComparatorTest`, `MavenVersionComparatorTest` all green.)
 
 ## 2. RMS client
 
