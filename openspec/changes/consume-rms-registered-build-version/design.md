@@ -220,7 +220,7 @@ Both are mapped in `ControllerExceptionHandler.kt`.
 
 This entire feature — ACTUAL display, the summary rollup, and the write gate — applies only to components whose (effective) build system is `MAVEN` or `GRADLE` (`BuildSystem` enum, `component-resolver-api`). For any other build system (`BS2_0`, `GOLANG`, `IN_CONTAINER`, `WHISKEY`, `PROVIDED`, `ESCROW_NOT_SUPPORTED`, `ESCROW_PROVIDED_MANUALLY`, ...), a Java/Maven version is a meaningless concept, so the feature does nothing: no RMS call for that component in the sweep, no ACTUAL field/rollup in its responses, no write gate on its `javaVersion`/`mavenVersion` fields (which, for a non-Maven/Gradle component, are unlikely to be meaningfully set in the first place).
 
-**Open question, not silently decided:** `ECLIPSE_MAVEN` is a separate, distinct enum value from `MAVEN` in this codebase. Whether it should be treated as "Maven-like" for this feature (included alongside `MAVEN`) or excluded is a real decision the team should make explicitly, not one this document assumes either way.
+`ECLIPSE_MAVEN` is a separate, distinct enum value from `MAVEN` in this codebase, and is **excluded** — treated the same as any other non-`MAVEN`/`GRADLE` build system (no ACTUAL data, no write gate). Only `MAVEN` and `GRADLE` are in scope.
 
 **Implementation note:** a component's build system can, in principle, be set per version-range row, not only at the base/component level. This design checks the build system at the component/base level for simplicity; if per-range build system divergence turns out to matter in practice, that's a refinement to revisit, not something this design claims to handle.
 
