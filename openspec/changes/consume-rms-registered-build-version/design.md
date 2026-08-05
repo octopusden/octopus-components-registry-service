@@ -44,22 +44,38 @@ Component has configured OVERRIDDEN ranges:
 - `[2.0,3.0)` → Java 1.8
 - `[3.0,4.0)` → Java 11
 
-RMS's build history, grouped by **minor version** (`major.minor` — e.g. `2.5` and `2.6` are different minors, both inside major line 2):
-- Minor `2.5` has builds recording Java 1.8.
-- Minor `2.6` has builds recording Java 1.8 (same value as `2.5`, and the very next minor — these two merge into one continuous range).
-- Minor `2.7` has **no builds at all**.
-- Minor `3.4` onward has builds recording Java 21 (the highest minor RMS has seen — see Decision 2 for why this one is open-ended).
+RMS's RC/RELEASE build history, in real version order, Java version recorded per build:
 
-Resulting ACTUAL ranges:
-- `[2.5,2.7)` → Java 1.8 (minors `2.5` and `2.6` merged).
-- `[3.4,)` → Java 21 (open-ended, highest known minor).
+| Version | Java recorded |
+|---|---|
+| 2.2.1 | — (null) |
+| 2.2.3 | — (null) |
+| 2.2.5 | 17 |
+| 2.2.7 | 17 |
+| 2.2.10 | 17 |
+| 2.3.1 | — (null, a different version line, not yet recording) |
+| 2.3.2 | — (null) |
+| 2.3.4 | 21 |
+| 2.3.5 | 21 |
+| 2.3.6 | 21 |
+
+ACTUAL is built by walking this list in order (see Decision 2) — no "minor version" bucketing involved, just this sequence:
+- `2.2.1` and `2.2.3` are null — nothing to start a run yet.
+- `2.2.5` starts a run at Java 17. `2.2.7` and `2.2.10` continue it (same value) — the run keeps extending even though there's a gap in the raw version numbers between `2.2.7` and `2.2.10` (nothing was built at `2.2.8`/`2.2.9` at all — that's fine, the run is defined by consecutive *observed builds*, not by unbroken version numbers).
+- `2.3.1` is null — this **closes** the 17-run. Its range is `[2.2.5,2.3.1)`.
+- `2.3.1` and `2.3.2` are null — no run active.
+- `2.3.4` starts a new run at Java 21. `2.3.5` and `2.3.6` continue it.
+- `2.3.6` is the **last build in the whole fetched history** for this component, and it's non-null — so this run stays **open-ended**: `[2.3.4,)`.
+
+Resulting ACTUAL ranges: `[2.2.5,2.3.1)` → 17, and `[2.3.4,)` → 21.
 
 Consequences:
-- `[2.0,2.5)` — never built — still free.
-- `[2.5,2.7)` — matches the existing override's own value (1.8) — no warning, and **rewriting 1.8 there is permitted** (it agrees with ACTUAL, so the write rule's third question is "no").
-- `[2.7,3.4)` — no builds at all anywhere in this stretch, including minor `2.7` itself — **entirely free**, even though it sits between two stretches that do have ACTUAL data. An unbuilt minor is always free, wherever it falls — that's the point of the uniform rule in Decision 2.
-- `[3.4,)`, including anything at or beyond `4.0` (a version that doesn't exist yet) — ACTUAL = 21, open-ended. Writing anything **other than** 21 there is blocked; writing 21 itself is permitted.
-- The existing OVERRIDDEN row `[3.0,4.0)` → Java 11 disagrees with ACTUAL `[3.4,)` → 21 for the overlapping part, `[3.4,4.0)`. This is **not** retroactively blocked or changed — it's shown as a **warning** naming that sub-range and ACTUAL's value (21). The one write that resolves it — setting that override to 21 — is permitted, not blocked.
+- Anything before `2.2.5`, and the stretch `[2.3.1,2.3.4)` — no ACTUAL data — still overridable.
+- `[2.2.5,2.3.1)` — ACTUAL = 17, matches the existing override `[2.0,3.0)`'s own value — no warning, and **rewriting 17 there is permitted** (agrees with ACTUAL).
+- `[2.3.4,)`, including `4.0` and beyond (versions that don't exist yet) — ACTUAL = 21, open-ended. Writing anything **other than** 21 there is blocked; writing 21 itself is permitted.
+- The existing OVERRIDDEN row `[3.0,4.0)` → Java 11 disagrees with ACTUAL `[2.3.4,)` → 21 for their overlap, `[2.3.4,4.0)`. This is **not** retroactively blocked or changed — it's shown as a **warning** naming that sub-range and ACTUAL's value (21). The one write that resolves it — setting that override to 21 — is permitted, not blocked.
+
+**Now suppose one more build exists, `2.3.7`, recorded *after* `2.3.6`, with Java null again** (the component's build stopped recording Java for some reason). This changes the last run: `2.3.6` is **no longer** the last build in the history — `2.3.7` is, and it's null. So the 21-run does **not** stay open-ended anymore; it closes at `2.3.7`: `[2.3.4,2.3.7)`, not `[2.3.4,)`. A later observation — even a null one — always overrides the "still true" assumption for whatever came before it.
 
 ## Goals / Non-Goals
 
@@ -67,6 +83,7 @@ Consequences:
 - Surface ACTUAL per range on CRS's v4 API, for human display in the Portal editor, plus a summary rollup for the components list.
 - Reject a DEFAULT/OVERRIDDEN write that would introduce a new disagreement with ACTUAL for an intersecting range.
 - Avoid any new cross-repo build dependency between CRS and RMS.
+- Apply all of the above only to components whose build system is Maven or Gradle (Decision 13) — a Java/Maven version is meaningless for anything else.
 
 **Non-Goals:**
 - CRS becoming the source of truth for ACTUAL (RMS remains that source; any other consumer should query RMS directly, not depend on CRS to relay it).
@@ -81,11 +98,10 @@ Consequences:
 CRS calls RMS's build-listing endpoint directly with its own minimal DTO:
 
 ```
-GET rest/api/1/builds/component/{component}?statuses=RC,RELEASE&javaVersionPresent=true
-GET rest/api/1/builds/component/{component}?statuses=RC,RELEASE&mavenVersionPresent=true
+GET rest/api/1/builds/component/{component}?statuses=RC,RELEASE
 ```
 
-The **display sweep** (Decision 4) makes both calls per component, one per attribute — not one call with both flags, since `BuildFilterDTO`'s boolean filters combine as AND on a single request, and one call with both flags set would only return builds where *both* fields are present. The **write-time gate** (Decision 6) makes only **one** call, for the specific attribute being written — there is no reason for a Java-only edit to also query Maven's build history.
+**One call, unfiltered by attribute presence** — no `javaVersionPresent`/`mavenVersionPresent` filter. This is deliberate, not an oversight: the collapsing algorithm (Decision 2) needs to see builds where the attribute is **null**, because a later null build is what closes off an earlier run rather than leaving it open-ended. Filtering server-side to "only builds where Java is present" would silently remove exactly the null observations the algorithm depends on. Both the **display sweep** (Decision 3) and the **write-time gate** (Decision 5) use this same single, full fetch per component — one call serves both Java and Maven collapsing, and both read paths.
 
 This does **not** depend on RMS's published `client` Gradle artifact (`org.octopusden.octopus.release-management-service:client`). That dependency was confirmed technically non-circular — RMS's `client` module depends only on RMS's own `:common` module, not on CRS — but it was deliberately skipped anyway, to avoid introducing a new cross-repo `gradle.properties` version pin between CRS and RMS.
 
@@ -93,35 +109,32 @@ This does **not** depend on RMS's published `client` Gradle artifact (`org.octop
 
 ### 2. How ACTUAL ranges are built from RMS's builds
 
-Run separately for Java and for Maven. Three steps:
+Run separately for Java and for Maven — each pass over the same fetched build list (Decision 1), sorted by real version order (the existing version comparator; no reliance on any particular version *format*, just a working total order — this is intentionally simpler than an earlier draft, which tried to bucket builds by a `major.minor` "minor version" first. That bucketing turned out to be both unnecessary and format-fragile — see the note at the end of this section for why it was dropped).
 
-**Step 1 — Group builds by minor version.**
-- A build's minor version is `major.minor` (e.g. `2.5`, `3.4`) — computed via CRS's existing `NumericVersionFactory`/`IVersionInfo` (the same tool behind `EscrowExpressionContext.getMajor()`/`getMinor()` elsewhere in CRS, not a new concept). 
-- This is deliberately **minor**, not major: RMS's own build filter tracks `minors` and `lines` (major) as separate, distinct things, and CRS computes its own minor value locally rather than relying on RMS to supply one (RMS's build response doesn't include it). 
-- Builds from different minors are **never** grouped together, even if they happen to record the same value.
+**Step 1 — Walk the sorted builds, tracking one "current run" (a value + where it started).**
+For each build in order, for the attribute being processed (Java or Maven):
+- If the build's value is **null**, or **differs** from the current run's value: close the current run (if any) at the previous build's version, and — if this build's own value is non-null — start a new run here.
+- If the build's value is the **same** as the current run's value (after normalization, see below): extend the current run; it doesn't matter how large the version gap since the run's last member is — a run bridges *unbuilt* stretches freely, it's only ever broken by an *observed, differing-or-null* build.
 
-**Step 2 — A minor with no builds at all is simply free — wherever it falls.**
-- If a minor version has zero recorded builds, ACTUAL has no data for it, full stop. 
-- It doesn't matter whether that minor comes before the first build, after the last one, or sits between two other minors that do have data — an unbuilt minor is never inferred or filled in from its neighbors. 
-- Example: minor `2.7` has no builds, so it's free, even though `2.6` just before it and `3.4` after it both have data.
+**Step 2 — The very last run is open-ended only if it also contains the single highest-version build in the whole fetched list.**
+- If the highest-version build overall has a non-null value, its run (which may include several builds before it) has no upper bound — it extends into versions that don't exist yet, on the reasoning that RMS's most recent observation is the best information available until something newer contradicts it.
+- If the highest-version build overall is **null**, no run is open-ended at all — the last non-null run (if any) closes at its own last member, because we now know something came *after* it, and it wasn't part of that run. A later observation, even a null one, always overrides the "still true" assumption (see the worked example's follow-up).
+- Every other run — one that isn't the very last one — is simply closed at the point where it was broken (Step 1).
 
-**Step 3 — Adjacent minors with the same value merge into one range; the highest one stays open-ended.**
-- Two minors that are next to each other (e.g. `2.5` and `2.6`) and record the same value combine into a single range, purely so the display shows one clean range instead of many tiny ones — this doesn't change what's blocked or free, just how it's shown. 
-- The **highest minor RMS has any data for** is the one exception to Step 2's boundedness: its range has no upper limit, and extends into versions that don't exist yet, until RMS reports something different there. 
-- Reasoning: RMS's data is a timeline, and the newest known value is treated as still true until something newer replaces it — there's no equivalent basis for guessing what happens *before* the earliest data point, which is why only the trailing end gets this treatment.
+**A consequence worth being explicit about:** a run can bridge a stretch where nothing was built at all (e.g. `2.2.7` to `2.2.10` in the worked example, skipping `2.2.8`/`2.2.9` entirely) — the range is defined by the sequence of *observed* builds, not by asserting that every intermediate version number was itself tested. This is a deliberate simplification, not an oversight: distinguishing "genuinely untested" from "not built at all, but presumably fine" was considered and rejected as unnecessary complexity for this feature.
 
 **Comparing values.** Two builds' values only count as "the same" after normalizing:
 - **Java:** the legacy `1.X` spelling and the short `X` spelling mean the same version (`1.8` = `8`, `1.7` = `7`, ...) — this generalizes the existing `JavaVersion.isEight` check (`ToolVersion.kt`) into a full rule rather than a single special case. Beyond that, RMS's actual recorded Java values are confirmed (via test fixtures) to be short forms like `"17"`/`"1.8"` — but since RMS's data is an unvalidated pass-through from an external legacy system CRS doesn't control, the normalizer also defensively takes the leading number of any longer form it might ever see (e.g. a hypothetical `"17.0.9"` would still read as major version 17), rather than assuming short forms are guaranteed forever.
 - **Maven:** confirmed real values include ordinary `x.y`/`x.y.z` forms (`"3.3.6"`, `"3.3.9"`, `"4.0"`) **and the literal token `"LATEST"`**, which isn't a version number at all — it means "resolve to whatever is newest at build time" and can't be meaningfully compared against a fixed version like `"3.3.9"`. `"LATEST"` is treated as its own distinct value for equality/grouping (never silently equal to any numbered version), and — since it inherently represents "the newest possible" — it always wins the max-rollup comparison (Decision 4) against any numbered version. Numbered values otherwise compare via the same version-aware comparator CRS already uses elsewhere for Maven versions, not raw string equality.
-- **Unparseable values:** if a build's version string can't be parsed by CRS's own version factory, it must **fail closed** — excluded from being silently mis-sorted by a weaker fallback comparator (the way `numericVersionComparator` in `EntityMappers.kt` degrades elsewhere in CRS today), which could otherwise place a build in the wrong minor and produce a wrong block or wrong allow. This applies to the write-time gate too (Decision 5) — the gate rebuilds the same ACTUAL ranges to check intersection, so a parsing failure there has the same correctness consequence as one in the display sweep, not just a cosmetic one.
+- **Unparseable values:** if a build's version string can't be parsed by CRS's own version factory, it must **fail closed** — excluded from being silently mis-sorted by a weaker fallback comparator (the way `numericVersionComparator` in `EntityMappers.kt` degrades elsewhere in CRS today), which could otherwise place a build out of order in the sequence and produce a wrong block or wrong allow. This applies to the write-time gate too (Decision 5) — the gate rebuilds the same ACTUAL ranges to check intersection, so a parsing failure there has the same correctness consequence as one in the display sweep, not just a cosmetic one.
 
-**Hotfix builds** (`ShortBuildDTO.hotfix`) are included in ACTUAL with no special handling — a hotfix always follows its parent minor's Java/Maven version, so there's no expected case where it would introduce a spurious value change. Considered and deliberately not filtered, not overlooked.
+**Hotfix builds** (`ShortBuildDTO.hotfix`) are included in ACTUAL with no special handling — a hotfix is expected to always carry its parent version line's Java/Maven value, so there's no expected case where it would introduce a spurious value change. Considered and deliberately not filtered, not overlooked.
 
 **Implementation note:** this is a small, new function, not a reuse of `VersionRangePartition.partition` (that one solves a different problem — splitting already-known ranges around other ranges' edges, not grouping raw points into runs). It does reuse a couple of `VersionRangePartition`'s existing helper functions for consistent range formatting.
 
 ### 3. Display caching — scheduled sweep + in-memory report
 
-A scheduled background job sweeps every CRS component, calling the RMS client (both attribute calls from Decision 1) once per component, and stores the result in a `@Volatile` in-memory cache holding:
+A scheduled background job sweeps every CRS component, calling the RMS client (the single unfiltered call from Decision 1) once per component, and stores the result in a `@Volatile` in-memory cache holding:
 - `generatedAt` — timestamp of the last *successful* sweep.
 - `lastAttemptAt` — timestamp of the last attempt, success or not.
 - `refreshError` — set when the most recent attempt failed; the previous good data is retained (stale-but-honest), not cleared.
@@ -131,20 +144,20 @@ Single-flight guarded (an `AtomicBoolean`), adaptive cadence (short retry interv
 
 **Inspiration:** `octopus-components-management-portal`'s `ValidationService.kt` — same shape, scoped here to just java/maven ACTUAL data.
 
-**Cost (see Risks):** this is 2 RMS calls per component per sweep cycle, on top of Portal's own independent RMS sweep for its own, unrelated purpose. Needs a concurrency bound and a per-call timeout budget at implementation time — this is not free to leave unbounded.
+**Cost (see Risks):** this is 1 RMS call per component per sweep cycle, on top of Portal's own independent RMS sweep for its own, unrelated purpose. Needs a concurrency bound and a per-call timeout budget at implementation time — this is not free to leave unbounded.
 
 ### 4. Summary vs. detail response shape
 
 - `ComponentSummaryResponse` (list view, existing DTO) gets one rollup number per attribute: the maximum version seen across all of that attribute's ACTUAL ranges, comparing values using the same normalization named in Decision 2 (Java: legacy-spelling-aware major-version extraction; Maven: the existing Maven version comparator) — not raw string comparison.
 - `ComponentDetailResponse` (detail view, existing DTO) gets the full per-attribute ACTUAL range list, plus warning entries on any DEFAULT/OVERRIDDEN row that disagrees with an intersecting ACTUAL range — each entry names the disagreeing sub-range and ACTUAL's value there; a row intersecting several differently-valued ACTUAL ranges gets one entry per disagreement.
 
-**Known limitation of the max rollup, stated explicitly rather than left to be rediscovered:** "maximum" means the highest version number ever seen across *any* range, not the value of the *current* (highest-minor) range. A component whose oldest still-maintained line used Java 21 but whose current line has since moved to Java 8 will show "21" in the list view — the list view therefore cannot answer "which components are still on an old Java version," only "what's the highest version this component has ever recorded." This is an accepted trade-off (see Part A requirements), not an oversight. For Maven, `"LATEST"` (see Decision 2) always displays as the rollup value if it appears anywhere in a component's ACTUAL data, regardless of what numbered versions also exist — it's treated as "newer than any fixed number" by definition.
+**Known limitation of the max rollup, stated explicitly rather than left to be rediscovered:** "maximum" means the highest version number ever seen across *any* range, not the value of the *current* (most recent) range. A component whose oldest still-maintained line used Java 21 but whose current line has since moved to Java 8 will show "21" in the list view — the list view therefore cannot answer "which components are still on an old Java version," only "what's the highest version this component has ever recorded." This is an accepted trade-off (see Part A requirements), not an oversight. For Maven, `"LATEST"` (see Decision 2) always displays as the rollup value if it appears anywhere in a component's ACTUAL data, regardless of what numbered versions also exist — it's treated as "newer than any fixed number" by definition.
 
 Warnings are computed at read time (bounded — a handful of configured rows against a handful of ACTUAL ranges per component) and are not cached separately from the ACTUAL data they're computed against. During an RMS outage, warnings are computed against the last known-good cached ACTUAL data (consistent with Decision 3's stale-but-honest retention), and suppressed only for a component that has never had a successful sweep at all.
 
-### 5. Write-time check — live, single-attribute, strict on ambiguity
+### 5. Write-time check — live, strict on ambiguity
 
-The block-override check (Part B) does not read the display cache (Decision 3). It makes its own synchronous RMS call at write time, for only the attribute being written (Decision 1).
+The block-override check (Part B) does not read the display cache (Decision 3). It makes its own synchronous RMS call at write time — the same single, unfiltered fetch shape as Decision 1 (there's no attribute-scoped variant to call instead, since the full build list, including null-value builds, is what the collapsing algorithm needs regardless of which attribute is being written). The disagreement check itself still only evaluates the one attribute actually being written.
 
 **Only a confirmed 200-response with no matching builds counts as "ACTUAL is null → write permitted."** 
 
@@ -183,7 +196,7 @@ ACTUAL is never written to CRS's database. It is kept structurally separate from
 
 Everything lives in `components-registry-service-server` — no new Gradle module. New code lives under:
 - `service/rms/` — the RMS client, the sweep service, its scheduler, and the write-time override gate.
-- `util/RmsBuildRangeCollapser.kt` — the pure, minor-version-aware collapsing function, alongside `VersionRangePartition`.
+- `util/RmsBuildRangeCollapser.kt` — the pure, sequential-run collapsing function, alongside `VersionRangePartition`.
 - `dto/v4/RegisteredBuildParametersDtos.kt` — the new response DTOs (per-attribute range list + warning entries for detail; max-value rollup for summary).
 
 `service/rms/` satisfies the existing ArchUnit rule (`ArchitectureFitnessTest.kt`: `@Service`-annotated beans must reside under `..service..` or `..teamcity..`) without a rule change. Decided: `service/rms/`, not a dedicated top-level `rms/` package — no ArchUnit rule change needed.
@@ -203,6 +216,14 @@ No `gradle.properties` version pin is added — consistent with Decision 1, this
 
 Both are mapped in `ControllerExceptionHandler.kt`.
 
+### 13. Scoped to Maven and Gradle build systems only
+
+This entire feature — ACTUAL display, the summary rollup, and the write gate — applies only to components whose (effective) build system is `MAVEN` or `GRADLE` (`BuildSystem` enum, `component-resolver-api`). For any other build system (`BS2_0`, `GOLANG`, `IN_CONTAINER`, `WHISKEY`, `PROVIDED`, `ESCROW_NOT_SUPPORTED`, `ESCROW_PROVIDED_MANUALLY`, ...), a Java/Maven version is a meaningless concept, so the feature does nothing: no RMS call for that component in the sweep, no ACTUAL field/rollup in its responses, no write gate on its `javaVersion`/`mavenVersion` fields (which, for a non-Maven/Gradle component, are unlikely to be meaningfully set in the first place).
+
+**Open question, not silently decided:** `ECLIPSE_MAVEN` is a separate, distinct enum value from `MAVEN` in this codebase. Whether it should be treated as "Maven-like" for this feature (included alongside `MAVEN`) or excluded is a real decision the team should make explicitly, not one this document assumes either way.
+
+**Implementation note:** a component's build system can, in principle, be set per version-range row, not only at the base/component level. This design checks the build system at the component/base level for simplicity; if per-range build system divergence turns out to matter in practice, that's a refinement to revisit, not something this design claims to handle.
+
 ## Out of Scope
 
 - **Legacy v1–v3 API.** Confirmed read-only — no write endpoints exist outside `ComponentControllerV4` — so no gate is needed there, and they will not carry ACTUAL. v2's existing, unmodified response continues to serve the configured value straight from CRS's DB, unaffected by this change.
@@ -214,8 +235,9 @@ Both are mapped in `ControllerExceptionHandler.kt`.
 - **DEFAULT can become permanently unwritable — this includes the common case, not just a narrow one.** DEFAULT spans every version at once, so it's compared against *every* ACTUAL range that exists, not just one. The moment a component has recorded **two or more different** Java (or Maven) versions across its history — which happens to any component that's ever upgraded, not an edge case — no single value written to DEFAULT can agree with all of them, so every possible write is rejected. There is no way to fall back to deleting DEFAULT either (a BASE row cannot be deleted). This was raised in review and deliberately **left as-is**: DEFAULT edits are rare in practice, and the alternative (comparing DEFAULT only against the parts of the version range not already covered by an override) adds real complexity for a rarely-hit path. Documented here so it's a known, accepted limitation rather than a surprise.
 - **Deleting a conflicting override is a one-way door.** A field override that's flagged with a warning can always be deleted. But recreating it afterward with that *same*, disagreeing value is a fresh write, and gets blocked exactly like any other disagreeing write would. Someone deleting a warned-about override expecting to "put it back" if needed will find they can't restore the old (disagreeing) value — only a value that agrees with ACTUAL. Worth a clear message in the UI when this happens, rather than a silent, confusing rejection.
 - **Multiple CRS instances mean separate caches.** If CRS runs on more than one replica, each one refreshes its own copy of ACTUAL independently. For a short window, two replicas could show slightly different data. This is fine — the display already tolerates being briefly out of date (Decision 7).
-- **This doubles how often RMS gets called, not just adds to it.** Every sweep cycle makes two calls per component (Java + Maven) — and Portal already runs its own separate, unrelated RMS sweep today. Implementation needs a cap on how many run at once and a timeout per call, not an unbounded fan-out across every component.
+- **A second, independent RMS sweep, on top of Portal's own.** One call per component per sweep cycle (Decision 1) — down from an earlier draft's two — but still a new, regular load on RMS alongside Portal's own separate, unrelated sweep. Implementation needs a cap on how many run at once and a timeout per call, not an unbounded fan-out across every component.
 - **First load after a restart/deploy is slow.** Right after a deploy, the cache is empty and has to refresh from scratch for every component before it's warm. A one-time cost per deploy — expected, not a concern.
 - **Saving now waits on a network call, mid-transaction.** Every save of `javaVersion`/`mavenVersion` has to ask RMS first, while a database transaction is still open (see the transaction hazard in Decision 9). If that call is slow, it holds a DB connection and row locks the whole time. This needs a short, strictly-enforced timeout — otherwise it's a real availability risk under load, not just a minor delay.
+- **A run can bridge a stretch that was never built at all**, as long as the builds on either side agree in value (Decision 2's "consequence worth being explicit about"). This means ACTUAL can claim coverage for a version that was never itself tested, if its neighbors on both sides happen to match. Accepted deliberately, in favor of a much simpler algorithm — distinguishing "confirmed identical" from "presumed identical because nothing said otherwise" was considered and rejected as unneeded complexity here.
 - **RMS and CRS might not agree on how to read a version string.** Some version strings RMS sends may not parse the way CRS's own `NumericVersionFactory` expects. When that happens elsewhere in CRS today, `numericVersionComparator` (`EntityMappers.kt`) quietly falls back to a weaker comparison — this feature's collapsing logic (Decision 2) inherits that same risk, and needs its own test for version strings CRS can't parse cleanly.
 - **An environment without RMS configured gets neither the display nor the enforcement — silently, and by design.** Per Decision 6, this is intentional and safe to roll out incrementally (no writes are ever blocked in an unconfigured environment), but it does mean nobody is told "this feature exists but isn't active here" — an operator who forgets to configure it simply never sees ACTUAL data or any blocking, with no error to notice. Worth a startup log line (informational, not a warning) stating the feature is disabled, so it isn't mistaken for "not implemented."

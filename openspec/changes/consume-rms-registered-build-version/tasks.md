@@ -1,20 +1,23 @@
-## 1. Range-collapsing utility (minor-version-aware, per attribute)
+## 1. Range-collapsing utility (sequential-run, per attribute)
 
 - [ ] 1.1 Write failing unit tests for `RmsBuildRangeCollapser`:
-  - [ ] 1.1.1 Builds are grouped by minor version (`major.minor`, via `NumericVersionFactory`/`IVersionInfo`) before collapsing by value.
-  - [ ] 1.1.2 A minor with zero builds is free wherever it falls — before the first build, after the last one, or between two data-bearing minors.
-  - [ ] 1.1.3 Two data-bearing minors that agree in value, with an empty minor between them, still leave that empty minor free (not silently bridged).
-  - [ ] 1.1.4 Adjacent, equal-valued minors merge into one rendered range.
-  - [ ] 1.1.5 Only the single highest data-bearing minor's range is open-ended.
-  - [ ] 1.1.6 A single-build minor renders as `[x]`.
-  - [ ] 1.1.7 Java `"1.8"`/`"8"` compare as equal (generalizing `JavaVersion.isEight` from `ToolVersion.kt` into a full major-version-extraction rule).
-  - [ ] 1.1.8 A longer Java form like `"17.0.9"` reads as major version 17 (defensive normalization, not a confirmed real case).
-  - [ ] 1.1.9 Maven values compare via the existing Maven version comparator, not raw string equality.
-  - [ ] 1.1.10 The Maven token `"LATEST"` is its own distinct value (never equal to a numbered version) and always wins a max comparison against any numbered version.
-  - [ ] 1.1.11 A version string CRS's own `NumericVersionFactory` cannot parse is excluded/flagged, not silently mis-ordered via the fallback comparator.
+  - [ ] 1.1.1 Builds are sorted by real version order (existing comparator), then walked once per attribute — no version-format-dependent bucketing of any kind.
+  - [ ] 1.1.2 A run starts at the first build carrying a (normalized) non-null value.
+  - [ ] 1.1.3 A run extends through consecutive same-valued builds, bridging any stretch where nothing was built at all in between.
+  - [ ] 1.1.4 A build with a **different** non-null value ends the current run and starts a new one.
+  - [ ] 1.1.5 A build with a **null** value ends the current run and starts no new one.
+  - [ ] 1.1.6 A null build between two runs of the *same* value still splits them into two separate ranges — values never bridge across an explicit null observation.
+  - [ ] 1.1.7 Only a run containing the single highest-version build in the whole fetched history is open-ended, and only if that build's value is non-null.
+  - [ ] 1.1.8 If the highest-version build in the history is null, no run is open-ended — the last non-null run closes at its own last member.
+  - [ ] 1.1.9 A single-build run renders as `[x]`.
+  - [ ] 1.1.10 Java `"1.8"`/`"8"` compare as equal (generalizing `JavaVersion.isEight` from `ToolVersion.kt` into a full major-version-extraction rule).
+  - [ ] 1.1.11 A longer Java form like `"17.0.9"` reads as major version 17 (defensive normalization, not a confirmed real case).
+  - [ ] 1.1.12 Maven values compare via the existing Maven version comparator, not raw string equality.
+  - [ ] 1.1.13 The Maven token `"LATEST"` is its own distinct value (never equal to a numbered version) and always wins a max comparison against any numbered version.
+  - [ ] 1.1.14 A version string CRS's own `NumericVersionFactory` cannot parse is excluded/flagged, not silently mis-ordered via the fallback comparator.
 - [ ] 1.2 Implement `components-registry-service-server/.../util/RmsBuildRangeCollapser.kt`:
-  - [ ] 1.2.1 Two independent passes — one for Java, one for Maven.
-  - [ ] 1.2.2 Each pass groups by minor version first, then collapses by (normalized) value within each minor.
+  - [ ] 1.2.1 Two independent passes — one for Java, one for Maven — each over the same sorted build list.
+  - [ ] 1.2.2 A single linear walk per pass: track one "current run" (value + start), close/open runs per the rules above.
   - [ ] 1.2.3 Reuse `VersionRangePartition`'s internal `Segment`/`render`/`parseSegment` helpers for consistent range rendering.
 - [ ] 1.3 Confirm tests pass. No Spring context required — this is a pure function.
 
@@ -25,24 +28,23 @@
   - [ ] 2.1.2 Blank-URL-means-unconfigured as a second gate.
   - [ ] 2.1.3 Register in `ApplicationConfig.kt`'s `@EnableConfigurationProperties`.
 - [ ] 2.2 Write failing tests for `RmsClient` (mocked HTTP):
-  - [ ] 2.2.1 A `javaVersionPresent=true` call against `GET rest/api/1/builds/component/{component}?statuses=RC,RELEASE`.
-  - [ ] 2.2.2 A separate `mavenVersionPresent=true` call.
-  - [ ] 2.2.3 Each parses `component`/`version`/`status`/`buildParameters.javaVersion`/`buildParameters.mavenVersion`.
-  - [ ] 2.2.4 A confirmed empty-builds 200 response is distinguished, in the client's return type, from any error response (404, timeout, 5xx, connection failure) — the display sweep and the write gate must be able to treat these two outcomes differently.
+  - [ ] 2.2.1 One call, unfiltered, against `GET rest/api/1/builds/component/{component}?statuses=RC,RELEASE` — no `javaVersionPresent`/`mavenVersionPresent` filter, since null-value builds must be visible to the collapsing algorithm.
+  - [ ] 2.2.2 The response parses `component`/`version`/`status`/`buildParameters.javaVersion`/`buildParameters.mavenVersion` for every build, including ones where either field is null.
+  - [ ] 2.2.3 A confirmed empty-builds 200 response is distinguished, in the client's return type, from any error response (404, timeout, 5xx, connection failure) — the display sweep and the write gate must be able to treat these two outcomes differently.
 - [ ] 2.3 Implement `RmsClient`:
   - [ ] 2.3.1 Thin blocking `RestClient` wrapper with a locally-owned DTO — no dependency on RMS's published `client` artifact.
-  - [ ] 2.3.2 Support querying a single attribute (for the write gate).
-  - [ ] 2.3.3 Support querying both attributes (for the sweep).
+  - [ ] 2.3.2 One method, used identically by both the sweep and the write gate — no attribute-scoped variant, since both need the same full, unfiltered fetch.
 - [ ] 2.4 Confirm tests pass.
 
 ## 3. Sweep + cache (display)
 
 - [ ] 3.1 Write failing tests for `RmsBuildParametersService`:
-  - [ ] 3.1.1 A full sweep populates the cache with `generatedAt`/`lastAttemptAt` and both attributes' minor-version-aware collapsed ranges.
+  - [ ] 3.1.1 A full sweep populates the cache with `generatedAt`/`lastAttemptAt` and both attributes' collapsed ranges, computed from the one fetched build list per component.
   - [ ] 3.1.2 A failed sweep retains previous data and sets `refreshError`.
   - [ ] 3.1.3 The single-flight guard rejects an overlapping trigger.
   - [ ] 3.1.4 A per-component RMS failure marks only that component unavailable, without failing the whole sweep.
-  - [ ] 3.1.5 A concurrency bound and per-call timeout budget are respected — 2 calls × N components does not run unbounded.
+  - [ ] 3.1.5 A concurrency bound and per-call timeout budget are respected — 1 call × N components does not run unbounded.
+  - [ ] 3.1.6 Components whose build system is not `MAVEN`/`GRADLE` are skipped entirely — no RMS call made for them.
 - [ ] 3.2 Implement:
   - [ ] 3.2.1 `RmsBuildParametersService` — sweep orchestration + `@Volatile` cache, mirroring Portal's `ValidationService`.
   - [ ] 3.2.2 `RmsRefreshScheduler` — adaptive-cadence scheduled trigger, mirroring Portal's scheduler for it.
@@ -65,6 +67,7 @@
   - [ ] 4.3.6 A matching (non-disagreeing) row shows no warning.
   - [ ] 4.3.7 Each DEFAULT/OVERRIDDEN row is marked "ACTUAL data unavailable" only for a component with no successful sweep ever.
   - [ ] 4.3.8 Rows are evaluated against stale-but-good cached data when a prior sweep succeeded, even if the latest one failed.
+  - [ ] 4.3.9 A component whose build system is not `MAVEN`/`GRADLE` carries no ACTUAL data, rollup, or warnings at all in its response.
 - [ ] 4.4 Implement:
   - [ ] 4.4.1 `attachRegisteredBuildParameters` (detail) and the summary rollup computation in `ComponentManagementServiceImpl`, mirroring the existing `attachTeamcityValidations` post-processing pattern.
   - [ ] 4.4.2 Warning computation: intersect each DEFAULT/OVERRIDDEN row against ACTUAL, per disagreeing sub-range.
@@ -89,11 +92,13 @@
   - [ ] 5.2.10 With RMS integration disabled: writes to `build.javaVersion`/`build.mavenVersion` succeed unconditionally, because the gate is never invoked — a distinct case from 5.2.8/5.2.9, not to be conflated with either.
   - [ ] 5.2.11 `deleteFieldOverride` succeeds regardless of ACTUAL — no gate call at all.
   - [ ] 5.2.12 Recreating the same range with the same, still-disagreeing value afterward is rejected like any other write.
+  - [ ] 5.2.13 A write to a component whose build system is not `MAVEN`/`GRADLE` is never gated — no RMS call at all, regardless of ACTUAL data that might exist.
 - [ ] 5.3 Implement `RmsOverrideGate`:
-  - [ ] 5.3.1 Live, single-attribute RMS call.
+  - [ ] 5.3.1 Live RMS call, unfiltered (same shape as the sweep's), but the disagreement check evaluates only the one attribute being written.
   - [ ] 5.3.2 The unified three-condition rule: effective change + intersects non-null ACTUAL + disagrees.
   - [ ] 5.3.3 Strict fail-closed on ambiguity, but only while the feature is enabled.
   - [ ] 5.3.4 When RMS integration is disabled/unconfigured, short-circuit to "permit" before making any call — never call RMS and then decide, never throw `RmsUnavailableException`.
+  - [ ] 5.3.5 When the component's build system is not `MAVEN`/`GRADLE`, short-circuit to "permit" before making any call — same short-circuit shape as the disabled case (5.3.4), just a different reason for it.
 - [ ] 5.4 Wire the gate into call sites:
   - [ ] 5.4.1 `ComponentManagementServiceImpl.updateComponent` (base config, `ALL_VERSIONS` range).
   - [ ] 5.4.2 `createFieldOverride`.
@@ -120,3 +125,4 @@
   - [ ] 7.3.2 `deleteFieldOverride`.
   - [ ] 7.3.3 `createComponent`.
 - [ ] 7.4 Add an informational (not warning) startup log line when RMS integration is disabled, so it reads as "not configured" rather than being mistaken for the feature not existing.
+- [ ] 7.5 Resolve, or explicitly re-flag for the team, the open `ECLIPSE_MAVEN` question from design.md Decision 13 (treat as Maven-like, or exclude) before implementation depends on an assumed answer.

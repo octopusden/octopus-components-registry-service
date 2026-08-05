@@ -4,51 +4,70 @@ Defines how CRS's v4 API exposes RMS's registered ("ACTUAL") `build.javaVersion`
 
 ## ADDED Requirements
 
-### Requirement: ACTUAL is exposed as independent, minor-version-aware, per-attribute ranges
+### Requirement: ACTUAL applies only to Maven and Gradle components
 
-CRS's v4 component detail response SHALL include RMS's registered Java version and Maven version as two independent lists of version ranges. A range boundary in one attribute's list SHALL NOT depend on the other attribute's value changing. Ranges SHALL be computed per minor version (`major.minor`) — a range SHALL NOT span across a minor-version boundary even if the value on both sides is the same.
+ACTUAL (display and write gate alike) SHALL apply only to components whose build system is `MAVEN` or `GRADLE`. For any other build system, no RMS call is made for that component, no ACTUAL data is shown, and no write gate applies to its `javaVersion`/`mavenVersion` fields.
+
+#### Scenario: A non-Maven/Gradle component is unaffected
+
+- **WHEN** a component's build system is neither `MAVEN` nor `GRADLE`
+- **THEN** its responses carry no ACTUAL data, and writes to its `javaVersion`/`mavenVersion` fields (if any) are never gated by this feature
+
+### Requirement: ACTUAL is exposed as independent, per-attribute ranges built from the real build sequence
+
+CRS's v4 component detail response SHALL include RMS's registered Java version and Maven version as two independent lists of version ranges. A range boundary in one attribute's list SHALL NOT depend on the other attribute's value changing. Ranges SHALL be built by walking the component's RC/RELEASE builds in real version order (not bucketed by any version-format-dependent grouping) and collapsing consecutive builds that share the same (normalized) value into one range; a build with a different or null value ends the run before it.
 
 #### Scenario: Independent attribute boundaries
 
-- **WHEN** a component's Java version changes at version `3.0` but its Maven version does not
-- **THEN** the Java range list has a boundary at `3.0` and the Maven range list does not
+- **WHEN** a component's Java version changes at a build where its Maven version does not
+- **THEN** the Java range list has a boundary there and the Maven range list does not
 
-#### Scenario: A minor-version boundary splits a range even when values match
+#### Scenario: A run bridges an unbuilt stretch between two agreeing builds
 
-- **WHEN** minor `2.5`'s builds and minor `2.6`'s builds record different values, and minor `2.6`'s builds and minor `2.7`'s builds happen to record the same value as each other
-- **THEN** ACTUAL still shows `2.6` and `2.7` as one merged range only because they're adjacent AND equal-valued — `2.5` remains its own separate range regardless of value
+- **WHEN** two builds recording the same Java version are not adjacent version numbers (nothing was built at all in between)
+- **THEN** both builds are part of one continuous ACTUAL range spanning the gap — the range reflects the sequence of observed builds, not a claim that every intermediate version was itself tested
 
 ### Requirement: Only RC/RELEASE builds are considered
 
-ACTUAL SHALL be derived only from RMS builds with status `RC` or `RELEASE`. Hotfix builds are included with no special handling — a hotfix is expected to always carry its parent minor's value.
+ACTUAL SHALL be derived only from RMS builds with status `RC` or `RELEASE`. Hotfix builds are included with no special handling — a hotfix is expected to always carry its parent version line's value.
 
 #### Scenario: A BUILD-status build is ignored
 
 - **WHEN** a component has a build with status `BUILD` recording a Java version different from the surrounding RC/RELEASE builds
 - **THEN** that build does not appear in, or alter, the ACTUAL ranges
 
-### Requirement: A minor version with no builds is always free, regardless of where it falls
+### Requirement: A build recording no value for an attribute ends the run before it, regardless of position
 
-A minor version with zero recorded RC/RELEASE builds SHALL NOT be part of any ACTUAL range — whether it comes before the first ever build, after the most recent one, or between two other minors that do have data. Nothing is inferred or filled in across an unbuilt minor.
+A build with a null value for an attribute SHALL end any active run of that attribute at that point. A stretch with no RC/RELEASE data at all — before the first build, after the last one, or between two data-bearing builds — SHALL NOT be part of any ACTUAL range.
 
 #### Scenario: Never-built prefix stays free
 
-- **WHEN** a component's earliest RC/RELEASE build carrying a Java version is at minor `2.5`, and no earlier minor was ever built
-- **THEN** ACTUAL has no range covering minors before `2.5`, and that stretch remains overridable
+- **WHEN** a component's earliest RC/RELEASE build carrying a Java version is well after the component's first-ever build, and no build before it ever recorded a Java version
+- **THEN** ACTUAL has no range covering that earlier stretch, and it remains overridable
 
-#### Scenario: An unbuilt minor between two data-bearing minors stays free
+#### Scenario: A null build between two agreeing runs breaks them apart
 
-- **WHEN** minor `2.6` has RC/RELEASE builds, minor `2.7` has none, and minor `3.4` has RC/RELEASE builds
-- **THEN** minor `2.7` is not part of any ACTUAL range, regardless of whether `2.6`'s and `3.4`'s values agree or differ
+- **WHEN** a run of builds recording Java version X is followed by a build recording null, which is in turn followed by a later run recording Java version X again
+- **THEN** these are two separate ACTUAL ranges, not one continuous range — a null observation always breaks a run, even if the value resumes unchanged afterward
 
-### Requirement: Only the single highest data-bearing minor's range is open-ended
+### Requirement: Only a run containing the single most recent build is open-ended
 
-For a given attribute, every minor's ACTUAL range is bounded (per the requirement above), except the single highest minor RMS has any RC/RELEASE data for, whose range has no upper bound.
+A run's ACTUAL range has no upper bound only if it contains the highest-version RC/RELEASE build in the component's entire history, and that build's value is non-null. Every other run is bounded at the point it was broken.
 
-#### Scenario: A future, unbuilt version is covered by the last known value
+#### Scenario: The most recent build extends the range into unbuilt future versions
 
-- **WHEN** the highest minor RMS has recorded a Java version for is `3.4`, and no build exists at or beyond `4.0`
-- **THEN** ACTUAL's Java range for that value extends from `3.4` with no upper bound, and covers `4.0` and beyond
+- **WHEN** the highest-version RC/RELEASE build RMS has recorded for a component records a non-null Java version, and no build exists beyond it
+- **THEN** ACTUAL's Java range for that value has no upper bound, and covers versions that don't exist yet
+
+#### Scenario: A later null build closes off what would otherwise be open-ended
+
+- **WHEN** a run of non-null values is the most recent thing observed, but a still-later build (recorded after it) has a null value for that attribute
+- **THEN** the run is bounded at its own last member, not left open-ended — the later null build proves the "still true" assumption wrong
+
+#### Scenario: An earlier run is always bounded, even if its value never changed before the gap
+
+- **WHEN** a run of builds recording the same value is followed, after an unbuilt or null gap, by a different run — regardless of whether the second run's value agrees or differs
+- **THEN** the earlier run's range ends where it was broken, never extending through the gap into the later run
 
 ### Requirement: A DEFAULT/OVERRIDDEN row that disagrees with ACTUAL is flagged as a named warning, never blocked retroactively
 
@@ -71,7 +90,7 @@ A stored DEFAULT or OVERRIDDEN value that disagrees with an intersecting ACTUAL 
 
 ### Requirement: Comparing values normalizes known spelling differences, and fails closed on unparseable ones
 
-Two values are considered equal, for both range collapsing and the write check, only after normalization: Java's legacy `1.X` spelling and the short `X` spelling (e.g. `1.8` and `8`) SHALL be treated as the same version; Maven values SHALL be compared with a version-aware comparison, not raw string equality. The Maven token `"LATEST"` SHALL be treated as its own distinct value, never equal to any numbered version, and SHALL always be considered the maximum when compared against any numbered version. A build whose version string cannot be parsed by CRS's version-comparison logic SHALL NOT be silently placed into a minor group by a fallback comparator — it SHALL be excluded and treated as fail-closed wherever this affects a write decision (see the write-check requirements below).
+Two values are considered equal, for both range collapsing and the write check, only after normalization: Java's legacy `1.X` spelling and the short `X` spelling (e.g. `1.8` and `8`) SHALL be treated as the same version; Maven values SHALL be compared with a version-aware comparison, not raw string equality. The Maven token `"LATEST"` SHALL be treated as its own distinct value, never equal to any numbered version, and SHALL always be considered the maximum when compared against any numbered version. A build whose version string cannot be parsed by CRS's version-comparison logic SHALL NOT be silently ordered into the build sequence by a fallback comparator — it SHALL be excluded and treated as fail-closed wherever this affects a write decision (see the write-check requirements below).
 
 #### Scenario: Equivalent Java spellings do not produce a false maximum
 
@@ -86,11 +105,11 @@ Two values are considered equal, for both range collapsing and the write check, 
 #### Scenario: An unparseable build version does not silently affect a write decision
 
 - **WHEN** the write-time check encounters a build whose version string cannot be parsed
-- **THEN** the write is rejected rather than proceeding on a result that may have mis-binned that build into the wrong minor
+- **THEN** the write is rejected rather than proceeding on a result that may have ordered that build incorrectly in the sequence
 
 ### Requirement: The components list view shows one rollup value per attribute
 
-The list/summary response SHALL show a single value per attribute: the maximum version number seen across all of that attribute's ACTUAL ranges, using the normalization above. This reflects the highest version ever recorded across any range — not the value of the component's current (highest-minor) range, which may differ.
+The list/summary response SHALL show a single value per attribute: the maximum version number seen across all of that attribute's ACTUAL ranges, using the normalization above. This reflects the highest version ever recorded across any range — not the value of the component's current (most recent) range, which may differ.
 
 #### Scenario: Maximum, not most recent
 
@@ -176,7 +195,7 @@ Creating or updating a DEFAULT or OVERRIDDEN value for `build.javaVersion`/`buil
 
 ### Requirement: Writes are checked live, never against the cached display
 
-Every write attempt to `build.javaVersion`/`build.mavenVersion` SHALL check ACTUAL with a live call at write time, querying only the specific attribute being written, independent of the cached report used for display.
+Every write attempt to `build.javaVersion`/`build.mavenVersion` SHALL check ACTUAL with a live call at write time, independent of the cached report used for display. The disagreement check itself only evaluates the specific attribute being written.
 
 #### Scenario: A just-registered value blocks a write before the next display refresh
 
