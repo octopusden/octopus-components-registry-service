@@ -25,23 +25,24 @@
 
 ## 2. RMS client
 
-- [ ] 2.1 Add `RmsProperties`:
-  - [ ] 2.1.1 `@ConfigurationProperties(prefix = "release-management-service")` with an `enabled` flag.
-  - [ ] 2.1.2 Blank-URL-means-unconfigured as a second gate.
-  - [ ] 2.1.3 Configurable sweep-timing fields: normal interval (default 4h), initial retry interval (default 5min), retry backoff cap (default = normal interval).
-  - [ ] 2.1.4 Register in `ApplicationConfig.kt`'s `@EnableConfigurationProperties`.
-- [ ] 2.2 Write failing tests for `RmsClient` (mocked HTTP):
-  - [ ] 2.2.1 One call, unfiltered, against `GET rest/api/1/builds/component/{component}?statuses=RC,RELEASE&descending=false` — no `javaVersionPresent`/`mavenVersionPresent` filter, since null-value builds must be visible to the collapsing algorithm; `descending=false` is what lets `BuildRangeCollapser` trust the response's ascending order without re-sorting.
-  - [ ] 2.2.2 The response parses `component`/`version`/`status`/`buildParameters.javaVersion`/`buildParameters.mavenVersion` for every build, including ones where either field is null.
-  - [ ] 2.2.3 A confirmed empty-builds 200 response is distinguished, in the client's return type, from any error response (404, timeout, 5xx, connection failure) — the display sweep and the write gate must be able to treat these two outcomes differently.
-- [ ] 2.3 Implement `RmsClient`:
-  - [ ] 2.3.1 Thin blocking `RestClient` wrapper with a locally-owned DTO — no dependency on RMS's published `client` artifact.
-  - [ ] 2.3.2 One method, used identically by both the sweep and the write gate — no attribute-scoped variant, since both need the same full, unfiltered fetch.
-- [ ] 2.4 Confirm tests pass.
+- [x] 2.1 Add `RMSProperties`:
+  - [x] 2.1.1 `@ConfigurationProperties(prefix = "release-management-service")` with an `enabled` flag.
+  - [x] 2.1.2 Blank-URL-means-unconfigured as a second gate at bean-registration time (`RMSUrlConfiguredCondition`); additionally, `@Validated` + `@AssertTrue` fails application startup outright if `enabled=true` with a blank `url` — a clear configuration error rather than a silent no-op (mirrors `TeamcityValidationProperties`'s fail-fast pattern). Covered by `RMSPropertiesTest`.
+  - [x] 2.1.3 Configurable sweep-timing fields: normal interval (default 4h), initial retry interval (default 5min), retry backoff cap (default = normal interval).
+  - [x] 2.1.4 Register in `ApplicationConfig.kt`'s `@EnableConfigurationProperties`.
+- [x] 2.2 Write failing tests for `RMSClient` (WireMock, `DefaultRMSClientTest`):
+  - [x] 2.2.1 One call, unfiltered, against `GET rest/api/1/builds/component/{component}?statuses=RC,RELEASE&descending=false` — no `javaVersionPresent`/`mavenVersionPresent` filter, since null-value builds must be visible to the collapsing algorithm; `descending=false` is what lets `BuildRangeCollapser` trust the response's ascending order without re-sorting.
+  - [x] 2.2.2 The response parses `version`/`buildParameters.javaVersion`/`buildParameters.mavenVersion` for every build, including ones where either field is null, and tolerates unknown fields (`component`, `status`, `hotfix`) present on the real wire response but unused here.
+  - [x] 2.2.3 A confirmed empty-builds 200 response (`Available(emptyList())`) is distinguished, in the client's return type, from any error response (404, 5xx, connection failure → `Unavailable`) — the display sweep and the write gate must be able to treat these two outcomes differently.
+- [x] 2.3 Implement `RMSClient`:
+  - [x] 2.3.1 `service/rms/RMSClient.kt` (interface + `RMSBuild`/`RMSBuildsResult`) and `DefaultRMSClient.kt` — thin blocking `RestClient` wrapper with a locally-owned DTO, no dependency on RMS's published `client` artifact.
+  - [x] 2.3.2 One method, used identically by both the sweep and the write gate — no attribute-scoped variant, since both need the same full, unfiltered fetch.
+  - [x] 2.3.3 `RMSClientConfig` — two-gate optional bean registration (`enabled` property + non-blank `url`), mirroring `EmployeeServiceConfig`/`TeamcityClientConfig`.
+- [x] 2.4 Confirm tests pass. (`DefaultRMSClientTest`, 5/5 green; `RMSPropertiesTest`, 4/4 green; `compileKotlin`/`compileTestKotlin` clean.)
 
 ## 3. Sweep + cache (display)
 
-- [ ] 3.1 Write failing tests for `RmsBuildParametersService`:
+- [ ] 3.1 Write failing tests for `RMSBuildParametersService`:
   - [ ] 3.1.1 A full sweep populates the cache with `generatedAt`/`lastAttemptAt` and both attributes' collapsed ranges, computed from the one fetched build list per component.
   - [ ] 3.1.2 A failed sweep retains previous data and sets `refreshError`.
   - [ ] 3.1.3 The single-flight guard rejects an overlapping trigger.
@@ -55,8 +56,8 @@
   - [ ] 3.1.11 Each consecutive failure doubles the retry interval (5, 10, 20, 40 min, ...), capped at the normal interval (4h) — it never waits longer than normal cadence to retry.
   - [ ] 3.1.12 A success resets the cadence to the normal interval and resets the backoff, so the next failure (if any) starts again at 5 minutes, not from wherever the previous backoff left off.
 - [ ] 3.2 Implement:
-  - [ ] 3.2.1 `RmsBuildParametersService` — sweep orchestration + `@Volatile` cache, mirroring Portal's `ValidationService`.
-  - [ ] 3.2.2 `RmsRefreshScheduler` — immediate first sweep on startup, then re-arms itself per the normal/retry/backoff rules above (3.1.8–3.1.12), mirroring Portal's scheduler with an added exponential backoff.
+  - [ ] 3.2.1 `RMSBuildParametersService` — sweep orchestration + `@Volatile` cache, mirroring Portal's `ValidationService`.
+  - [ ] 3.2.2 `RMSRefreshScheduler` — immediate first sweep on startup, then re-arms itself per the normal/retry/backoff rules above (3.1.8–3.1.12), mirroring Portal's scheduler with an added exponential backoff.
 - [ ] 3.3 Confirm tests pass.
 
 ## 4. Display wiring
@@ -85,10 +86,10 @@
 ## 5. Write-gate (unified rule)
 
 - [ ] 5.1 Add exception types:
-  - [ ] 5.1.1 `RmsRegisteredValueConflictException` and `RmsUnavailableException`.
+  - [ ] 5.1.1 `RMSRegisteredValueConflictException` and `RMSUnavailableException`.
   - [ ] 5.1.2 Map both in `ControllerExceptionHandler.kt` to distinguishable HTTP statuses.
-  - [ ] 5.1.3 `RmsUnavailableException` is only ever thrown while the feature is enabled (a genuine reachability/ambiguity failure) — never for the disabled case, which must not invoke the gate at all.
-- [ ] 5.2 Write failing MockMvc tests (model on `ComponentFieldOverridesPatchTest.kt`, `RmsClient` mocked):
+  - [ ] 5.1.3 `RMSUnavailableException` is only ever thrown while the feature is enabled (a genuine reachability/ambiguity failure) — never for the disabled case, which must not invoke the gate at all.
+- [ ] 5.2 Write failing MockMvc tests (model on `ComponentFieldOverridesPatchTest.kt`, `RMSClient` mocked):
   - [ ] 5.2.1 Unchanged resend of the current value/range is never blocked, even when it disagrees with ACTUAL.
   - [ ] 5.2.2 Writing a value that matches ACTUAL is always permitted, including when it resolves an existing warning.
   - [ ] 5.2.3 Writing a disagreeing value into an intersecting non-null ACTUAL range is rejected.
@@ -102,11 +103,11 @@
   - [ ] 5.2.11 `deleteFieldOverride` succeeds regardless of ACTUAL — no gate call at all.
   - [ ] 5.2.12 Recreating the same range with the same, still-disagreeing value afterward is rejected like any other write.
   - [ ] 5.2.13 A write to a component whose build system is not `MAVEN`/`GRADLE` is never gated — no RMS call at all, regardless of ACTUAL data that might exist.
-- [ ] 5.3 Implement `RmsOverrideGate`:
+- [ ] 5.3 Implement `RMSOverrideGate`:
   - [ ] 5.3.1 Live RMS call, unfiltered (same shape as the sweep's), but the disagreement check evaluates only the one attribute being written.
   - [ ] 5.3.2 The unified three-condition rule: effective change + intersects non-null ACTUAL + disagrees.
   - [ ] 5.3.3 Strict fail-closed on ambiguity, but only while the feature is enabled.
-  - [ ] 5.3.4 When RMS integration is disabled/unconfigured, short-circuit to "permit" before making any call — never call RMS and then decide, never throw `RmsUnavailableException`.
+  - [ ] 5.3.4 When RMS integration is disabled/unconfigured, short-circuit to "permit" before making any call — never call RMS and then decide, never throw `RMSUnavailableException`.
   - [ ] 5.3.5 When the component's build system is not `MAVEN`/`GRADLE`, short-circuit to "permit" before making any call — same short-circuit shape as the disabled case (5.3.4), just a different reason for it.
 - [ ] 5.4 Wire the gate into call sites:
   - [ ] 5.4.1 `ComponentManagementServiceImpl.updateComponent` (base config, `ALL_VERSIONS` range).
@@ -119,7 +120,7 @@
   - [ ] 5.5.1 Explicit, tight timeout — shorter than the write endpoint's overall request timeout.
   - [ ] 5.5.2 Evaluate the gate as early as possible in the write path, given `ComponentManagementServiceImpl`'s class-level `@Transactional` scope, to minimize how long a DB connection/lock is held waiting on the network call.
 - [ ] 5.6 Confirm tests pass.
-- [ ] 5.7 Write a failing test: after `RmsOverrideGate` rejects a write with `RmsRegisteredValueConflictException`, that component's entry in `RmsBuildParametersService`'s cache is refreshed using the data from the same live call — not left stale until the next scheduled sweep.
+- [ ] 5.7 Write a failing test: after `RMSOverrideGate` rejects a write with `RMSRegisteredValueConflictException`, that component's entry in `RMSBuildParametersService`'s cache is refreshed using the data from the same live call — not left stale until the next scheduled sweep.
 - [ ] 5.8 Implement the targeted refresh from 5.7: on rejection, update the one component's cache entry directly (no full sweep triggered).
 - [ ] 5.9 Confirm tests pass.
 

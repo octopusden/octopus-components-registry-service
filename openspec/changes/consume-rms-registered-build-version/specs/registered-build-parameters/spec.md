@@ -252,14 +252,23 @@ Only a confirmed response with no matching builds for the range/attribute in que
 
 ### Requirement: A disabled RMS integration turns the whole feature off — distinct from RMS being unreachable
 
-When RMS integration is disabled (or its URL is unconfigured), neither Part A's display nor Part B's write check SHALL run. No ACTUAL data is shown, and no write to `build.javaVersion`/`build.mavenVersion` is blocked by this feature. This is a distinct condition from RMS being unreachable while the feature is enabled (see the requirements above), which fails closed for writes and fails soft for display — a disabled integration does neither, because the feature is simply not active.
+When RMS integration is disabled, neither Part A's display nor Part B's write check SHALL run. No ACTUAL data is shown, and no write to `build.javaVersion`/`build.mavenVersion` is blocked by this feature. This is a distinct condition from RMS being unreachable while the feature is enabled (see the requirements above), which fails closed for writes and fails soft for display — a disabled integration does neither, because the feature is simply not active.
 
 #### Scenario: Integration disabled — writes are unaffected
 
-- **WHEN** RMS integration is disabled (or its base URL is blank) and an editor writes `build.javaVersion`/`build.mavenVersion`
+- **WHEN** RMS integration is disabled and an editor writes `build.javaVersion`/`build.mavenVersion`
 - **THEN** the write succeeds, behaving exactly as it would if this feature did not exist
 
 #### Scenario: Integration disabled — no ACTUAL data is shown
 
 - **WHEN** RMS integration is disabled and a component's detail or summary response is requested
 - **THEN** no ACTUAL ranges, rollup, or warnings are shown — not even an "unavailable" indicator, since there is no attempt to check RMS at all
+
+### Requirement: Enabling the integration without a URL fails application startup, rather than silently behaving as disabled
+
+Configuration where RMS integration is enabled but its base URL is left blank SHALL fail application startup outright. This is deliberately distinct from the disabled requirement above: turning the feature on is an explicit action, and doing so without a URL is a configuration mistake worth surfacing immediately rather than one the application quietly runs through as if the feature were off.
+
+#### Scenario: Enabled with a blank URL fails fast
+
+- **WHEN** RMS integration is enabled and its base URL is blank or unset
+- **THEN** the application fails to start, rather than starting up with the feature silently disabled
