@@ -1,0 +1,70 @@
+package org.octopusden.octopus.components.registry.server.util
+
+/**
+ * Computes the intersecting sub-range of two single-segment, Maven-syntax range strings (the shape
+ * every DEFAULT/OVERRIDDEN/ACTUAL range in this feature uses) — unlike [VersionRangePartition],
+ * which only checks/reports whether ranges overlap, this returns the overlap itself. A composite
+ * (multi-segment) range on either side is not supported and returns `null`.
+ */
+object VersionRangeIntersector {
+    fun intersect(
+        a: String,
+        b: String,
+        compare: (String, String) -> Int,
+    ): String? {
+        val segA = segmentOf(a) ?: return null
+        val segB = segmentOf(b) ?: return null
+
+        val (lo, loIncl) = maxLower(segA.lo, segA.loIncl, segB.lo, segB.loIncl, compare)
+        val (hi, hiIncl) = minUpper(segA.hi, segA.hiIncl, segB.hi, segB.hiIncl, compare)
+
+        if (lo != null && hi != null) {
+            val cmp = compare(lo, hi)
+            if (cmp > 0 || (cmp == 0 && !(loIncl && hiIncl))) return null
+        }
+        return VersionRangePartition.render(VersionRangePartition.Segment(lo, loIncl, hi, hiIncl))
+    }
+
+    private fun segmentOf(range: String): VersionRangePartition.Segment? =
+        if (VersionRangePartition.isAllVersions(range)) {
+            VersionRangePartition.Segment(lo = null, loIncl = false, hi = null, hiIncl = false)
+        } else {
+            VersionRangePartition.parseSegment(range)
+        }
+
+    private fun maxLower(
+        loA: String?,
+        loInclA: Boolean,
+        loB: String?,
+        loInclB: Boolean,
+        compare: (String, String) -> Int,
+    ): Pair<String?, Boolean> =
+        when {
+            loA == null -> loB to loInclB
+            loB == null -> loA to loInclA
+            else ->
+                when {
+                    compare(loA, loB) > 0 -> loA to loInclA
+                    compare(loA, loB) < 0 -> loB to loInclB
+                    else -> loA to (loInclA && loInclB)
+                }
+        }
+
+    private fun minUpper(
+        hiA: String?,
+        hiInclA: Boolean,
+        hiB: String?,
+        hiInclB: Boolean,
+        compare: (String, String) -> Int,
+    ): Pair<String?, Boolean> =
+        when {
+            hiA == null -> hiB to hiInclB
+            hiB == null -> hiA to hiInclA
+            else ->
+                when {
+                    compare(hiA, hiB) < 0 -> hiA to hiInclA
+                    compare(hiA, hiB) > 0 -> hiB to hiInclB
+                    else -> hiA to (hiInclA && hiInclB)
+                }
+        }
+}

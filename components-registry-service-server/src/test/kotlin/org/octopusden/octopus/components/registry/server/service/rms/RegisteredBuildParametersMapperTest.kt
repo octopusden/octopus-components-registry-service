@@ -1,0 +1,88 @@
+package org.octopusden.octopus.components.registry.server.service.rms
+
+import org.junit.jupiter.api.Assertions.assertEquals
+import org.junit.jupiter.api.Assertions.assertNull
+import org.junit.jupiter.api.Assertions.assertTrue
+import org.junit.jupiter.api.DisplayName
+import org.junit.jupiter.api.Test
+import org.octopusden.octopus.components.registry.server.dto.v4.ActualDisagreement
+import org.octopusden.octopus.components.registry.server.util.BuildRangeCollapser
+import org.octopusden.octopus.components.registry.server.util.JavaVersionComparator
+import org.octopusden.octopus.components.registry.server.util.MavenVersionComparator
+
+class RegisteredBuildParametersMapperTest {
+    private val intCompare: (String, String) -> Int = { a, b -> a.toInt().compareTo(b.toInt()) }
+
+    @Test
+    @DisplayName("rollup is the maximum value across all ranges")
+    fun `rollup returns the maximum value`() {
+        val ranges = listOf(BuildRangeCollapser.Run("[1,2)", "8"), BuildRangeCollapser.Run("[2,)", "17"))
+        assertEquals("17", RegisteredBuildParametersMapper.rollup(ranges, JavaVersionComparator::compare))
+    }
+
+    @Test
+    @DisplayName("rollup treats equivalent Java spellings as one value, not two")
+    fun `rollup normalizes Java spelling before finding the maximum`() {
+        val ranges = listOf(BuildRangeCollapser.Run("[1,2)", "1.8"), BuildRangeCollapser.Run("[2,)", "8"))
+        val result = RegisteredBuildParametersMapper.rollup(ranges, JavaVersionComparator::compare)
+        assertEquals(8, result?.let { JavaVersionComparator.majorVersion(it) }, "1.8 and 8 must collapse to one major-version-8 maximum, whichever spelling is reported")
+    }
+
+    @Test
+    @DisplayName("rollup reflects a numerically-higher-but-superseded line, not the current (most recent) one")
+    fun `rollup reflects the highest value ever recorded, even from a superseded line`() {
+        val ranges = listOf(BuildRangeCollapser.Run("[1,2)", "21"), BuildRangeCollapser.Run("[2,)", "11"))
+        assertEquals("21", RegisteredBuildParametersMapper.rollup(ranges, JavaVersionComparator::compare))
+    }
+
+    @Test
+    @DisplayName("Maven's LATEST always wins the rollup")
+    fun `rollup lets LATEST win over any numbered version`() {
+        val ranges = listOf(BuildRangeCollapser.Run("[1,2)", "3.3.9"), BuildRangeCollapser.Run("[2,)", "LATEST"))
+        assertEquals("LATEST", RegisteredBuildParametersMapper.rollup(ranges, MavenVersionComparator::compare))
+    }
+
+    @Test
+    @DisplayName("rollup of no ranges is null")
+    fun `rollup of an empty list is null`() {
+        assertNull(RegisteredBuildParametersMapper.rollup(emptyList(), JavaVersionComparator::compare))
+    }
+
+    @Test
+    @DisplayName("a matching configured row produces no warning")
+    fun `a matching row produces no warning`() {
+        val rows = listOf(ConfiguredRow("[1,3)", "17"))
+        val actual = listOf(BuildRangeCollapser.Run("[1,3)", "17"))
+        assertTrue(RegisteredBuildParametersMapper.warnings(rows, actual, String::equals, intCompare).isEmpty())
+    }
+
+    @Test
+    @DisplayName("a disagreeing configured row names the intersecting sub-range and ACTUAL's value")
+    fun `a disagreeing row names the intersecting sub-range and ACTUAL value`() {
+        val rows = listOf(ConfiguredRow("[1,4)", "11"))
+        val actual = listOf(BuildRangeCollapser.Run("[3,)", "17"))
+        assertEquals(
+            listOf(ActualDisagreement("[3,4)", "17")),
+            RegisteredBuildParametersMapper.warnings(rows, actual, String::equals, intCompare),
+        )
+    }
+
+    @Test
+    @DisplayName("a non-intersecting ACTUAL range produces no warning")
+    fun `a non-intersecting range produces no warning`() {
+        val rows = listOf(ConfiguredRow("[1,2)", "11"))
+        val actual = listOf(BuildRangeCollapser.Run("[5,)", "17"))
+        assertTrue(RegisteredBuildParametersMapper.warnings(rows, actual, String::equals, intCompare).isEmpty())
+    }
+
+    @Test
+    @DisplayName("a row intersecting multiple disagreeing ACTUAL ranges produces multiple warnings")
+    fun `a row spanning multiple disagreeing ranges produces multiple warnings`() {
+        val rows = listOf(ConfiguredRow("[1,10)", "11"))
+        val actual = listOf(BuildRangeCollapser.Run("[2,5)", "17"), BuildRangeCollapser.Run("[5,)", "21"))
+        assertEquals(
+            listOf(ActualDisagreement("[2,5)", "17"), ActualDisagreement("[5,10)", "21")),
+            RegisteredBuildParametersMapper.warnings(rows, actual, String::equals, intCompare),
+        )
+    }
+}

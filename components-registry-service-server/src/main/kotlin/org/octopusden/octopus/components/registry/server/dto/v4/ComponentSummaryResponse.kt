@@ -37,4 +37,6 @@ data class ComponentSummaryResponse(
     val vcsPath: String? = null,
     val teamcityProjectId: String? = null,
     val teamcityProjectUrl: String? = null,
+    /** RMS-registered build parameters rollup — null for a non-Maven/Gradle component, or one RMS has no data for. */
+    val registeredBuildParameters: RegisteredBuildParametersSummary? = null,
 )

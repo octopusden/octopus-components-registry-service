@@ -13,6 +13,11 @@ import org.octopusden.octopus.components.registry.server.dto.v4.ComponentGroupRe
 import org.octopusden.octopus.components.registry.server.dto.v4.ComponentGroupRole
 import org.octopusden.octopus.components.registry.server.dto.v4.ComponentSummaryResponse
 import org.octopusden.octopus.components.registry.server.dto.v4.ConfigurationRowType
+import org.octopusden.octopus.components.registry.server.dto.v4.RegisteredBuildParametersSummary
+import org.octopusden.octopus.components.registry.server.service.rms.ComponentBuildRanges
+import org.octopusden.octopus.components.registry.server.service.rms.RegisteredBuildParametersMapper
+import org.octopusden.octopus.components.registry.server.util.JavaVersionComparator
+import org.octopusden.octopus.components.registry.server.util.MavenVersionComparator
 import org.octopusden.octopus.components.registry.server.dto.v4.DocLinkResponse
 import org.octopusden.octopus.components.registry.server.dto.v4.DockerImageRequest
 import org.octopusden.octopus.components.registry.server.dto.v4.DockerImageResponse
@@ -100,10 +105,15 @@ fun ComponentEntity.toDetailResponse(teamcityBaseUrl: String? = null): Component
  * (`sort_order = 0`) so multi-VCS / multi-TC components render their primary
  * link the same way single-target components do. Blank strings → null.
  */
-fun ComponentEntity.toSummaryResponse(teamcityBaseUrl: String? = null): ComponentSummaryResponse {
+fun ComponentEntity.toSummaryResponse(
+    teamcityBaseUrl: String? = null,
+    rmsComponents: Map<String, ComponentBuildRanges> = emptyMap(),
+): ComponentSummaryResponse {
     val base = this.configurations.firstOrNull { it.rowType == "BASE" }
     val firstTcProject = this.versionLines.minByOrNull { it.teamcityProject.projectId }
     val firstVcsEntry = base?.vcsEntries?.minByOrNull { it.sortOrder }
+    val buildSystem = base?.buildSystem?.takeIf { it.isNotBlank() }
+    val rmsRanges = if (buildSystem == "MAVEN" || buildSystem == "GRADLE") rmsComponents[this.componentKey] else null
     return ComponentSummaryResponse(
         id = this.id!!,
         name = this.componentKey,
@@ -117,12 +127,19 @@ fun ComponentEntity.toSummaryResponse(teamcityBaseUrl: String? = null): Componen
         labels = this.labelJunctions.map { it.labelCode },
         releaseManagers = this.releaseManagerUsernames(),
         securityChampions = this.securityChampionUsernames(),
-        buildSystem = base?.buildSystem?.takeIf { it.isNotBlank() },
+        buildSystem = buildSystem,
         javaVersion = base?.javaVersion?.takeIf { it.isNotBlank() },
         jiraProjectKey = base?.jiraProjectKey?.takeIf { it.isNotBlank() },
         vcsPath = firstVcsEntry?.vcsPath?.takeIf { it.isNotBlank() }?.sshUrlToProjectRepo(),
         teamcityProjectId = firstTcProject?.teamcityProject?.projectId,
         teamcityProjectUrl = firstTcProject?.let { composeTeamcityProjectUrl(teamcityBaseUrl, it.teamcityProject.projectId) },
+        registeredBuildParameters =
+            rmsRanges?.let {
+                RegisteredBuildParametersSummary(
+                    java = RegisteredBuildParametersMapper.rollup(it.javaRanges, JavaVersionComparator::compare),
+                    maven = RegisteredBuildParametersMapper.rollup(it.mavenRanges, MavenVersionComparator::compare),
+                )
+            },
     )
 }
 

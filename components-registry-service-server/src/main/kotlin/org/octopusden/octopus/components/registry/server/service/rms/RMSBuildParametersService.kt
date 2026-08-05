@@ -1,5 +1,6 @@
 package org.octopusden.octopus.components.registry.server.service.rms
 
+import org.octopusden.octopus.components.registry.server.config.ConditionalOnDatabaseEnabled
 import org.octopusden.octopus.components.registry.server.config.RMSProperties
 import org.octopusden.octopus.components.registry.server.util.BuildRangeCollapser
 import org.octopusden.octopus.components.registry.server.util.JavaVersionComparator
@@ -42,11 +43,15 @@ data class RMSBuildParametersReport(
  * `ValidationService` shape (single-flight guarded refresh, stale-but-honest retention on
  * failure), adapted to CRS's blocking stack and extended with exponential retry backoff.
  *
- * Always registered; every operation short-circuits on [RMSProperties.enabled] rather than
- * relying on conditional bean registration, so a disabled environment pays only a cheap no-op
- * check per would-be sweep, never a missing-bean wiring failure.
+ * Registered whenever the DB layer is (every operation short-circuits on [RMSProperties.enabled]
+ * rather than relying on a second conditional for that — a disabled environment pays only a cheap
+ * no-op check per would-be sweep). Absent entirely in no-db mode (SYS-047): [EligibleComponentsProvider]
+ * is JPA-backed, so there is no component list to sweep without a database. Callers hold this via a
+ * nullable, defaulted constructor param (see `ComponentManagementServiceImpl`) and treat its absence
+ * the same as the feature being disabled.
  */
 @Service
+@ConditionalOnDatabaseEnabled
 class RMSBuildParametersService(
     private val rmsClient: RMSClient?,
     private val eligibleComponentsProvider: EligibleComponentsProvider,

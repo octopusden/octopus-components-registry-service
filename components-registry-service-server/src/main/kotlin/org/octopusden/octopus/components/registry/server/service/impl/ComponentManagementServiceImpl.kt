@@ -89,6 +89,8 @@ import org.octopusden.octopus.components.registry.server.security.PermissionEval
 import org.octopusden.octopus.components.registry.server.service.ComponentManagementService
 import org.octopusden.octopus.components.registry.server.service.ComponentSourceRegistry
 import org.octopusden.octopus.components.registry.server.service.RenderedComponentCode
+import org.octopusden.octopus.components.registry.server.service.rms.RMSBuildParametersService
+import org.octopusden.octopus.components.registry.server.service.rms.RegisteredBuildParametersMapper
 import org.octopusden.octopus.components.registry.server.teamcity.TeamcityProperties
 import org.octopusden.octopus.components.registry.server.util.ArtifactOwnershipModeClassifier
 import org.octopusden.octopus.components.registry.server.util.ComponentCodeRenderer
@@ -161,6 +163,11 @@ class ComponentManagementServiceImpl(
     // Spring injects the singleton bean in production. Used to attach TeamCity validation findings
     // onto the component detail response (see toDetail / attachTeamcityValidations).
     private val teamcityValidationRepository: TeamcityValidationRepository? = null,
+    // Defaulted (nullable) so unit tests constructing this service directly need no new wiring;
+    // Spring injects the singleton bean in production (always registered, self-gates on
+    // RMSProperties.enabled — see RMSBuildParametersService). Used to attach RMS-registered
+    // build parameters onto both the summary rollup and the detail ranges/warnings.
+    private val rmsBuildParametersService: RMSBuildParametersService? = null,
 ) : ComponentManagementService {
     // ConfigHelper is constructed lazily because it touches the Spring
     // Environment on first access; mirrors the pattern used by
@@ -913,10 +920,12 @@ class ComponentManagementServiceImpl(
     override fun listComponents(
         filter: ComponentFilter,
         pageable: Pageable,
-    ): Page<ComponentSummaryResponse> =
-        componentRepository
+    ): Page<ComponentSummaryResponse> {
+        val rmsComponents = rmsBuildParametersService?.currentReport()?.components.orEmpty()
+        return componentRepository
             .findAll(buildSpecification(filter), translateSort(pageable))
-            .map { it.toSummaryResponse(teamcityProperties.baseUrl) }
+            .map { it.toSummaryResponse(teamcityProperties.baseUrl, rmsComponents) }
+    }
 
     /**
      * Translate API-facing sort field names to `ComponentEntity` property names.
@@ -3294,7 +3303,7 @@ class ComponentManagementServiceImpl(
      * preview needs the negative-lookahead, which depends on OTHER components' claims).
      */
     private fun toDetail(entity: ComponentEntity): ComponentDetailResponse {
-        val response = attachTeamcityValidations(entity.toDetailResponse(teamcityProperties.baseUrl))
+        val response = attachRegisteredBuildParameters(attachTeamcityValidations(entity.toDetailResponse(teamcityProperties.baseUrl)))
         val patterns = ownershipExportPatterns(entity)
         if (patterns.isEmpty()) return response
         return response.copy(
@@ -3331,6 +3340,23 @@ class ComponentManagementServiceImpl(
                     )
                 },
         )
+    }
+
+    /**
+     * Attach RMS-registered build parameters (ACTUAL) onto [response]: the per-attribute range
+     * lists, warnings for any DEFAULT/OVERRIDDEN row that disagrees with an intersecting ACTUAL
+     * range, and an unavailable flag when RMS has never successfully reported this component.
+     * Left `null` for a non-Maven/Gradle component or when the feature is off (no bean present).
+     */
+    private fun attachRegisteredBuildParameters(response: ComponentDetailResponse): ComponentDetailResponse {
+        val service = rmsBuildParametersService ?: return response
+        val detail =
+            RegisteredBuildParametersMapper.detailFor(
+                response,
+                service.currentReport().components,
+                numericVersionComparator(numericVersionFactory),
+            )
+        return response.copy(registeredBuildParameters = detail)
     }
 
     /**

@@ -65,4 +65,6 @@ data class ComponentDetailResponse(
     // a request context); the Portal then falls back to its global CREATE_COMPONENTS
     // check for legacy backend compatibility.
     val canEdit: Boolean? = null,
+    /** RMS-registered build parameters — null for a non-Maven/Gradle component. */
+    val registeredBuildParameters: RegisteredBuildParametersDetail? = null,
 )
