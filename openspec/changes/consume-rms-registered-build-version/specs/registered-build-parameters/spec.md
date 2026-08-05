@@ -13,6 +13,11 @@ ACTUAL (display and write gate alike) SHALL apply only to components whose build
 - **WHEN** a component's build system is neither `MAVEN` nor `GRADLE`
 - **THEN** its responses carry no ACTUAL data, and writes to its `javaVersion`/`mavenVersion` fields (if any) are never gated by this feature
 
+#### Scenario: ECLIPSE_MAVEN is excluded, not treated as Maven-like
+
+- **WHEN** a component's build system is `ECLIPSE_MAVEN`
+- **THEN** it is treated the same as any other non-`MAVEN`/`GRADLE` build system — no ACTUAL data, no write gate
+
 ### Requirement: ACTUAL is exposed as independent, per-attribute ranges built from the real build sequence
 
 CRS's v4 component detail response SHALL include RMS's registered Java version and Maven version as two independent lists of version ranges. A range boundary in one attribute's list SHALL NOT depend on the other attribute's value changing. Ranges SHALL be built by walking the component's RC/RELEASE builds in real version order (not bucketed by any version-format-dependent grouping) and collapsing consecutive builds that share the same (normalized) value into one range; a build with a different or null value ends the run before it.
@@ -50,7 +55,7 @@ A build with a null value for an attribute SHALL end any active run of that attr
 - **WHEN** a run of builds recording Java version X is followed by a build recording null, which is in turn followed by a later run recording Java version X again
 - **THEN** these are two separate ACTUAL ranges, not one continuous range — a null observation always breaks a run, even if the value resumes unchanged afterward
 
-### Requirement: Only a run containing the single most recent build is open-ended
+### Requirement: Only a run containing the single highest-version build is open-ended
 
 A run's ACTUAL range has no upper bound only if it contains the highest-version RC/RELEASE build in the component's entire history, and that build's value is non-null. Every other run is bounded at the point it was broken.
 
@@ -59,10 +64,10 @@ A run's ACTUAL range has no upper bound only if it contains the highest-version 
 - **WHEN** the highest-version RC/RELEASE build RMS has recorded for a component records a non-null Java version, and no build exists beyond it
 - **THEN** ACTUAL's Java range for that value has no upper bound, and covers versions that don't exist yet
 
-#### Scenario: A later null build closes off what would otherwise be open-ended
+#### Scenario: A higher-version null build closes off what would otherwise be open-ended
 
-- **WHEN** a run of non-null values is the most recent thing observed, but a still-later build (recorded after it) has a null value for that attribute
-- **THEN** the run is bounded at its own last member, not left open-ended — the later null build proves the "still true" assumption wrong
+- **WHEN** a run of non-null values is the highest-version thing observed, but a build at a still-higher version number (version order, not chronological order — CRS has no build timestamp to order by) has a null value for that attribute
+- **THEN** the run is bounded at its own last member, not left open-ended — the higher-version null build proves the "still true" assumption wrong
 
 #### Scenario: An earlier run is always bounded, even if its value never changed before the gap
 
@@ -134,6 +139,20 @@ If RMS cannot be reached when the cached ACTUAL report was last refreshed, the a
 
 - **WHEN** a caller inspects the ACTUAL report
 - **THEN** it can tell when the data was last successfully generated, separately from when the last refresh attempt occurred, and whether the last attempt failed
+
+#### Scenario: A 404 during the sweep is treated as unavailable, not as clean
+
+- **WHEN** RMS returns a 404 for a component during the scheduled sweep
+- **THEN** that component's ACTUAL is marked unavailable, the same as any other sweep failure — a 404 SHALL NOT be read as "confirmed, no data"
+
+### Requirement: A rejected write immediately refreshes that component's cached ACTUAL data
+
+When a write is rejected because it disagrees with ACTUAL, the component's cached display data SHALL be refreshed immediately using the data already retrieved for that check, rather than waiting for the next scheduled sweep.
+
+#### Scenario: A rejection updates the display without waiting for the next sweep
+
+- **WHEN** a write is rejected due to a disagreeing ACTUAL value
+- **THEN** a subsequent read of that component's detail response reflects the ACTUAL data that caused the rejection, even before the next scheduled sweep runs
 
 ### Requirement: A write is blocked only when it would introduce a disagreement with ACTUAL
 

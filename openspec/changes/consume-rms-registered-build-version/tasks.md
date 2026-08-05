@@ -45,6 +45,7 @@
   - [ ] 3.1.4 A per-component RMS failure marks only that component unavailable, without failing the whole sweep.
   - [ ] 3.1.5 A concurrency bound and per-call timeout budget are respected — 1 call × N components does not run unbounded.
   - [ ] 3.1.6 Components whose build system is not `MAVEN`/`GRADLE` are skipped entirely — no RMS call made for them.
+  - [ ] 3.1.7 A 404 from RMS for a component during the sweep marks that component unavailable, the same as any other failure — never treated as "confirmed, no data."
 - [ ] 3.2 Implement:
   - [ ] 3.2.1 `RmsBuildParametersService` — sweep orchestration + `@Volatile` cache, mirroring Portal's `ValidationService`.
   - [ ] 3.2.2 `RmsRefreshScheduler` — adaptive-cadence scheduled trigger, mirroring Portal's scheduler for it.
@@ -110,6 +111,9 @@
   - [ ] 5.5.1 Explicit, tight timeout — shorter than the write endpoint's overall request timeout.
   - [ ] 5.5.2 Evaluate the gate as early as possible in the write path, given `ComponentManagementServiceImpl`'s class-level `@Transactional` scope, to minimize how long a DB connection/lock is held waiting on the network call.
 - [ ] 5.6 Confirm tests pass.
+- [ ] 5.7 Write a failing test: after `RmsOverrideGate` rejects a write with `RmsRegisteredValueConflictException`, that component's entry in `RmsBuildParametersService`'s cache is refreshed using the data from the same live call — not left stale until the next scheduled sweep.
+- [ ] 5.8 Implement the targeted refresh from 5.7: on rejection, update the one component's cache entry directly (no full sweep triggered).
+- [ ] 5.9 Confirm tests pass.
 
 ## 6. Docs
 
@@ -125,4 +129,5 @@
   - [ ] 7.3.2 `deleteFieldOverride`.
   - [ ] 7.3.3 `createComponent`.
 - [ ] 7.4 Add an informational (not warning) startup log line when RMS integration is disabled, so it reads as "not configured" rather than being mistaken for the feature not existing.
-- [ ] 7.5 Resolve, or explicitly re-flag for the team, the open `ECLIPSE_MAVEN` question from design.md Decision 13 (treat as Maven-like, or exclude) before implementation depends on an assumed answer.
+- [ ] 7.5 Confirm `ECLIPSE_MAVEN` components are excluded (decided: not treated as Maven-like) — test coverage should assert this explicitly, not just fall out of a `!= MAVEN && != GRADLE` check by accident.
+- [ ] 7.6 Confirm two deliberately-not-fixed gaps stay documented, not silently dropped from review: null-always-breaks-a-run (design.md Decision 2 / Risks) and the build-system-change bypass (design.md Decision 13 / Risks).
