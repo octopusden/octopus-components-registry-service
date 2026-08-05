@@ -9,6 +9,7 @@ import org.springframework.context.annotation.ConditionContext
 import org.springframework.context.annotation.Conditional
 import org.springframework.context.annotation.Configuration
 import org.springframework.core.type.AnnotatedTypeMetadata
+import org.springframework.http.client.SimpleClientHttpRequestFactory
 import org.springframework.web.client.RestClient
 
 /**
@@ -25,7 +26,12 @@ class RMSClientConfig {
     @Conditional(RMSUrlConfiguredCondition::class)
     fun rmsClient(properties: RMSProperties): RMSClient {
         log.info("Wiring RMSClient against {}", properties.url)
-        return DefaultRMSClient(RestClient.builder().baseUrl(properties.url).build())
+        val requestFactory =
+            SimpleClientHttpRequestFactory().apply {
+                setConnectTimeout(properties.connectTimeout.toMillis().toInt())
+                setReadTimeout(properties.readTimeout.toMillis().toInt())
+            }
+        return DefaultRMSClient(RestClient.builder().baseUrl(properties.url).requestFactory(requestFactory).build())
     }
 
     private companion object {
