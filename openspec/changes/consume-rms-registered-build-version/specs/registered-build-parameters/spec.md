@@ -71,12 +71,17 @@ A stored DEFAULT or OVERRIDDEN value that disagrees with an intersecting ACTUAL 
 
 ### Requirement: Comparing values normalizes known spelling differences, and fails closed on unparseable ones
 
-Two values are considered equal, for both range collapsing and the write check, only after normalization: Java's legacy `1.X` spelling and the short `X` spelling (e.g. `1.8` and `8`) SHALL be treated as the same version; Maven values SHALL be compared with a version-aware comparison, not raw string equality. A build whose version string cannot be parsed by CRS's version-comparison logic SHALL NOT be silently placed into a minor group by a fallback comparator — it SHALL be excluded and treated as fail-closed wherever this affects a write decision (see the write-check requirements below).
+Two values are considered equal, for both range collapsing and the write check, only after normalization: Java's legacy `1.X` spelling and the short `X` spelling (e.g. `1.8` and `8`) SHALL be treated as the same version; Maven values SHALL be compared with a version-aware comparison, not raw string equality. The Maven token `"LATEST"` SHALL be treated as its own distinct value, never equal to any numbered version, and SHALL always be considered the maximum when compared against any numbered version. A build whose version string cannot be parsed by CRS's version-comparison logic SHALL NOT be silently placed into a minor group by a fallback comparator — it SHALL be excluded and treated as fail-closed wherever this affects a write decision (see the write-check requirements below).
 
 #### Scenario: Equivalent Java spellings do not produce a false maximum
 
 - **WHEN** a component's ACTUAL Java ranges include one recorded as `"8"` and another recorded as `"1.8"`, and no other Java version is recorded
 - **THEN** the summary rollup (below) reflects a single Java 8 value, not two distinct values
+
+#### Scenario: Maven's "LATEST" always wins the rollup
+
+- **WHEN** a component's ACTUAL Maven ranges include `"3.3.9"` and, for a different range, the literal value `"LATEST"`
+- **THEN** the summary rollup shows `"LATEST"`, not `"3.3.9"`
 
 #### Scenario: An unparseable build version does not silently affect a write decision
 
@@ -94,7 +99,7 @@ The list/summary response SHALL show a single value per attribute: the maximum v
 
 ### Requirement: Display degrades gracefully when RMS is unreachable
 
-If RMS cannot be reached when the cached ACTUAL report was last refreshed, the affected component(s) SHALL report ACTUAL as unavailable, distinguishable from ACTUAL being null, and the rest of the component response SHALL still be returned. Warnings SHALL continue to be computed against the last successfully cached ACTUAL data, and SHALL be shown as unavailable only for a component that has never had a successful sweep.
+If RMS cannot be reached when the cached ACTUAL report was last refreshed, the affected component(s) SHALL still return a normal response. Each DEFAULT/OVERRIDDEN row SHALL be marked with an "ACTUAL data unavailable" indicator, distinguishable from both a disagreement warning (which means "checked, and it disagrees") and a clean row (which means "checked, and it agrees or there's nothing to compare"). Warnings SHALL continue to be computed against the last successfully cached ACTUAL data where one exists, and SHALL be shown as unavailable only for a component that has never had a successful sweep.
 
 #### Scenario: RMS unreachable at read time, prior data exists
 
@@ -104,7 +109,7 @@ If RMS cannot be reached when the cached ACTUAL report was last refreshed, the a
 #### Scenario: RMS unreachable at read time, no prior data exists
 
 - **WHEN** RMS could not be reached and no sweep has ever succeeded for a component
-- **THEN** ACTUAL and any warnings for that component are reported as unavailable
+- **THEN** every DEFAULT/OVERRIDDEN row for that component is marked "ACTUAL data unavailable"
 
 #### Scenario: Cache staleness is visible
 
@@ -155,11 +160,6 @@ Creating or updating a DEFAULT or OVERRIDDEN value for `build.javaVersion`/`buil
 - **WHEN** ACTUAL for the specific range and attribute being written is null
 - **THEN** the write is permitted, unaffected by ACTUAL values on other, non-intersecting ranges
 
-#### Scenario: createComponent is covered
-
-- **WHEN** a new component is created with a `baseConfiguration.build.javaVersion` value that disagrees with ACTUAL already registered under that component's key
-- **THEN** the create request is rejected on the same basis as an update would be
-
 ### Requirement: Deleting a field override requires no ACTUAL check, but recreating it with the same disagreeing value is blocked like any other write
 
 `deleteFieldOverride` SHALL NOT be gated by ACTUAL, regardless of value or disagreement. A subsequent create using the same range and a value that disagrees with ACTUAL SHALL be evaluated as a new write, per the write-blocking requirement above.
@@ -197,11 +197,21 @@ Only a confirmed response with no matching builds for the range/attribute in que
 - **WHEN** the live RMS call returns a response that does not clearly confirm zero matching builds (e.g. an error status)
 - **THEN** the write is rejected rather than treated as ACTUAL being null
 
-### Requirement: A disabled or unconfigured RMS integration does not silently disable enforcement
+#### Scenario: An RMS outage only affects the field actually being changed
 
-When RMS integration is disabled or its URL is unconfigured, the write gate SHALL reject writes the same way it does for an unreachable RMS, rather than skipping the check. This condition SHALL be distinguishable from a genuine reachability failure in operator-facing diagnostics.
+- **WHEN** RMS is unreachable and a write updates a field other than `build.javaVersion`/`build.mavenVersion` (or resends `build.javaVersion`/`build.mavenVersion` unchanged alongside other real changes)
+- **THEN** the write succeeds — the outage never blocks a write that isn't itself changing `build.javaVersion`/`build.mavenVersion`
 
-#### Scenario: Integration disabled
+### Requirement: A disabled RMS integration turns the whole feature off — distinct from RMS being unreachable
 
-- **WHEN** RMS integration is disabled (or its base URL is blank) and an editor attempts to write `build.javaVersion`/`build.mavenVersion`
-- **THEN** the write is rejected, the same as if the live call had failed, and the failure is logged/reported as "integration not configured" rather than "RMS unreachable"
+When RMS integration is disabled (or its URL is unconfigured), neither Part A's display nor Part B's write check SHALL run. No ACTUAL data is shown, and no write to `build.javaVersion`/`build.mavenVersion` is blocked by this feature. This is a distinct condition from RMS being unreachable while the feature is enabled (see the requirements above), which fails closed for writes and fails soft for display — a disabled integration does neither, because the feature is simply not active.
+
+#### Scenario: Integration disabled — writes are unaffected
+
+- **WHEN** RMS integration is disabled (or its base URL is blank) and an editor writes `build.javaVersion`/`build.mavenVersion`
+- **THEN** the write succeeds, behaving exactly as it would if this feature did not exist
+
+#### Scenario: Integration disabled — no ACTUAL data is shown
+
+- **WHEN** RMS integration is disabled and a component's detail or summary response is requested
+- **THEN** no ACTUAL ranges, rollup, or warnings are shown — not even an "unavailable" indicator, since there is no attempt to check RMS at all
