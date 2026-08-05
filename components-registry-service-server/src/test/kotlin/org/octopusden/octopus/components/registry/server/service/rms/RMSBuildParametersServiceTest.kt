@@ -291,8 +291,8 @@ class RMSBuildParametersServiceTest {
     }
 
     @Test
-    @DisplayName("a component that goes down on a later sweep moves from components into unavailable")
-    fun `a previously-available component goes unavailable on a later sweep`() {
+    @DisplayName("a component that goes down on a later sweep keeps its last known-good data, and is never marked unavailable")
+    fun `a previously-available component retains its stale data when a later sweep fails for it`() {
         var componentIsUp = true
         val client =
             RMSClient {
@@ -301,14 +301,36 @@ class RMSBuildParametersServiceTest {
         val service = RMSBuildParametersService(client, EligibleComponentsProvider { listOf("comp-a") }, props())
 
         service.refresh()
-        assertTrue(service.currentReport().components.containsKey("comp-a"))
+        val goodRanges = service.currentReport().components.getValue("comp-a")
 
         componentIsUp = false
         service.refresh()
 
         val report = service.currentReport()
-        assertEquals(setOf("comp-a"), report.unavailableComponents)
-        assertTrue(report.components.isEmpty())
+        assertEquals(goodRanges, report.components["comp-a"], "the last known-good ranges must be retained, not dropped")
+        assertTrue(
+            report.unavailableComponents.isEmpty(),
+            "a component with prior good data must never be marked unavailable, per spec.md: " +
+                "'shown as unavailable only for a component that has never had a successful sweep'",
+        )
+    }
+
+    @Test
+    @DisplayName("a component that becomes ineligible loses its cached data entirely, rather than serving it forever")
+    fun `a component that drops out of eligibility is removed from the report`() {
+        var eligible = true
+        val client = RMSClient { RMSBuildsResult.Available(listOf(RMSBuild("1", "17", null))) }
+        val service = RMSBuildParametersService(client, EligibleComponentsProvider { if (eligible) listOf("comp-a") else emptyList() }, props())
+
+        service.refresh()
+        assertTrue(service.currentReport().components.containsKey("comp-a"))
+
+        eligible = false
+        service.refresh()
+
+        val report = service.currentReport()
+        assertFalse(report.components.containsKey("comp-a"))
+        assertFalse(report.unavailableComponents.contains("comp-a"))
     }
 
     @Test

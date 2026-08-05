@@ -22,9 +22,12 @@ data class ComponentBuildRanges(
 )
 
 /**
- * [components] holds one entry per successfully-swept component (present even if both range
- * lists are empty). [unavailableComponents] holds every eligible component whose individual RMS
- * lookup failed or timed out during the sweep that produced this report — disjoint from [components].
+ * [components] holds the last known-good ranges for every eligible component that has ever
+ * succeeded at least once — a component whose latest sweep failed keeps its previous entry here
+ * (stale-but-honest, mirroring the whole-sweep retention on [RMSBuildParametersService.refresh]).
+ * [unavailableComponents] holds only eligible components that have **never** had a successful
+ * lookup — disjoint from [components]. A component that drops out of eligibility (archived, or no
+ * longer Maven/Gradle) has no entry in either.
  */
 data class RMSBuildParametersReport(
     val generatedAt: Instant?,
@@ -100,9 +103,14 @@ class RMSBuildParametersService(
      * (an [RMSBuildsResult.Unavailable] result, an exception, or a timeout) marks only that
      * component unavailable — it never fails the whole sweep. Only a failure listing the eligible
      * components themselves propagates and fails the sweep.
+     *
+     * A per-component failure retains that component's previous [RMSBuildParametersReport.components]
+     * entry, if it has one, instead of dropping it — only a component with no prior successful
+     * lookup at all lands in [RMSBuildParametersReport.unavailableComponents].
      */
     private fun sweep(client: RMSClient): RMSBuildParametersReport {
         val eligible = eligibleComponentsProvider.listEligibleComponents()
+        val previousComponents = report.components
         val executor = Executors.newFixedThreadPool(properties.sweepConcurrency.coerceAtLeast(1))
         try {
             val futures: List<Pair<String, Future<RMSBuildsResult>>> =
@@ -114,16 +122,20 @@ class RMSBuildParametersService(
 
             for ((component, future) in futures) {
                 val remainingNanos = (deadline - System.nanoTime()).coerceAtLeast(0)
-                try {
-                    when (val result = future.get(remainingNanos, TimeUnit.NANOSECONDS)) {
-                        is RMSBuildsResult.Available -> components[component] = collapse(result.builds)
-                        RMSBuildsResult.Unavailable -> unavailable += component
+                val result =
+                    try {
+                        future.get(remainingNanos, TimeUnit.NANOSECONDS)
+                    } catch (_: TimeoutException) {
+                        future.cancel(true)
+                        null
+                    } catch (_: Exception) {
+                        null
                     }
-                } catch (_: TimeoutException) {
-                    future.cancel(true)
-                    unavailable += component
-                } catch (_: Exception) {
-                    unavailable += component
+
+                when {
+                    result is RMSBuildsResult.Available -> components[component] = collapse(result.builds)
+                    previousComponents.containsKey(component) -> components[component] = previousComponents.getValue(component)
+                    else -> unavailable += component
                 }
             }
 
