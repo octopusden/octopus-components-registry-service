@@ -107,13 +107,11 @@ fun ComponentEntity.toDetailResponse(teamcityBaseUrl: String? = null): Component
  */
 fun ComponentEntity.toSummaryResponse(
     teamcityBaseUrl: String? = null,
-    rmsComponents: Map<String, ComponentBuildRanges> = emptyMap(),
+    rmsRanges: ComponentBuildRanges? = null,
 ): ComponentSummaryResponse {
     val base = this.configurations.firstOrNull { it.rowType == "BASE" }
     val firstTcProject = this.versionLines.minByOrNull { it.teamcityProject.projectId }
     val firstVcsEntry = base?.vcsEntries?.minByOrNull { it.sortOrder }
-    val buildSystem = base?.buildSystem?.takeIf { it.isNotBlank() }
-    val rmsRanges = if (buildSystem == "MAVEN" || buildSystem == "GRADLE") rmsComponents[this.componentKey] else null
     return ComponentSummaryResponse(
         id = this.id!!,
         name = this.componentKey,
@@ -127,7 +125,7 @@ fun ComponentEntity.toSummaryResponse(
         labels = this.labelJunctions.map { it.labelCode },
         releaseManagers = this.releaseManagerUsernames(),
         securityChampions = this.securityChampionUsernames(),
-        buildSystem = buildSystem,
+        buildSystem = base?.buildSystem?.takeIf { it.isNotBlank() },
         javaVersion = base?.javaVersion?.takeIf { it.isNotBlank() },
         jiraProjectKey = base?.jiraProjectKey?.takeIf { it.isNotBlank() },
         vcsPath = firstVcsEntry?.vcsPath?.takeIf { it.isNotBlank() }?.sshUrlToProjectRepo(),

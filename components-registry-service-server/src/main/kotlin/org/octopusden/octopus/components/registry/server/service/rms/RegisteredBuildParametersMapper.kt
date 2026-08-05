@@ -11,9 +11,6 @@ import org.octopusden.octopus.components.registry.server.util.JavaVersionCompara
 import org.octopusden.octopus.components.registry.server.util.MavenVersionComparator
 import org.octopusden.octopus.components.registry.server.util.VersionRangeIntersector
 
-/** A single stored DEFAULT/OVERRIDDEN row (its range and configured value) for one attribute. */
-data class ConfiguredRow(val versionRange: String, val value: String)
-
 /**
  * Pure computation over already-collapsed ACTUAL ranges — no RMS call, no DB, no Spring. Kept
  * separate from [RMSBuildParametersService] (which owns fetching/caching) and from the v4 mapper
@@ -25,11 +22,11 @@ object RegisteredBuildParametersMapper {
         compare: (String, String) -> Int,
     ): String? = ranges.map { it.value }.maxWithOrNull(Comparator(compare))
 
-    fun toActualRanges(ranges: List<BuildRangeCollapser.Run>): List<ActualRange> = ranges.map { ActualRange(it.versionRange, it.value) }
+    private fun toActualRanges(ranges: List<BuildRangeCollapser.Run>): List<ActualRange> = ranges.map { ActualRange(it.versionRange, it.value) }
 
     /** One [ActualDisagreement] per (configured row, intersecting ACTUAL range) pair whose values disagree. */
     fun warnings(
-        configuredRows: List<ConfiguredRow>,
+        configuredRows: List<ActualRange>,
         actualRanges: List<BuildRangeCollapser.Run>,
         valuesEqual: (String, String) -> Boolean,
         compare: (String, String) -> Int,
@@ -53,7 +50,7 @@ object RegisteredBuildParametersMapper {
         compare: (String, String) -> Int,
     ): RegisteredBuildParametersDetail? {
         val buildSystem = response.configurations.firstOrNull { it.rowType == ConfigurationRowType.BASE }?.build?.buildSystem
-        if (buildSystem != "MAVEN" && buildSystem != "GRADLE") return null
+        if (buildSystem !in ELIGIBLE_BUILD_SYSTEMS) return null
 
         val ranges = reportComponents[response.name]
             ?: return RegisteredBuildParametersDetail(emptyList(), emptyList(), emptyList(), emptyList(), actualDataUnavailable = true)
@@ -84,10 +81,19 @@ object RegisteredBuildParametersMapper {
         response: ComponentDetailResponse,
         attribute: String,
         valueOf: (BuildAspectResponse) -> String?,
-    ): List<ConfiguredRow> =
+    ): List<ActualRange> =
         response.configurations.mapNotNull { cfg ->
             if (cfg.rowType != ConfigurationRowType.BASE && cfg.overriddenAttribute != attribute) return@mapNotNull null
             val build = cfg.build ?: return@mapNotNull null
-            valueOf(build)?.let { ConfiguredRow(cfg.versionRange, it) }
+            valueOf(build)?.let { ActualRange(cfg.versionRange, it) }
         }
+
+    /**
+     * Unlike the summary rollup (which can trust `reportComponents` membership alone, since the
+     * sweep only ever tracks Maven/Gradle components), detail must tell "not eligible at all" (→
+     * `null`, no field) apart from "eligible but never successfully swept" (→ `actualDataUnavailable
+     * = true`) — two different response shapes a missing map entry alone can't distinguish. So this
+     * reads the component's *live* build system directly, rather than relying on cache membership.
+     */
+    private val ELIGIBLE_BUILD_SYSTEMS = setOf("MAVEN", "GRADLE")
 }

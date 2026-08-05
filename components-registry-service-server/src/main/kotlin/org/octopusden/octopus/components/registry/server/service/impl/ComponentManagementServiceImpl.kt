@@ -924,7 +924,7 @@ class ComponentManagementServiceImpl(
         val rmsComponents = rmsBuildParametersService?.currentReport()?.components.orEmpty()
         return componentRepository
             .findAll(buildSpecification(filter), translateSort(pageable))
-            .map { it.toSummaryResponse(teamcityProperties.baseUrl, rmsComponents) }
+            .map { it.toSummaryResponse(teamcityProperties.baseUrl, rmsComponents[it.componentKey]) }
     }
 
     /**
