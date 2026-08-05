@@ -6,7 +6,7 @@ package org.octopusden.octopus.components.registry.server.util
  * containing the single highest-version build stays open-ended, and only if that build's value
  * is non-null.
  */
-object RmsBuildRangeCollapser {
+object BuildRangeCollapser {
     data class Build(val version: String, val value: String?)
 
     data class Run(val versionRange: String, val value: String)

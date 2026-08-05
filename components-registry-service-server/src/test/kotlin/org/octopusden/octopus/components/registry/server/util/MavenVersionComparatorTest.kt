@@ -21,4 +21,11 @@ class MavenVersionComparatorTest {
         assertEquals(true, MavenVersionComparator.compare("4.0", "LATEST") < 0)
         assertEquals(true, MavenVersionComparator.compare("LATEST", "LATEST") == 0)
     }
+
+    @Test
+    @DisplayName("sorting a list of raw Maven version strings by compare orders them by version, with LATEST last")
+    fun `sorting by compare orders a list by version with LATEST last`() {
+        val sorted = listOf("3.3.9", "LATEST", "3.3.6", "4.0").sortedWith(MavenVersionComparator::compare)
+        assertEquals(listOf("3.3.6", "3.3.9", "4.0", "LATEST"), sorted)
+    }
 }
