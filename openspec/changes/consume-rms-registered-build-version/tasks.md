@@ -61,34 +61,38 @@
   - [x] 3.1.11 Each consecutive failure doubles the retry interval (5, 10, 20, 40 min, ...), capped at the normal interval (4h) — it never waits longer than normal cadence to retry.
   - [x] 3.1.12 A success resets the cadence to the normal interval and resets the backoff, so the next failure (if any) starts again at 5 minutes, not from wherever the previous backoff left off.
 - [x] 3.2 Implement:
-  - [x] 3.2.1 `RMSBuildParametersService` — sweep orchestration + `@Volatile` cache, mirroring Portal's `ValidationService`. Always registered (not conditional on the `RMSClient` bean); every operation short-circuits on `RMSProperties.enabled` (and a null `RMSClient`) rather than relying on `@ConditionalOnBean` ordering across regular `@Configuration` classes, which is fragile outside Spring Boot auto-configuration.
-  - [x] 3.2.2 `RMSRefreshScheduler` — immediate first sweep on startup, then re-arms itself per the normal/retry/backoff rules above (3.1.8–3.1.12), mirroring Portal's `ValidationRefreshScheduler`'s dynamic-`Trigger` pattern with an added exponential backoff. Covered by `RMSRefreshSchedulerTest` (drives the registered `Trigger` directly with a hand-written `TriggerContext`, no Spring context needed).
+  - [x] 3.2.1 `RMSBuildParametersService` — sweep orchestration + `@Volatile` cache, mirroring Portal's `ValidationService`. Not conditional on the `RMSClient` bean specifically (every operation short-circuits on `RMSProperties.enabled` and a null `RMSClient` rather than relying on `@ConditionalOnBean` ordering across regular `@Configuration` classes, which is fragile outside Spring Boot auto-configuration) — but IS `@ConditionalOnDatabaseEnabled` (SYS-047), since its `EligibleComponentsProvider` is JPA-backed and there is no DB in no-db mode. **Found and fixed during review**: the first pass omitted this and broke `NoDbModeContextTest`/`NoDbModeTeamcityValidationOptionalTest` (`NoSuchBeanDefinitionException` — the whole no-db context failed to start).
+  - [x] 3.2.2 `RMSRefreshScheduler` — immediate first sweep on startup, then re-arms itself per the normal/retry/backoff rules above (3.1.8–3.1.12), mirroring Portal's `ValidationRefreshScheduler`'s dynamic-`Trigger` pattern with an added exponential backoff. Also `@ConditionalOnDatabaseEnabled` (depends on the non-nullable `RMSBuildParametersService`). Covered by `RMSRefreshSchedulerTest` (drives the registered `Trigger` directly with a hand-written `TriggerContext`, no Spring context needed).
   - [x] 3.2.3 `RMSProperties` gained `connectTimeout`/`readTimeout` (wired into `RMSClientConfig`'s `RestClient` via `SimpleClientHttpRequestFactory`) and `sweepConcurrency`/`sweepTimeout` (used by the sweep's bounded executor) — not in the original 2.1.3 list, added here since 3.1.5 requires them and they have no other natural home.
-  - [x] 3.2.4 `EligibleComponentsProvider` (interface) / `JpaEligibleComponentsProvider` (impl) — thin seam over the new repository projection, kept separate so `RMSBuildParametersServiceTest` never touches JPA/DB.
-- [x] 3.3 Confirm tests pass. (`RMSBuildParametersServiceTest` — 23/23 green, no Spring context; `RMSRefreshSchedulerTest` — 2/2 green. `ComponentConfigurationRepositoryEligibleComponentsTest` compiles; not run locally, no Docker in this environment.)
+  - [x] 3.2.4 `EligibleComponentsProvider` (interface) / `JpaEligibleComponentsProvider` (impl, `@ConditionalOnDatabaseEnabled`) — thin seam over the new repository projection, kept separate so `RMSBuildParametersServiceTest` never touches JPA/DB.
+- [x] 3.3 Confirm tests pass. (`RMSBuildParametersServiceTest` — 23/23 green, no Spring context; `RMSRefreshSchedulerTest` — 2/2 green. `ComponentConfigurationRepositoryEligibleComponentsTest` compiles; not run locally, no Docker in this environment. Full `:components-registry-service-server:test` suite — 898+ tests, all green, incl. no-db mode.)
 
 ## 4. Display wiring
 
-- [ ] 4.1 Add `RegisteredBuildParametersDtos`:
-  - [ ] 4.1.1 Per-attribute ACTUAL range list + named warning entries (sub-range + ACTUAL value) for detail view.
-  - [ ] 4.1.2 Normalized max-value rollup shape for summary view.
-- [ ] 4.2 Wire the DTOs in:
-  - [ ] 4.2.1 Rollup fields on `ComponentSummaryResponse`.
-  - [ ] 4.2.2 Full range-list + warning fields on `ComponentDetailResponse`.
-- [ ] 4.3 Write failing tests:
-  - [ ] 4.3.1 The summary rollup is the maximum, normalized version number across all ACTUAL ranges for that attribute (Java major-version-extraction, Maven comparator — not raw string comparison).
-  - [ ] 4.3.2 The rollup can reflect a numerically-higher-but-superseded line — assert the value, not that it matches the "current" line (documented limitation, not a bug).
-  - [ ] 4.3.3 Maven's `"LATEST"` wins the rollup over any numbered version.
-  - [ ] 4.3.4 The detail response's warnings name the correct disagreeing sub-range(s) and ACTUAL value(s).
-  - [ ] 4.3.5 A row intersecting multiple disagreeing ACTUAL ranges produces multiple warning entries.
-  - [ ] 4.3.6 A matching (non-disagreeing) row shows no warning.
-  - [ ] 4.3.7 Each DEFAULT/OVERRIDDEN row is marked "ACTUAL data unavailable" only for a component with no successful sweep ever.
-  - [ ] 4.3.8 Rows are evaluated against stale-but-good cached data when a prior sweep succeeded, even if the latest one failed.
-  - [ ] 4.3.9 A component whose build system is not `MAVEN`/`GRADLE` carries no ACTUAL data, rollup, or warnings at all in its response.
-- [ ] 4.4 Implement:
-  - [ ] 4.4.1 `attachRegisteredBuildParameters` (detail) and the summary rollup computation in `ComponentManagementServiceImpl`, mirroring the existing `attachTeamcityValidations` post-processing pattern.
-  - [ ] 4.4.2 Warning computation: intersect each DEFAULT/OVERRIDDEN row against ACTUAL, per disagreeing sub-range.
-- [ ] 4.5 Confirm tests pass.
+- [x] 4.1 Add `RegisteredBuildParametersDtos`:
+  - [x] 4.1.1 Per-attribute ACTUAL range list + named warning entries (sub-range + ACTUAL value) for detail view. (`ActualRange`, `ActualDisagreement`, `RegisteredBuildParametersDetail`.)
+  - [x] 4.1.2 Normalized max-value rollup shape for summary view. (`RegisteredBuildParametersSummary`.)
+  - [x] 4.1.3 (added on review) `VersionRangeIntersector` (`util/`) — computes the intersecting sub-range of two bracket-notation ranges; no existing utility did this (`VersionRangeFactory.isIntersect` only returns a boolean). Covers the actual half-open-range algebra 4.4.2 needs.
+- [x] 4.2 Wire the DTOs in:
+  - [x] 4.2.1 Rollup fields on `ComponentSummaryResponse` (`registeredBuildParameters: RegisteredBuildParametersSummary?`), wired via `toSummaryResponse`'s new `rmsComponents` parameter, threaded through once per `listComponents` call — no N+1 (mirrors how `buildSystem`/`javaVersion` are already resolved off the same in-memory `base` row).
+  - [x] 4.2.2 Full range-list + warning fields on `ComponentDetailResponse` (`registeredBuildParameters: RegisteredBuildParametersDetail?`), via `attachRegisteredBuildParameters`.
+- [x] 4.3 Write failing tests:
+  - [x] 4.3.1 The summary rollup is the maximum, normalized version number across all ACTUAL ranges for that attribute (Java major-version-extraction, Maven comparator — not raw string comparison).
+  - [x] 4.3.2 The rollup can reflect a numerically-higher-but-superseded line — assert the value, not that it matches the "current" line (documented limitation, not a bug).
+  - [x] 4.3.3 Maven's `"LATEST"` wins the rollup over any numbered version.
+  - [x] 4.3.4 The detail response's warnings name the correct disagreeing sub-range(s) and ACTUAL value(s).
+  - [x] 4.3.5 A row intersecting multiple disagreeing ACTUAL ranges produces multiple warning entries.
+  - [x] 4.3.6 A matching (non-disagreeing) row shows no warning.
+  - [x] 4.3.7 Each DEFAULT/OVERRIDDEN row is marked "ACTUAL data unavailable" only for a component with no successful sweep ever.
+  - [x] 4.3.8 Rows are evaluated against stale-but-good cached data when a prior sweep succeeded, even if the latest one failed. (Falls out of §3's per-component stale retention — `detailFor` reads `RMSBuildParametersService`'s cache map directly and is agnostic to whether an entry is fresh or stale.)
+  - [x] 4.3.9 A component whose build system is not `MAVEN`/`GRADLE` carries no ACTUAL data, rollup, or warnings at all in its response.
+- [x] 4.4 Implement:
+  - [x] 4.4.1 `RegisteredBuildParametersMapper.detailFor` (pure, `service/rms/`) computes the full detail-view result from a `ComponentDetailResponse` + the cache map + a comparator; `ComponentManagementServiceImpl.attachRegisteredBuildParameters` is a thin 3-line call into it, mirroring `attachTeamcityValidations`'s call-site shape. Kept the actual computation out of the giant service class so it's unit-testable without constructing it.
+  - [x] 4.4.2 Warning computation: intersect each DEFAULT/OVERRIDDEN row against ACTUAL via `VersionRangeIntersector`, using the same `numericVersionComparator(numericVersionFactory)` already injected into `ComponentManagementServiceImpl` for its own existing range-overlap checks (not `VersionRangePartition.defaultVersionCompare`, which its own docs say can invert dash-qualifier production versions).
+  - [x] 4.4.3 (added on review) Found and fixed a real regression: `RMSBuildParametersService`/`RMSRefreshScheduler`/`JpaEligibleComponentsProvider` are JPA-backed but were unconditionally registered, breaking CRS's no-db (git-only) mode (`NoSuchBeanDefinitionException`, caught by `NoDbModeContextTest`). Fixed with `@ConditionalOnDatabaseEnabled` (SYS-047's existing escape hatch) on all three; `ComponentManagementServiceImpl`'s nullable, defaulted `rmsBuildParametersService` param already handled the bean's absence correctly once it was actually absent instead of failing to construct.
+  - [x] 4.4.4 (added on review) Regenerated the committed `openapi/v4.json` (`generateOpenApiDocs`) — the new response fields broke `OpenApiV4SpecTest`'s drift gate; pulled forward from §6.1 rather than leaving an existing test red.
+- [x] 4.5 Confirm tests pass. (`RegisteredBuildParametersMapperTest` — 16/16 green; `RegisteredBuildParametersMapperDetailForTest` — 13/13 green; `VersionRangeIntersectorTest` — 11/11 green (both-ALL_VERSIONS, composite-range, malformed-input, and single-point-boundary cases added on review). Full `:components-registry-service-server:test` suite re-run after wiring into shared files — 898+ tests, all green, including the no-db mode fix and the regenerated OpenAPI drift gate.)
+- [x] 4.6 (added on review) `ComponentRegisteredBuildParametersEmbeddingIntegrationTest` — mirrors `ComponentTeamcityValidationEmbeddingIntegrationTest`'s shape (`@SpringBootTest` + Testcontainers Postgres, `@MockBean RMSBuildParametersService`): proves `ComponentManagementServiceImpl` actually calls `attachRegisteredBuildParameters` and wires the result onto the real `getComponent` response — the pure `detailFor` computation was already covered in isolation, but nothing previously exercised the real wiring/call-site. `@Tag("integration")`; compiles, not run locally (no Docker in this environment), runs on CI per this repo's convention for infra-dependent suites — same as `ComponentConfigurationRepositoryEligibleComponentsTest`.
 
 ## 5. Write-gate (unified rule)
 
