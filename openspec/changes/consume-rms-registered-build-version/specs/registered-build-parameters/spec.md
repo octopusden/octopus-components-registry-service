@@ -140,6 +140,21 @@ If RMS cannot be reached when the cached ACTUAL report was last refreshed, the a
 - **WHEN** a caller inspects the ACTUAL report
 - **THEN** it can tell when the data was last successfully generated, separately from when the last refresh attempt occurred, and whether the last attempt failed
 
+#### Scenario: The cache is populated immediately on startup
+
+- **WHEN** CRS starts up
+- **THEN** the first sweep runs immediately, rather than waiting for the first scheduled interval to elapse
+
+#### Scenario: Retry cadence backs off after repeated failures, capped at the normal interval
+
+- **WHEN** the sweep fails repeatedly in a row
+- **THEN** each successive retry waits longer than the last, up to but never exceeding the normal (successful-case) refresh interval
+
+#### Scenario: A success resets the retry backoff
+
+- **WHEN** a sweep succeeds after one or more failures
+- **THEN** the next sweep is scheduled at the normal interval, and a subsequent failure starts the backoff over from its shortest interval, not from where the previous backoff left off
+
 #### Scenario: A 404 during the sweep is treated as unavailable, not as clean
 
 - **WHEN** RMS returns a 404 for a component during the scheduled sweep
