@@ -215,7 +215,7 @@ Everything lives in `components-registry-service-server` — no new Gradle modul
 
 ### 11. Configuration
 
-A new `RmsProperties` (`@ConfigurationProperties(prefix = "release-management-service")`) follows the same "inert by default, two-gate" pattern as `EmployeeServiceProperties`: an `enabled` flag plus a blank-URL-means-unconfigured second gate. Also carries the sweep timing from Decision 3 as configurable, defaulted fields — normal interval (default 4 hours), initial retry interval (default 5 minutes), and the retry backoff cap (default equal to the normal interval) — rather than hardcoding them, so an environment can tune them without a code change. Registered in `ApplicationConfig.kt`'s `@EnableConfigurationProperties` list.
+A new `RMSProperties` (`@ConfigurationProperties(prefix = "release-management-service")`) follows the same "inert by default, two-gate" pattern as `EmployeeServiceProperties`: an `enabled` flag plus a blank-URL-means-unconfigured second gate. Also carries the sweep timing from Decision 3 as configurable, defaulted fields — normal interval (default 4 hours), initial retry interval (default 5 minutes), and the retry backoff cap (default equal to the normal interval) — rather than hardcoding them, so an environment can tune them without a code change. Registered in `ApplicationConfig.kt`'s `@EnableConfigurationProperties` list.
 
 Per Decision 6, "not enabled/configured" now means the same thing for both Part A and Part B: the feature is off. Neither the display sweep nor the write gate runs; nothing is shown, nothing is blocked. This is a single, consistent meaning for the properties object's absence, not two different interpretations per feature.
 
@@ -223,8 +223,8 @@ No `gradle.properties` version pin is added — consistent with Decision 1, this
 
 ### 12. New exception types
 
-- `RmsRegisteredValueConflictException` — ACTUAL disagrees with the value being written, for (part of) the range. Mapped to a 4xx.
-- `RmsUnavailableException` — the feature is enabled, but the live check failed, timed out, or was ambiguous. Mapped to a distinguishable status (e.g. 503). Not thrown at all when the feature is disabled (Decision 6) — a disabled integration means the gate isn't invoked in the first place, not that it invokes and throws.
+- `RMSRegisteredValueConflictException` — ACTUAL disagrees with the value being written, for (part of) the range. Mapped to a 4xx.
+- `RMSUnavailableException` — the feature is enabled, but the live check failed, timed out, or was ambiguous. Mapped to a distinguishable status (e.g. 503). Not thrown at all when the feature is disabled (Decision 6) — a disabled integration means the gate isn't invoked in the first place, not that it invokes and throws.
 
 Both are mapped in `ControllerExceptionHandler.kt`.
 
@@ -244,7 +244,7 @@ If RMS returns a 404 for a component during the scheduled sweep, that component'
 
 ### 15. A write rejected for an ACTUAL conflict triggers an immediate, targeted cache refresh for that one component
 
-Because warnings and ACTUAL display are served from the sweep's cache (Decision 3) while the write gate checks live (Decision 5), it's possible for a user to see a clean, no-warning row, attempt a save, and have it rejected by ACTUAL data the cache hasn't caught up to yet (Decision 3 already accepts this as inherent to a scheduled-sweep design). To keep the display from staying visibly wrong afterward, a write rejected with `RmsRegisteredValueConflictException` triggers a refresh of *that one component's* cache entry immediately — not a full sweep, just the single component whose live check just ran and already has fresh data available from the same call. The next read for that component reflects the conflict that caused the rejection, without waiting for the next scheduled sweep interval.
+Because warnings and ACTUAL display are served from the sweep's cache (Decision 3) while the write gate checks live (Decision 5), it's possible for a user to see a clean, no-warning row, attempt a save, and have it rejected by ACTUAL data the cache hasn't caught up to yet (Decision 3 already accepts this as inherent to a scheduled-sweep design). To keep the display from staying visibly wrong afterward, a write rejected with `RMSRegisteredValueConflictException` triggers a refresh of *that one component's* cache entry immediately — not a full sweep, just the single component whose live check just ran and already has fresh data available from the same call. The next read for that component reflects the conflict that caused the rejection, without waiting for the next scheduled sweep interval.
 
 ## Out of Scope
 
