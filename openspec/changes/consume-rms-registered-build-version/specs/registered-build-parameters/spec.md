@@ -93,9 +93,9 @@ A stored DEFAULT or OVERRIDDEN value that disagrees with an intersecting ACTUAL 
 - **WHEN** a single OVERRIDDEN row's range spans two ACTUAL ranges with two different, disagreeing values
 - **THEN** the row shows two separate warning entries, one per disagreeing sub-range
 
-### Requirement: Comparing values normalizes known spelling differences, and fails closed on unparseable ones
+### Requirement: Comparing values normalizes known spelling differences
 
-Two values are considered equal, for both range collapsing and the write check, only after normalization: Java's legacy `1.X` spelling and the short `X` spelling (e.g. `1.8` and `8`) SHALL be treated as the same version; Maven values SHALL be compared with a version-aware comparison, not raw string equality. The Maven token `"LATEST"` SHALL be treated as its own distinct value, never equal to any numbered version, and SHALL always be considered the maximum when compared against any numbered version. A build whose version string cannot be parsed by CRS's version-comparison logic SHALL NOT be silently ordered into the build sequence by a fallback comparator — it SHALL be excluded and treated as fail-closed wherever this affects a write decision (see the write-check requirements below).
+Two values are considered equal, for both range collapsing and the write check, only after normalization: Java's legacy `1.X` spelling and the short `X` spelling (e.g. `1.8` and `8`) SHALL be treated as the same version; Maven values SHALL be compared with a version-aware comparison, not raw string equality. The Maven token `"LATEST"` SHALL be treated as its own distinct value, never equal to any numbered version, and SHALL always be considered the maximum when compared against any numbered version.
 
 #### Scenario: Equivalent Java spellings do not produce a false maximum
 
@@ -106,11 +106,6 @@ Two values are considered equal, for both range collapsing and the write check, 
 
 - **WHEN** a component's ACTUAL Maven ranges include `"3.3.9"` and, for a different range, the literal value `"LATEST"`
 - **THEN** the summary rollup shows `"LATEST"`, not `"3.3.9"`
-
-#### Scenario: An unparseable build version does not silently affect a write decision
-
-- **WHEN** the write-time check encounters a build whose version string cannot be parsed
-- **THEN** the write is rejected rather than proceeding on a result that may have ordered that build incorrectly in the sequence
 
 ### Requirement: The components list view shows one rollup value per attribute
 
@@ -238,7 +233,7 @@ Every write attempt to `build.javaVersion`/`build.mavenVersion` SHALL check ACTU
 
 ### Requirement: An ambiguous or failed live check fails closed
 
-Only a confirmed response with no matching builds for the range/attribute in question counts as "ACTUAL is null → write permitted." Any other outcome from the live call — an error response, a timeout, a connection failure, or an unparseable build version among the results — SHALL reject the write.
+Only a confirmed response with no matching builds for the range/attribute in question counts as "ACTUAL is null → write permitted." Any other outcome from the live call — an error response, a timeout, or a connection failure — SHALL reject the write.
 
 #### Scenario: RMS unreachable at write time
 

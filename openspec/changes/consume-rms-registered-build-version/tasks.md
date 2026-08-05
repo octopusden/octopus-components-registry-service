@@ -1,7 +1,7 @@
 ## 1. Range-collapsing utility (sequential-run, per attribute)
 
-- [x] 1.1 Write failing unit tests for `RmsBuildRangeCollapser`:
-  - [x] 1.1.1 Builds are sorted by real version order (existing comparator), then walked once per attribute — no version-format-dependent bucketing of any kind.
+- [x] 1.1 Write failing unit tests for `BuildRangeCollapser`:
+  - [x] 1.1.1 Builds are walked once per attribute in the order given (RMS's `descending=false` guarantees ascending real version order — no independent sort/parse) — no version-format-dependent bucketing of any kind.
   - [x] 1.1.2 A run starts at the first build carrying a (normalized) non-null value.
   - [x] 1.1.3 A run extends through consecutive same-valued builds, bridging any stretch where nothing was built at all in between.
   - [x] 1.1.4 A build with a **different** non-null value ends the current run and starts a new one.
@@ -14,14 +14,14 @@
   - [x] 1.1.11 A longer Java form like `"17.0.9"` reads as major version 17 (defensive normalization, not a confirmed real case).
   - [x] 1.1.12 Maven values compare via the existing Maven version comparator, not raw string equality.
   - [x] 1.1.13 The Maven token `"LATEST"` is its own distinct value (never equal to a numbered version) and always wins a max comparison against any numbered version.
-  - [x] 1.1.14 A version string CRS's own `NumericVersionFactory` cannot parse is excluded/flagged, not silently mis-ordered via the fallback comparator.
+  - [x] 1.1.14 Builds are trusted to arrive in ascending real version order (RMS's `descending=false` guarantee) — `collapse()` does not parse or re-sort them, and has no "unparseable build version" case.
 - [x] 1.2 Implement, as separate units:
-  - [x] 1.2.1 `util/RmsBuildRangeCollapser.kt` — attribute-agnostic collapsing; the caller runs it twice, once per attribute, passing in that attribute's `valuesEqual`.
-  - [x] 1.2.2 `util/JavaVersionComparator.kt` — major-version extraction and equality.
-  - [x] 1.2.3 `util/MavenVersionComparator.kt` — version-aware equality/comparison, `LATEST` handling.
+  - [x] 1.2.1 `util/BuildRangeCollapser.kt` — attribute-agnostic collapsing over the (already RMS-ordered) build list; the caller runs it twice, once per attribute, passing in that attribute's `valuesEqual`.
+  - [x] 1.2.2 `util/JavaVersionComparator.kt` — major-version extraction, `valuesEqual`, and `compare` (throws on an unparseable value).
+  - [x] 1.2.3 `util/MavenVersionComparator.kt` — `valuesEqual`/`compare` (version-aware, `LATEST` handling), the same shape as `JavaVersionComparator`.
   - [x] 1.2.4 A single linear walk in `collapse()`: track one "current run" (value + start), close/open runs per the rules above.
   - [x] 1.2.5 Reuse `VersionRangePartition`'s internal `Segment`/`render` helpers for consistent range rendering; `defaultVersionCompare` reused by `MavenVersionComparator`.
-- [x] 1.3 Confirm tests pass. No Spring context required — these are pure functions. (`RmsBuildRangeCollapserTest`, `JavaVersionComparatorTest`, `MavenVersionComparatorTest` all green.)
+- [x] 1.3 Confirm tests pass. No Spring context required — these are pure functions. (`BuildRangeCollapserTest`, `JavaVersionComparatorTest`, `MavenVersionComparatorTest` all green.)
 
 ## 2. RMS client
 
@@ -31,7 +31,7 @@
   - [ ] 2.1.3 Configurable sweep-timing fields: normal interval (default 4h), initial retry interval (default 5min), retry backoff cap (default = normal interval).
   - [ ] 2.1.4 Register in `ApplicationConfig.kt`'s `@EnableConfigurationProperties`.
 - [ ] 2.2 Write failing tests for `RmsClient` (mocked HTTP):
-  - [ ] 2.2.1 One call, unfiltered, against `GET rest/api/1/builds/component/{component}?statuses=RC,RELEASE` — no `javaVersionPresent`/`mavenVersionPresent` filter, since null-value builds must be visible to the collapsing algorithm.
+  - [ ] 2.2.1 One call, unfiltered, against `GET rest/api/1/builds/component/{component}?statuses=RC,RELEASE&descending=false` — no `javaVersionPresent`/`mavenVersionPresent` filter, since null-value builds must be visible to the collapsing algorithm; `descending=false` is what lets `BuildRangeCollapser` trust the response's ascending order without re-sorting.
   - [ ] 2.2.2 The response parses `component`/`version`/`status`/`buildParameters.javaVersion`/`buildParameters.mavenVersion` for every build, including ones where either field is null.
   - [ ] 2.2.3 A confirmed empty-builds 200 response is distinguished, in the client's return type, from any error response (404, timeout, 5xx, connection failure) — the display sweep and the write gate must be able to treat these two outcomes differently.
 - [ ] 2.3 Implement `RmsClient`:
@@ -96,7 +96,7 @@
   - [ ] 5.2.5 DEFAULT write is rejected when it disagrees with ACTUAL anywhere, including a range already fully shadowed by an existing override.
   - [ ] 5.2.6 DEFAULT becomes permanently unwritable once 2+ disagreeing ACTUAL values exist across the component's history — decided/accepted behavior (see design.md's Risks section), no shadow-aware exception is being built for it.
   - [ ] 5.2.7 Independent per-attribute gating: a Java disagreement never blocks a Maven-only write for the same range, and vice versa.
-  - [ ] 5.2.8 With RMS enabled and reachable: an ambiguous/failed live RMS call (404, timeout, 5xx, connection failure, or an unparseable build version) rejects the write, but only when the write actually changes `build.javaVersion`/`build.mavenVersion` — a confirmed empty-builds response is the only thing that permits it.
+  - [ ] 5.2.8 With RMS enabled and reachable: an ambiguous/failed live RMS call (404, timeout, 5xx, connection failure) rejects the write, but only when the write actually changes `build.javaVersion`/`build.mavenVersion` — a confirmed empty-builds response is the only thing that permits it.
   - [ ] 5.2.9 With RMS unreachable: a write that touches an unrelated field, or resends `javaVersion`/`mavenVersion` unchanged, still succeeds normally — this must be tested as its own case, not assumed from 5.2.8.
   - [ ] 5.2.10 With RMS integration disabled: writes to `build.javaVersion`/`build.mavenVersion` succeed unconditionally, because the gate is never invoked — a distinct case from 5.2.8/5.2.9, not to be conflated with either.
   - [ ] 5.2.11 `deleteFieldOverride` succeeds regardless of ACTUAL — no gate call at all.

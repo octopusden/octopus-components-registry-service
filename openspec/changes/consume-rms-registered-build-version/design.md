@@ -98,10 +98,12 @@ Consequences:
 CRS calls RMS's build-listing endpoint directly with its own minimal DTO:
 
 ```
-GET rest/api/1/builds/component/{component}?statuses=RC,RELEASE
+GET rest/api/1/builds/component/{component}?statuses=RC,RELEASE&descending=false
 ```
 
 **One call, unfiltered by attribute presence**. The collapsing algorithm (Decision 2) needs to see builds where the attribute is **null**, because a later null build is what closes off an earlier run rather than leaving it open-ended. Filtering server-side to "only builds where Java is present" would silently remove exactly the null observations the algorithm depends on. Both the **display sweep** (Decision 3) and the **write-time gate** (Decision 5) use this same single, full fetch per component — one call serves both Java and Maven collapsing, and both read paths.
+
+**`descending: false` is relied on directly — CRS does not re-derive or re-verify build order.** RMS's build-listing endpoint guarantees the returned builds are ordered by real version (ascending, oldest first), so the collapsing algorithm (Decision 2) walks the response as-is; it does not parse each build's version itself to establish order, and there is no "unparseable version" case to fail closed on for ordering purposes.
 
 This does **not** depend on RMS's published `client` Gradle artifact (`org.octopusden.octopus.release-management-service:client`). That dependency was confirmed technically non-circular — RMS's `client` module depends only on RMS's own `:common` module, not on CRS — but it was deliberately skipped anyway, to avoid introducing a new cross-repo `gradle.properties` version pin between CRS and RMS.
 
@@ -109,7 +111,7 @@ This does **not** depend on RMS's published `client` Gradle artifact (`org.octop
 
 ### 2. How ACTUAL ranges are built from RMS's builds
 
-Run separately for Java and for Maven — each pass over the same fetched build list (Decision 1), sorted by real version order.
+Run separately for Java and for Maven — each pass over the same fetched build list (Decision 1), taken in RMS's guaranteed ascending real-version order (`descending: false`) with no independent re-sorting.
 
 **Step 1 — Walk the sorted builds, tracking one "current run" (a value + where it started).**
 For each build in order, for the attribute being processed (Java or Maven):
@@ -127,7 +129,6 @@ For each build in order, for the attribute being processed (Java or Maven):
 
 - **Java:** `"1.8"` and `"8"` count as the same version (same for `"1.7"`/`"7"`, and so on) — this is just the existing `JavaVersion.isEight` check (`ToolVersion.kt`), generalized into a full rule instead of a single special case. RMS's real recorded values are confirmed to be short forms like `"17"` or `"1.8"` — but since this data passes through from an external legacy system CRS doesn't control, that's not assumed to hold forever: as a safety net, a longer form like `"17.0.9"` is also read as major version 17.
 - **Maven:** real values look like `"3.3.6"`, `"3.3.9"`, `"4.0"` — plus one special case, the literal word `"LATEST"`. That's not a version number; it means "whatever's newest at build time," so it's never treated as equal to a numbered version. But since "latest" is by definition at least as new as anything else, it always counts as the biggest value when computing the maximum (Decision 4). Everything else compares using CRS's existing Maven version comparator, not plain string equality.
-- **Unparseable values:** if a build's version string can't be parsed at all, don't guess where it belongs. CRS has an existing fallback (`numericVersionComparator` in `EntityMappers.kt`) that quietly does its best with unparseable input elsewhere in the codebase — that's not good enough here, since a wrong guess could place a build in the wrong spot in the sequence and produce a wrong block or a wrong allow. Both the display sweep and the write-time gate (Decision 5) treat this the same way: fail closed.
 
 **Hotfix builds** (`ShortBuildDTO.hotfix`) are included in ACTUAL with no special handling — a hotfix is expected to always carry its parent version line's Java/Maven value, so there's no expected case where it would introduce a spurious value change. Considered and deliberately not filtered, not overlooked.
 
@@ -207,7 +208,7 @@ ACTUAL is never written to CRS's database. It is kept structurally separate from
 
 Everything lives in `components-registry-service-server` — no new Gradle module. New code lives under:
 - `service/rms/` — the RMS client, the sweep service, its scheduler, and the write-time override gate.
-- `util/RmsBuildRangeCollapser.kt` — the pure, sequential-run collapsing function, alongside `VersionRangePartition`.
+- `util/BuildRangeCollapser.kt` — the pure, sequential-run collapsing function, alongside `VersionRangePartition`.
 - `dto/v4/RegisteredBuildParametersDtos.kt` — the new response DTOs (per-attribute range list + warning entries for detail; max-value rollup for summary).
 
 `service/rms/` satisfies the existing ArchUnit rule (`ArchitectureFitnessTest.kt`: `@Service`-annotated beans must reside under `..service..` or `..teamcity..`) without a rule change. Decided: `service/rms/`, not a dedicated top-level `rms/` package — no ArchUnit rule change needed.
@@ -262,6 +263,5 @@ Because warnings and ACTUAL display are served from the sweep's cache (Decision 
 - **A run can bridge a stretch that was never built at all**, as long as the builds on either side agree in value (Decision 2's "consequence worth being explicit about"). This means ACTUAL can claim coverage for a version that was never itself tested, if its neighbors on both sides happen to match. Accepted deliberately, in favor of a much simpler algorithm — distinguishing "confirmed identical" from "presumed identical because nothing said otherwise" was considered and rejected as unneeded complexity here.
 - **A null build always breaks a run — considered treating it as invisible instead, deliberately kept as-is.** This can fragment an otherwise-unchanged Java/Maven version around any old, untracked build, and can cancel the open-ended forward-coverage guarantee if the single most recent build for a component happens to lack data (both are common, since most components have pre-OCTOPUS-2256 history). Kept because the alternative — quietly assuming a missing build agrees with its neighbors — means inferring a value CRS was never actually told, and there is no clean, non-arbitrary rule for how far such an inference should be allowed to reach. See Decision 2 for the full reasoning.
 - **The build-system gate (Decision 13) can be bypassed by changing a component's build system.** A component's build system is itself an editable, ungated field. Changing it away from `MAVEN`/`GRADLE`, writing a disagreeing Java/Maven value while the gate doesn't apply, then changing it back, stores a value that was never actually checked against ACTUAL. Considered and deliberately **not fixed** — changing a component's build system is expected to be very rare, and closing this fully would mean gating the build-system field itself, which is new scope this feature doesn't otherwise need. Documented here as a known, accepted gap, not an oversight.
-- **RMS and CRS might not agree on how to read a version string.** Some version strings RMS sends may not parse the way CRS's own `NumericVersionFactory` expects. When that happens elsewhere in CRS today, `numericVersionComparator` (`EntityMappers.kt`) quietly falls back to a weaker comparison — this feature's collapsing logic (Decision 2) inherits that same risk, and needs its own test for version strings CRS can't parse cleanly.
 - **An environment without RMS configured gets neither the display nor the enforcement — silently, and by design.** Per Decision 6, this is intentional and safe to roll out incrementally (no writes are ever blocked in an unconfigured environment), but it does mean nobody is told "this feature exists but isn't active here" — an operator who forgets to configure it simply never sees ACTUAL data or any blocking, with no error to notice. Worth a startup log line (informational, not a warning) stating the feature is disabled, so it isn't mistaken for "not implemented."
 - **`"LATEST"` creates the same kind of dead-end as DEFAULT, at override level.** If ACTUAL for a range is the literal Maven token `"LATEST"`, no numbered value can ever agree with it — that range's override can only ever be written as `"LATEST"` itself. Accepted the same way as DEFAULT's dead-end (see above): documented, not specially remediated.
