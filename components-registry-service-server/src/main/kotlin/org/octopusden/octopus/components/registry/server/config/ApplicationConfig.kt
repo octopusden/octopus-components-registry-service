@@ -17,7 +17,7 @@ import java.util.concurrent.ConcurrentHashMap
     EmployeeServiceProperties::class,
     ServiceEventProperties::class,
     FeedbackProperties::class,
-    RmsProperties::class,
+    RMSProperties::class,
 )
 class ApplicationConfig(
     val componentsRegistryProperties: ComponentsRegistryProperties,
