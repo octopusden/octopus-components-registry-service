@@ -26,7 +26,8 @@
 - [ ] 2.1 Add `RmsProperties`:
   - [ ] 2.1.1 `@ConfigurationProperties(prefix = "release-management-service")` with an `enabled` flag.
   - [ ] 2.1.2 Blank-URL-means-unconfigured as a second gate.
-  - [ ] 2.1.3 Register in `ApplicationConfig.kt`'s `@EnableConfigurationProperties`.
+  - [ ] 2.1.3 Configurable sweep-timing fields: normal interval (default 4h), initial retry interval (default 5min), retry backoff cap (default = normal interval).
+  - [ ] 2.1.4 Register in `ApplicationConfig.kt`'s `@EnableConfigurationProperties`.
 - [ ] 2.2 Write failing tests for `RmsClient` (mocked HTTP):
   - [ ] 2.2.1 One call, unfiltered, against `GET rest/api/1/builds/component/{component}?statuses=RC,RELEASE` — no `javaVersionPresent`/`mavenVersionPresent` filter, since null-value builds must be visible to the collapsing algorithm.
   - [ ] 2.2.2 The response parses `component`/`version`/`status`/`buildParameters.javaVersion`/`buildParameters.mavenVersion` for every build, including ones where either field is null.
@@ -46,9 +47,14 @@
   - [ ] 3.1.5 A concurrency bound and per-call timeout budget are respected — 1 call × N components does not run unbounded.
   - [ ] 3.1.6 Components whose build system is not `MAVEN`/`GRADLE` are skipped entirely — no RMS call made for them.
   - [ ] 3.1.7 A 404 from RMS for a component during the sweep marks that component unavailable, the same as any other failure — never treated as "confirmed, no data."
+  - [ ] 3.1.8 On startup, the first sweep runs immediately — it does not wait for the first scheduled interval to elapse.
+  - [ ] 3.1.9 After a successful sweep, the next sweep is scheduled at the normal interval (4h).
+  - [ ] 3.1.10 After a failed sweep, the next sweep is scheduled at the retry interval, starting at 5 minutes.
+  - [ ] 3.1.11 Each consecutive failure doubles the retry interval (5, 10, 20, 40 min, ...), capped at the normal interval (4h) — it never waits longer than normal cadence to retry.
+  - [ ] 3.1.12 A success resets the cadence to the normal interval and resets the backoff, so the next failure (if any) starts again at 5 minutes, not from wherever the previous backoff left off.
 - [ ] 3.2 Implement:
   - [ ] 3.2.1 `RmsBuildParametersService` — sweep orchestration + `@Volatile` cache, mirroring Portal's `ValidationService`.
-  - [ ] 3.2.2 `RmsRefreshScheduler` — adaptive-cadence scheduled trigger, mirroring Portal's scheduler for it.
+  - [ ] 3.2.2 `RmsRefreshScheduler` — immediate first sweep on startup, then re-arms itself per the normal/retry/backoff rules above (3.1.8–3.1.12), mirroring Portal's scheduler with an added exponential backoff.
 - [ ] 3.3 Confirm tests pass.
 
 ## 4. Display wiring
