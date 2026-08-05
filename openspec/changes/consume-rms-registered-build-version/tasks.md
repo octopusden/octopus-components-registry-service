@@ -42,23 +42,30 @@
 
 ## 3. Sweep + cache (display)
 
-- [ ] 3.1 Write failing tests for `RMSBuildParametersService`:
-  - [ ] 3.1.1 A full sweep populates the cache with `generatedAt`/`lastAttemptAt` and both attributes' collapsed ranges, computed from the one fetched build list per component.
-  - [ ] 3.1.2 A failed sweep retains previous data and sets `refreshError`.
-  - [ ] 3.1.3 The single-flight guard rejects an overlapping trigger.
-  - [ ] 3.1.4 A per-component RMS failure marks only that component unavailable, without failing the whole sweep.
-  - [ ] 3.1.5 A concurrency bound and per-call timeout budget are respected — 1 call × N components does not run unbounded.
-  - [ ] 3.1.6 Components whose build system is not `MAVEN`/`GRADLE` are skipped entirely — no RMS call made for them.
-  - [ ] 3.1.7 A 404 from RMS for a component during the sweep marks that component unavailable, the same as any other failure — never treated as "confirmed, no data."
-  - [ ] 3.1.8 On startup, the first sweep runs immediately — it does not wait for the first scheduled interval to elapse.
-  - [ ] 3.1.9 After a successful sweep, the next sweep is scheduled at the normal interval (4h).
-  - [ ] 3.1.10 After a failed sweep, the next sweep is scheduled at the retry interval, starting at 5 minutes.
-  - [ ] 3.1.11 Each consecutive failure doubles the retry interval (5, 10, 20, 40 min, ...), capped at the normal interval (4h) — it never waits longer than normal cadence to retry.
-  - [ ] 3.1.12 A success resets the cadence to the normal interval and resets the backoff, so the next failure (if any) starts again at 5 minutes, not from wherever the previous backoff left off.
-- [ ] 3.2 Implement:
-  - [ ] 3.2.1 `RMSBuildParametersService` — sweep orchestration + `@Volatile` cache, mirroring Portal's `ValidationService`.
-  - [ ] 3.2.2 `RMSRefreshScheduler` — immediate first sweep on startup, then re-arms itself per the normal/retry/backoff rules above (3.1.8–3.1.12), mirroring Portal's scheduler with an added exponential backoff.
-- [ ] 3.3 Confirm tests pass.
+- [x] 3.1 Write failing tests for `RMSBuildParametersService` (hand-written fake `RMSClient`/`EligibleComponentsProvider`, no mocking framework):
+  - [x] 3.1.1 A full sweep populates the cache with `generatedAt`/`lastAttemptAt` and both attributes' collapsed ranges, computed from the one fetched build list per component.
+  - [x] 3.1.2 A failed sweep retains previous data and sets `refreshError`.
+  - [x] 3.1.3 The single-flight guard rejects an overlapping trigger.
+  - [x] 3.1.4 A per-component RMS failure marks only that component unavailable, without failing the whole sweep.
+  - [x] 3.1.5 A concurrency bound and per-call timeout budget are respected — 1 call × N components does not run unbounded. (Bounded `ExecutorService` sized by `sweepConcurrency`; each `Future.get` waits only the time remaining in the shared `sweepTimeout` deadline — a slow component is marked unavailable and cancelled rather than left hanging. Directly verified: max simultaneous in-flight calls never exceeds `sweepConcurrency`; total wall-clock across several slow components stays bounded by the shared `sweepTimeout`, not N × per-call duration.)
+  - [x] 3.1.5a (added on review) A per-component call that throws directly, not just one returning `Unavailable`, is isolated the same way — never fails the whole sweep.
+  - [x] 3.1.5b (added on review) `enabled=true` with no `RMSClient` present (defensive: the `@AssertTrue`/condition gates should prevent this, but the service checks anyway) never sweeps.
+  - [x] 3.1.5c (added on review) A component that recovers (or newly fails) on a later sweep correctly moves between `components` and `unavailableComponents` — not left stale in both/neither.
+  - [x] 3.1.5d (added on review) After the single-flight guard rejects an overlapping call, a later non-overlapping `refresh()` still runs — the guard releases on completion, not permanently.
+  - [x] 3.1.5e (added on review) Before any sweep has ever run, `nextDelay()` returns the normal interval.
+  - [x] 3.1.6 Components whose build system is not `MAVEN`/`GRADLE` are skipped entirely — no RMS call made for them. (`ComponentConfigurationRepository.findNonArchivedMavenOrGradleComponentKeys()`, verified by the Testcontainers-backed `ComponentConfigurationRepositoryEligibleComponentsTest`, `@Tag("integration")` — not run locally in this environment, no Docker available; compiles cleanly, runs on CI per this repo's convention for infra-dependent suites.)
+  - [x] 3.1.7 A 404 from RMS for a component during the sweep marks that component unavailable, the same as any other failure — never treated as "confirmed, no data." (Falls out of 3.1.4: RMS's client already maps a 404 to `RMSBuildsResult.Unavailable`, covered by `DefaultRMSClientTest`; the sweep treats `Unavailable` uniformly regardless of the underlying HTTP outcome, so no separate 404-specific case is needed at this layer.)
+  - [x] 3.1.8 On startup, the first sweep runs immediately — it does not wait for the first scheduled interval to elapse.
+  - [x] 3.1.9 After a successful sweep, the next sweep is scheduled at the normal interval (4h).
+  - [x] 3.1.10 After a failed sweep, the next sweep is scheduled at the retry interval, starting at 5 minutes.
+  - [x] 3.1.11 Each consecutive failure doubles the retry interval (5, 10, 20, 40 min, ...), capped at the normal interval (4h) — it never waits longer than normal cadence to retry.
+  - [x] 3.1.12 A success resets the cadence to the normal interval and resets the backoff, so the next failure (if any) starts again at 5 minutes, not from wherever the previous backoff left off.
+- [x] 3.2 Implement:
+  - [x] 3.2.1 `RMSBuildParametersService` — sweep orchestration + `@Volatile` cache, mirroring Portal's `ValidationService`. Always registered (not conditional on the `RMSClient` bean); every operation short-circuits on `RMSProperties.enabled` (and a null `RMSClient`) rather than relying on `@ConditionalOnBean` ordering across regular `@Configuration` classes, which is fragile outside Spring Boot auto-configuration.
+  - [x] 3.2.2 `RMSRefreshScheduler` — immediate first sweep on startup, then re-arms itself per the normal/retry/backoff rules above (3.1.8–3.1.12), mirroring Portal's `ValidationRefreshScheduler`'s dynamic-`Trigger` pattern with an added exponential backoff. Covered by `RMSRefreshSchedulerTest` (drives the registered `Trigger` directly with a hand-written `TriggerContext`, no Spring context needed).
+  - [x] 3.2.3 `RMSProperties` gained `connectTimeout`/`readTimeout` (wired into `RMSClientConfig`'s `RestClient` via `SimpleClientHttpRequestFactory`) and `sweepConcurrency`/`sweepTimeout` (used by the sweep's bounded executor) — not in the original 2.1.3 list, added here since 3.1.5 requires them and they have no other natural home.
+  - [x] 3.2.4 `EligibleComponentsProvider` (interface) / `JpaEligibleComponentsProvider` (impl) — thin seam over the new repository projection, kept separate so `RMSBuildParametersServiceTest` never touches JPA/DB.
+- [x] 3.3 Confirm tests pass. (`RMSBuildParametersServiceTest` — 17/17 green, no Spring context; `RMSRefreshSchedulerTest` — 2/2 green. `ComponentConfigurationRepositoryEligibleComponentsTest` compiles; not run locally, no Docker in this environment.)
 
 ## 4. Display wiring
 

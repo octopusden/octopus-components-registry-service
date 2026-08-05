@@ -152,7 +152,7 @@ Single-flight guarded (an `AtomicBoolean`).
 
 **Inspiration:** `octopus-components-management-portal`'s `ValidationService.kt` — same shape (immediate first sweep, adaptive re-arming based on outcome), scoped here to just java/maven ACTUAL data, with an added exponential backoff Portal's own retry cadence doesn't need at this call volume.
 
-**Cost (see Risks):** this is 1 RMS call per component per sweep cycle, on top of Portal's own independent RMS sweep for its own, unrelated purpose. Needs a concurrency bound and a per-call timeout budget at implementation time — this is not free to leave unbounded.
+**Cost (see Risks):** this is 1 RMS call per component per sweep cycle, on top of Portal's own independent RMS sweep for its own, unrelated purpose. Needs a concurrency bound and a per-call timeout budget at implementation time — this is not free to leave unbounded. (Implemented as a bounded `ExecutorService` sized by `RMSProperties.sweepConcurrency`, with each component's `Future.get` bounded by the time remaining in a shared `sweepTimeout` deadline — a slow or hanging component is cancelled and marked unavailable rather than stalling the rest of the sweep or running unbounded.)
 
 ### 4. Summary vs. detail response shape
 
@@ -216,9 +216,11 @@ Everything lives in `components-registry-service-server` — no new Gradle modul
 
 ### 11. Configuration
 
-A new `RMSProperties` (`@ConfigurationProperties(prefix = "release-management-service")`) follows the same "inert by default" pattern as `EmployeeServiceProperties`: an `enabled` flag, defaulting to `false`, so unconfigured environments boot cleanly. Also carries the sweep timing from Decision 3 as configurable, defaulted fields — normal interval (default 4 hours), initial retry interval (default 5 minutes), and the retry backoff cap (default equal to the normal interval) — rather than hardcoding them, so an environment can tune them without a code change. Registered in `ApplicationConfig.kt`'s `@EnableConfigurationProperties` list.
+A new `RMSProperties` (`@ConfigurationProperties(prefix = "release-management-service")`) follows the same "inert by default" pattern as `EmployeeServiceProperties`: an `enabled` flag, defaulting to `false`, so unconfigured environments boot cleanly. Also carries, as configurable, defaulted fields rather than hardcoding them: the sweep timing from Decision 3 (normal interval, default 4 hours; initial retry interval, default 5 minutes; retry backoff cap, default equal to the normal interval); per-call HTTP connect/read timeouts (defaults 5s/10s), applied to every `RMSClient` request; and the sweep's concurrency bound and overall time budget (defaults 8 in-flight calls, 5-minute budget) that Decision 3's per-component isolation relies on. Registered in `ApplicationConfig.kt`'s `@EnableConfigurationProperties` list.
 
 Per Decision 6, `enabled=false` means the same thing for both Part A and Part B: the feature is off. Neither the display sweep nor the write gate runs; nothing is shown, nothing is blocked. This is a single, consistent meaning, not two different interpretations per feature.
+
+**`RMSBuildParametersService` is always registered, not conditional on the `RMSClient` bean.** Every operation on it (`refresh`, and later the write gate's live check) starts by checking `properties.enabled` and that its `RMSClient` reference is non-null, short-circuiting to a no-op otherwise. `@ConditionalOnBean` was considered and rejected here: it depends on Spring having already processed the bean it references, which is reliable for Spring Boot's own auto-configuration ordering but not guaranteed across two independent, regularly-scanned `@Configuration`/`@Service` classes in application code — the wrong tool for this, even though it looks like the obvious one.
 
 **Two independent gates on `url`, not one:**
 - `@Validated` + a class-level `@AssertTrue` fails Bean Validation (and so application startup) if `enabled=true` and `url` is blank — `TeamcityValidationProperties`'s existing fail-fast pattern in this codebase, applied here because turning the feature on without a URL is a configuration mistake, not a state worth quietly tolerating.
