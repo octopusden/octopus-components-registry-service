@@ -140,7 +140,7 @@ A scheduled background job sweeps every CRS component, calling the RMS client (t
 - `generatedAt` — timestamp of the last *successful* sweep.
 - `lastAttemptAt` — timestamp of the last attempt, success or not.
 - `refreshError` — set when the most recent attempt failed; the previous good data is retained (stale-but-honest), not cleared.
-- Per-component `unavailable` flag for components whose individual RMS lookup failed even in an otherwise-successful sweep.
+- Per-component `unavailable` flag — but only for a component that has **never** had a successful lookup. A component whose individual RMS lookup fails in an otherwise-successful sweep, but which succeeded on some earlier sweep, keeps its last known-good ranges instead (stale-but-honest, same principle as the whole-sweep case above) — it is never flagged unavailable once it has real data to show.
 
 Single-flight guarded (an `AtomicBoolean`).
 
