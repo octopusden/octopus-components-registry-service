@@ -224,4 +224,161 @@ class RMSBuildParametersServiceTest {
         assertTrue(report.components.isEmpty())
         assertFalse(report.unavailableComponents.contains("comp-a"))
     }
+
+    @Test
+    @DisplayName("enabled but with no RMSClient bean present never sweeps (defensive short-circuit)")
+    fun `enabled with a null RMSClient never sweeps`() {
+        val service = RMSBuildParametersService(null, EligibleComponentsProvider { listOf("comp-a") }, props(enabled = true))
+
+        service.refresh()
+
+        val report = service.currentReport()
+        assertNull(report.generatedAt)
+        assertNull(report.lastAttemptAt)
+        assertNull(report.refreshError)
+        assertTrue(report.components.isEmpty())
+    }
+
+    @Test
+    @DisplayName("before any sweep has ever run, the next delay is the normal interval")
+    fun `next delay before any sweep is the normal interval`() {
+        val service =
+            RMSBuildParametersService(
+                RMSClient { RMSBuildsResult.Available(emptyList()) },
+                EligibleComponentsProvider { listOf("comp-a") },
+                props(normalInterval = Duration.ofHours(4)),
+            )
+        assertEquals(Duration.ofHours(4), service.nextDelay())
+    }
+
+    @Test
+    @DisplayName("a component whose call throws directly is isolated the same way as an Unavailable result")
+    fun `a component whose call throws is marked unavailable, not left to fail the whole sweep`() {
+        val client =
+            RMSClient { component ->
+                if (component == "throws") throw RuntimeException("boom") else RMSBuildsResult.Available(listOf(RMSBuild("1", "17", null)))
+            }
+        val service = RMSBuildParametersService(client, EligibleComponentsProvider { listOf("good", "throws") }, props())
+
+        service.refresh()
+
+        val report = service.currentReport()
+        assertEquals(setOf("throws"), report.unavailableComponents)
+        assertTrue(report.components.containsKey("good"))
+        assertNull(report.refreshError, "one component throwing must not fail the whole sweep")
+    }
+
+    @Test
+    @DisplayName("a component that recovers on a later sweep moves from unavailable into components")
+    fun `a previously-unavailable component recovers on the next successful sweep`() {
+        var componentIsUp = false
+        val client =
+            RMSClient {
+                if (componentIsUp) RMSBuildsResult.Available(listOf(RMSBuild("1", "17", null))) else RMSBuildsResult.Unavailable
+            }
+        val service = RMSBuildParametersService(client, EligibleComponentsProvider { listOf("comp-a") }, props())
+
+        service.refresh()
+        assertEquals(setOf("comp-a"), service.currentReport().unavailableComponents)
+        assertTrue(service.currentReport().components.isEmpty())
+
+        componentIsUp = true
+        service.refresh()
+
+        val report = service.currentReport()
+        assertTrue(report.unavailableComponents.isEmpty())
+        assertTrue(report.components.containsKey("comp-a"))
+    }
+
+    @Test
+    @DisplayName("a component that goes down on a later sweep moves from components into unavailable")
+    fun `a previously-available component goes unavailable on a later sweep`() {
+        var componentIsUp = true
+        val client =
+            RMSClient {
+                if (componentIsUp) RMSBuildsResult.Available(listOf(RMSBuild("1", "17", null))) else RMSBuildsResult.Unavailable
+            }
+        val service = RMSBuildParametersService(client, EligibleComponentsProvider { listOf("comp-a") }, props())
+
+        service.refresh()
+        assertTrue(service.currentReport().components.containsKey("comp-a"))
+
+        componentIsUp = false
+        service.refresh()
+
+        val report = service.currentReport()
+        assertEquals(setOf("comp-a"), report.unavailableComponents)
+        assertTrue(report.components.isEmpty())
+    }
+
+    @Test
+    @DisplayName("after the single-flight guard rejects an overlapping call, a later non-overlapping refresh still runs")
+    fun `refreshing resets after completion, so a later refresh is not permanently blocked`() {
+        val callCount = AtomicInteger(0)
+        val client =
+            RMSClient {
+                callCount.incrementAndGet()
+                RMSBuildsResult.Available(emptyList())
+            }
+        val service = RMSBuildParametersService(client, EligibleComponentsProvider { listOf("comp-a") }, props())
+
+        service.refresh()
+        service.refresh()
+
+        assertEquals(2, callCount.get(), "the guard must release after each refresh completes")
+    }
+
+    @Test
+    @DisplayName("the sweep concurrency bound limits how many calls run at once")
+    fun `sweep concurrency bound limits simultaneous in-flight calls`() {
+        val inFlight = AtomicInteger(0)
+        val maxObservedInFlight = AtomicInteger(0)
+        val components = (1..8).map { "comp-$it" }
+        val client =
+            RMSClient {
+                val current = inFlight.incrementAndGet()
+                maxObservedInFlight.updateAndGet { previous -> maxOf(previous, current) }
+                Thread.sleep(100)
+                inFlight.decrementAndGet()
+                RMSBuildsResult.Available(emptyList())
+            }
+        val service =
+            RMSBuildParametersService(
+                client,
+                EligibleComponentsProvider { components },
+                props(sweepConcurrency = 2, sweepTimeout = Duration.ofSeconds(5)),
+            )
+
+        service.refresh()
+
+        assertTrue(
+            maxObservedInFlight.get() <= 2,
+            "at most 2 calls should ever run at once; observed ${maxObservedInFlight.get()}",
+        )
+        assertEquals(8, service.currentReport().components.size)
+    }
+
+    @Test
+    @DisplayName("the overall sweep timeout budget bounds total time across several slow components, not just one")
+    fun `sweep timeout budget bounds total time across multiple slow components`() {
+        val components = (1..4).map { "comp-$it" }
+        val client =
+            RMSClient {
+                Thread.sleep(2000)
+                RMSBuildsResult.Available(emptyList())
+            }
+        val service =
+            RMSBuildParametersService(
+                client,
+                EligibleComponentsProvider { components },
+                props(sweepConcurrency = 1, sweepTimeout = Duration.ofMillis(200)),
+            )
+
+        val start = System.nanoTime()
+        service.refresh()
+        val elapsedMs = (System.nanoTime() - start) / 1_000_000
+
+        assertEquals(components.toSet(), service.currentReport().unavailableComponents)
+        assertTrue(elapsedMs < 2000, "total sweep time must be bounded by the shared budget, not 4 x 2s; took ${elapsedMs}ms")
+    }
 }
