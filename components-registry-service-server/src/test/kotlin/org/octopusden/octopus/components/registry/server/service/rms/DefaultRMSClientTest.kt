@@ -12,8 +12,8 @@ import org.junit.jupiter.api.DisplayName
 import org.junit.jupiter.api.Test
 import org.springframework.web.client.RestClient
 
-class DefaultRmsClientTest {
-    private val client: RmsClient = DefaultRmsClient(RestClient.builder().baseUrl("http://localhost:${wireMock.port()}").build())
+class DefaultRMSClientTest {
+    private val client: RMSClient = DefaultRMSClient(RestClient.builder().baseUrl("http://localhost:${wireMock.port()}").build())
 
     @Test
     @DisplayName("a confirmed empty-builds response is available with no builds")
@@ -23,7 +23,7 @@ class DefaultRmsClientTest {
                 .willReturn(aResponse().withStatus(200).withHeader("Content-Type", "application/json").withBody("[]")),
         )
 
-        assertEquals(RmsBuildsResult.Available(emptyList()), client.getBuilds("empty-component"))
+        assertEquals(RMSBuildsResult.Available(emptyList()), client.getBuilds("empty-component"))
     }
 
     @Test
@@ -44,10 +44,10 @@ class DefaultRmsClientTest {
         )
 
         assertEquals(
-            RmsBuildsResult.Available(
+            RMSBuildsResult.Available(
                 listOf(
-                    RmsBuild("1.0", javaVersion = "17", mavenVersion = null),
-                    RmsBuild("1.1", javaVersion = null, mavenVersion = "3.3.9"),
+                    RMSBuild("1.0", javaVersion = "17", mavenVersion = null),
+                    RMSBuild("1.1", javaVersion = null, mavenVersion = "3.3.9"),
                 ),
             ),
             client.getBuilds("my-component"),
@@ -62,7 +62,7 @@ class DefaultRmsClientTest {
                 .willReturn(aResponse().withStatus(404)),
         )
 
-        assertEquals(RmsBuildsResult.Unavailable, client.getBuilds("missing-component"))
+        assertEquals(RMSBuildsResult.Unavailable, client.getBuilds("missing-component"))
     }
 
     @Test
@@ -73,14 +73,14 @@ class DefaultRmsClientTest {
                 .willReturn(aResponse().withStatus(500)),
         )
 
-        assertEquals(RmsBuildsResult.Unavailable, client.getBuilds("broken-component"))
+        assertEquals(RMSBuildsResult.Unavailable, client.getBuilds("broken-component"))
     }
 
     @Test
     @DisplayName("a connection failure is unavailable")
     fun `connection failure is unavailable`() {
-        val unreachableClient = DefaultRmsClient(RestClient.builder().baseUrl("http://localhost:1").build())
-        assertEquals(RmsBuildsResult.Unavailable, unreachableClient.getBuilds("any-component"))
+        val unreachableClient = DefaultRMSClient(RestClient.builder().baseUrl("http://localhost:1").build())
+        assertEquals(RMSBuildsResult.Unavailable, unreachableClient.getBuilds("any-component"))
     }
 
     companion object {

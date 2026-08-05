@@ -1,6 +1,6 @@
 package org.octopusden.octopus.components.registry.server.service.rms
 
-import org.octopusden.octopus.components.registry.server.config.RmsProperties
+import org.octopusden.octopus.components.registry.server.config.RMSProperties
 import org.slf4j.LoggerFactory
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty
 import org.springframework.context.annotation.Bean
@@ -12,28 +12,28 @@ import org.springframework.core.type.AnnotatedTypeMetadata
 import org.springframework.web.client.RestClient
 
 /**
- * Registers the optional [RmsClient] bean — two-gates:
+ * Registers the optional [RMSClient] bean — two-gates:
  *   1. `@ConditionalOnProperty("release-management-service.enabled", havingValue="true")`, and
- *   2. [RmsUrlConfiguredCondition] — `enabled=true` with a blank `url` still does not register the bean.
- * With no bean registered, callers resolving an `ObjectProvider<RmsClient>` see it empty and the
+ *   2. [RMSUrlConfiguredCondition] — `enabled=true` with a blank `url` still does not register the bean.
+ * With no bean registered, callers resolving an `ObjectProvider<RMSClient>` see it empty and the
  * feature is off, not degraded.
  */
 @Configuration
-class RmsClientConfig {
+class RMSClientConfig {
     @Bean
     @ConditionalOnProperty("release-management-service.enabled", havingValue = "true")
-    @Conditional(RmsUrlConfiguredCondition::class)
-    fun rmsClient(properties: RmsProperties): RmsClient {
-        log.info("Wiring RmsClient against {}", properties.url)
-        return DefaultRmsClient(RestClient.builder().baseUrl(properties.url).build())
+    @Conditional(RMSUrlConfiguredCondition::class)
+    fun rmsClient(properties: RMSProperties): RMSClient {
+        log.info("Wiring RMSClient against {}", properties.url)
+        return DefaultRMSClient(RestClient.builder().baseUrl(properties.url).build())
     }
 
     private companion object {
-        private val log = LoggerFactory.getLogger(RmsClientConfig::class.java)
+        private val log = LoggerFactory.getLogger(RMSClientConfig::class.java)
     }
 }
 
-class RmsUrlConfiguredCondition : Condition {
+class RMSUrlConfiguredCondition : Condition {
     override fun matches(
         context: ConditionContext,
         metadata: AnnotatedTypeMetadata,

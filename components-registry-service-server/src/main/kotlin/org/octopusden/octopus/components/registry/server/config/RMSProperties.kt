@@ -11,7 +11,7 @@ import java.time.Duration
  */
 @Validated
 @ConfigurationProperties(prefix = "release-management-service")
-class RmsProperties(
+class RMSProperties(
     val enabled: Boolean = false,
     val url: String = "",
     /** Sweep cadence after a successful refresh. */

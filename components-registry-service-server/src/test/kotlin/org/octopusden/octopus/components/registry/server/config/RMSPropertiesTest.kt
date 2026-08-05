@@ -9,11 +9,11 @@ import org.junit.jupiter.api.BeforeAll
 import org.junit.jupiter.api.DisplayName
 import org.junit.jupiter.api.Test
 
-class RmsPropertiesTest {
+class RMSPropertiesTest {
     private fun props(
         enabled: Boolean,
         url: String,
-    ) = RmsProperties(enabled = enabled, url = url)
+    ) = RMSProperties(enabled = enabled, url = url)
 
     @Test
     @DisplayName("disabled with a blank url is valid")
