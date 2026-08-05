@@ -49,4 +49,29 @@ class VersionRangeIntersectorTest {
     fun `identical ranges intersect as themselves`() {
         assertEquals("[1,3)", VersionRangeIntersector.intersect("[1,3)", "[1,3)", intCompare))
     }
+
+    @Test
+    @DisplayName("ALL_VERSIONS intersected with itself is ALL_VERSIONS")
+    fun `all versions intersected with all versions is all versions`() {
+        assertEquals("(,0),[0,)", VersionRangeIntersector.intersect("(,0),[0,)", "(,0),[0,)", intCompare))
+    }
+
+    @Test
+    @DisplayName("a composite (multi-segment) range on either side is unsupported and returns null")
+    fun `a composite range returns null`() {
+        assertNull(VersionRangeIntersector.intersect("[1,2),[5,)", "[1,10)", intCompare))
+        assertNull(VersionRangeIntersector.intersect("[1,10)", "[1,2),[5,)", intCompare))
+    }
+
+    @Test
+    @DisplayName("a malformed range string returns null rather than throwing")
+    fun `a malformed range returns null`() {
+        assertNull(VersionRangeIntersector.intersect("not-a-range", "[1,10)", intCompare))
+    }
+
+    @Test
+    @DisplayName("two closed boundaries meeting at exactly one point intersect as that single version, not null")
+    fun `closed boundaries meeting at one point intersect as a single version`() {
+        assertEquals("[3]", VersionRangeIntersector.intersect("[1,3]", "[3,5)", intCompare))
+    }
 }
