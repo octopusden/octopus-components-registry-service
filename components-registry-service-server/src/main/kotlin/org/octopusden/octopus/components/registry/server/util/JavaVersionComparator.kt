@@ -20,4 +20,14 @@ object JavaVersionComparator {
         val majorB = majorVersion(b) ?: return false
         return majorA == majorB
     }
+
+    /** Throws for a value with no extractable major version — unlike [valuesEqual], an ordering can't fall back to a safe default. */
+    fun compare(
+        a: String,
+        b: String,
+    ): Int {
+        val majorA = majorVersion(a) ?: throw IllegalArgumentException("not a parseable Java version: $a")
+        val majorB = majorVersion(b) ?: throw IllegalArgumentException("not a parseable Java version: $b")
+        return majorA.compareTo(majorB)
+    }
 }

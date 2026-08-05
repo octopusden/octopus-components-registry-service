@@ -12,45 +12,19 @@ object RmsBuildRangeCollapser {
     data class Run(val versionRange: String, val value: String)
 
     /**
-     * [hasUnparseableVersion] is true when at least one build's version could not be parsed via the
-     * injected `parseVersion` — that build is excluded from [runs] rather than mis-ordered by a
-     * silently-degrading fallback.
-     */
-    data class Result(
-        val runs: List<Run>,
-        val hasUnparseableVersion: Boolean,
-    )
-
-    /**
-     * @param builds need not be pre-sorted — they are sorted here by [parseVersion].
-     * @param parseVersion the real version ordering for [Build.version]. Throwing for a given
-     *   version excludes that build and sets [Result.hasUnparseableVersion].
+     * @param builds MUST already be in ascending real version order (RMS's `descending=false`
+     *   guarantee) — this does not sort them.
      * @param valuesEqual value equality after normalization; defaults to plain string equality.
      */
-    fun <T : Comparable<T>> collapse(
+    fun collapse(
         builds: List<Build>,
-        parseVersion: (String) -> T,
         valuesEqual: (String, String) -> Boolean = String::equals,
-    ): Result {
-        if (builds.isEmpty()) return Result(emptyList(), false)
-
-        var hasUnparseableVersion = false
-        val parsed =
-            builds.mapNotNull { build ->
-                try {
-                    build to parseVersion(build.version)
-                } catch (_: Exception) {
-                    hasUnparseableVersion = true
-                    null
-                }
-            }
-        val sorted = parsed.sortedBy { it.second }
-
+    ): List<Run> {
         val runs = mutableListOf<Run>()
         var runStartVersion: String? = null
         var runValue: String? = null
 
-        for ((build, _) in sorted) {
+        for (build in builds) {
             val value = build.value
             val sameAsRun = runValue != null && value != null && valuesEqual(runValue, value)
             if (!sameAsRun) {
@@ -66,7 +40,7 @@ object RmsBuildRangeCollapser {
             runs += Run(openRange(runStartVersion), runValue!!)
         }
 
-        return Result(runs, hasUnparseableVersion)
+        return runs
     }
 
     private fun closedRange(
