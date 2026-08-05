@@ -86,4 +86,26 @@ class RegisteredBuildParametersMapperTest {
             RegisteredBuildParametersMapper.warnings(rows, actual, String::equals, intCompare),
         )
     }
+
+    @Test
+    @DisplayName("two independent configured rows are each checked against ACTUAL on their own")
+    fun `two configured rows are each checked independently`() {
+        val rows = listOf(ActualRange("[1,3)", "17"), ActualRange("[3,5)", "11"))
+        val actual = listOf(BuildRangeCollapser.Run("[1,)", "17"))
+        assertEquals(
+            listOf(ActualDisagreement("[3,5)", "17")),
+            RegisteredBuildParametersMapper.warnings(rows, actual, String::equals, intCompare),
+        )
+    }
+
+    @Test
+    @DisplayName("a row spanning two ACTUAL ranges warns only for the one it actually disagrees with")
+    fun `a row agreeing with one ACTUAL range and disagreeing with another warns only once`() {
+        val rows = listOf(ActualRange("[1,10)", "17"))
+        val actual = listOf(BuildRangeCollapser.Run("[1,5)", "17"), BuildRangeCollapser.Run("[5,)", "21"))
+        assertEquals(
+            listOf(ActualDisagreement("[5,10)", "21")),
+            RegisteredBuildParametersMapper.warnings(rows, actual, String::equals, intCompare),
+        )
+    }
 }
