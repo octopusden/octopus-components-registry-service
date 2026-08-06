@@ -63,8 +63,18 @@ class RMSOverrideGate(
 
         val builds = fetchWithBudget(client, componentKey)
 
-        val actualRanges = BuildRangeCollapser.collapse(builds.map { BuildRangeCollapser.Build(it.version, selectValue(it)) }, valuesEqual = valuesEqual)
-        val disagreements = RegisteredBuildParametersMapper.warnings(listOf(ActualRange(newRange, newValue)), actualRanges, valuesEqual, compare)
+        val actualRanges = BuildRangeCollapser.collapse(
+            builds.map {
+                BuildRangeCollapser.Build(it.version, selectValue(it))
+            },
+            valuesEqual = valuesEqual,
+        )
+        val disagreements = RegisteredBuildParametersMapper.warnings(
+            listOf(ActualRange(newRange, newValue)),
+            actualRanges,
+            valuesEqual,
+            compare,
+        )
 
         if (disagreements.isNotEmpty()) {
             rmsBuildParametersService?.refreshComponent(componentKey, builds)
@@ -93,7 +103,7 @@ class RMSOverrideGate(
             is RMSBuildsResult.Available -> result.builds
             RMSBuildsResult.Unavailable ->
                 throw RMSUnavailableException(
-                    "Could not confirm RMS's registered value for component '$componentKey' — the live check failed, timed out, or was ambiguous",
+                    "Could not confirm RMS's registered value for component '$componentKey' — the live check failed or timed out",
                 )
         }
     }

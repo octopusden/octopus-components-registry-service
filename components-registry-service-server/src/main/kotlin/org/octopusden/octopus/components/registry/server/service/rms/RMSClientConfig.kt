@@ -29,7 +29,7 @@ class RMSClientConfig(
     @PostConstruct
     fun logDisabledState() {
         if (!properties.enabled) {
-            log.info("RMS integration is disabled (release-management-service.enabled=false) — no ACTUAL build-parameter data will be shown or enforced")
+            log.info("RMS integration is disabled (release-management-service.enabled=false) — ACTUAL data is off")
         }
     }
 
@@ -43,7 +43,13 @@ class RMSClientConfig(
                 setConnectTimeout(properties.connectTimeout.toMillis().toInt())
                 setReadTimeout(properties.readTimeout.toMillis().toInt())
             }
-        return DefaultRMSClient(RestClient.builder().baseUrl(properties.url).requestFactory(requestFactory).build())
+        return DefaultRMSClient(
+            RestClient
+                .builder()
+                .baseUrl(properties.url)
+                .requestFactory(requestFactory)
+                .build(),
+        )
     }
 
     private companion object {

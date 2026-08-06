@@ -11,7 +11,9 @@ import java.time.Duration
 import java.time.Instant
 
 class RMSRefreshSchedulerTest {
-    private class FakeTriggerContext(private val completion: Instant?) : TriggerContext {
+    private class FakeTriggerContext(
+        private val completion: Instant?,
+    ) : TriggerContext {
         override fun lastScheduledExecution(): Instant? = completion
 
         override fun lastActualExecution(): Instant? = completion
@@ -20,7 +22,11 @@ class RMSRefreshSchedulerTest {
     }
 
     private fun registerTrigger(service: RMSBuildParametersService) =
-        ScheduledTaskRegistrar().also { RMSRefreshScheduler(service).configureTasks(it) }.triggerTaskList.single().trigger
+        ScheduledTaskRegistrar()
+            .also { RMSRefreshScheduler(service).configureTasks(it) }
+            .triggerTaskList
+            .single()
+            .trigger
 
     @Test
     @DisplayName("the first run fires immediately, not after the configured delay")
@@ -46,7 +52,7 @@ class RMSRefreshSchedulerTest {
     @DisplayName("a subsequent run is anchored on the last completion plus the service's next delay")
     fun `subsequent run anchors on last completion plus next delay`() {
         val initialRetryInterval = Duration.ofMinutes(5)
-        val provider = EligibleComponentsProvider { throw RuntimeException("boom") }
+        val provider = EligibleComponentsProvider { throw IllegalStateException("boom") }
         val service =
             RMSBuildParametersService(
                 RMSClient { RMSBuildsResult.Available(emptyList()) },

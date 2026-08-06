@@ -7,9 +7,15 @@ package org.octopusden.octopus.components.registry.server.util
  * is non-null.
  */
 object BuildRangeCollapser {
-    data class Build(val version: String, val value: String?)
+    data class Build(
+        val version: String,
+        val value: String?,
+    )
 
-    data class Run(val versionRange: String, val value: String)
+    data class Run(
+        val versionRange: String,
+        val value: String,
+    )
 
     /**
      * @param builds MUST already be in ascending real version order (RMS's `descending=false`

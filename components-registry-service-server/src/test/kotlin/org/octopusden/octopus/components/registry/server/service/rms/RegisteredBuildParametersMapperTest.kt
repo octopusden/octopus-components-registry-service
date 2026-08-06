@@ -26,7 +26,13 @@ class RegisteredBuildParametersMapperTest {
     fun `rollup normalizes Java spelling before finding the maximum`() {
         val ranges = listOf(BuildRangeCollapser.Run("[1,2)", "1.8"), BuildRangeCollapser.Run("[2,)", "8"))
         val result = RegisteredBuildParametersMapper.rollup(ranges, JavaVersionComparator::compare)
-        assertEquals(8, result?.let { JavaVersionComparator.majorVersion(it) }, "1.8 and 8 must collapse to one major-version-8 maximum, whichever spelling is reported")
+        assertEquals(
+            8,
+            result?.let {
+                JavaVersionComparator.majorVersion(it)
+            },
+            "1.8 and 8 must collapse to one major-version-8 maximum, whichever spelling is reported",
+        )
     }
 
     @Test

@@ -146,7 +146,9 @@ class RMSOverrideGateWriteTest {
     }
 
     @Test
-    @DisplayName("moving a field override's range onto ACTUAL-covered disagreeing territory is rejected, even though its value didn't change")
+    @DisplayName(
+        "moving a field override's range onto ACTUAL-covered disagreeing territory is rejected, even though its value didn't change",
+    )
     fun `moving an override range onto disagreeing territory is rejected`() {
         `when`(rmsClient.getBuilds(anyString())).thenReturn(RMSBuildsResult.Available(listOf(RMSBuild("5", "17", null))))
         val id = newComponent()
@@ -213,7 +215,9 @@ class RMSOverrideGateWriteTest {
     }
 
     @Test
-    @DisplayName("recreating a field override with the same, still-disagreeing value after deleting it is rejected, just like any other write")
+    @DisplayName(
+        "recreating a field override with the same, still-disagreeing value after deleting it is rejected, just like any other write",
+    )
     fun `recreating the same disagreeing override after delete is rejected`() {
         `when`(rmsClient.getBuilds(anyString())).thenReturn(RMSBuildsResult.Unavailable)
         val id = newComponent()
@@ -234,7 +238,13 @@ class RMSOverrideGateWriteTest {
 
     private fun newComponent(javaVersion: String? = null): String {
         val name = "rms-gate-${UUID.randomUUID().toString().take(8)}"
-        val build = if (javaVersion != null) """"build":{"buildSystem":"MAVEN","javaVersion":"$javaVersion"}""" else """"build":{"buildSystem":"MAVEN"}"""
+        val build = if (javaVersion !=
+            null
+        ) {
+            """"build":{"buildSystem":"MAVEN","javaVersion":"$javaVersion"}"""
+        } else {
+            """"build":{"buildSystem":"MAVEN"}"""
+        }
         val body =
             mvc
                 .perform(

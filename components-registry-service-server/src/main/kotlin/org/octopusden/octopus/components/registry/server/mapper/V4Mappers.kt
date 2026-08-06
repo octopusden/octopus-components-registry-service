@@ -13,11 +13,6 @@ import org.octopusden.octopus.components.registry.server.dto.v4.ComponentGroupRe
 import org.octopusden.octopus.components.registry.server.dto.v4.ComponentGroupRole
 import org.octopusden.octopus.components.registry.server.dto.v4.ComponentSummaryResponse
 import org.octopusden.octopus.components.registry.server.dto.v4.ConfigurationRowType
-import org.octopusden.octopus.components.registry.server.dto.v4.RegisteredBuildParametersSummary
-import org.octopusden.octopus.components.registry.server.service.rms.ComponentBuildRanges
-import org.octopusden.octopus.components.registry.server.service.rms.RegisteredBuildParametersMapper
-import org.octopusden.octopus.components.registry.server.util.JavaVersionComparator
-import org.octopusden.octopus.components.registry.server.util.MavenVersionComparator
 import org.octopusden.octopus.components.registry.server.dto.v4.DocLinkResponse
 import org.octopusden.octopus.components.registry.server.dto.v4.DockerImageRequest
 import org.octopusden.octopus.components.registry.server.dto.v4.DockerImageResponse
@@ -31,6 +26,7 @@ import org.octopusden.octopus.components.registry.server.dto.v4.MavenArtifactReq
 import org.octopusden.octopus.components.registry.server.dto.v4.MavenArtifactResponse
 import org.octopusden.octopus.components.registry.server.dto.v4.PackageRequest
 import org.octopusden.octopus.components.registry.server.dto.v4.PackageResponse
+import org.octopusden.octopus.components.registry.server.dto.v4.RegisteredBuildParametersSummary
 import org.octopusden.octopus.components.registry.server.dto.v4.SecurityGroupResponse
 import org.octopusden.octopus.components.registry.server.dto.v4.TeamcityProjectResponse
 import org.octopusden.octopus.components.registry.server.dto.v4.VcsEntryRequest
@@ -40,6 +36,10 @@ import org.octopusden.octopus.components.registry.server.entity.ComponentArtifac
 import org.octopusden.octopus.components.registry.server.entity.ComponentBuildToolBeanEntity
 import org.octopusden.octopus.components.registry.server.entity.ComponentConfigurationEntity
 import org.octopusden.octopus.components.registry.server.entity.ComponentEntity
+import org.octopusden.octopus.components.registry.server.service.rms.ComponentBuildRanges
+import org.octopusden.octopus.components.registry.server.service.rms.RegisteredBuildParametersMapper
+import org.octopusden.octopus.components.registry.server.util.JavaVersionComparator
+import org.octopusden.octopus.components.registry.server.util.MavenVersionComparator
 
 /**
  * Maps a fully-loaded `ComponentEntity` (with `configurations` + per-component

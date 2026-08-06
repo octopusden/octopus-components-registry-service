@@ -14,6 +14,11 @@ import java.util.concurrent.CountDownLatch
 import java.util.concurrent.TimeUnit
 import java.util.concurrent.atomic.AtomicInteger
 
+/** Stands in for an arbitrary sweep-time failure, avoiding detekt's generic-exception rules on the fakes below. */
+private class SimulatedFailure(
+    message: String,
+) : Exception(message)
+
 class RMSBuildParametersServiceTest {
     private fun props(
         enabled: Boolean = true,
@@ -35,7 +40,8 @@ class RMSBuildParametersServiceTest {
     @Test
     @DisplayName("a full sweep populates the cache with generatedAt/lastAttemptAt and both attributes' collapsed ranges")
     fun `full sweep populates the cache with collapsed ranges`() {
-        val builds = listOf(RMSBuild("1", javaVersion = "17", mavenVersion = "3.3.6"), RMSBuild("2", javaVersion = "17", mavenVersion = "3.3.6"))
+        val builds =
+            listOf(RMSBuild("1", javaVersion = "17", mavenVersion = "3.3.6"), RMSBuild("2", javaVersion = "17", mavenVersion = "3.3.6"))
         val client = RMSClient { RMSBuildsResult.Available(builds) }
         val service = RMSBuildParametersService(client, EligibleComponentsProvider { listOf("comp-a") }, props())
 
@@ -55,7 +61,7 @@ class RMSBuildParametersServiceTest {
     fun `a failed sweep retains previous data and sets refreshError`() {
         val client = RMSClient { RMSBuildsResult.Available(listOf(RMSBuild("1", "17", null))) }
         var shouldFail = false
-        val provider = EligibleComponentsProvider { if (shouldFail) throw RuntimeException("boom") else listOf("comp-a") }
+        val provider = EligibleComponentsProvider { if (shouldFail) throw SimulatedFailure("boom") else listOf("comp-a") }
         val service = RMSBuildParametersService(client, provider, props())
 
         service.refresh()
@@ -74,7 +80,7 @@ class RMSBuildParametersServiceTest {
     @Test
     @DisplayName("when the very first sweep ever fails, generatedAt stays null while lastAttemptAt is set")
     fun `the first sweep failing leaves generatedAt null but sets lastAttemptAt`() {
-        val provider = EligibleComponentsProvider { throw RuntimeException("boom") }
+        val provider = EligibleComponentsProvider { throw SimulatedFailure("boom") }
         val service = RMSBuildParametersService(RMSClient { RMSBuildsResult.Available(emptyList()) }, provider, props())
 
         service.refresh()
@@ -169,7 +175,7 @@ class RMSBuildParametersServiceTest {
     @Test
     @DisplayName("after a failed sweep, the next delay starts at the initial retry interval")
     fun `after failure next delay starts at the initial retry interval`() {
-        val provider = EligibleComponentsProvider { throw RuntimeException("boom") }
+        val provider = EligibleComponentsProvider { throw SimulatedFailure("boom") }
         val service =
             RMSBuildParametersService(
                 RMSClient { RMSBuildsResult.Available(emptyList()) },
@@ -183,7 +189,7 @@ class RMSBuildParametersServiceTest {
     @Test
     @DisplayName("each consecutive failure doubles the retry interval, capped at the backoff cap")
     fun `each consecutive failure doubles the retry interval capped at the backoff cap`() {
-        val provider = EligibleComponentsProvider { throw RuntimeException("boom") }
+        val provider = EligibleComponentsProvider { throw SimulatedFailure("boom") }
         val service =
             RMSBuildParametersService(
                 RMSClient { RMSBuildsResult.Available(emptyList()) },
@@ -203,7 +209,7 @@ class RMSBuildParametersServiceTest {
     @DisplayName("a success resets the backoff, so the next failure starts again at the initial retry interval")
     fun `a success resets the backoff`() {
         var shouldFail = true
-        val provider = EligibleComponentsProvider { if (shouldFail) throw RuntimeException("boom") else listOf("comp-a") }
+        val provider = EligibleComponentsProvider { if (shouldFail) throw SimulatedFailure("boom") else listOf("comp-a") }
         val service =
             RMSBuildParametersService(
                 RMSClient { RMSBuildsResult.Available(emptyList()) },
@@ -271,7 +277,7 @@ class RMSBuildParametersServiceTest {
     fun `a component whose call throws is marked unavailable, not left to fail the whole sweep`() {
         val client =
             RMSClient { component ->
-                if (component == "throws") throw RuntimeException("boom") else RMSBuildsResult.Available(listOf(RMSBuild("1", "17", null)))
+                if (component == "throws") throw SimulatedFailure("boom") else RMSBuildsResult.Available(listOf(RMSBuild("1", "17", null)))
             }
         val service = RMSBuildParametersService(client, EligibleComponentsProvider { listOf("good", "throws") }, props())
 
@@ -289,7 +295,7 @@ class RMSBuildParametersServiceTest {
         var shouldThrow = false
         val client =
             RMSClient {
-                if (shouldThrow) throw RuntimeException("boom") else RMSBuildsResult.Available(listOf(RMSBuild("1", "17", null)))
+                if (shouldThrow) throw SimulatedFailure("boom") else RMSBuildsResult.Available(listOf(RMSBuild("1", "17", null)))
             }
         val service = RMSBuildParametersService(client, EligibleComponentsProvider { listOf("comp-a") }, props())
 
@@ -388,7 +394,8 @@ class RMSBuildParametersServiceTest {
     fun `a component that drops out of eligibility is removed from the report`() {
         var eligible = true
         val client = RMSClient { RMSBuildsResult.Available(listOf(RMSBuild("1", "17", null))) }
-        val service = RMSBuildParametersService(client, EligibleComponentsProvider { if (eligible) listOf("comp-a") else emptyList() }, props())
+        val service =
+            RMSBuildParametersService(client, EligibleComponentsProvider { if (eligible) listOf("comp-a") else emptyList() }, props())
 
         service.refresh()
         assertTrue(service.currentReport().components.containsKey("comp-a"))

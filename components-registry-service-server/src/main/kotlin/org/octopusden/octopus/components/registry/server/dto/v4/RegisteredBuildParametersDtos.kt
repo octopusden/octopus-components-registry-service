@@ -1,8 +1,14 @@
 package org.octopusden.octopus.components.registry.server.dto.v4
 
-data class ActualRange(val versionRange: String, val value: String)
+data class ActualRange(
+    val versionRange: String,
+    val value: String,
+)
 
-data class ActualDisagreement(val subRange: String, val actualValue: String)
+data class ActualDisagreement(
+    val subRange: String,
+    val actualValue: String,
+)
 
 data class RegisteredBuildParametersDetail(
     val javaActualRanges: List<ActualRange>,

@@ -7,8 +7,16 @@ object JavaVersionComparator {
 
     fun majorVersion(raw: String): Int? {
         val trimmed = raw.trim()
-        return ONE_DOT.find(trimmed)?.groupValues?.get(1)?.toIntOrNull()
-            ?: PLAIN.find(trimmed)?.groupValues?.get(1)?.toIntOrNull()
+        return ONE_DOT
+            .find(trimmed)
+            ?.groupValues
+            ?.get(1)
+            ?.toIntOrNull()
+            ?: PLAIN
+                .find(trimmed)
+                ?.groupValues
+                ?.get(1)
+                ?.toIntOrNull()
     }
 
     /** An unparseable value is never equal to anything. */

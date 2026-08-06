@@ -27,7 +27,9 @@ class DefaultRMSClientTest {
     }
 
     @Test
-    @DisplayName("parses version and buildParameters, including a build where one attribute is null, tolerating unused fields like component/status/hotfix")
+    @DisplayName(
+        "parses version and buildParameters, incl. a null attribute, tolerating unused fields like component/status/hotfix",
+    )
     fun `parses version and buildParameters for every build`() {
         wireMock.stubFor(
             get(urlEqualTo("/rest/api/1/builds/component/my-component?statuses=RC,RELEASE&descending=false"))

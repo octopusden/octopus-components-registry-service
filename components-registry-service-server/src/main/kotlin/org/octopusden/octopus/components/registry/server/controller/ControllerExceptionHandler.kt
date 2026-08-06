@@ -121,7 +121,7 @@ class ControllerExceptionHandler {
         return HttpEntity(ErrorResponse(e.localizedMessage, ErrorCodes.RMS_REGISTERED_VALUE_CONFLICT))
     }
 
-    /** The live RMS check needed to evaluate a build parameters write failed, timed out, or was ambiguous — distinguishable from an explicit conflict above. */
+    /** The live RMS check for a build parameters write failed, timed out, or was ambiguous. */
     @ExceptionHandler(RMSUnavailableException::class)
     @ResponseStatus(HttpStatus.SERVICE_UNAVAILABLE)
     fun rmsUnavailableExceptionHandler(e: RMSUnavailableException): HttpEntity<ErrorResponse> {

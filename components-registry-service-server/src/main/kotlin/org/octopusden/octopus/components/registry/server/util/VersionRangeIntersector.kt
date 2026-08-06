@@ -18,12 +18,16 @@ object VersionRangeIntersector {
         val (lo, loIncl) = maxLower(segA.lo, segA.loIncl, segB.lo, segB.loIncl, compare)
         val (hi, hiIncl) = minUpper(segA.hi, segA.hiIncl, segB.hi, segB.hiIncl, compare)
 
-        if (lo != null && hi != null) {
-            val cmp = compare(lo, hi)
-            if (cmp > 0 || (cmp == 0 && !(loIncl && hiIncl))) return null
-        }
+        if (lo != null && hi != null && isEmpty(compare(lo, hi), loIncl, hiIncl)) return null
         return VersionRangePartition.render(VersionRangePartition.Segment(lo, loIncl, hi, hiIncl))
     }
+
+    /** `lo..hi` (given how each bound compares and whether each is inclusive) contains no version at all. */
+    private fun isEmpty(
+        loHiCompare: Int,
+        loIncl: Boolean,
+        hiIncl: Boolean,
+    ): Boolean = loHiCompare > 0 || (loHiCompare == 0 && !(loIncl && hiIncl))
 
     private fun segmentOf(range: String): VersionRangePartition.Segment? =
         if (VersionRangePartition.isAllVersions(range)) {

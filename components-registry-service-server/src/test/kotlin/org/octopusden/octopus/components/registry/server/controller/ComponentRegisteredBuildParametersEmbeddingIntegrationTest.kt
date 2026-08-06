@@ -117,7 +117,9 @@ class ComponentRegisteredBuildParametersEmbeddingIntegrationTest {
                 generatedAt = Instant.now(),
                 lastAttemptAt = Instant.now(),
                 refreshError = null,
-                components = mapOf(name to ComponentBuildRanges(javaRanges = listOf(BuildRangeCollapser.Run("[1,)", "11")), mavenRanges = emptyList())),
+                components = mapOf(
+                    name to ComponentBuildRanges(javaRanges = listOf(BuildRangeCollapser.Run("[1,)", "11")), mavenRanges = emptyList()),
+                ),
                 unavailableComponents = emptySet(),
             ),
         )
@@ -125,7 +127,14 @@ class ComponentRegisteredBuildParametersEmbeddingIntegrationTest {
 
         val registeredBuildParameters = getComponent(id)["registeredBuildParameters"]
         assertEquals(false, registeredBuildParameters.get("actualDataUnavailable").asBoolean())
-        assertEquals("11", registeredBuildParameters.get("javaActualRanges").get(0).get("value").asText())
+        assertEquals(
+            "11",
+            registeredBuildParameters
+                .get("javaActualRanges")
+                .get(0)
+                .get("value")
+                .asText(),
+        )
     }
 
     private fun newComponent(name: String = "rms-embed-${UUID.randomUUID().toString().take(8)}"): String {

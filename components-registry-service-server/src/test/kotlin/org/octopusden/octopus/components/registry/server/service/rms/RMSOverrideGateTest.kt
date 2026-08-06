@@ -49,7 +49,10 @@ class RMSOverrideGateTest {
     @DisplayName("no effective change permits the write without ever calling RMS")
     fun `no effective change permits without calling RMS`() {
         val callCount = AtomicInteger(0)
-        val client = RMSClient { callCount.incrementAndGet(); RMSBuildsResult.Unavailable }
+        val client = RMSClient {
+            callCount.incrementAndGet()
+            RMSBuildsResult.Unavailable
+        }
         assertDoesNotThrow { check(gate(client), effectiveChange = false) }
         assertEquals(0, callCount.get())
     }
@@ -58,7 +61,10 @@ class RMSOverrideGateTest {
     @DisplayName("clearing the value to null permits the write without calling RMS")
     fun `clearing to null permits without calling RMS`() {
         val callCount = AtomicInteger(0)
-        val client = RMSClient { callCount.incrementAndGet(); RMSBuildsResult.Unavailable }
+        val client = RMSClient {
+            callCount.incrementAndGet()
+            RMSBuildsResult.Unavailable
+        }
         assertDoesNotThrow { check(gate(client), newValue = null) }
         assertEquals(0, callCount.get())
     }
@@ -67,7 +73,10 @@ class RMSOverrideGateTest {
     @DisplayName("a disabled integration permits the write without calling RMS")
     fun `disabled integration permits without calling RMS`() {
         val callCount = AtomicInteger(0)
-        val client = RMSClient { callCount.incrementAndGet(); RMSBuildsResult.Unavailable }
+        val client = RMSClient {
+            callCount.incrementAndGet()
+            RMSBuildsResult.Unavailable
+        }
         assertDoesNotThrow { check(gate(client, enabled = false)) }
         assertEquals(0, callCount.get())
     }
@@ -82,7 +91,10 @@ class RMSOverrideGateTest {
     @DisplayName("a component whose build system is not Maven or Gradle permits the write without calling RMS")
     fun `non-Maven-Gradle build system permits without calling RMS`() {
         val callCount = AtomicInteger(0)
-        val client = RMSClient { callCount.incrementAndGet(); RMSBuildsResult.Unavailable }
+        val client = RMSClient {
+            callCount.incrementAndGet()
+            RMSBuildsResult.Unavailable
+        }
         assertDoesNotThrow { check(gate(client), buildSystem = "GOLANG") }
         assertEquals(0, callCount.get())
     }
@@ -91,7 +103,10 @@ class RMSOverrideGateTest {
     @DisplayName("ECLIPSE_MAVEN is not treated as Maven — permits the write without calling RMS")
     fun `ECLIPSE_MAVEN permits without calling RMS`() {
         val callCount = AtomicInteger(0)
-        val client = RMSClient { callCount.incrementAndGet(); RMSBuildsResult.Unavailable }
+        val client = RMSClient {
+            callCount.incrementAndGet()
+            RMSBuildsResult.Unavailable
+        }
         assertDoesNotThrow { check(gate(client), buildSystem = "ECLIPSE_MAVEN") }
         assertEquals(0, callCount.get())
     }
@@ -100,7 +115,10 @@ class RMSOverrideGateTest {
     @DisplayName("a null build system permits the write without calling RMS")
     fun `null build system permits without calling RMS`() {
         val callCount = AtomicInteger(0)
-        val client = RMSClient { callCount.incrementAndGet(); RMSBuildsResult.Unavailable }
+        val client = RMSClient {
+            callCount.incrementAndGet()
+            RMSBuildsResult.Unavailable
+        }
         assertDoesNotThrow { check(gate(client), buildSystem = null) }
         assertEquals(0, callCount.get())
     }
