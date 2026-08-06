@@ -1583,20 +1583,6 @@ object id30Step2AggregateAuto : BuildType({
         }
     }
 
-    // The template (RDDepartment_PostGithubStatus) gives us exactly two steps —
-    // "...Success" (execute_if_success) and "...Failed" (execute_only_if_failed) —
-    // and picking between them relies on THIS build already reading as "failing"
-    // by the time they run. That's what onDependencyFailure = ADD_PROBLEM above is
-    // for: a failed fan-out build attaches a SNAPSHOT_DEPENDENCY_ERROR_BUILD_PROCEEDS_TYPE
-    // problem, which flips the preliminary status to failing before either step
-    // executes, so "...Failed" fires and posts `failure` to GitHub (confirmed in build
-    // #11959980's log: it ran and exited 0). The side effect is that the SAME problem
-    // then also finishes id30Step2AggregateAuto itself red — but this build has no
-    // work of its own; reporting the fan-out's outcome to GitHub IS the job, and by
-    // this point it has already done that correctly regardless of which branch ran.
-    // Force the final status back to green, LAST (after both conditional steps have
-    // made their choice off the still-failing status), so a red dependency shows up
-    // as a failing GitHub commit status — not as a red TeamCity aggregator build.
     steps {
         script {
             name = "Force green status (this build only reports the fan-out's status, it doesn't gate on it)"
