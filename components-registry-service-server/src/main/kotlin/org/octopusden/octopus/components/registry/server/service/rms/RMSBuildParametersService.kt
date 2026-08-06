@@ -143,7 +143,7 @@ class RMSBuildParametersService(
     /**
      * One full sweep: eligible components fetched with [RMSProperties.sweepConcurrency] in-flight
      * calls at a time, bounded overall by [RMSProperties.sweepTimeout]. A per-component failure
-     * (an [org.octopusden.octopus.components.registry.server.service.rms.client.RMSBuildsResult.Unavailable] result, an exception, or a timeout) marks only that
+     * (an [RMSBuildsResult.Unavailable] result, an exception, or a timeout) marks only that
      * component unavailable — it never fails the whole sweep. Only a failure listing the eligible
      * components themselves propagates and fails the sweep.
      *

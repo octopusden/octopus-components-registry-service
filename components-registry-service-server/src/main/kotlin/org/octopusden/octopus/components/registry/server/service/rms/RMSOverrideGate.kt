@@ -19,7 +19,7 @@ import java.util.concurrent.TimeoutException
 /**
  * Live write-time check for `build.javaVersion`/`build.mavenVersion`: unlike
  * [RMSBuildParametersService], this never reads the display cache — every call makes its own
- * synchronous [org.octopusden.octopus.components.registry.server.service.rms.client.RMSClient] call, using the same unfiltered fetch shape as the sweep. Registered
+ * synchronous [RMSClient] call, using the same unfiltered fetch shape as the sweep. Registered
  * unconditionally (no direct JPA dependency of its own) — both collaborators are already nullable
  * and this degrades to a no-op the same way whether they're absent because the feature is
  * disabled or because no-db mode dropped [RMSBuildParametersService].
