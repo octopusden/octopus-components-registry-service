@@ -213,6 +213,41 @@ Rules:
 4. System verifier checks requirements with status ✅ Tested
 5. All requirement content must be written in English
 
+### Enforcement: the `spec / gate` check
+
+Rule 2 above is enforced on every PR by the `spec / gate` job in
+[`merge-gate.yml`](.github/workflows/merge-gate.yml), which runs two checks:
+
+- **spec-delta** — a PR touching `*/src/main/{kotlin,java,resources}/**` or
+  `components-registry-automation/data/**` must also touch a spec. Resources are
+  included because Flyway migrations and the `octopus-security`
+  role-to-permission mapping live there; `components-registry-automation/data/`
+  because that module keeps its runtime configuration (supported groupIds and
+  systems, version-name and product-type mappings) outside `src/main`. Excluded:
+  the `-test` and `-ft-db` profile configs, the generated `openapi/v4.json`, and
+  the automation module's `okd/` stand template and `metarunners/` build steps.
+  A spec is `docs/registry/requirements-*.md`, `docs/registry/*-spec.md`,
+  `prd.md`, `technical-design.md`, `api-changelog.md`, `docs/registry/adr/**`,
+  `docs/features/**`, or `openspec/**`.
+- **spec-first** — the first commit touching a spec must come **strictly
+  before** the first commit touching behaviour. A requirement written in the
+  same commit as the code, or after it, documents what was built instead of
+  agreeing what to build, and fails the gate.
+
+Practical consequence: commit the requirement on its own, get it agreed, then
+implement. If you squash locally, re-split before pushing — GitHub's
+squash-on-merge is fine, the gate reads branch commits, not the merge result.
+
+**Escape hatch:** apply the `no-spec-impact` label for changes with no
+observable behaviour (refactor, tests, build/CI, dependency bumps). It skips
+both checks. Nothing in the PR body opts out — a label is structured, visible on
+the PR, recorded in the timeline, and can be applied by a reviewer rather than
+only self-declared.
+
+The script [`.github/scripts/spec-gate.sh`](.github/scripts/spec-gate.sh) is
+byte-identical with the Portal copy — configured entirely by environment, so
+keep the two in sync when either changes. Its suite runs in the same job.
+
 ### Test-to-Requirement Traceability
 
 Every test method that covers a numbered requirement (MIG-xxx, SYS-xxx) MUST:
