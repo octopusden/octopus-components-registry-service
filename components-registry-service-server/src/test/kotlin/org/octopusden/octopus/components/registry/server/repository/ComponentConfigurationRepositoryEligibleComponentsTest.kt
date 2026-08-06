@@ -16,7 +16,6 @@ import org.springframework.test.context.ActiveProfiles
 import org.springframework.test.context.DynamicPropertyRegistry
 import org.springframework.test.context.DynamicPropertySource
 import org.testcontainers.containers.PostgreSQLContainer
-import java.util.UUID
 
 @SpringBootTest(classes = [ComponentRegistryServiceApplication::class])
 @ActiveProfiles("common", "test-db")
@@ -54,7 +53,7 @@ class ComponentConfigurationRepositoryEligibleComponentsTest {
         buildSystem: String,
         archived: Boolean = false,
     ): ComponentEntity {
-        val comp = ComponentEntity(id = UUID.randomUUID(), componentKey = key)
+        val comp = ComponentEntity(componentKey = key)
         comp.archived = archived
         val base =
             ComponentConfigurationEntity(
