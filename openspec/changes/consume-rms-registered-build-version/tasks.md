@@ -139,17 +139,17 @@
 
 ## 6. Docs
 
-- [ ] 6.1 Add the new v4 response fields and error responses to the OpenAPI surface, then regenerate the committed spec: run `:components-registry-service-server:generateOpenApiDocs` to refresh `components-registry-service-server/src/main/resources/openapi/v4.json`.
-- [ ] 6.2 Confirm `OpenApiV4SpecTest`'s drift gate passes against the regenerated spec.
+- [x] 6.1 Add the new v4 response fields and error responses to the OpenAPI surface, then regenerate the committed spec: run `:components-registry-service-server:generateOpenApiDocs` to refresh `components-registry-service-server/src/main/resources/openapi/v4.json`. (Already done incrementally at 4.4.4/5.6; re-run and re-verified clean at finalization.)
+- [x] 6.2 Confirm `OpenApiV4SpecTest`'s drift gate passes against the regenerated spec.
 
 ## 7. Finalization
 
-- [ ] 7.1 Run the full test suite and static/lint checks.
-- [ ] 7.2 Confirm all new code lives under `service/rms/` — decided, not a top-level `rms/` package — so no ArchUnit rule change is needed.
-- [ ] 7.3 Confirm these write surfaces were left ungated, per the stated out-of-scope boundaries:
-  - [ ] 7.3.1 The Git/DSL import path (`ImportServiceImpl`).
-  - [ ] 7.3.2 `deleteFieldOverride`.
-  - [ ] 7.3.3 `createComponent`.
+- [x] 7.1 Run the full test suite and static/lint checks. `:test` — all green. `ktlintCheck` — all green: every file this feature added or touched is clean; 5 pre-existing violations in code this feature never touched (4 `property-naming` in `ComponentManagementServiceImpl.kt`, 1 `max-line-length` in `V4Mappers.kt`) are pre-existing tracked debt in `ktlint-baseline.xml` — left as-is, out of scope, baseline re-generated (`ktlintGenerateBaseline`) to realign the suppressed entries' line numbers, shifted by this feature's insertions elsewhere in those two shared files.
+- [x] 7.2 Confirm all new code lives under `service/rms/` — decided, not a top-level `rms/` package — so no ArchUnit rule change is needed. (Verified: `RMSClient`/`RMSClientConfig`/`DefaultRMSClient`/`RMSBuildParametersService`/`RMSRefreshScheduler`/`RMSOverrideGate`/`RegisteredBuildParametersMapper` all under `service/rms/`; `BuildRangeCollapser`/`VersionRangeIntersector`/comparators under `util/`; DTOs under `dto/v4/`.)
+- [x] 7.3 Confirm these write surfaces were left ungated, per the stated out-of-scope boundaries:
+  - [x] 7.3.1 The Git/DSL import path (`ImportServiceImpl`) — no `checkRMSOverrideGate` reference anywhere in that file.
+  - [x] 7.3.2 `deleteFieldOverride` — confirmed by omission, per 5.4.6.
+  - [x] 7.3.3 `createComponent` — confirmed by omission, per 5.4.6.
 - [x] 7.4 Add an informational (not warning) startup log line when RMS integration is disabled, so it reads as "not configured" rather than being mistaken for the feature not existing. (`RMSClientConfig.logDisabledState`, `@PostConstruct`.)
 - [x] 7.5 Confirm `ECLIPSE_MAVEN` components are excluded (decided: not treated as Maven-like) — test coverage should assert this explicitly, not just fall out of a `!= MAVEN && != GRADLE` check by accident. (`RMSOverrideGateTest` "ECLIPSE_MAVEN permits without calling RMS".)
-- [ ] 7.6 Confirm two deliberately-not-fixed gaps stay documented, not silently dropped from review: null-always-breaks-a-run (design.md Decision 2 / Risks) and the build-system-change bypass (design.md Decision 13 / Risks).
+- [x] 7.6 Confirm two deliberately-not-fixed gaps stay documented, not silently dropped from review: null-always-breaks-a-run (design.md Decision 2 / Risks) and the build-system-change bypass (design.md Decision 13 / Risks). Both still present in design.md's Risks section, verified during the doc-consistency pass.
