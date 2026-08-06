@@ -12,7 +12,7 @@ import org.springframework.scheduling.config.ScheduledTaskRegistrar
  * mirroring Portal's `ValidationRefreshScheduler`: the first run fires immediately, and every
  * subsequent gap is [RMSBuildParametersService.nextDelay] — the normal interval after a clean
  * sweep, a doubling retry cadence after a failed one. Absent in no-db mode along with the
- * required (non-nullable) [RMSBuildParametersService] itself (SYS-047).
+ * required (non-nullable) [RMSBuildParametersService] itself.
  */
 @Configuration(proxyBeanMethods = false)
 @ConditionalOnDatabaseEnabled

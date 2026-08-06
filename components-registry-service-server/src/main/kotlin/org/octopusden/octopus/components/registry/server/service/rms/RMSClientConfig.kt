@@ -24,9 +24,8 @@ import org.springframework.web.client.RestClient
 class RMSClientConfig(
     private val properties: RMSProperties,
 ) {
-    // Informational, not a warning: a disabled integration is a deliberate, safe configuration
-    // state (see RMSProperties), not a failure — this just makes that state visible in logs
-    // instead of reading as "RMS support doesn't exist."
+    // Informational, not a warning: a disabled integration is a deliberate, safe state, not a
+    // failure — this just makes it visible in logs instead of reading as "not implemented."
     @PostConstruct
     fun logDisabledState() {
         if (!properties.enabled) {
