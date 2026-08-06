@@ -4,9 +4,9 @@ Defines how CRS's v4 API exposes RMS's registered ("ACTUAL") `build.javaVersion`
 
 ## ADDED Requirements
 
-### Requirement: ACTUAL applies only to Maven and Gradle components
+### Requirement: ACTUAL applies only to non-archived Maven and Gradle components
 
-ACTUAL (display and write gate alike) SHALL apply only to components whose build system is `MAVEN` or `GRADLE`. For any other build system, no RMS call is made for that component, no ACTUAL data is shown, and no write gate applies to its `javaVersion`/`mavenVersion` fields.
+ACTUAL (display and write gate alike) SHALL apply only to components whose build system is `MAVEN` or `GRADLE` and which are not archived. For any other build system, or for an archived component, no RMS call is made for that component, no ACTUAL data is shown, and no write gate applies to its `javaVersion`/`mavenVersion` fields.
 
 #### Scenario: A non-Maven/Gradle component is unaffected
 
@@ -17,6 +17,11 @@ ACTUAL (display and write gate alike) SHALL apply only to components whose build
 
 - **WHEN** a component's build system is `ECLIPSE_MAVEN`
 - **THEN** it is treated the same as any other non-`MAVEN`/`GRADLE` build system — no ACTUAL data, no write gate
+
+#### Scenario: An archived component is unaffected, distinctly from "never successfully swept"
+
+- **WHEN** a component is archived, regardless of its build system
+- **THEN** its detail response carries no ACTUAL data at all — `null`, not an "ACTUAL data unavailable" indicator, since an archived component is never swept and there was never an attempt to check RMS for it
 
 ### Requirement: ACTUAL is exposed as independent, per-attribute ranges built from the real build sequence
 
@@ -166,7 +171,7 @@ When a write is rejected because it disagrees with ACTUAL, the component's cache
 
 ### Requirement: A write is blocked only when it would introduce a disagreement with ACTUAL
 
-Creating or updating a DEFAULT or OVERRIDDEN value for `build.javaVersion`/`build.mavenVersion` SHALL be rejected only when all of the following hold: the write changes the effective stored value and/or range; the resulting range intersects a non-null ACTUAL value for that attribute; and the resulting value disagrees with **any one** of the intersecting ACTUAL values (a range can intersect more than one ACTUAL range, most commonly for DEFAULT, which spans every version at once). This check is evaluated per range and per attribute.
+Creating or updating a DEFAULT or OVERRIDDEN value for `build.javaVersion`/`build.mavenVersion` SHALL be rejected only when all of the following hold: the write changes the effective stored value and/or range; the resulting range intersects a non-null ACTUAL value for that attribute; and the resulting value disagrees with **any one** of the intersecting ACTUAL values (a range can intersect more than one ACTUAL range — always true for DEFAULT, which spans every version at once, and also possible for a composite OVERRIDDEN range, whose own segments are each checked independently). This check is evaluated per range and per attribute.
 
 #### Scenario: Unchanged resend is never blocked
 
@@ -208,6 +213,16 @@ Creating or updating a DEFAULT or OVERRIDDEN value for `build.javaVersion`/`buil
 - **WHEN** ACTUAL for the specific range and attribute being written is null
 - **THEN** the write is permitted, unaffected by ACTUAL values on other, non-intersecting ranges
 
+#### Scenario: A composite range is checked segment by segment
+
+- **WHEN** a legacy, composite (multi-segment) OVERRIDDEN range is written with a new value
+- **THEN** each of the range's segments is checked against ACTUAL independently; the write is permitted only if no segment disagrees, and rejected if any one segment does
+
+#### Scenario: A malformed range fails closed rather than being partially checked
+
+- **WHEN** a write's range cannot be fully parsed as either a single interval or a clean composite of intervals (e.g. a stray, unparseable segment mixed in with valid ones)
+- **THEN** the write is rejected if ACTUAL has any data at all for that component and attribute — the range is never partially checked using only the segments that happened to parse
+
 ### Requirement: Deleting a field override requires no ACTUAL check, but recreating it with the same disagreeing value is blocked like any other write
 
 `deleteFieldOverride` SHALL NOT be gated by ACTUAL, regardless of value or disagreement. A subsequent create using the same range and a value that disagrees with ACTUAL SHALL be evaluated as a new write, per the write-blocking requirement above.
@@ -233,7 +248,7 @@ Every write attempt to `build.javaVersion`/`build.mavenVersion` SHALL check ACTU
 
 ### Requirement: An ambiguous or failed live check fails closed
 
-Only a confirmed response with no matching builds for the range/attribute in question counts as "ACTUAL is null → write permitted." Any other outcome from the live call — an error response, a timeout, or a connection failure — SHALL reject the write.
+Only a confirmed response with no matching builds for the range/attribute in question counts as "ACTUAL is null → write permitted." Any other outcome from the live call — an error response, a timeout, a connection failure, or a response with no body at all — SHALL reject the write.
 
 #### Scenario: RMS unreachable at write time
 

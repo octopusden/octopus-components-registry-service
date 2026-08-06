@@ -173,7 +173,9 @@ The block-override check (Part B) does not read the display cache (Decision 3). 
 
 **Only a confirmed 200-response with no matching builds counts as "ACTUAL is null → write permitted."** 
 
-Any other outcome — 404, timeout, 5xx, connection failure — is treated as fail-closed (write rejected). This is a deliberate departure from Decision 1's read-side precedent (Portal's `ReleaseManagementClient` treats 404 as "no data"): that mapping is correct for a read-only sweep ("unknown to RMS ⇒ nothing to report") but wrong for a gate, where the same mapping would mean "unknown/misconfigured ⇒ allow the write." The client's return contract must let the two call sites — sweep and write gate — distinguish "confirmed empty" from "ambiguous/failed," since they treat the same underlying HTTP outcomes differently.
+Any other outcome — 404, timeout, 5xx, connection failure, or a 200 with no response body at all (distinct from a genuine `[]`, which RMS always sends for zero matching builds) — is treated as fail-closed (write rejected). This is a deliberate departure from Decision 1's read-side precedent (Portal's `ReleaseManagementClient` treats 404 as "no data"): that mapping is correct for a read-only sweep ("unknown to RMS ⇒ nothing to report") but wrong for a gate, where the same mapping would mean "unknown/misconfigured ⇒ allow the write." The client's return contract must let the two call sites — sweep and write gate — distinguish "confirmed empty" from "ambiguous/failed," since they treat the same underlying HTTP outcomes differently.
+
+A composite (multi-segment) write range is fully checked, not treated as ambiguous — every segment is intersected against ACTUAL independently (`VersionRangeIntersector`), so the write is rejected if any one segment disagrees. Only a range that fails to parse cleanly at all — a genuinely malformed string, or a composite with one bad segment mixed in among good ones — falls back to fail-closed here, the same as an ambiguous RMS response: partially checking only the segments that happened to parse would silently under-check the write.
 
 ### 6. Disabled means the feature is off. Unreachable means RMS is down. These are different, and are handled differently.
 
@@ -207,6 +209,8 @@ ACTUAL is never written to CRS's database. It is kept structurally separate from
 
 **Implemented as `RMSProperties.writeGateTimeout`** (default 3s) — deliberately its own, tighter budget, separate from the sweep's `connectTimeout`+`readTimeout` (5s+10s), since only this call site sits inside a held transaction. Enforced via a bounded `Future.get` inside `RMSOverrideGate` (the same timeout-budget shape the sweep already uses), not a second `RestClient` instance — a timeout is treated identically to `RMSBuildsResult.Unavailable` (fails closed, throws `RMSUnavailableException`). Each call site invokes the gate as soon as the relevant field's post-patch state is known, at the same point as that call site's own pre-existing change-based gate (e.g. right alongside `updateComponent`'s WHISKEY check, `updateFieldOverride`'s editability check).
 
+**One RMS fetch per component per write, not per gated field** (added post-review): a single `PATCH` can gate both `javaVersion` and `mavenVersion` on the same BASE row, and the bulk apply-plan gates every touched row — without sharing, each of those makes its own live call, multiplying the transaction-hazard risk above by the number of gated fields in one request. `RMSOverrideGate.check` takes an optional `buildsCache` (component key → fetched builds); `ComponentManagementServiceImpl` creates one per write request and threads it through every `checkRMSOverrideGate` call that request makes, so a component's build list is fetched at most once regardless of how many of its fields are gated.
+
 ### 10. Module and package placement
 
 Everything lives in `components-registry-service-server` — no new Gradle module. New code lives under:
@@ -237,11 +241,13 @@ No `gradle.properties` version pin is added — consistent with Decision 1, this
 
 Both are mapped in `ControllerExceptionHandler.kt`.
 
-### 13. Scoped to Maven and Gradle build systems only
+### 13. Scoped to non-archived Maven and Gradle components only
 
 This entire feature — ACTUAL display, the summary rollup, and the write gate — applies only to components whose (effective) build system is `MAVEN` or `GRADLE` (`BuildSystem` enum, `component-resolver-api`). For any other build system (`BS2_0`, `GOLANG`, `IN_CONTAINER`, `WHISKEY`, `PROVIDED`, `ESCROW_NOT_SUPPORTED`, `ESCROW_PROVIDED_MANUALLY`, ...), a Java/Maven version is a meaningless concept, so the feature does nothing: no RMS call for that component in the sweep, no ACTUAL field/rollup in its responses, no write gate on its `javaVersion`/`mavenVersion` fields (which, for a non-Maven/Gradle component, are unlikely to be meaningfully set in the first place).
 
 `ECLIPSE_MAVEN` is a separate, distinct enum value from `MAVEN` in this codebase, and is **excluded** — treated the same as any other non-`MAVEN`/`GRADLE` build system (no ACTUAL data, no write gate). Only `MAVEN` and `GRADLE` are in scope.
+
+**Archived components are excluded too** (added post-review), on a separate axis from build system: `findNonArchivedMavenOrGradleComponentKeys` never sweeps an archived component, so its cache entry is always absent — the same shape as "eligible but never successfully swept." `RegisteredBuildParametersMapper.detailFor` checks `archived` explicitly, before the build-system check, so an archived component's detail response reports no ACTUAL data at all (`null`) rather than the misleading `actualDataUnavailable = true`, which would otherwise read as an RMS problem rather than "not applicable." The summary rollup needs no equivalent check — it already omits the field whenever the sweep's map has no entry, for either reason.
 
 **Implementation note:** a component's build system can, in principle, be set per version-range row, not only at the base/component level. This design checks the build system at the component/base level for simplicity; if per-range build system divergence turns out to matter in practice, that's a refinement to revisit, not something this design claims to handle.
 
