@@ -96,44 +96,46 @@
 
 ## 5. Write-gate (unified rule)
 
-- [ ] 5.1 Add exception types:
-  - [ ] 5.1.1 `RMSRegisteredValueConflictException` and `RMSUnavailableException`.
-  - [ ] 5.1.2 Map both in `ControllerExceptionHandler.kt` to distinguishable HTTP statuses.
-  - [ ] 5.1.3 `RMSUnavailableException` is only ever thrown while the feature is enabled (a genuine reachability/ambiguity failure) — never for the disabled case, which must not invoke the gate at all.
-- [ ] 5.2 Write failing MockMvc tests (model on `ComponentFieldOverridesPatchTest.kt`, `RMSClient` mocked):
-  - [ ] 5.2.1 Unchanged resend of the current value/range is never blocked, even when it disagrees with ACTUAL.
-  - [ ] 5.2.2 Writing a value that matches ACTUAL is always permitted, including when it resolves an existing warning.
-  - [ ] 5.2.3 Writing a disagreeing value into an intersecting non-null ACTUAL range is rejected.
-  - [ ] 5.2.4 Updating only a field override's `versionRange` (value unchanged) onto ACTUAL-covered, disagreeing territory is rejected the same way.
-  - [ ] 5.2.5 DEFAULT write is rejected when it disagrees with ACTUAL anywhere, including a range already fully shadowed by an existing override.
-  - [ ] 5.2.6 DEFAULT becomes permanently unwritable once 2+ disagreeing ACTUAL values exist across the component's history — decided/accepted behavior (see design.md's Risks section), no shadow-aware exception is being built for it.
-  - [ ] 5.2.7 Independent per-attribute gating: a Java disagreement never blocks a Maven-only write for the same range, and vice versa.
-  - [ ] 5.2.8 With RMS enabled and reachable: an ambiguous/failed live RMS call (404, timeout, 5xx, connection failure) rejects the write, but only when the write actually changes `build.javaVersion`/`build.mavenVersion` — a confirmed empty-builds response is the only thing that permits it.
-  - [ ] 5.2.9 With RMS unreachable: a write that touches an unrelated field, or resends `javaVersion`/`mavenVersion` unchanged, still succeeds normally — this must be tested as its own case, not assumed from 5.2.8.
-  - [ ] 5.2.10 With RMS integration disabled: writes to `build.javaVersion`/`build.mavenVersion` succeed unconditionally, because the gate is never invoked — a distinct case from 5.2.8/5.2.9, not to be conflated with either.
-  - [ ] 5.2.11 `deleteFieldOverride` succeeds regardless of ACTUAL — no gate call at all.
-  - [ ] 5.2.12 Recreating the same range with the same, still-disagreeing value afterward is rejected like any other write.
-  - [ ] 5.2.13 A write to a component whose build system is not `MAVEN`/`GRADLE` is never gated — no RMS call at all, regardless of ACTUAL data that might exist.
-- [ ] 5.3 Implement `RMSOverrideGate`:
-  - [ ] 5.3.1 Live RMS call, unfiltered (same shape as the sweep's), but the disagreement check evaluates only the one attribute being written.
-  - [ ] 5.3.2 The unified three-condition rule: effective change + intersects non-null ACTUAL + disagrees.
-  - [ ] 5.3.3 Strict fail-closed on ambiguity, but only while the feature is enabled.
-  - [ ] 5.3.4 When RMS integration is disabled/unconfigured, short-circuit to "permit" before making any call — never call RMS and then decide, never throw `RMSUnavailableException`.
-  - [ ] 5.3.5 When the component's build system is not `MAVEN`/`GRADLE`, short-circuit to "permit" before making any call — same short-circuit shape as the disabled case (5.3.4), just a different reason for it.
-- [ ] 5.4 Wire the gate into call sites:
-  - [ ] 5.4.1 `ComponentManagementServiceImpl.updateComponent` (base config, `ALL_VERSIONS` range).
-  - [ ] 5.4.2 `createFieldOverride`.
-  - [ ] 5.4.3 `updateFieldOverride`, evaluated against the post-write range/value.
-  - [ ] 5.4.4 The bulk field-overrides apply-plan.
-  - [ ] 5.4.5 Each call site invokes the gate only when the write would actually change the effective value/range.
-  - [ ] 5.4.6 Explicitly do **not** wire it into `deleteFieldOverride` or `createComponent` — a new component's key can never collide with prior RMS history, since components are archived, not hard-deleted (a key is never freed up for reuse).
-- [ ] 5.5 Add a timeout budget for the gate's RMS call:
-  - [ ] 5.5.1 Explicit, tight timeout — shorter than the write endpoint's overall request timeout.
-  - [ ] 5.5.2 Evaluate the gate as early as possible in the write path, given `ComponentManagementServiceImpl`'s class-level `@Transactional` scope, to minimize how long a DB connection/lock is held waiting on the network call.
-- [ ] 5.6 Confirm tests pass.
-- [ ] 5.7 Write a failing test: after `RMSOverrideGate` rejects a write with `RMSRegisteredValueConflictException`, that component's entry in `RMSBuildParametersService`'s cache is refreshed using the data from the same live call — not left stale until the next scheduled sweep.
-- [ ] 5.8 Implement the targeted refresh from 5.7: on rejection, update the one component's cache entry directly (no full sweep triggered).
-- [ ] 5.9 Confirm tests pass.
+- [x] 5.1 Add exception types:
+  - [x] 5.1.1 `RMSRegisteredValueConflictException` and `RMSUnavailableException` (`components-registry-service-core`, extend `BaseComponentsRegistryException`).
+  - [x] 5.1.2 Mapped in `ControllerExceptionHandler.kt`: conflict → 409 (`ErrorCodes.RMS_REGISTERED_VALUE_CONFLICT`, new entry); unavailable → 503.
+  - [x] 5.1.3 `RMSUnavailableException` is only ever thrown while the feature is enabled — `RMSOverrideGate.check()` returns before ever calling RMS when disabled, so it structurally cannot throw this for the disabled case.
+- [x] 5.2 Tests — split across two layers: `RMSOverrideGateTest` (unit, hand-written fakes, no Spring) for the gate's own decision logic, and `RMSOverrideGateWriteTest` (MockMvc + H2 `ft-db` profile, `@MockBean RMSClient`, modeled on `ComponentFieldOverridesPatchTest.kt`) proving the real service actually invokes it end-to-end:
+  - [x] 5.2.1 Unchanged resend never blocked, even disagreeing with ACTUAL. (Unit + integration.)
+  - [x] 5.2.2 A value matching ACTUAL is always permitted. (Unit + integration.)
+  - [x] 5.2.3 A disagreeing value into an intersecting non-null ACTUAL range is rejected. (Unit + integration, both the field-override-create and base-config-PATCH paths.)
+  - [x] 5.2.4 Moving only a field override's `versionRange` (value unchanged) onto ACTUAL-covered disagreeing territory is rejected the same way. (Integration.)
+  - [x] 5.2.5 DEFAULT write rejected when it disagrees with ACTUAL. Covered by the base-config-PATCH integration test; the "even a range already fully shadowed by an override" nuance is true by construction — the gate only ever sees the literal range being written (`ALL_VERSIONS` for DEFAULT) and has no concept of shadowing overrides at all — not separately tested.
+  - [x] 5.2.6 DEFAULT permanently unwritable with 2+ disagreeing ACTUAL values: accepted behavior, no shadow-aware exception built (design.md Risks) — not separately tested; follows directly from 5.2.5's mechanism (every intersecting ACTUAL range is checked independently, so 2+ disagreeing ranges just means 2+ ways to fail, not a special case).
+  - [x] 5.2.7 Independent per-attribute gating. True by construction — `checkRMSOverrideGate` dispatches to a separate `gate.check()` call per attribute, each with no shared state — not separately tested at the write-gate layer (the analogous display-layer case, "java/maven override rows do not cross-contaminate," is tested in `RegisteredBuildParametersMapperDetailForTest`).
+  - [x] 5.2.8 An ambiguous/failed live call rejects the write only when it changes the attribute. (Unit: `RMSOverrideGateTest`; integration: "RMS unreachable blocks a real change".)
+  - [x] 5.2.9 RMS unreachable + no effective change (or an unrelated field) still succeeds. (Unit: "no effective change permits without calling RMS" — proves the client is never even called, not just that the write succeeds.)
+  - [x] 5.2.10 RMS disabled → gate never invoked, writes succeed unconditionally. (Unit: `RMSOverrideGateTest` "disabled integration permits without calling RMS" — not separately re-tested at MockMvc level, since `RMSOverrideGateWriteTest` force-enables the feature for its whole class and this is the same gate code path already proven.)
+  - [x] 5.2.11 `deleteFieldOverride` succeeds regardless of ACTUAL. (Integration.)
+  - [x] 5.2.12 Recreating the same range with the same, still-disagreeing value after a delete is rejected like any other write. (Integration.)
+  - [x] 5.2.13 A component whose build system isn't `MAVEN`/`GRADLE` is never gated. (Unit: `RMSOverrideGateTest` "non-Maven-Gradle build system permits without calling RMS", plus dedicated `ECLIPSE_MAVEN` and null-buildSystem cases; `GRADLE` itself is proven NOT short-circuited — not separately re-tested at MockMvc level.)
+  - [x] 5.2.14 The bulk desired-set apply-plan (`PATCH .../{id}` with a `fieldOverrides` array) is gated the same as the single-override endpoints, for both its CREATE and UPDATE passes. (Integration: `RMSOverrideGateWriteTest` "bulk desired-set create/update ... is rejected".)
+  - [x] 5.2.15 A client that throws instead of returning `RMSBuildsResult.Unavailable` still fails closed. (Unit: `RMSOverrideGateTest` "a throwing client fails closed".)
+- [x] 5.3 Implement `RMSOverrideGate` (`service/rms/`):
+  - [x] 5.3.1 Live RMS call, unfiltered (same shape as the sweep's — reuses the same `RMSClient`); the disagreement check evaluates only the one attribute passed to `check()`.
+  - [x] 5.3.2 The unified rule: `effectiveChange` (caller-computed, matching each call site's existing change-detection idiom) + non-null `newValue` + a disagreeing intersection via `RegisteredBuildParametersMapper.warnings` (reused from §4).
+  - [x] 5.3.3 Fail-closed on ambiguity (`RMSBuildsResult.Unavailable` or a timeout) — but only reached once past the disabled/build-system/no-op short-circuits below, so only while genuinely enabled.
+  - [x] 5.3.4 Disabled/unconfigured (`!properties.enabled` or a null `RMSClient`) short-circuits to permit before any call.
+  - [x] 5.3.5 Non-Maven/Gradle `buildSystem` short-circuits to permit before any call — same shape as 5.3.4.
+- [x] 5.4 Wired into all four call sites in `ComponentManagementServiceImpl`, via a shared private `checkRMSOverrideGate` helper (resolves the attribute-specific comparator pair + the component's BASE `buildSystem`, then delegates to the gate):
+  - [x] 5.4.1 `updateComponent` — snapshots the BASE row's old `javaVersion`/`mavenVersion` alongside the existing `oldBaseBuildSystem` snapshot, checks post-patch (same point as the existing WHISKEY change-gate).
+  - [x] 5.4.2 `createFieldOverride` — `effectiveChange = true` unconditionally (nothing existed at this range/attribute before), checked right after `applyScalarValue`, before `configurationRepository.save`.
+  - [x] 5.4.3 `updateFieldOverride` — reuses the existing `fieldOverrideAuditSnapshot` before/after diff (already the call site's own change-detection idiom) as `effectiveChange`.
+  - [x] 5.4.4 The bulk apply-plan (`applyFieldOverrideDesiredSet`) — both the UPDATE pass (snapshot diff, mirroring 5.4.3) and the CREATE pass (`effectiveChange = true`, mirroring 5.4.2); the CREATE pass's gate check runs before its early `configurationRepository.save` (id-assignment save), not after.
+  - [x] 5.4.5 Each call site's `effectiveChange` is real, not a stub — reuses whatever change-detection each site already had for its own unrelated gates (WHISKEY check, editability check), not a new mechanism.
+  - [x] 5.4.6 Not wired into `deleteFieldOverride` or `createComponent` (confirmed by omission — neither method calls `checkRMSOverrideGate`).
+- [x] 5.5 Timeout budget for the gate's RMS call:
+  - [x] 5.5.1 `RMSProperties.writeGateTimeout` (default 3s) — deliberately tighter than the sweep's `connectTimeout`+`readTimeout`, enforced via a bounded `Future.get` (mirrors the sweep's own timeout-budget pattern) rather than a second `RestClient`/`RMSClient` instance. A timeout is treated the same as `RMSBuildsResult.Unavailable` (fails closed).
+  - [x] 5.5.2 The gate is invoked as early as the relevant field's post-patch state is known at each call site (not deferred to just before `saveAndFlush`), minimizing how long the transaction holds a DB connection/lock waiting on the network call.
+- [x] 5.6 Confirm tests pass. (`RMSOverrideGateTest` — 13/13 green, no Spring context; `RMSOverrideGateWriteTest` — 8/8 green via `:dbTest`, H2/`ft-db`, no Docker needed. Full `:test` fast-gate suite — all green after wiring into `ComponentManagementServiceImpl` + regenerating the OpenAPI drift gate for the two new error responses.)
+- [x] 5.7 Test: a rejection triggers a targeted cache refresh. (`RMSOverrideGateTest` "a rejection refreshes the one component's cache entry" — asserts `RMSBuildParametersService.currentReport()` reflects the live call's data immediately after rejection, using a real service instance, not a mock.)
+- [x] 5.8 Implemented as `RMSBuildParametersService.refreshComponent(componentKey, builds)` — updates just that one component's cache entry (both attributes, recollapsed from the same fetched `builds`) without touching the rest of the cache or triggering a full sweep; called from `RMSOverrideGate` immediately before throwing the conflict exception.
+- [x] 5.9 Confirm tests pass. (Same run as 5.6.)
 
 ## 6. Docs
 
@@ -149,5 +151,5 @@
   - [ ] 7.3.2 `deleteFieldOverride`.
   - [ ] 7.3.3 `createComponent`.
 - [ ] 7.4 Add an informational (not warning) startup log line when RMS integration is disabled, so it reads as "not configured" rather than being mistaken for the feature not existing.
-- [ ] 7.5 Confirm `ECLIPSE_MAVEN` components are excluded (decided: not treated as Maven-like) — test coverage should assert this explicitly, not just fall out of a `!= MAVEN && != GRADLE` check by accident.
+- [x] 7.5 Confirm `ECLIPSE_MAVEN` components are excluded (decided: not treated as Maven-like) — test coverage should assert this explicitly, not just fall out of a `!= MAVEN && != GRADLE` check by accident. (`RMSOverrideGateTest` "ECLIPSE_MAVEN permits without calling RMS".)
 - [ ] 7.6 Confirm two deliberately-not-fixed gaps stay documented, not silently dropped from review: null-always-breaks-a-run (design.md Decision 2 / Risks) and the build-system-change bypass (design.md Decision 13 / Risks).

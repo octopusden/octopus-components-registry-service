@@ -205,6 +205,8 @@ ACTUAL is never written to CRS's database. It is kept structurally separate from
 
 **Transaction hazard.** `ComponentManagementServiceImpl` is class-level `@Transactional`. The live RMS call in Decision 5 runs inside that transaction's write path — a slow or hanging RMS call holds a DB connection and row locks for its duration, which can exhaust the connection pool under concurrent writes. The gate needs an explicit, tight timeout budget (shorter than the write's overall request timeout), and implementation should evaluate it as early as possible in the write path rather than interleaved with other mutations, to minimize how long a lock is held waiting on a network call.
 
+**Implemented as `RMSProperties.writeGateTimeout`** (default 3s) — deliberately its own, tighter budget, separate from the sweep's `connectTimeout`+`readTimeout` (5s+10s), since only this call site sits inside a held transaction. Enforced via a bounded `Future.get` inside `RMSOverrideGate` (the same timeout-budget shape the sweep already uses), not a second `RestClient` instance — a timeout is treated identically to `RMSBuildsResult.Unavailable` (fails closed, throws `RMSUnavailableException`). Each call site invokes the gate as soon as the relevant field's post-patch state is known, at the same point as that call site's own pre-existing change-based gate (e.g. right alongside `updateComponent`'s WHISKEY check, `updateFieldOverride`'s editability check).
+
 ### 10. Module and package placement
 
 Everything lives in `components-registry-service-server` — no new Gradle module. New code lives under:
