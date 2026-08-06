@@ -65,6 +65,28 @@ class RMSBuildParametersService(
 
     fun currentReport(): RMSBuildParametersReport = report
 
+    /**
+     * Targeted refresh: update this one component's cache entry directly, using
+     * [builds] already fetched by the write gate's own live call — no full sweep triggered. Called
+     * after [RMSOverrideGate] rejects a write, so the display doesn't keep showing a stale, clean
+     * row for a component whose conflict the cache hadn't caught up to yet.
+     */
+    fun refreshComponent(
+        componentKey: String,
+        builds: List<RMSBuild>,
+    ) {
+        // Read-then-write on `report`, not CAS-retried: a scheduled sweep completing in the same
+        // instant could race this and be overwritten. Accepted — the next sweep (minutes to hours
+        // away) corrects it either way, the same stale-but-honest tolerance the rest of this cache
+        // already relies on, and a write-rejection racing a sweep is rare.
+        val current = report
+        report =
+            current.copy(
+                components = current.components + (componentKey to collapse(builds)),
+                unavailableComponents = current.unavailableComponents - componentKey,
+            )
+    }
+
     /** Delay before the next sweep: the normal interval after success, a doubling retry cadence (capped) after failure. */
     fun nextDelay(): Duration {
         if (report.refreshError == null) return properties.normalInterval

@@ -28,6 +28,12 @@ class RMSProperties(
     val sweepConcurrency: Int = 8,
     /** Overall budget for one full sweep; components not completed within it count as unavailable. */
     val sweepTimeout: Duration = Duration.ofMinutes(5),
+    /**
+     * Overall budget for the write gate's live call — deliberately tighter than [connectTimeout] +
+     * [readTimeout] combined, since this call runs inside a write's `@Transactional` scope and holds
+     * a DB connection/lock for its duration.
+     */
+    val writeGateTimeout: Duration = Duration.ofSeconds(3),
 ) {
     @AssertTrue(message = "release-management-service.url must be set when release-management-service.enabled=true")
     fun isUrlConfiguredWhenEnabled(): Boolean = !enabled || url.isNotBlank()

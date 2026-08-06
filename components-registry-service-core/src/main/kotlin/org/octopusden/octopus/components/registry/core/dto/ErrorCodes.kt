@@ -14,4 +14,7 @@ object ErrorCodes {
 
     /** Database integrity constraint rejected the write (duplicate or invalid data). */
     const val DATA_INTEGRITY = "DATA_INTEGRITY"
+
+    /** A build parameters write disagrees with RMS's registered ACTUAL value for an intersecting range. */
+    const val RMS_REGISTERED_VALUE_CONFLICT = "RMS_REGISTERED_VALUE_CONFLICT"
 }
