@@ -95,11 +95,16 @@ class RMSBuildParametersService(
             )
     }
 
-    /** Delay before the next sweep: the normal interval after success, a doubling retry cadence (capped) after failure. */
+    /**
+     * Delay before the next sweep: the normal interval after success, a doubling retry cadence
+     * (capped) after failure. The shift exponent is bounded well below 63 — `1L shl 63` overflows
+     * `Duration.multipliedBy` (`ArithmeticException`) long before the result would ever matter,
+     * since `initialRetryInterval * 2^32` already dwarfs any realistic `retryBackoffCap`.
+     */
     fun nextDelay(): Duration {
         if (report.refreshError == null) return properties.normalInterval
-        val multiplier = 1L shl (consecutiveFailures.get() - 1).coerceAtLeast(0)
-        val backoff = properties.initialRetryInterval.multipliedBy(multiplier)
+        val exponent = (consecutiveFailures.get() - 1).coerceIn(0, 32)
+        val backoff = properties.initialRetryInterval.multipliedBy(1L shl exponent)
         return if (backoff > properties.retryBackoffCap) properties.retryBackoffCap else backoff
     }
 

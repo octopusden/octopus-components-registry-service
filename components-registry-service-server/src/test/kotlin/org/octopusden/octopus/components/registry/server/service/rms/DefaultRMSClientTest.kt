@@ -27,6 +27,17 @@ class DefaultRMSClientTest {
     }
 
     @Test
+    @DisplayName("a null response body is unavailable, not confirmed empty")
+    fun `null body response is unavailable`() {
+        wireMock.stubFor(
+            get(urlEqualTo("/rest/api/1/builds/component/null-body-component?statuses=RC,RELEASE&descending=false"))
+                .willReturn(aResponse().withStatus(200)),
+        )
+
+        assertEquals(RMSBuildsResult.Unavailable, client.getBuilds("null-body-component"))
+    }
+
+    @Test
     @DisplayName(
         "parses version and buildParameters, incl. a null attribute, tolerating unused fields like component/status/hotfix",
     )
@@ -37,8 +48,10 @@ class DefaultRMSClientTest {
                     aResponse().withStatus(200).withHeader("Content-Type", "application/json").withBody(
                         """
                         [
-                          {"component":"my-component","version":"1.0","status":"RC","hotfix":false,"buildParameters":{"javaVersion":"17","mavenVersion":null}},
-                          {"component":"my-component","version":"1.1","status":"RELEASE","hotfix":false,"buildParameters":{"javaVersion":null,"mavenVersion":"3.3.9"}}
+                          {"component":"my-component","version":"1.0","status":"RC","hotfix":false,
+                           "buildParameters":{"javaVersion":"17","mavenVersion":null}},
+                          {"component":"my-component","version":"1.1","status":"RELEASE","hotfix":false,
+                           "buildParameters":{"javaVersion":null,"mavenVersion":"3.3.9"}}
                         ]
                         """.trimIndent(),
                     ),

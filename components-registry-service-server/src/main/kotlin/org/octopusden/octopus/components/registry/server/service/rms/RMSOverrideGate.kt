@@ -6,6 +6,7 @@ import org.octopusden.octopus.components.registry.core.exceptions.RMSUnavailable
 import org.octopusden.octopus.components.registry.server.config.RMSProperties
 import org.octopusden.octopus.components.registry.server.dto.v4.ActualRange
 import org.octopusden.octopus.components.registry.server.util.BuildRangeCollapser
+import org.octopusden.octopus.components.registry.server.util.VersionRangePartition
 import org.springframework.stereotype.Service
 import java.util.concurrent.Callable
 import java.util.concurrent.Executors
@@ -44,6 +45,9 @@ class RMSOverrideGate(
      * or is ambiguous. Returns normally (permits the write) without ever calling RMS when: the
      * feature is disabled/unconfigured, [effectiveChange] is false, the write clears the value to
      * `null`, or [buildSystem] isn't Maven/Gradle.
+     *
+     * [buildsCache] lets callers share one RMS fetch per component across every gated field of a
+     * single write (e.g. a `PATCH` gating both `javaVersion` and `mavenVersion`).
      */
     fun check(
         componentKey: String,
@@ -54,6 +58,7 @@ class RMSOverrideGate(
         selectValue: (RMSBuild) -> String?,
         valuesEqual: (String, String) -> Boolean,
         compare: (String, String) -> Int,
+        buildsCache: MutableMap<String, List<RMSBuild>> = mutableMapOf(),
     ) {
         if (!properties.enabled) return
         if (!effectiveChange) return
@@ -61,7 +66,7 @@ class RMSOverrideGate(
         if (buildSystem != "MAVEN" && buildSystem != "GRADLE") return
         val client = rmsClient ?: return
 
-        val builds = fetchWithBudget(client, componentKey)
+        val builds = buildsCache.getOrPut(componentKey) { fetchWithBudget(client, componentKey) }
 
         val actualRanges = BuildRangeCollapser.collapse(
             builds.map {
@@ -69,6 +74,17 @@ class RMSOverrideGate(
             },
             valuesEqual = valuesEqual,
         )
+
+        // A composite/malformed newRange can't be intersected, and VersionRangeIntersector reads that
+        // as "no overlap" — fine for display's fail-soft warnings, wrong here: against non-empty ACTUAL
+        // data, "couldn't evaluate" must fail closed, not silently permit.
+        if (actualRanges.isNotEmpty() && !isSingleRange(newRange)) {
+            throw RMSUnavailableException(
+                "Could not confirm RMS's registered value for component '$componentKey': the range '$newRange' " +
+                    "is composite or malformed, so it cannot be checked against RMS's non-empty ACTUAL data",
+            )
+        }
+
         val disagreements = RegisteredBuildParametersMapper.warnings(
             listOf(ActualRange(newRange, newValue)),
             actualRanges,
@@ -84,6 +100,10 @@ class RMSOverrideGate(
             )
         }
     }
+
+    /** A single interval or the all-versions sentinel — [VersionRangeIntersector] can only evaluate this shape. */
+    private fun isSingleRange(range: String): Boolean =
+        VersionRangePartition.isAllVersions(range) || VersionRangePartition.parseSegment(range) != null
 
     private fun fetchWithBudget(
         client: RMSClient,

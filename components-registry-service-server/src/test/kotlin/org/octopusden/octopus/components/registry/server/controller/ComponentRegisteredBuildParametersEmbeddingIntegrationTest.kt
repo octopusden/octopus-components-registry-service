@@ -34,17 +34,13 @@ import java.util.UUID
 
 /**
  * Proves `ComponentManagementServiceImpl.attachRegisteredBuildParameters` is really wired into the
- * live `GET /components/{id}` response, mirroring `ComponentTeamcityValidationEmbeddingIntegrationTest`'s
- * intent (the pure `RegisteredBuildParametersMapper.detailFor` computation is already covered in
- * isolation by `RegisteredBuildParametersMapperDetailForTest`; nothing previously exercised the real
- * wiring/call-site). Unlike that reference test, this uses the H2 `ft-db` profile with a mocked
- * `RMSBuildParametersService` rather than Testcontainers Postgres — runnable without Docker, and the
- * collaborator being mocked (rather than the DB) is exactly what this test needs to control.
+ * live `GET /components/{id}` response — `RegisteredBuildParametersMapper.detailFor`'s own logic is
+ * already covered in isolation, but nothing previously exercised the real call-site. Uses the H2
+ * `ft-db` profile with a mocked `RMSBuildParametersService`, so it runs without Docker.
  *
- * Also the regression test for the "disabled shows nothing, not 'unavailable'" fix: a disabled
- * integration and an enabled-but-never-swept one both leave `RMSBuildParametersService`'s report
- * empty, so only checking `isEnabled()` before falling back to the "unavailable" branch tells them
- * apart.
+ * Also the regression test for "disabled shows nothing, not 'unavailable'": a disabled integration
+ * and an enabled-but-never-swept one both leave the report empty, so only checking `isEnabled()`
+ * first tells them apart.
  */
 @AutoConfigureMockMvc
 @SpringBootTest(

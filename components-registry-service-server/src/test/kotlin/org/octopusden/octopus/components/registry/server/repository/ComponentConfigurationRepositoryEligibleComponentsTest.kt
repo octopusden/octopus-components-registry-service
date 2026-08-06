@@ -15,11 +15,13 @@ import org.springframework.boot.test.mock.mockito.MockBean
 import org.springframework.test.context.ActiveProfiles
 import org.springframework.test.context.DynamicPropertyRegistry
 import org.springframework.test.context.DynamicPropertySource
+import org.springframework.transaction.annotation.Transactional
 import org.testcontainers.containers.PostgreSQLContainer
 
 @SpringBootTest(classes = [ComponentRegistryServiceApplication::class])
 @ActiveProfiles("common", "test-db")
 @Tag("integration")
+@Transactional
 class ComponentConfigurationRepositoryEligibleComponentsTest {
     @MockBean
     @Suppress("UnusedPrivateProperty")
@@ -43,7 +45,8 @@ class ComponentConfigurationRepositoryEligibleComponentsTest {
             ),
         )
 
-        val eligible = configurationRepository.findNonArchivedMavenOrGradleComponentKeys()
+        val testKeys = setOf("maven-comp", "gradle-comp", "golang-comp", "archived-maven-comp")
+        val eligible = configurationRepository.findNonArchivedMavenOrGradleComponentKeys().filter { it in testKeys }
 
         assertEquals(setOf("maven-comp", "gradle-comp"), eligible.toSet())
     }

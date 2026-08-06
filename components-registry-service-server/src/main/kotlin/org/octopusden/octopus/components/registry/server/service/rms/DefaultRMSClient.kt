@@ -11,14 +11,19 @@ internal class DefaultRMSClient(
 ) : RMSClient {
     override fun getBuilds(component: String): RMSBuildsResult =
         try {
-            val builds =
-                restClient
-                    .get()
-                    .uri("/rest/api/1/builds/component/{component}?statuses=RC,RELEASE&descending=false", component)
-                    .retrieve()
-                    .body(Array<RMSBuildResponse>::class.java)
-                    .orEmpty()
-            RMSBuildsResult.Available(builds.map { RMSBuild(it.version, it.buildParameters.javaVersion, it.buildParameters.mavenVersion) })
+            // A null body is distinct from a genuine `[]` — RMS always serializes zero matching
+            // builds as `[]`, so null means something went wrong, not "confirmed empty."
+            restClient
+                .get()
+                .uri("/rest/api/1/builds/component/{component}?statuses=RC,RELEASE&descending=false", component)
+                .retrieve()
+                .body(Array<RMSBuildResponse>::class.java)
+                ?.let { builds ->
+                    RMSBuildsResult.Available(
+                        builds.map { RMSBuild(it.version, it.buildParameters.javaVersion, it.buildParameters.mavenVersion) },
+                    )
+                }
+                ?: RMSBuildsResult.Unavailable
         } catch (e: RestClientException) {
             log.warn("Failed to fetch RMS builds for component '{}': {}", component, e.message)
             RMSBuildsResult.Unavailable

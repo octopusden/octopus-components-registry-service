@@ -1,6 +1,7 @@
 package org.octopusden.octopus.components.registry.server.service.rms
 
 import org.junit.jupiter.api.Assertions.assertEquals
+import org.junit.jupiter.api.Assertions.assertNotNull
 import org.junit.jupiter.api.Assertions.assertTrue
 import org.junit.jupiter.api.DisplayName
 import org.junit.jupiter.api.Test
@@ -42,10 +43,9 @@ class RMSRefreshSchedulerTest {
 
         val next = trigger.nextExecution(FakeTriggerContext(completion = null))
 
-        if (next != null) {
-            assertTrue(!next.isBefore(before), "first execution must not be before now")
-            assertTrue(next.isBefore(before.plusSeconds(5)), "first execution must not wait for the normal interval")
-        }
+        assertNotNull(next, "a null next execution means scheduling failed, not that there's nothing to assert")
+        assertTrue(!next!!.isBefore(before), "first execution must not be before now")
+        assertTrue(next.isBefore(before.plusSeconds(5)), "first execution must not wait for the normal interval")
     }
 
     @Test

@@ -126,7 +126,7 @@ class ControllerExceptionHandler {
     @ResponseStatus(HttpStatus.SERVICE_UNAVAILABLE)
     fun rmsUnavailableExceptionHandler(e: RMSUnavailableException): HttpEntity<ErrorResponse> {
         log.warn(e.localizedMessage)
-        return HttpEntity(ErrorResponse(e.localizedMessage))
+        return HttpEntity(ErrorResponse(e.localizedMessage, ErrorCodes.RMS_UNAVAILABLE))
     }
 
     /**

@@ -7,6 +7,8 @@ import org.junit.jupiter.api.Tag
 import org.junit.jupiter.api.Test
 import org.junit.jupiter.api.Timeout
 import org.mockito.ArgumentMatchers.anyString
+import org.mockito.Mockito.times
+import org.mockito.Mockito.verify
 import org.mockito.Mockito.`when`
 import org.octopusden.cloud.commons.security.client.AuthServerClient
 import org.octopusden.octopus.components.registry.server.ComponentRegistryServiceApplication
@@ -94,6 +96,45 @@ class RMSOverrideGateWriteTest {
                     .contentType(MediaType.APPLICATION_JSON)
                     .content("""{"overriddenAttribute":"build.javaVersion","versionRange":"[1,5)","value":"17"}"""),
             ).andExpect(status().is2xxSuccessful)
+    }
+
+    @Test
+    @DisplayName("creating a Maven field override that disagrees with RMS's ACTUAL value is rejected 409 — the gate isn't Java-only")
+    fun `disagreeing Maven field override create is rejected`() {
+        `when`(rmsClient.getBuilds(anyString())).thenReturn(RMSBuildsResult.Available(listOf(RMSBuild("2", null, "3.3.9"))))
+        val id = newComponent()
+        mvc
+            .perform(
+                post("/rest/api/4/components/$id/field-overrides")
+                    .with(adminJwt())
+                    .contentType(MediaType.APPLICATION_JSON)
+                    .content("""{"overriddenAttribute":"build.mavenVersion","versionRange":"[1,5)","value":"3.3.6"}"""),
+            ).andExpect(status().isConflict)
+    }
+
+    @Test
+    @DisplayName("creating a Maven field override that matches RMS's ACTUAL value is permitted — the gate isn't Java-only")
+    fun `matching Maven field override create is permitted`() {
+        `when`(rmsClient.getBuilds(anyString())).thenReturn(RMSBuildsResult.Available(listOf(RMSBuild("2", null, "3.3.9"))))
+        val id = newComponent()
+        mvc
+            .perform(
+                post("/rest/api/4/components/$id/field-overrides")
+                    .with(adminJwt())
+                    .contentType(MediaType.APPLICATION_JSON)
+                    .content("""{"overriddenAttribute":"build.mavenVersion","versionRange":"[1,5)","value":"3.3.9"}"""),
+            ).andExpect(status().is2xxSuccessful)
+    }
+
+    @Test
+    @DisplayName("changing both javaVersion and mavenVersion in one PATCH fetches RMS only once for the component")
+    fun `changing both java and maven in one PATCH calls RMS only once`() {
+        `when`(rmsClient.getBuilds(anyString())).thenReturn(RMSBuildsResult.Available(listOf(RMSBuild("1", "11", "3.3.9"))))
+        val id = newComponent()
+
+        patchComponent(id, """"baseConfiguration":{"build":{"javaVersion":"11","mavenVersion":"3.3.9"}}""")
+
+        verify(rmsClient, times(1)).getBuilds(anyString())
     }
 
     @Test

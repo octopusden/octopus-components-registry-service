@@ -21,6 +21,7 @@ class RegisteredBuildParametersMapperDetailForTest {
     private fun response(
         name: String = "comp-a",
         buildSystem: String? = "MAVEN",
+        archived: Boolean = false,
         overrides: List<ComponentConfigurationResponse> = emptyList(),
     ): ComponentDetailResponse {
         val base =
@@ -40,7 +41,7 @@ class RegisteredBuildParametersMapperDetailForTest {
             productType = null,
             systems = emptySet(),
             clientCode = null,
-            archived = false,
+            archived = archived,
             solution = null,
             parentComponentName = null,
             version = 0,
@@ -72,6 +73,13 @@ class RegisteredBuildParametersMapperDetailForTest {
                 mapOf("comp-a" to ComponentBuildRanges(emptyList(), emptyList())),
                 intCompare,
             )
+        assertNull(result)
+    }
+
+    @Test
+    @DisplayName("an archived Maven/Gradle component carries no ACTUAL data — never swept, not 'unavailable'")
+    fun `an archived component is null, not marked unavailable`() {
+        val result = RegisteredBuildParametersMapper.detailFor(response(archived = true), emptyMap(), intCompare)
         assertNull(result)
     }
 

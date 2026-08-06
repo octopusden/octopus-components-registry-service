@@ -17,4 +17,7 @@ object ErrorCodes {
 
     /** A build parameters write disagrees with RMS's registered ACTUAL value for an intersecting range. */
     const val RMS_REGISTERED_VALUE_CONFLICT = "RMS_REGISTERED_VALUE_CONFLICT"
+
+    /** The live RMS check for a build parameters write failed, timed out, or was ambiguous. */
+    const val RMS_UNAVAILABLE = "RMS_UNAVAILABLE"
 }

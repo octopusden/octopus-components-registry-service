@@ -206,6 +206,22 @@ class RMSBuildParametersServiceTest {
     }
 
     @Test
+    @DisplayName("a long outage never overflows the doubling backoff — it just stays pinned at the cap")
+    fun `a very long outage stays pinned at the backoff cap without overflowing`() {
+        val provider = EligibleComponentsProvider { throw SimulatedFailure("boom") }
+        val service =
+            RMSBuildParametersService(
+                RMSClient { RMSBuildsResult.Available(emptyList()) },
+                provider,
+                props(initialRetryInterval = Duration.ofMinutes(5), retryBackoffCap = Duration.ofHours(4)),
+            )
+
+        repeat(80) { service.refresh() }
+
+        assertEquals(Duration.ofHours(4), service.nextDelay(), "80 consecutive failures must not throw or overflow — just cap")
+    }
+
+    @Test
     @DisplayName("a success resets the backoff, so the next failure starts again at the initial retry interval")
     fun `a success resets the backoff`() {
         var shouldFail = true

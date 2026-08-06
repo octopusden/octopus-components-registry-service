@@ -14,9 +14,10 @@ import org.springframework.http.client.SimpleClientHttpRequestFactory
 import org.springframework.web.client.RestClient
 
 /**
- * Registers the optional [RMSClient] bean — two-gates:
+ * Registers the optional [RMSClient] bean — two gates, both must pass:
  *   1. `@ConditionalOnProperty("release-management-service.enabled", havingValue="true")`, and
- *   2. [RMSUrlConfiguredCondition] — `enabled=true` with a blank `url` still does not register the bean.
+ *   2. [RMSUrlConfiguredCondition] — checks only that `url` is non-blank; combined with gate 1,
+ *      `enabled=true` with a blank `url` still does not register the bean.
  * With no bean registered, callers resolving an `ObjectProvider<RMSClient>` see it empty and the
  * feature is off, not degraded.
  */

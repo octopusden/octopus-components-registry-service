@@ -17,19 +17,34 @@ import org.octopusden.octopus.components.registry.server.util.VersionRangeInters
  * layer (which owns wiring these into response DTOs), so both are independently unit-testable.
  */
 object RegisteredBuildParametersMapper {
-    /**
-     * Unlike the summary rollup (which can trust `reportComponents` membership alone, since the
-     * sweep only ever tracks Maven/Gradle components), detail must tell "not eligible at all" (→
-     * `null`, no field) apart from "eligible but never successfully swept" (→ `actualDataUnavailable
-     * = true`) — two different response shapes a missing map entry alone can't distinguish. So this
-     * reads the component's *live* build system directly, rather than relying on cache membership.
-     */
+    /** Component/base-config eligibility for ACTUAL — see [detailFor]. */
     private val ELIGIBLE_BUILD_SYSTEMS = setOf("MAVEN", "GRADLE")
 
+    /**
+     * The maximum [valueCompare]-ordered value across [ranges], skipping any value [valueCompare]
+     * can't order (e.g. a Java value RMS recorded that CRS's comparator can't parse) rather than
+     * letting it throw out of the whole rollup — one unparseable value must not take down every
+     * other component's summary row alongside it.
+     */
     fun rollup(
         ranges: List<BuildRangeCollapser.Run>,
-        compare: (String, String) -> Int,
-    ): String? = ranges.map { it.value }.maxWithOrNull(Comparator(compare))
+        valueCompare: (String, String) -> Int,
+    ): String? =
+        ranges
+            .map { it.value }
+            .filter { isOrderable(it, valueCompare) }
+            .maxWithOrNull(Comparator(valueCompare))
+
+    private fun isOrderable(
+        value: String,
+        valueCompare: (String, String) -> Int,
+    ): Boolean =
+        try {
+            valueCompare(value, value)
+            true
+        } catch (_: IllegalArgumentException) {
+            false
+        }
 
     private fun toActualRanges(ranges: List<BuildRangeCollapser.Run>): List<ActualRange> =
         ranges.map { ActualRange(it.versionRange, it.value) }
@@ -39,26 +54,29 @@ object RegisteredBuildParametersMapper {
         configuredRows: List<ActualRange>,
         actualRanges: List<BuildRangeCollapser.Run>,
         valuesEqual: (String, String) -> Boolean,
-        compare: (String, String) -> Int,
+        versionRangeCompare: (String, String) -> Int,
     ): List<ActualDisagreement> =
         configuredRows.flatMap { row ->
             actualRanges.mapNotNull { actual ->
-                val subRange = VersionRangeIntersector.intersect(row.versionRange, actual.versionRange, compare) ?: return@mapNotNull null
+                val subRange =
+                    VersionRangeIntersector.intersect(row.versionRange, actual.versionRange, versionRangeCompare) ?: return@mapNotNull null
                 if (valuesEqual(row.value, actual.value)) null else ActualDisagreement(subRange, actual.value)
             }
         }
 
     /**
-     * The full detail-view computation: `null` for a non-Maven/Gradle component (per [response]'s
-     * BASE row); otherwise a [RegisteredBuildParametersDetail] — `actualDataUnavailable = true` and
-     * empty ranges/warnings when [reportComponents] has no entry for this component (RMS has never
-     * successfully reported it), else the collapsed ranges plus computed warnings.
+     * The full detail-view computation. `null` for a non-Maven/Gradle or archived component
+     * (archived ones are never swept, so treating them as ineligible avoids a misleading
+     * `actualDataUnavailable` reading as an RMS problem). Otherwise a [RegisteredBuildParametersDetail]:
+     * `actualDataUnavailable = true` with empty ranges/warnings when [reportComponents] has no entry
+     * (never successfully swept), else the collapsed ranges plus computed warnings.
      */
     fun detailFor(
         response: ComponentDetailResponse,
         reportComponents: Map<String, ComponentBuildRanges>,
-        compare: (String, String) -> Int,
+        versionRangeCompare: (String, String) -> Int,
     ): RegisteredBuildParametersDetail? {
+        if (response.archived) return null
         val buildSystem = response.configurations
             .firstOrNull { it.rowType == ConfigurationRowType.BASE }
             ?.build
@@ -75,7 +93,7 @@ object RegisteredBuildParametersMapper {
                     configuredRows(response, "build.javaVersion") { it.javaVersion },
                     ranges.javaRanges,
                     JavaVersionComparator::valuesEqual,
-                    compare,
+                    versionRangeCompare,
                 ),
             mavenActualRanges = toActualRanges(ranges.mavenRanges),
             mavenWarnings =
@@ -83,7 +101,7 @@ object RegisteredBuildParametersMapper {
                     configuredRows(response, "build.mavenVersion") { it.mavenVersion },
                     ranges.mavenRanges,
                     MavenVersionComparator::valuesEqual,
-                    compare,
+                    versionRangeCompare,
                 ),
             actualDataUnavailable = false,
         )

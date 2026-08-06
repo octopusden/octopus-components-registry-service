@@ -31,7 +31,7 @@
     <ID>ComplexCondition:VersionRangePartition.kt$VersionRangePartition$seg.lo != null &amp;&amp; seg.lo == seg.hi &amp;&amp; seg.loIncl &amp;&amp; seg.hiIncl</ID>
     <ID>CyclomaticComplexMethod:ComponentCodeRenderer.kt$ComponentCodeRenderer$@Suppress("ReturnCount") fun renderResolved( component: ComponentEntity, version: String, ownershipExportPatterns: Map&lt;UUID, String&gt; = emptyMap(), ): String?</ID>
     <ID>CyclomaticComplexMethod:ComponentManagementServiceImpl.kt$ComponentManagementServiceImpl$override fun createComponent(request: ComponentCreateRequest): ComponentDetailResponse</ID>
-    <ID>CyclomaticComplexMethod:ComponentManagementServiceImpl.kt$ComponentManagementServiceImpl$private fun applyFieldOverrideDesiredSet( component: ComponentEntity, desired: List&lt;FieldOverrideUpsertRequest&gt;, ): FieldOverrideApplyPlan</ID>
+    <ID>CyclomaticComplexMethod:ComponentManagementServiceImpl.kt$ComponentManagementServiceImpl$private fun applyFieldOverrideDesiredSet( component: ComponentEntity, desired: List&lt;FieldOverrideUpsertRequest&gt;, rmsBuildsCache: MutableMap&lt;String, List&lt;RMSBuild&gt;&gt; = mutableMapOf(), ): FieldOverrideApplyPlan</ID>
     <ID>CyclomaticComplexMethod:ComponentManagementServiceImpl.kt$ComponentManagementServiceImpl$private fun buildSpecification(filter: ComponentFilter): Specification&lt;ComponentEntity&gt;</ID>
     <ID>CyclomaticComplexMethod:ComponentManagementServiceImpl.kt$ComponentManagementServiceImpl$private fun enforceEditabilityOnCreate(request: ComponentCreateRequest)</ID>
     <ID>CyclomaticComplexMethod:ComponentManagementServiceImpl.kt$ComponentManagementServiceImpl$private fun enforceEditabilityOnUpdate( entity: ComponentEntity, request: ComponentUpdateRequest, )</ID>

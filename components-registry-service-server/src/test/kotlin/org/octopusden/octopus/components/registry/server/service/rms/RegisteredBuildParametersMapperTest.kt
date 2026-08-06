@@ -56,6 +56,20 @@ class RegisteredBuildParametersMapperTest {
     }
 
     @Test
+    @DisplayName("an unparseable value never breaks the rollup — it's skipped rather than thrown")
+    fun `rollup skips a value the comparator cannot parse`() {
+        val ranges = listOf(BuildRangeCollapser.Run("[1,2)", "17-ea"), BuildRangeCollapser.Run("[2,)", "11"))
+        assertEquals("11", RegisteredBuildParametersMapper.rollup(ranges, JavaVersionComparator::compare))
+    }
+
+    @Test
+    @DisplayName("rollup of only unparseable values is null, not a thrown exception")
+    fun `rollup of only unparseable values is null`() {
+        val ranges = listOf(BuildRangeCollapser.Run("[1,)", "17-ea"))
+        assertNull(RegisteredBuildParametersMapper.rollup(ranges, JavaVersionComparator::compare))
+    }
+
+    @Test
     @DisplayName("a matching configured row produces no warning")
     fun `a matching row produces no warning`() {
         val rows = listOf(ActualRange("[1,3)", "17"))

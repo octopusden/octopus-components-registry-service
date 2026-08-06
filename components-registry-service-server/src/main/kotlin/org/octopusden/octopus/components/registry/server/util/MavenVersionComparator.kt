@@ -9,11 +9,7 @@ object MavenVersionComparator {
         b: String,
     ): Boolean {
         if (a == LATEST_VERSION || b == LATEST_VERSION) return a == b
-        return try {
-            VersionRangePartition.defaultVersionCompare(a, b) == 0
-        } catch (_: Exception) {
-            false
-        }
+        return VersionRangePartition.defaultVersionCompare(a, b) == 0
     }
 
     fun compare(

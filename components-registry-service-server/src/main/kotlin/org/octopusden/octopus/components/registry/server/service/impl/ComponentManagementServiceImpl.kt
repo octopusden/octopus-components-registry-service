@@ -89,6 +89,7 @@ import org.octopusden.octopus.components.registry.server.security.PermissionEval
 import org.octopusden.octopus.components.registry.server.service.ComponentManagementService
 import org.octopusden.octopus.components.registry.server.service.ComponentSourceRegistry
 import org.octopusden.octopus.components.registry.server.service.RenderedComponentCode
+import org.octopusden.octopus.components.registry.server.service.rms.RMSBuild
 import org.octopusden.octopus.components.registry.server.service.rms.RMSBuildParametersService
 import org.octopusden.octopus.components.registry.server.service.rms.RMSOverrideGate
 import org.octopusden.octopus.components.registry.server.service.rms.RegisteredBuildParametersMapper
@@ -788,16 +789,34 @@ class ComponentManagementServiceImpl(
         }
 
         // RMS write-gate: the BASE row's own javaVersion/mavenVersion, change-based against the
-        // oldBase* snapshots above — same convention as the WHISKEY check just above.
-        checkRMSOverrideGate(entity, ATTR_JAVA_VERSION, newBase?.javaVersion != oldBaseJavaVersion, newBase?.javaVersion, ALL_VERSIONS)
-        checkRMSOverrideGate(entity, ATTR_MAVEN_VERSION, newBase?.mavenVersion != oldBaseMavenVersion, newBase?.mavenVersion, ALL_VERSIONS)
+        // oldBase* snapshots above — same convention as the WHISKEY check just above. rmsBuildsCache
+        // is shared with applyFieldOverrideDesiredSet so one PATCH fetches RMS data at most once.
+        val rmsBuildsCache = mutableMapOf<String, List<RMSBuild>>()
+        checkRMSOverrideGate(
+            entity,
+            ATTR_JAVA_VERSION,
+            newBase?.javaVersion != oldBaseJavaVersion,
+            newBase?.javaVersion,
+            newBase?.mavenVersion,
+            ALL_VERSIONS,
+            rmsBuildsCache,
+        )
+        checkRMSOverrideGate(
+            entity,
+            ATTR_MAVEN_VERSION,
+            newBase?.mavenVersion != oldBaseMavenVersion,
+            newBase?.javaVersion,
+            newBase?.mavenVersion,
+            ALL_VERSIONS,
+            rmsBuildsCache,
+        )
 
         // Field overrides (item D): desired-FULL-SET applied in-place on the
         // configuration collection — cascade (orphanRemoval) persists the
         // inserts/deletes on the saveAndFlush below, bumping the aggregate
         // @Version once. null = don't touch. The returned plan carries the
         // post-flush required-tool syncs + per-override audit rows.
-        val fieldOverridePlan = request.fieldOverrides?.let { applyFieldOverrideDesiredSet(entity, it) }
+        val fieldOverridePlan = request.fieldOverrides?.let { applyFieldOverrideDesiredSet(entity, it, rmsBuildsCache) }
 
         // Cross-component / malformed-input checks are GRANDFATHERED on update:
         // they re-run only when the PATCH actually touches a field they govern
@@ -1056,7 +1075,8 @@ class ComponentManagementServiceImpl(
                         component = component,
                         attribute = request.overriddenAttribute,
                         effectiveChange = true,
-                        newValue = if (request.overriddenAttribute == ATTR_JAVA_VERSION) row.javaVersion else row.mavenVersion,
+                        javaVersion = row.javaVersion,
+                        mavenVersion = row.mavenVersion,
                         newRange = canonicalRange,
                     )
                     null
@@ -1154,7 +1174,8 @@ class ComponentManagementServiceImpl(
             component = row.component,
             attribute = row.overriddenAttribute!!,
             effectiveChange = effectiveChange,
-            newValue = if (row.overriddenAttribute == ATTR_JAVA_VERSION) row.javaVersion else row.mavenVersion,
+            javaVersion = row.javaVersion,
+            mavenVersion = row.mavenVersion,
             newRange = row.versionRange,
         )
 
@@ -1277,6 +1298,7 @@ class ComponentManagementServiceImpl(
     private fun applyFieldOverrideDesiredSet(
         component: ComponentEntity,
         desired: List<FieldOverrideUpsertRequest>,
+        rmsBuildsCache: MutableMap<String, List<RMSBuild>> = mutableMapOf(),
     ): FieldOverrideApplyPlan {
         fun isImportManaged(row: ComponentConfigurationEntity) = row.rowType == "MARKER" && row.overriddenAttribute !in MarkerAttributes.ALL
 
@@ -1337,8 +1359,10 @@ class ComponentManagementServiceImpl(
                 component = component,
                 attribute = d.overriddenAttribute,
                 effectiveChange = effectiveChange,
-                newValue = if (d.overriddenAttribute == ATTR_JAVA_VERSION) row.javaVersion else row.mavenVersion,
+                javaVersion = row.javaVersion,
+                mavenVersion = row.mavenVersion,
                 newRange = row.versionRange,
+                rmsBuildsCache = rmsBuildsCache,
             )
             updated += row to before
         }
@@ -1365,8 +1389,10 @@ class ComponentManagementServiceImpl(
                 component = component,
                 attribute = d.overriddenAttribute,
                 effectiveChange = true,
-                newValue = if (d.overriddenAttribute == ATTR_JAVA_VERSION) row.javaVersion else row.mavenVersion,
+                javaVersion = row.javaVersion,
+                mavenVersion = row.mavenVersion,
                 newRange = row.versionRange,
+                rmsBuildsCache = rmsBuildsCache,
             )
             // Explicit save (like the single-row create path) so the generated id
             // is assigned to this instance now — the parent saveAndFlush's cascade
@@ -3427,8 +3453,10 @@ class ComponentManagementServiceImpl(
         component: ComponentEntity,
         attribute: String,
         effectiveChange: Boolean,
-        newValue: String?,
+        javaVersion: String?,
+        mavenVersion: String?,
         newRange: String,
+        rmsBuildsCache: MutableMap<String, List<RMSBuild>> = mutableMapOf(),
     ) {
         val gate = rmsOverrideGate ?: return
         val buildSystem = component.configurations.firstOrNull { it.rowType == ROW_TYPE_BASE }?.buildSystem
@@ -3439,11 +3467,12 @@ class ComponentManagementServiceImpl(
                     componentKey = component.componentKey,
                     buildSystem = buildSystem,
                     effectiveChange = effectiveChange,
-                    newValue = newValue,
+                    newValue = javaVersion,
                     newRange = newRange,
                     selectValue = { it.javaVersion },
                     valuesEqual = JavaVersionComparator::valuesEqual,
                     compare = compare,
+                    buildsCache = rmsBuildsCache,
                 )
 
             ATTR_MAVEN_VERSION ->
@@ -3451,11 +3480,12 @@ class ComponentManagementServiceImpl(
                     componentKey = component.componentKey,
                     buildSystem = buildSystem,
                     effectiveChange = effectiveChange,
-                    newValue = newValue,
+                    newValue = mavenVersion,
                     newRange = newRange,
                     selectValue = { it.mavenVersion },
                     valuesEqual = MavenVersionComparator::valuesEqual,
                     compare = compare,
+                    buildsCache = rmsBuildsCache,
                 )
 
             else -> Unit
