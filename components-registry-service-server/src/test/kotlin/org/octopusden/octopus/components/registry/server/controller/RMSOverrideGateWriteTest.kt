@@ -175,6 +175,44 @@ class RMSOverrideGateWriteTest {
     }
 
     @Test
+    @DisplayName("creating a field override via the bulk desired-set PATCH is gated the same as the single-create endpoint")
+    fun `bulk desired-set create of a disagreeing override is rejected`() {
+        `when`(rmsClient.getBuilds(anyString())).thenReturn(RMSBuildsResult.Available(listOf(RMSBuild("2", "17", null))))
+        val id = newComponent()
+        val version = currentVersion(id)
+        mvc
+            .perform(
+                patch("/rest/api/4/components/$id")
+                    .with(adminJwt())
+                    .contentType(MediaType.APPLICATION_JSON)
+                    .content(
+                        """{"version":$version,"fieldOverrides":[""" +
+                            """{"overriddenAttribute":"build.javaVersion","versionRange":"[1,5)","value":"11"}]}""",
+                    ),
+            ).andExpect(status().isConflict)
+    }
+
+    @Test
+    @DisplayName("updating a field override's value via the bulk desired-set PATCH is gated the same as the single-update endpoint")
+    fun `bulk desired-set update to a disagreeing value is rejected`() {
+        val id = newComponent()
+        val overrideId = seedOverride(id, "build.javaVersion", "[1,5)")
+
+        `when`(rmsClient.getBuilds(anyString())).thenReturn(RMSBuildsResult.Available(listOf(RMSBuild("2", "21", null))))
+        val version = currentVersion(id)
+        mvc
+            .perform(
+                patch("/rest/api/4/components/$id")
+                    .with(adminJwt())
+                    .contentType(MediaType.APPLICATION_JSON)
+                    .content(
+                        """{"version":$version,"fieldOverrides":[""" +
+                            """{"id":"$overrideId","overriddenAttribute":"build.javaVersion","versionRange":"[1,5)","value":"11"}]}""",
+                    ),
+            ).andExpect(status().isConflict)
+    }
+
+    @Test
     @DisplayName("recreating a field override with the same, still-disagreeing value after deleting it is rejected, just like any other write")
     fun `recreating the same disagreeing override after delete is rejected`() {
         `when`(rmsClient.getBuilds(anyString())).thenReturn(RMSBuildsResult.Unavailable)

@@ -88,6 +88,33 @@ class RMSOverrideGateTest {
     }
 
     @Test
+    @DisplayName("ECLIPSE_MAVEN is not treated as Maven — permits the write without calling RMS")
+    fun `ECLIPSE_MAVEN permits without calling RMS`() {
+        val callCount = AtomicInteger(0)
+        val client = RMSClient { callCount.incrementAndGet(); RMSBuildsResult.Unavailable }
+        assertDoesNotThrow { check(gate(client), buildSystem = "ECLIPSE_MAVEN") }
+        assertEquals(0, callCount.get())
+    }
+
+    @Test
+    @DisplayName("a null build system permits the write without calling RMS")
+    fun `null build system permits without calling RMS`() {
+        val callCount = AtomicInteger(0)
+        val client = RMSClient { callCount.incrementAndGet(); RMSBuildsResult.Unavailable }
+        assertDoesNotThrow { check(gate(client), buildSystem = null) }
+        assertEquals(0, callCount.get())
+    }
+
+    @Test
+    @DisplayName("a Gradle build system is not short-circuited — a disagreeing value is still rejected")
+    fun `GRADLE build system is gated the same as Maven`() {
+        val client = RMSClient { RMSBuildsResult.Available(listOf(RMSBuild("2", "17", null))) }
+        assertThrows(RMSRegisteredValueConflictException::class.java) {
+            check(gate(client), buildSystem = "GRADLE", newValue = "11", newRange = "[1,5)")
+        }
+    }
+
+    @Test
     @DisplayName("ACTUAL null for the range (confirmed empty response) permits the write")
     fun `confirmed empty response permits the write`() {
         val client = RMSClient { RMSBuildsResult.Available(emptyList()) }
@@ -112,6 +139,13 @@ class RMSOverrideGateTest {
     @DisplayName("an unreachable/ambiguous live call fails closed with RMSUnavailableException")
     fun `an unavailable result fails closed`() {
         val client = RMSClient { RMSBuildsResult.Unavailable }
+        assertThrows(RMSUnavailableException::class.java) { check(gate(client)) }
+    }
+
+    @Test
+    @DisplayName("a client that throws instead of returning Unavailable still fails closed with RMSUnavailableException")
+    fun `a throwing client fails closed`() {
+        val client = RMSClient { throw IllegalStateException("connection refused") }
         assertThrows(RMSUnavailableException::class.java) { check(gate(client)) }
     }
 
