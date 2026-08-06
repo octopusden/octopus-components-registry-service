@@ -6,7 +6,7 @@ import org.octopusden.octopus.components.registry.core.exceptions.RMSUnavailable
 import org.octopusden.octopus.components.registry.server.config.RMSProperties
 import org.octopusden.octopus.components.registry.server.dto.v4.ActualRange
 import org.octopusden.octopus.components.registry.server.util.BuildRangeCollapser
-import org.octopusden.octopus.components.registry.server.util.VersionRangePartition
+import org.octopusden.octopus.components.registry.server.util.VersionRangeIntersector
 import org.springframework.stereotype.Service
 import java.util.concurrent.Callable
 import java.util.concurrent.Executors
@@ -75,13 +75,13 @@ class RMSOverrideGate(
             valuesEqual = valuesEqual,
         )
 
-        // A composite/malformed newRange can't be intersected, and VersionRangeIntersector reads that
-        // as "no overlap" — fine for display's fail-soft warnings, wrong here: against non-empty ACTUAL
-        // data, "couldn't evaluate" must fail closed, not silently permit.
-        if (actualRanges.isNotEmpty() && !isSingleRange(newRange)) {
+        // A composite newRange (e.g. legacy DSL-imported rows) is fully supported below — every one of
+        // its segments gets checked. Only a genuinely malformed/partial one fails closed here, rather
+        // than silently checking just the parseable part of it against non-empty ACTUAL data.
+        if (actualRanges.isNotEmpty() && !VersionRangeIntersector.isFullyParseable(newRange)) {
             throw RMSUnavailableException(
                 "Could not confirm RMS's registered value for component '$componentKey': the range '$newRange' " +
-                    "is composite or malformed, so it cannot be checked against RMS's non-empty ACTUAL data",
+                    "is malformed, so it cannot be fully checked against RMS's non-empty ACTUAL data",
             )
         }
 
@@ -100,10 +100,6 @@ class RMSOverrideGate(
             )
         }
     }
-
-    /** A single interval or the all-versions sentinel — [VersionRangeIntersector] can only evaluate this shape. */
-    private fun isSingleRange(range: String): Boolean =
-        VersionRangePartition.isAllVersions(range) || VersionRangePartition.parseSegment(range) != null
 
     private fun fetchWithBudget(
         client: RMSClient,

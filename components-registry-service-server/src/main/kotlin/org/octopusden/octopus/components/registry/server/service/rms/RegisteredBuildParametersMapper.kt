@@ -49,7 +49,11 @@ object RegisteredBuildParametersMapper {
     private fun toActualRanges(ranges: List<BuildRangeCollapser.Run>): List<ActualRange> =
         ranges.map { ActualRange(it.versionRange, it.value) }
 
-    /** One [ActualDisagreement] per (configured row, intersecting ACTUAL range) pair whose values disagree. */
+    /**
+     * One [ActualDisagreement] per (configured row, intersecting ACTUAL range, intersecting sub-range)
+     * triple whose values disagree — a composite row can intersect one ACTUAL range at more than one
+     * sub-range, each checked and named independently.
+     */
     fun warnings(
         configuredRows: List<ActualRange>,
         actualRanges: List<BuildRangeCollapser.Run>,
@@ -57,10 +61,10 @@ object RegisteredBuildParametersMapper {
         versionRangeCompare: (String, String) -> Int,
     ): List<ActualDisagreement> =
         configuredRows.flatMap { row ->
-            actualRanges.mapNotNull { actual ->
-                val subRange =
-                    VersionRangeIntersector.intersect(row.versionRange, actual.versionRange, versionRangeCompare) ?: return@mapNotNull null
-                if (valuesEqual(row.value, actual.value)) null else ActualDisagreement(subRange, actual.value)
+            actualRanges.flatMap { actual ->
+                VersionRangeIntersector.intersect(row.versionRange, actual.versionRange, versionRangeCompare).mapNotNull { subRange ->
+                    if (valuesEqual(row.value, actual.value)) null else ActualDisagreement(subRange, actual.value)
+                }
             }
         }
 

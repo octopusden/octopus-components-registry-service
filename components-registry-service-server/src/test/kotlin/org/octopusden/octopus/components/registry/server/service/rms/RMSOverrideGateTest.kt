@@ -162,19 +162,39 @@ class RMSOverrideGateTest {
     }
 
     @Test
-    @DisplayName("a composite range fails closed against non-empty ACTUAL data, rather than silently permitting")
-    fun `a composite range fails closed when ACTUAL has data`() {
-        val client = RMSClient { RMSBuildsResult.Available(listOf(RMSBuild("2", "17", null))) }
-        assertThrows(RMSUnavailableException::class.java) {
+    @DisplayName("a composite range is fine when ACTUAL has no data at all for this component")
+    fun `a composite range is permitted when ACTUAL is empty`() {
+        val client = RMSClient { RMSBuildsResult.Available(emptyList()) }
+        assertDoesNotThrow { check(gate(client), newValue = "11", newRange = "[1,2),[5,)") }
+    }
+
+    @Test
+    @DisplayName("a composite range is checked segment by segment — permitted when no segment disagrees")
+    fun `a composite range with no disagreeing segment is permitted`() {
+        val client = RMSClient {
+            RMSBuildsResult.Available(listOf(RMSBuild("1", "11", null), RMSBuild("5", "11", null)))
+        }
+        assertDoesNotThrow { check(gate(client), newValue = "11", newRange = "[1,2),[5,)") }
+    }
+
+    @Test
+    @DisplayName("a composite range is checked segment by segment — rejected when any one segment disagrees")
+    fun `a composite range with a disagreeing segment is rejected`() {
+        val client = RMSClient {
+            RMSBuildsResult.Available(listOf(RMSBuild("1", "17", null), RMSBuild("5", "11", null)))
+        }
+        assertThrows(RMSRegisteredValueConflictException::class.java) {
             check(gate(client), newValue = "11", newRange = "[1,2),[5,)")
         }
     }
 
     @Test
-    @DisplayName("a composite range is fine when ACTUAL has no data at all for this component")
-    fun `a composite range is permitted when ACTUAL is empty`() {
-        val client = RMSClient { RMSBuildsResult.Available(emptyList()) }
-        assertDoesNotThrow { check(gate(client), newValue = "11", newRange = "[1,2),[5,)") }
+    @DisplayName("a partially malformed composite range still fails closed against non-empty ACTUAL data")
+    fun `a partially malformed composite range fails closed`() {
+        val client = RMSClient { RMSBuildsResult.Available(listOf(RMSBuild("2", "17", null))) }
+        assertThrows(RMSUnavailableException::class.java) {
+            check(gate(client), newValue = "11", newRange = "[1,2),garbage,[5,)")
+        }
     }
 
     @Test

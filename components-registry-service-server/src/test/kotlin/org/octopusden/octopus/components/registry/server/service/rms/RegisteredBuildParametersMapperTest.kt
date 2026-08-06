@@ -108,6 +108,17 @@ class RegisteredBuildParametersMapperTest {
     }
 
     @Test
+    @DisplayName("a composite configured row is checked segment by segment, one warning per disagreeing segment")
+    fun `a composite row produces one warning per disagreeing segment`() {
+        val rows = listOf(ActualRange("[1,2),[5,6)", "11"))
+        val actual = listOf(BuildRangeCollapser.Run("[1,2)", "17"), BuildRangeCollapser.Run("[5,6)", "11"))
+        assertEquals(
+            listOf(ActualDisagreement("[1,2)", "17")),
+            RegisteredBuildParametersMapper.warnings(rows, actual, String::equals, intCompare),
+        )
+    }
+
+    @Test
     @DisplayName("two independent configured rows are each checked against ACTUAL on their own")
     fun `two configured rows are each checked independently`() {
         val rows = listOf(ActualRange("[1,3)", "17"), ActualRange("[3,5)", "11"))
