@@ -3399,10 +3399,13 @@ class ComponentManagementServiceImpl(
      * Attach RMS-registered build parameters (ACTUAL) onto [response]: the per-attribute range
      * lists, warnings for any DEFAULT/OVERRIDDEN row that disagrees with an intersecting ACTUAL
      * range, and an unavailable flag when RMS has never successfully reported this component.
-     * Left `null` for a non-Maven/Gradle component or when the feature is off (no bean present).
+     * Left `null` for a non-Maven/Gradle component, when no bean is present (no-db mode), or when
+     * RMS integration is disabled — a disabled integration must show nothing at all, not an
+     * "unavailable" indicator, since there was never an attempt to check RMS in the first place.
      */
     private fun attachRegisteredBuildParameters(response: ComponentDetailResponse): ComponentDetailResponse {
         val service = rmsBuildParametersService ?: return response
+        if (!service.isEnabled()) return response
         val detail =
             RegisteredBuildParametersMapper.detailFor(
                 response,

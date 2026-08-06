@@ -1,5 +1,6 @@
 package org.octopusden.octopus.components.registry.server.service.rms
 
+import jakarta.annotation.PostConstruct
 import org.octopusden.octopus.components.registry.server.config.RMSProperties
 import org.slf4j.LoggerFactory
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty
@@ -20,7 +21,19 @@ import org.springframework.web.client.RestClient
  * feature is off, not degraded.
  */
 @Configuration
-class RMSClientConfig {
+class RMSClientConfig(
+    private val properties: RMSProperties,
+) {
+    // Informational, not a warning: a disabled integration is a deliberate, safe configuration
+    // state (see RMSProperties), not a failure — this just makes that state visible in logs
+    // instead of reading as "RMS support doesn't exist."
+    @PostConstruct
+    fun logDisabledState() {
+        if (!properties.enabled) {
+            log.info("RMS integration is disabled (release-management-service.enabled=false) — no ACTUAL build-parameter data will be shown or enforced")
+        }
+    }
+
     @Bean
     @ConditionalOnProperty("release-management-service.enabled", havingValue = "true")
     @Conditional(RMSUrlConfiguredCondition::class)

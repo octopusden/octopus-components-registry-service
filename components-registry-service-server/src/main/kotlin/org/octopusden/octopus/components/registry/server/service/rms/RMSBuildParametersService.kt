@@ -66,6 +66,14 @@ class RMSBuildParametersService(
     fun currentReport(): RMSBuildParametersReport = report
 
     /**
+     * Whether the feature is turned on at all — distinct from [currentReport] ever having data.
+     * A disabled integration never sweeps, so its report stays permanently empty; callers need
+     * this to tell "disabled" apart from "enabled but never successfully swept," which otherwise
+     * look identical from [currentReport] alone.
+     */
+    fun isEnabled(): Boolean = properties.enabled
+
+    /**
      * Targeted refresh: update this one component's cache entry directly, using
      * [builds] already fetched by the write gate's own live call — no full sweep triggered. Called
      * after [RMSOverrideGate] rejects a write, so the display doesn't keep showing a stale, clean
