@@ -27,9 +27,9 @@ class RMSOverrideGate(
     private val rmsBuildParametersService: RMSBuildParametersService?,
     private val properties: RMSProperties,
 ) {
-    // A write endpoint is expected to make at most one of these calls at a time per request thread,
-    // so a small cached pool (not sized to sweepConcurrency) is enough; sized generously since an
-    // idle thread here costs nothing and this must never itself become a bottleneck under write load.
+    // Deliberately unbounded (not sized to sweepConcurrency): thread count here scales with
+    // concurrent writes needing a gate check, not with the number of components, and an idle
+    // thread costs nothing — see design.md Risks for why a cap was considered and not added.
     private val executor = Executors.newCachedThreadPool()
 
     @PreDestroy

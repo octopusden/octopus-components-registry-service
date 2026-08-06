@@ -45,4 +45,19 @@ class RMSProperties(
 
     @AssertTrue(message = "release-management-service.readTimeout must be strictly positive")
     fun isReadTimeoutPositive(): Boolean = !readTimeout.isZero && !readTimeout.isNegative
+
+    @AssertTrue(message = "release-management-service.normalInterval must be strictly positive")
+    fun isNormalIntervalPositive(): Boolean = !normalInterval.isZero && !normalInterval.isNegative
+
+    @AssertTrue(message = "release-management-service.initialRetryInterval must be strictly positive")
+    fun isInitialRetryIntervalPositive(): Boolean = !initialRetryInterval.isZero && !initialRetryInterval.isNegative
+
+    @AssertTrue(message = "release-management-service.retryBackoffCap must be strictly positive")
+    fun isRetryBackoffCapPositive(): Boolean = !retryBackoffCap.isZero && !retryBackoffCap.isNegative
+
+    @AssertTrue(message = "release-management-service.sweepTimeout must be strictly positive")
+    fun isSweepTimeoutPositive(): Boolean = !sweepTimeout.isZero && !sweepTimeout.isNegative
+
+    @AssertTrue(message = "release-management-service.writeGateTimeout must be strictly positive")
+    fun isWriteGateTimeoutPositive(): Boolean = !writeGateTimeout.isZero && !writeGateTimeout.isNegative
 }

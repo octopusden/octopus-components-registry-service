@@ -65,6 +65,41 @@ class RMSPropertiesTest {
         assertEquals(0, validator.validate(RMSProperties()).size)
     }
 
+    @Test
+    @DisplayName("a zero normalInterval is rejected — nextDelay() would return ZERO and hot-loop the sweep")
+    fun `zero normalInterval fails`() {
+        val violations = validator.validate(RMSProperties(normalInterval = Duration.ZERO, retryBackoffCap = Duration.ofHours(1)))
+        assertTrue(violations.any { it.propertyPath.toString() == "normalIntervalPositive" })
+    }
+
+    @Test
+    @DisplayName("a zero initialRetryInterval is rejected — same hot-loop risk as normalInterval")
+    fun `zero initialRetryInterval fails`() {
+        val violations = validator.validate(RMSProperties(initialRetryInterval = Duration.ZERO))
+        assertTrue(violations.any { it.propertyPath.toString() == "initialRetryIntervalPositive" })
+    }
+
+    @Test
+    @DisplayName("a negative retryBackoffCap is rejected")
+    fun `negative retryBackoffCap fails`() {
+        val violations = validator.validate(RMSProperties(retryBackoffCap = Duration.ofSeconds(-1)))
+        assertTrue(violations.any { it.propertyPath.toString() == "retryBackoffCapPositive" })
+    }
+
+    @Test
+    @DisplayName("a zero sweepTimeout is rejected — the sweep would go permanently dark without surfacing an error")
+    fun `zero sweepTimeout fails`() {
+        val violations = validator.validate(RMSProperties(sweepTimeout = Duration.ZERO))
+        assertTrue(violations.any { it.propertyPath.toString() == "sweepTimeoutPositive" })
+    }
+
+    @Test
+    @DisplayName("a zero writeGateTimeout is rejected")
+    fun `zero writeGateTimeout fails`() {
+        val violations = validator.validate(RMSProperties(writeGateTimeout = Duration.ZERO))
+        assertTrue(violations.any { it.propertyPath.toString() == "writeGateTimeoutPositive" })
+    }
+
     companion object {
         private lateinit var factory: ValidatorFactory
         private lateinit var validator: Validator
