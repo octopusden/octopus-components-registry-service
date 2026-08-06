@@ -2,6 +2,9 @@ package org.octopusden.octopus.components.registry.server.service.rms
 
 import org.octopusden.octopus.components.registry.server.config.ConditionalOnDatabaseEnabled
 import org.octopusden.octopus.components.registry.server.config.RMSProperties
+import org.octopusden.octopus.components.registry.server.service.rms.client.RMSBuild
+import org.octopusden.octopus.components.registry.server.service.rms.client.RMSBuildsResult
+import org.octopusden.octopus.components.registry.server.service.rms.client.RMSClient
 import org.octopusden.octopus.components.registry.server.util.BuildRangeCollapser
 import org.octopusden.octopus.components.registry.server.util.JavaVersionComparator
 import org.octopusden.octopus.components.registry.server.util.MavenVersionComparator
@@ -140,7 +143,7 @@ class RMSBuildParametersService(
     /**
      * One full sweep: eligible components fetched with [RMSProperties.sweepConcurrency] in-flight
      * calls at a time, bounded overall by [RMSProperties.sweepTimeout]. A per-component failure
-     * (an [RMSBuildsResult.Unavailable] result, an exception, or a timeout) marks only that
+     * (an [org.octopusden.octopus.components.registry.server.service.rms.client.RMSBuildsResult.Unavailable] result, an exception, or a timeout) marks only that
      * component unavailable — it never fails the whole sweep. Only a failure listing the eligible
      * components themselves propagates and fails the sweep.
      *

@@ -89,7 +89,7 @@ import org.octopusden.octopus.components.registry.server.security.PermissionEval
 import org.octopusden.octopus.components.registry.server.service.ComponentManagementService
 import org.octopusden.octopus.components.registry.server.service.ComponentSourceRegistry
 import org.octopusden.octopus.components.registry.server.service.RenderedComponentCode
-import org.octopusden.octopus.components.registry.server.service.rms.RMSBuild
+import org.octopusden.octopus.components.registry.server.service.rms.client.RMSBuild
 import org.octopusden.octopus.components.registry.server.service.rms.RMSBuildParametersService
 import org.octopusden.octopus.components.registry.server.service.rms.RMSOverrideGate
 import org.octopusden.octopus.components.registry.server.service.rms.RegisteredBuildParametersMapper

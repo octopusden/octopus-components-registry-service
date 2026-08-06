@@ -1,4 +1,4 @@
-package org.octopusden.octopus.components.registry.server.service.rms
+package org.octopusden.octopus.components.registry.server.service.rms.client
 
 import jakarta.annotation.PostConstruct
 import org.octopusden.octopus.components.registry.server.config.RMSProperties

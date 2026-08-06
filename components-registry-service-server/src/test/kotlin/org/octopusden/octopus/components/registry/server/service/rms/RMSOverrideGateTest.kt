@@ -8,6 +8,9 @@ import org.junit.jupiter.api.Test
 import org.octopusden.octopus.components.registry.core.exceptions.RMSRegisteredValueConflictException
 import org.octopusden.octopus.components.registry.core.exceptions.RMSUnavailableException
 import org.octopusden.octopus.components.registry.server.config.RMSProperties
+import org.octopusden.octopus.components.registry.server.service.rms.client.RMSBuild
+import org.octopusden.octopus.components.registry.server.service.rms.client.RMSBuildsResult
+import org.octopusden.octopus.components.registry.server.service.rms.client.RMSClient
 import org.octopusden.octopus.components.registry.server.util.BuildRangeCollapser
 import org.octopusden.octopus.components.registry.server.util.JavaVersionComparator
 import org.octopusden.octopus.components.registry.server.util.MavenVersionComparator

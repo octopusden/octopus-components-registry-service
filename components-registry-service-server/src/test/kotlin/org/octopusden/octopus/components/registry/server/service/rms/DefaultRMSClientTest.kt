@@ -10,6 +10,10 @@ import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.BeforeAll
 import org.junit.jupiter.api.DisplayName
 import org.junit.jupiter.api.Test
+import org.octopusden.octopus.components.registry.server.service.rms.client.DefaultRMSClient
+import org.octopusden.octopus.components.registry.server.service.rms.client.RMSBuild
+import org.octopusden.octopus.components.registry.server.service.rms.client.RMSBuildsResult
+import org.octopusden.octopus.components.registry.server.service.rms.client.RMSClient
 import org.springframework.web.client.RestClient
 
 class DefaultRMSClientTest {

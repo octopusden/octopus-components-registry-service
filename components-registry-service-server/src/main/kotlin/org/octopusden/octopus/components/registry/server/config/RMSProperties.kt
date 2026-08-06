@@ -38,8 +38,6 @@ class RMSProperties(
     @AssertTrue(message = "release-management-service.url must be set when release-management-service.enabled=true")
     fun isUrlConfiguredWhenEnabled(): Boolean = !enabled || url.isNotBlank()
 
-    // Duration.ZERO on a SimpleClientHttpRequestFactory timeout means "wait forever," not "fail
-    // fast" — the opposite of what a zero-looking timeout value would suggest.
     @AssertTrue(message = "release-management-service.connectTimeout must be strictly positive")
     fun isConnectTimeoutPositive(): Boolean = !connectTimeout.isZero && !connectTimeout.isNegative
 

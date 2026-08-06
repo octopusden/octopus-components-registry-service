@@ -6,6 +6,8 @@ import org.junit.jupiter.api.Assertions.assertTrue
 import org.junit.jupiter.api.DisplayName
 import org.junit.jupiter.api.Test
 import org.octopusden.octopus.components.registry.server.config.RMSProperties
+import org.octopusden.octopus.components.registry.server.service.rms.client.RMSBuildsResult
+import org.octopusden.octopus.components.registry.server.service.rms.client.RMSClient
 import org.springframework.scheduling.TriggerContext
 import org.springframework.scheduling.config.ScheduledTaskRegistrar
 import java.time.Duration

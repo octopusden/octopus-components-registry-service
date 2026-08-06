@@ -12,9 +12,9 @@ import org.mockito.Mockito.verify
 import org.mockito.Mockito.`when`
 import org.octopusden.cloud.commons.security.client.AuthServerClient
 import org.octopusden.octopus.components.registry.server.ComponentRegistryServiceApplication
-import org.octopusden.octopus.components.registry.server.service.rms.RMSBuild
-import org.octopusden.octopus.components.registry.server.service.rms.RMSBuildsResult
-import org.octopusden.octopus.components.registry.server.service.rms.RMSClient
+import org.octopusden.octopus.components.registry.server.service.rms.client.RMSBuild
+import org.octopusden.octopus.components.registry.server.service.rms.client.RMSBuildsResult
+import org.octopusden.octopus.components.registry.server.service.rms.client.RMSClient
 import org.octopusden.octopus.components.registry.server.support.adminJwt
 import org.springframework.beans.factory.annotation.Autowired
 import org.springframework.boot.test.autoconfigure.web.servlet.AutoConfigureMockMvc
@@ -303,7 +303,7 @@ class RMSOverrideGateWriteTest {
         return objectMapper.readTree(body)["id"].asText()
     }
 
-    // Bypasses the gate deliberately: this seeds fixture state, not exercising the write path under test.
+    /** Bypasses the gate deliberately: this seeds fixture state, not exercising the write path under test. */
     private fun seedOverride(
         componentId: String,
         attribute: String,

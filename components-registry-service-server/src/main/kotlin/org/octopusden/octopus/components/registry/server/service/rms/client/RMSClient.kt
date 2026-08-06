@@ -1,4 +1,4 @@
-package org.octopusden.octopus.components.registry.server.service.rms
+package org.octopusden.octopus.components.registry.server.service.rms.client
 
 /** One RC/RELEASE build's registered Java/Maven version — either value may be null. */
 data class RMSBuild(

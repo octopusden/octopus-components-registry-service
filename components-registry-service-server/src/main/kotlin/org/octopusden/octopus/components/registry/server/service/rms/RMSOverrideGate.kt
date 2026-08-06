@@ -5,6 +5,9 @@ import org.octopusden.octopus.components.registry.core.exceptions.RMSRegisteredV
 import org.octopusden.octopus.components.registry.core.exceptions.RMSUnavailableException
 import org.octopusden.octopus.components.registry.server.config.RMSProperties
 import org.octopusden.octopus.components.registry.server.dto.v4.ActualRange
+import org.octopusden.octopus.components.registry.server.service.rms.client.RMSBuild
+import org.octopusden.octopus.components.registry.server.service.rms.client.RMSBuildsResult
+import org.octopusden.octopus.components.registry.server.service.rms.client.RMSClient
 import org.octopusden.octopus.components.registry.server.util.BuildRangeCollapser
 import org.octopusden.octopus.components.registry.server.util.VersionRangeIntersector
 import org.springframework.stereotype.Service
@@ -16,7 +19,7 @@ import java.util.concurrent.TimeoutException
 /**
  * Live write-time check for `build.javaVersion`/`build.mavenVersion`: unlike
  * [RMSBuildParametersService], this never reads the display cache — every call makes its own
- * synchronous [RMSClient] call, using the same unfiltered fetch shape as the sweep. Registered
+ * synchronous [org.octopusden.octopus.components.registry.server.service.rms.client.RMSClient] call, using the same unfiltered fetch shape as the sweep. Registered
  * unconditionally (no direct JPA dependency of its own) — both collaborators are already nullable
  * and this degrades to a no-op the same way whether they're absent because the feature is
  * disabled or because no-db mode dropped [RMSBuildParametersService].

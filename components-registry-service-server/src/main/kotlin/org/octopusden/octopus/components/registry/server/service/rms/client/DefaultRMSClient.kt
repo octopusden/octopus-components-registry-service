@@ -1,4 +1,4 @@
-package org.octopusden.octopus.components.registry.server.service.rms
+package org.octopusden.octopus.components.registry.server.service.rms.client
 
 import com.fasterxml.jackson.annotation.JsonIgnoreProperties
 import org.slf4j.LoggerFactory

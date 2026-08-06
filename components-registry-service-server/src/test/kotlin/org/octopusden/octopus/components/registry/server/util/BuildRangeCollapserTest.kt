@@ -22,7 +22,6 @@ class BuildRangeCollapserTest {
     @Test
     @DisplayName("a differing-value build ends the current run before it; only the last run is open-ended")
     fun `two builds with different values produce two runs`() {
-        // Input is ascending, matching RMS's guaranteed order.
         val result = BuildRangeCollapser.collapse(listOf(Build("2", "17"), Build("3", "21")))
         assertEquals(
             listOf(
