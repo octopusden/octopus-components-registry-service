@@ -56,12 +56,7 @@ data class ComponentFilter(
     val buildSystem: List<String>? = null,
     /**
      * Multi-value OR filter over the component's *effective* Java version — RMS's registered
-     * value when it has one, else the BASE configuration row's configured `javaVersion`. Unlike
-     * [buildSystem], this can't be pushed into the DB query (RMS's data isn't a DB column), so a
-     * component matches when [ComponentManagementServiceImpl][org.octopusden.octopus.components.registry.server.service.impl.ComponentManagementServiceImpl.listComponents]
-     * computes this same effective value in-memory and finds it in the list. Null or empty means
-     * "no extra filter applied". The controller normalises raw query input (split-by-comma, trim,
-     * drop-empty, distinct, null-if-empty) before populating this field.
+     * value when it has one, else the BASE configuration row's configured `javaVersion`.
      */
     val javaVersion: List<String>? = null,
     /**

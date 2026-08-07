@@ -614,8 +614,6 @@ class ComponentManagementServiceImpl(
         val oldSkipCommitCheck = entity.skipCommitCheck
         val oldBase = entity.configurations.firstOrNull { it.rowType == ROW_TYPE_BASE }
         val oldBaseBuildSystem = oldBase?.buildSystem
-        // Snapshotted here (same reasoning as oldBaseBuildSystem above) for the RMS write-gate's
-        // change-based check further down — see checkRMSOverrideGate.
         val oldBaseJavaVersion = oldBase?.javaVersion
         val oldBaseMavenVersion = oldBase?.mavenVersion
 
@@ -790,8 +788,8 @@ class ComponentManagementServiceImpl(
         }
 
         // RMS write-gate: the BASE row's own javaVersion/mavenVersion, change-based against the
-        // oldBase* snapshots above — same convention as the WHISKEY check just above. rmsBuildsCache
-        // is shared with applyFieldOverrideDesiredSet so one PATCH fetches RMS data at most once.
+        // oldBase* snapshots above. rmsBuildsCache is shared with applyFieldOverrideDesiredSet,
+        // so one PATCH fetches RMS data at most once.
         val rmsBuildsCache = mutableMapOf<String, List<RMSBuild>>()
         checkRMSOverrideGate(
             entity,
@@ -985,6 +983,7 @@ class ComponentManagementServiceImpl(
                         )
                     effective != null && matchesJavaVersionFilter(effective, javaVersionFilter)
                 }
+
         // Long arithmetic then clamp: `pageNumber * pageSize` in Int overflows for a large but
         // perfectly acceptable page number (`?page=200000000` with the default size of 20 is
         // already past Int.MAX), and a negative fromIndex reaches subList as an exception, not a
@@ -4019,9 +4018,11 @@ class ComponentManagementServiceImpl(
                     },
                 )
         }
+
         // javaVersion is deliberately NOT filtered here — it matches against the effective
         // Java version (RMS's registered value, falling back to this BASE row's configured
         // value), which the DB doesn't have. See listComponents.
+
         // OR across selected system codes — a component matches when ANY of its
         // system junctions has a code in the list. Unlike labels (also
         // junction-backed but AND across selections), the picker semantics here

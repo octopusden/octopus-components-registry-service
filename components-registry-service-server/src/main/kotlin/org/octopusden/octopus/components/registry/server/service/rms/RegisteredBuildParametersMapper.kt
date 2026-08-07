@@ -82,7 +82,7 @@ object RegisteredBuildParametersMapper {
     /**
      * The full detail-view computation. `null` for a non-Maven/Gradle or archived component
      * (archived ones are never swept, so treating them as ineligible avoids a misleading
-     * `actualDataUnavailable` reading as an RMS problem). Otherwise a [RegisteredBuildParametersDetail]:
+     * `actualDataUnavailable` reading as an RMS problem). Otherwise, a [RegisteredBuildParametersDetail]:
      * `actualDataUnavailable = true` with empty ranges/warnings when [reportComponents] has no entry
      * (never successfully swept), else the collapsed ranges plus computed warnings.
      */

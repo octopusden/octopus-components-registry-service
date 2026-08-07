@@ -50,7 +50,7 @@ Two secondary consequences of the same design:
 ## Removal options
 
 None is free; all trade the sweep's "never persisted" property (design.md Decision 8) for
-queryability.
+query ability.
 
 - **Persist the effective value as a derived, sweep-maintained column** on `components` (or a small
   side table keyed by component). The sweep already runs on a schedule and already knows every
