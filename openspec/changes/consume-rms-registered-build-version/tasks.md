@@ -150,6 +150,13 @@
 - [x] 5a.4 Tests: `ComponentSummaryMapperTest` (`javaVersion` falls back to BASE / prefers RMS / null when both absent), `RegisteredBuildParametersMapperTest` (`effectiveJavaVersion` unit cases), `ListComponentsExtendedFiltersTest` (RMS-registered value overrides the configured one for filtering, and falls back to it when RMS has no data).
 - [x] 5a.5 Regenerated `openapi/v4.json`; `OpenApiV4SpecTest` green.
 
+## 5b. Admin visibility into the sweep itself
+
+- [x] 5b.1 `RMSBuildParametersReport` gains `lastSweepDuration: Duration?` (default `null`); `RMSBuildParametersService.sweep()` records elapsed wall-clock time and sets it on the returned report only when the sweep completes.
+- [x] 5b.2 `RMSSweepControllerV4` (`GET rest/api/4/admin/rms-sweep`, `IMPORT_DATA`-gated, `@ConditionalOnDatabaseEnabled`) + `RMSSweepStatusResponse` (`enabled`, `generatedAt`, `lastAttemptAt`, `lastSweepDurationMillis`, `refreshError`, `componentsWithData`, `unavailableComponents` — no per-component range data; that stays on the existing detail/list endpoints).
+- [x] 5b.3 Tests: `RMSBuildParametersServiceTest` (duration null before any sweep, non-null after a completed one), `RMSSweepStatusResponseTest` (disabled → empty/null; enabled with data → populated, unavailable list sorted; refreshError surfaced as-is), `RMSSweepControllerV4SecurityTest` (401/403/200), `RMSSweepControllerV4Test` (JSON shape for both the enabled-with-data and disabled paths).
+- [x] 5b.4 Regenerated `openapi/v4.json`; `OpenApiV4SpecTest` green.
+
 ## 6. Docs
 
 - [x] 6.1 Add the new v4 response fields and error responses to the OpenAPI surface, then regenerate the committed spec: run `:components-registry-service-server:generateOpenApiDocs` to refresh `components-registry-service-server/src/main/resources/openapi/v4.json`. (Already done incrementally at 4.4.4/5.6; re-run and re-verified clean at finalization.)

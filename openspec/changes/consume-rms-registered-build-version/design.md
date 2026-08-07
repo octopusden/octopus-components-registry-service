@@ -154,6 +154,14 @@ Single-flight guarded (an `AtomicBoolean`).
 
 **Cost (see Risks):** this is 1 RMS call per component per sweep cycle, on top of Portal's own independent RMS sweep for its own, unrelated purpose. Needs a concurrency bound and a per-call timeout budget at implementation time — this is not free to leave unbounded. (Implemented as a bounded `ExecutorService` sized by `RMSProperties.sweepConcurrency`, with each component's `Future.get` bounded by the time remaining in a shared `sweepTimeout` deadline — a slow or hanging component is cancelled and marked unavailable rather than stalling the rest of the sweep or running unbounded.)
 
+### 3a. Admin visibility into the sweep itself
+
+`GET rest/api/4/admin/rms-sweep` (`RMSSweepControllerV4`, `IMPORT_DATA`-gated via `@PreAuthorize("@permissionEvaluator.canImport()")`, the same permission every other admin dashboard read endpoint in CRS uses) exposes the sweep's own status — not any one component's data, which stays reachable through the existing detail/list endpoints. Response (`RMSSweepStatusResponse`): `enabled`, `generatedAt`, `lastAttemptAt`, `lastSweepDurationMillis`, `refreshError`, `componentsWithData` (a count), and `unavailableComponents` (the full, sorted list of component keys RMS has never successfully returned data for).
+
+`lastSweepDuration` is a new field on `RMSBuildParametersReport`, set only when `sweep()` completes (`null` before the first sweep, or if the sweep throws before finishing — e.g. `EligibleComponentsProvider.listEligibleComponents()` failing outright). Exposed over the wire as milliseconds rather than a serialized `Duration`, to keep the format unambiguous.
+
+When disabled, the report is the permanently-empty initial `RMSBuildParametersReport`, so every count/list comes back empty and `lastSweepDurationMillis` stays `null` automatically — no special-casing needed in the response mapping.
+
 ### 4. Summary vs. detail response shape
 
 - `ComponentSummaryResponse` (list view, existing DTO) — `javaVersion` no longer reads the BASE row's configured value directly; it's now the component's *effective* Java version: RMS's registered value when it has any (the maximum, normalized value across the component's ACTUAL Java ranges — Java's legacy-spelling-aware comparison from Decision 2), else the configured value it always showed before. No Maven equivalent, no ranges, no warnings at the summary level — those stay on the detail view only. The `javaVersion` list filter matches against this same effective value (see "Filtering by effective Java version" below), so a component that matches the filter is always the same one the list displays.
@@ -223,6 +231,7 @@ Everything lives in `components-registry-service-server` — no new Gradle modul
 - `service/rms/client/` — `RMSClient`, `DefaultRMSClient`, `RMSClientConfig`: the RMS client itself, split into its own subpackage separate from the collaborators that use it.
 - `util/BuildRangeCollapser.kt` — the pure, sequential-run collapsing function, alongside `VersionRangePartition`.
 - `dto/v4/RegisteredBuildParametersDtos.kt` — the new detail-view DTOs (per-attribute range list + warning entries). The summary view has no dedicated DTO or new field — its existing `javaVersion` field is repointed to the effective value.
+- `controller/RMSSweepControllerV4.kt` + `dto/v4/RMSSweepStatusResponse.kt` — the admin sweep-status endpoint (Decision 3a), following the same `controller/` + `dto/v4/` split every other v4 endpoint uses, rather than living under `service/rms/`.
 
 `service/rms/` satisfies the existing ArchUnit rule (`ArchitectureFitnessTest.kt`: `@Service`-annotated beans must reside under `..service..` or `..teamcity..`) without a rule change. Decided: `service/rms/`, not a dedicated top-level `rms/` package — no ArchUnit rule change needed.
 

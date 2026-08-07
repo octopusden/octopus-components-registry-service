@@ -39,6 +39,8 @@ data class RMSBuildParametersReport(
     val refreshError: String?,
     val components: Map<String, ComponentBuildRanges>,
     val unavailableComponents: Set<String>,
+    /** How long the last *completed* sweep took. `null` before any sweep has completed. */
+    val lastSweepDuration: Duration? = null,
 )
 
 /**
@@ -152,6 +154,7 @@ class RMSBuildParametersService(
      * lookup at all lands in [RMSBuildParametersReport.unavailableComponents].
      */
     private fun sweep(client: RMSClient): RMSBuildParametersReport {
+        val sweepStartNanos = System.nanoTime()
         val eligible = eligibleComponentsProvider.listEligibleComponents()
         val previousComponents = report.components
         val executor = Executors.newFixedThreadPool(properties.sweepConcurrency.coerceAtLeast(1))
@@ -183,7 +186,8 @@ class RMSBuildParametersService(
             }
 
             val now = Instant.now()
-            return RMSBuildParametersReport(now, now, null, components, unavailable)
+            val duration = Duration.ofNanos(System.nanoTime() - sweepStartNanos)
+            return RMSBuildParametersReport(now, now, null, components, unavailable, duration)
         } finally {
             executor.shutdownNow()
         }

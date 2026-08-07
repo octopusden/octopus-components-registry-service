@@ -2445,6 +2445,44 @@
         },
         "type" : "object"
       },
+      "RMSSweepStatusResponse" : {
+        "properties" : {
+          "componentsWithData" : {
+            "format" : "int32",
+            "type" : "integer"
+          },
+          "enabled" : {
+            "type" : "boolean"
+          },
+          "generatedAt" : {
+            "format" : "date-time",
+            "type" : "string"
+          },
+          "lastAttemptAt" : {
+            "format" : "date-time",
+            "type" : "string"
+          },
+          "lastSweepDurationMillis" : {
+            "format" : "int64",
+            "type" : "integer"
+          },
+          "refreshError" : {
+            "type" : "string"
+          },
+          "unavailableComponents" : {
+            "items" : {
+              "type" : "string"
+            },
+            "type" : "array"
+          }
+        },
+        "required" : [
+          "componentsWithData",
+          "enabled",
+          "unavailableComponents"
+        ],
+        "type" : "object"
+      },
       "RegisteredBuildParametersDetail" : {
         "properties" : {
           "actualDataUnavailable" : {
@@ -5555,6 +5593,116 @@
         },
         "tags" : [
           "admin-controller-v-4"
+        ]
+      }
+    },
+    "/rest/api/4/admin/rms-sweep" : {
+      "get" : {
+        "operationId" : "getRmsSweepStatus",
+        "responses" : {
+          "200" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/RMSSweepStatusResponse"
+                }
+              }
+            },
+            "description" : "OK"
+          },
+          "400" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description" : "Bad Request"
+          },
+          "404" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description" : "Not Found"
+          },
+          "409" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description" : "Conflict"
+          },
+          "413" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description" : "Payload Too Large"
+          },
+          "425" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description" : "Too Early"
+          },
+          "500" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description" : "Internal Server Error"
+          },
+          "501" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description" : "Not Implemented"
+          },
+          "502" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description" : "Bad Gateway"
+          },
+          "503" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description" : "Service Unavailable"
+          }
+        },
+        "tags" : [
+          "rms-sweep-controller-v-4"
         ]
       }
     },

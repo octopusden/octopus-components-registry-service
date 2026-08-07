@@ -30,6 +30,7 @@ RMS's `server` module already depends on CRS's client library (`components-regis
 - CRS's v4 API response shapes: `ComponentSummaryResponse` (`javaVersion` now reports the effective value, not always the raw configured one) and `ComponentDetailResponse` (new per-attribute range lists + warnings).
 - The `javaVersion` list filter now matches the effective value in memory rather than the BASE column in SQL (see design.md, "Filtering by effective Java version").
 - CRS's v4 write endpoints (base config `PATCH`, field-override create/update, bulk field-overrides apply-plan) gain a new validation gate. `createComponent` is not gated — a new component's key can never collide with prior RMS history, since components are archived, not hard-deleted (so a key is never freed up for reuse).
+- New admin endpoint, `GET rest/api/4/admin/rms-sweep`, exposing the sweep's own status (last run, how long it took, current error, which components RMS is unreachable for) — see design.md, "Admin visibility into the sweep itself".
 
 ## Out of scope
 

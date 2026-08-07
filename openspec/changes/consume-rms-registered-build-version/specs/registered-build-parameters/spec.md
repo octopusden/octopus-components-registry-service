@@ -174,6 +174,25 @@ If RMS cannot be reached when the cached ACTUAL report was last refreshed, the a
 - **WHEN** RMS returns a 404 for a component during the scheduled sweep
 - **THEN** that component's ACTUAL is marked unavailable, the same as any other sweep failure — a 404 SHALL NOT be read as "confirmed, no data"
 
+### Requirement: An IMPORT_DATA-permitted caller can read the sweep's own status
+
+CRS SHALL expose a read-only admin endpoint reporting the sweep's own status — separate from any single component's data — for callers holding the `IMPORT_DATA` permission: whether the feature is enabled, when the cache was last successfully generated, when the last attempt occurred, how long the last completed sweep took, the current refresh error (if any), a count of components with cached data, and the full list of components RMS has never successfully returned data for.
+
+#### Scenario: A caller without IMPORT_DATA is rejected
+
+- **WHEN** a caller without the `IMPORT_DATA` permission requests the sweep status endpoint
+- **THEN** the request is rejected, the same as any other IMPORT_DATA-gated admin endpoint
+
+#### Scenario: Disabled integration reports empty status
+
+- **WHEN** RMS integration is disabled and an IMPORT_DATA-permitted caller requests the sweep status
+- **THEN** the response reports `enabled=false`, no unavailable components, a zero component-with-data count, and no sweep duration — since a disabled integration never sweeps
+
+#### Scenario: Enabled integration reports the current sweep result
+
+- **WHEN** RMS integration is enabled and has swept at least once
+- **THEN** the response reports the last successful/attempted timestamps, how long the most recent completed sweep took, any current refresh error, and the full, stable-ordered list of components RMS could not be reached for
+
 ### Requirement: A rejected write immediately refreshes that component's cached ACTUAL data
 
 When a write is rejected because it disagrees with ACTUAL, the component's cached display data SHALL be refreshed immediately using the data already retrieved for that check, rather than waiting for the next scheduled sweep.

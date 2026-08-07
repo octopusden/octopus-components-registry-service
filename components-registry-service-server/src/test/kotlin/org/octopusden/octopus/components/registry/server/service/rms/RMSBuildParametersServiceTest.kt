@@ -60,6 +60,24 @@ class RMSBuildParametersServiceTest {
     }
 
     @Test
+    @DisplayName("before any sweep has run, lastSweepDuration is null")
+    fun `before any sweep, lastSweepDuration is null`() {
+        val service = RMSBuildParametersService(RMSClient { RMSBuildsResult.Available(emptyList()) }, { emptyList() }, props())
+        assertNull(service.currentReport().lastSweepDuration)
+    }
+
+    @Test
+    @DisplayName("a completed sweep records how long it took")
+    fun `a completed sweep records its duration`() {
+        val client = RMSClient { RMSBuildsResult.Available(listOf(RMSBuild("1", "17", null))) }
+        val service = RMSBuildParametersService(client, EligibleComponentsProvider { listOf("comp-a") }, props())
+
+        service.refresh()
+
+        assertNotNull(service.currentReport().lastSweepDuration)
+    }
+
+    @Test
     @DisplayName("a failed sweep retains previous data and sets refreshError")
     fun `a failed sweep retains previous data and sets refreshError`() {
         val client = RMSClient { RMSBuildsResult.Available(listOf(RMSBuild("1", "17", null))) }
