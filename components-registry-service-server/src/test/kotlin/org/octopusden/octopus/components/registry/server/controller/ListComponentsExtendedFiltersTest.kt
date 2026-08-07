@@ -3,17 +3,23 @@ package org.octopusden.octopus.components.registry.server.controller
 import com.fasterxml.jackson.databind.ObjectMapper
 import org.junit.jupiter.api.Assertions.assertFalse
 import org.junit.jupiter.api.Assertions.assertTrue
+import org.junit.jupiter.api.BeforeEach
 import org.junit.jupiter.api.DisplayName
 import org.junit.jupiter.api.Tag
 import org.junit.jupiter.api.Test
 import org.junit.jupiter.api.Timeout
+import org.mockito.Mockito.`when`
 import org.octopusden.cloud.commons.security.client.AuthServerClient
 import org.octopusden.octopus.components.registry.server.ComponentRegistryServiceApplication
 import org.octopusden.octopus.components.registry.server.entity.ComponentGroupEntity
 import org.octopusden.octopus.components.registry.server.repository.ComponentGroupRepository
 import org.octopusden.octopus.components.registry.server.repository.ComponentRepository
+import org.octopusden.octopus.components.registry.server.service.rms.ComponentBuildRanges
+import org.octopusden.octopus.components.registry.server.service.rms.RMSBuildParametersReport
+import org.octopusden.octopus.components.registry.server.service.rms.RMSBuildParametersService
 import org.octopusden.octopus.components.registry.server.support.adminJwt
 import org.octopusden.octopus.components.registry.server.support.viewerJwt
+import org.octopusden.octopus.components.registry.server.util.BuildRangeCollapser
 import org.springframework.beans.factory.annotation.Autowired
 import org.springframework.boot.test.autoconfigure.web.servlet.AutoConfigureMockMvc
 import org.springframework.boot.test.context.SpringBootTest
@@ -66,10 +72,22 @@ class ListComponentsExtendedFiltersTest {
     @Autowired
     private lateinit var componentGroupRepository: ComponentGroupRepository
 
+    // RMS integration is disabled by default in this profile — stubbed with an empty report so
+    // the effective-Java-version filter behaves exactly like the plain BASE-column filter unless
+    // a specific test overrides it with real ranges.
+    @MockBean
+    private lateinit var rmsBuildParametersService: RMSBuildParametersService
+
     init {
         val testResourcesPath =
             Paths.get(ListComponentsExtendedFiltersTest::class.java.getResource("/expected-data")!!.toURI()).parent
         System.setProperty("COMPONENTS_REGISTRY_SERVICE_TEST_DATA_DIR", testResourcesPath.toString())
+    }
+
+    @BeforeEach
+    fun stubEmptyRmsReportByDefault() {
+        `when`(rmsBuildParametersService.currentReport())
+            .thenReturn(RMSBuildParametersReport(null, null, null, emptyMap(), emptySet()))
     }
 
     private fun uniqueName(prefix: String) = "${prefix}_${UUID.randomUUID().toString().take(8)}"
@@ -437,6 +455,45 @@ class ListComponentsExtendedFiltersTest {
         assertTrue(both.contains(gradle17), "expected $gradle17 in $both")
         assertFalse(both.contains(maven17), "did not expect $maven17 (wrong buildSystem) in $both")
         assertFalse(both.contains(gradle21), "did not expect $gradle21 (wrong javaVersion) in $both")
+    }
+
+    @Test
+    @DisplayName("?javaVersion= matches RMS's registered value, not the configured BASE value, when RMS has data")
+    fun javaVersionFilterPrefersRmsActualOverBaseValue() {
+        val rmsOverridden = uniqueName("ext_jv_rms")
+        val dbOnly = uniqueName("ext_jv_db")
+        create(baseBody(rmsOverridden, build = """"build":{"buildSystem":"MAVEN","javaVersion":"8"}"""))
+        create(baseBody(dbOnly, build = """"build":{"buildSystem":"MAVEN","javaVersion":"21"}"""))
+        `when`(rmsBuildParametersService.currentReport()).thenReturn(
+            RMSBuildParametersReport(
+                generatedAt = null,
+                lastAttemptAt = null,
+                refreshError = null,
+                components =
+                    mapOf(
+                        rmsOverridden to
+                            ComponentBuildRanges(
+                                javaRanges = listOf(BuildRangeCollapser.Run("[1,)", "21")),
+                                mavenRanges = emptyList(),
+                            ),
+                    ),
+                unavailableComponents = emptySet(),
+            ),
+        )
+
+        // Both components are now effectively Java 21: rmsOverridden via RMS's rollup
+        // (overriding its configured "8"), dbOnly via its configured value directly (RMS has
+        // no data for it).
+        val matches = names("javaVersion" to "21")
+        assertTrue(matches.contains(rmsOverridden), "expected $rmsOverridden (RMS-actual 21) in $matches")
+        assertTrue(matches.contains(dbOnly), "expected $dbOnly (DB-configured 21) in $matches")
+
+        // Its configured "8" is no longer what it matches on.
+        val configuredValue = names("javaVersion" to "8")
+        assertFalse(
+            configuredValue.contains(rmsOverridden),
+            "did not expect $rmsOverridden (RMS overrides its configured 8) in $configuredValue",
+        )
     }
 
     @Test

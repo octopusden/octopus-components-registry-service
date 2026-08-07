@@ -46,6 +46,17 @@ object RegisteredBuildParametersMapper {
             false
         }
 
+    /**
+     * RMS's registered Java version when it has any (the [rollup] of [javaRanges]), else the
+     * component's own configured `javaVersion` BASE value. Used both for display (list view) and
+     * for filtering — the same effective value, so a component that matches the filter is always
+     * the same one the list shows.
+     */
+    fun effectiveJavaVersion(
+        baseJavaVersion: String?,
+        javaRanges: List<BuildRangeCollapser.Run>,
+    ): String? = rollup(javaRanges, JavaVersionComparator::compare) ?: baseJavaVersion?.takeIf { it.isNotBlank() }
+
     private fun toActualRanges(ranges: List<BuildRangeCollapser.Run>): List<ActualRange> =
         ranges.map { ActualRange(it.versionRange, it.value) }
 

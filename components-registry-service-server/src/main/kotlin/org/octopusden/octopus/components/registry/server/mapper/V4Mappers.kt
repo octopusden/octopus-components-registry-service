@@ -26,7 +26,6 @@ import org.octopusden.octopus.components.registry.server.dto.v4.MavenArtifactReq
 import org.octopusden.octopus.components.registry.server.dto.v4.MavenArtifactResponse
 import org.octopusden.octopus.components.registry.server.dto.v4.PackageRequest
 import org.octopusden.octopus.components.registry.server.dto.v4.PackageResponse
-import org.octopusden.octopus.components.registry.server.dto.v4.RegisteredBuildParametersSummary
 import org.octopusden.octopus.components.registry.server.dto.v4.SecurityGroupResponse
 import org.octopusden.octopus.components.registry.server.dto.v4.TeamcityProjectResponse
 import org.octopusden.octopus.components.registry.server.dto.v4.VcsEntryRequest
@@ -38,8 +37,6 @@ import org.octopusden.octopus.components.registry.server.entity.ComponentConfigu
 import org.octopusden.octopus.components.registry.server.entity.ComponentEntity
 import org.octopusden.octopus.components.registry.server.service.rms.ComponentBuildRanges
 import org.octopusden.octopus.components.registry.server.service.rms.RegisteredBuildParametersMapper
-import org.octopusden.octopus.components.registry.server.util.JavaVersionComparator
-import org.octopusden.octopus.components.registry.server.util.MavenVersionComparator
 
 /**
  * Maps a fully-loaded `ComponentEntity` (with `configurations` + per-component
@@ -126,18 +123,11 @@ fun ComponentEntity.toSummaryResponse(
         releaseManagers = this.releaseManagerUsernames(),
         securityChampions = this.securityChampionUsernames(),
         buildSystem = base?.buildSystem?.takeIf { it.isNotBlank() },
-        javaVersion = base?.javaVersion?.takeIf { it.isNotBlank() },
+        javaVersion = RegisteredBuildParametersMapper.effectiveJavaVersion(base?.javaVersion, rmsRanges?.javaRanges.orEmpty()),
         jiraProjectKey = base?.jiraProjectKey?.takeIf { it.isNotBlank() },
         vcsPath = firstVcsEntry?.vcsPath?.takeIf { it.isNotBlank() }?.sshUrlToProjectRepo(),
         teamcityProjectId = firstTcProject?.teamcityProject?.projectId,
         teamcityProjectUrl = firstTcProject?.let { composeTeamcityProjectUrl(teamcityBaseUrl, it.teamcityProject.projectId) },
-        registeredBuildParameters =
-            rmsRanges?.let {
-                RegisteredBuildParametersSummary(
-                    java = RegisteredBuildParametersMapper.rollup(it.javaRanges, JavaVersionComparator::compare),
-                    maven = RegisteredBuildParametersMapper.rollup(it.mavenRanges, MavenVersionComparator::compare),
-                )
-            },
     )
 }
 

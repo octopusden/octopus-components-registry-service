@@ -108,6 +108,7 @@ import org.octopusden.releng.versions.VersionRangeFactory
 import org.springframework.context.ApplicationEventPublisher
 import org.springframework.core.env.Environment
 import org.springframework.data.domain.Page
+import org.springframework.data.domain.PageImpl
 import org.springframework.data.domain.PageRequest
 import org.springframework.data.domain.Pageable
 import org.springframework.data.domain.Sort
@@ -960,9 +961,37 @@ class ComponentManagementServiceImpl(
         pageable: Pageable,
     ): Page<ComponentSummaryResponse> {
         val rmsComponents = rmsBuildParametersService?.currentReport()?.components.orEmpty()
-        return componentRepository
-            .findAll(buildSpecification(filter), translateSort(pageable))
-            .map { it.toSummaryResponse(teamcityProperties.baseUrl, rmsComponents[it.componentKey]) }
+        val sortedPageable = translateSort(pageable)
+        if (filter.javaVersion.isNullOrEmpty()) {
+            return componentRepository
+                .findAll(buildSpecification(filter), sortedPageable)
+                .map { it.toSummaryResponse(teamcityProperties.baseUrl, rmsComponents[it.componentKey]) }
+        }
+
+        // The effective Java version isn't a DB column, so it can't be filtered or paginated
+        // by SQL — every other-filter-matching candidate is loaded, sorted DB-side, then
+        // filtered and paginated here. Acceptable while the candidate set stays in the low
+        // thousands; revisit if that assumption stops holding.
+        val javaVersionFilter = filter.javaVersion.toSet()
+        val matches =
+            componentRepository
+                .findAll(buildSpecification(filter), sortedPageable.sort)
+                .filter { entity ->
+                    val base = entity.configurations.firstOrNull { it.rowType == "BASE" }
+                    val effective =
+                        RegisteredBuildParametersMapper.effectiveJavaVersion(
+                            base?.javaVersion,
+                            rmsComponents[entity.componentKey]?.javaRanges.orEmpty(),
+                        )
+                    effective != null && effective in javaVersionFilter
+                }
+        val fromIndex = (sortedPageable.pageNumber * sortedPageable.pageSize).coerceAtMost(matches.size)
+        val toIndex = (fromIndex + sortedPageable.pageSize).coerceAtMost(matches.size)
+        val pageContent =
+            matches
+                .subList(fromIndex, toIndex)
+                .map { it.toSummaryResponse(teamcityProperties.baseUrl, rmsComponents[it.componentKey]) }
+        return PageImpl(pageContent, sortedPageable, matches.size.toLong())
     }
 
     /**
@@ -3973,26 +4002,9 @@ class ComponentManagementServiceImpl(
                     },
                 )
         }
-        // OR across selected javaVersions — same scalar-on-BASE-row shape as
-        // buildSystem above: one JOIN through configurations with rowType=BASE +
-        // IN(...). A component has exactly one BASE javaVersion at a time, so
-        // multi-select is "any of these". `distinct(true)` guards against row
-        // multiplication from the join. The controller's normalisation
-        // guarantees the list, if present, is non-empty, blank-free, and
-        // duplicate-free.
-        if (!filter.javaVersion.isNullOrEmpty()) {
-            spec =
-                spec.and(
-                    Specification { root, query, cb ->
-                        val join = root.join<ComponentEntity, ComponentConfigurationEntity>("configurations")
-                        query?.distinct(true)
-                        cb.and(
-                            cb.equal(join.get<String>("rowType"), "BASE"),
-                            join.get<String>("javaVersion").`in`(filter.javaVersion),
-                        )
-                    },
-                )
-        }
+        // javaVersion is deliberately NOT filtered here — it matches against the effective
+        // Java version (RMS's registered value, falling back to this BASE row's configured
+        // value), which the DB doesn't have. See listComponents.
         // OR across selected system codes — a component matches when ANY of its
         // system junctions has a code in the list. Unlike labels (also
         // junction-backed but AND across selections), the picker semantics here

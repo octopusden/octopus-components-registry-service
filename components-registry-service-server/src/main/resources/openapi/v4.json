@@ -882,9 +882,6 @@
           "productType" : {
             "type" : "string"
           },
-          "registeredBuildParameters" : {
-            "$ref" : "#/components/schemas/RegisteredBuildParametersSummary"
-          },
           "releaseManagers" : {
             "items" : {
               "type" : "string"
@@ -2485,17 +2482,6 @@
           "mavenActualRanges",
           "mavenWarnings"
         ],
-        "type" : "object"
-      },
-      "RegisteredBuildParametersSummary" : {
-        "properties" : {
-          "java" : {
-            "type" : "string"
-          },
-          "maven" : {
-            "type" : "string"
-          }
-        },
         "type" : "object"
       },
       "Role" : {

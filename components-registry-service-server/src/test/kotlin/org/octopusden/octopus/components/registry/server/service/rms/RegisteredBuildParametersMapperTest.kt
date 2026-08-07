@@ -43,6 +43,26 @@ class RegisteredBuildParametersMapperTest {
     }
 
     @Test
+    @DisplayName("effectiveJavaVersion prefers RMS's rollup over the configured BASE value")
+    fun `effectiveJavaVersion prefers RMS rollup`() {
+        val ranges = listOf(BuildRangeCollapser.Run("[1,)", "21"))
+        assertEquals("21", RegisteredBuildParametersMapper.effectiveJavaVersion("8", ranges))
+    }
+
+    @Test
+    @DisplayName("effectiveJavaVersion falls back to the configured BASE value when RMS has no ranges")
+    fun `effectiveJavaVersion falls back to BASE value`() {
+        assertEquals("8", RegisteredBuildParametersMapper.effectiveJavaVersion("8", emptyList()))
+    }
+
+    @Test
+    @DisplayName("effectiveJavaVersion is null when RMS has no ranges and the BASE value is blank")
+    fun `effectiveJavaVersion is null when both sources are absent`() {
+        assertNull(RegisteredBuildParametersMapper.effectiveJavaVersion("   ", emptyList()))
+        assertNull(RegisteredBuildParametersMapper.effectiveJavaVersion(null, emptyList()))
+    }
+
+    @Test
     @DisplayName("Maven's LATEST always wins the rollup")
     fun `rollup lets LATEST win over any numbered version`() {
         val ranges = listOf(BuildRangeCollapser.Run("[1,2)", "3.3.9"), BuildRangeCollapser.Run("[2,)", "LATEST"))

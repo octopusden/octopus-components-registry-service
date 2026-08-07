@@ -80,7 +80,7 @@ Consequences:
 ## Goals / Non-Goals
 
 **Goals:**
-- Surface ACTUAL per range on CRS's v4 API, for human display in the Portal editor, plus a summary rollup for the components list.
+- Surface ACTUAL per range on CRS's v4 API, for human display in the Portal editor, plus an effective Java version on the components list, usable both for display and for filtering.
 - Reject a DEFAULT/OVERRIDDEN write that would introduce a new disagreement with ACTUAL for an intersecting range.
 - Avoid any new cross-repo build dependency between CRS and RMS.
 - Apply all of the above only to components whose build system is Maven or Gradle (Decision 13) — a Java/Maven version is meaningless for anything else.
@@ -128,7 +128,7 @@ For each build in order, for the attribute being processed (Java or Maven):
 **Comparing values.** Before two builds' values can be compared, each one is normalized first:
 
 - **Java:** `"1.8"` and `"8"` count as the same version (same for `"1.7"`/`"7"`, and so on) — this is just the existing `JavaVersion.isEight` check (`ToolVersion.kt`), generalized into a full rule instead of a single special case. RMS's real recorded values are confirmed to be short forms like `"17"` or `"1.8"` — but since this data passes through from an external legacy system CRS doesn't control, that's not assumed to hold forever: as a safety net, a longer form like `"17.0.9"` is also read as major version 17.
-- **Maven:** real values look like `"3.3.6"`, `"3.3.9"`, `"4.0"` — plus one special case, the literal word `"LATEST"`. That's not a version number; it means "whatever's newest at build time," so it's never treated as equal to a numbered version. But since "latest" is by definition at least as new as anything else, it always counts as the biggest value when computing the maximum (Decision 4). Everything else compares using CRS's existing Maven version comparator, not plain string equality.
+- **Maven:** real values look like `"3.3.6"`, `"3.3.9"`, `"4.0"` — plus one special case, the literal word `"LATEST"`. That's not a version number; it means "whatever's newest at build time," so it's never treated as equal to a numbered version, and always counts as the biggest value in a maximum comparison. Everything else compares using CRS's existing Maven version comparator, not plain string equality.
 
 **Hotfix builds** (`ShortBuildDTO.hotfix`) are included in ACTUAL with no special handling — a hotfix is expected to always carry its parent version line's Java/Maven value, so there's no expected case where it would introduce a spurious value change. Considered and deliberately not filtered, not overlooked.
 
@@ -156,16 +156,21 @@ Single-flight guarded (an `AtomicBoolean`).
 
 ### 4. Summary vs. detail response shape
 
-- `ComponentSummaryResponse` (list view, existing DTO) gets one rollup number per attribute: the maximum version seen across all of that attribute's ACTUAL ranges, comparing values using the same normalization named in Decision 2 (Java: legacy-spelling-aware major-version extraction; Maven: the existing Maven version comparator) — not raw string comparison.
-- `ComponentDetailResponse` (detail view, existing DTO) gets the full per-attribute ACTUAL range list, plus warning entries on any DEFAULT/OVERRIDDEN row that disagrees with an intersecting ACTUAL range — each entry names the disagreeing sub-range and ACTUAL's value there; a row intersecting several differently-valued ACTUAL ranges gets one entry per disagreement.
+- `ComponentSummaryResponse` (list view, existing DTO) — `javaVersion` no longer reads the BASE row's configured value directly; it's now the component's *effective* Java version: RMS's registered value when it has any (the maximum, normalized value across the component's ACTUAL Java ranges — Java's legacy-spelling-aware comparison from Decision 2), else the configured value it always showed before. No Maven equivalent, no ranges, no warnings at the summary level — those stay on the detail view only. The `javaVersion` list filter matches against this same effective value (see "Filtering by effective Java version" below), so a component that matches the filter is always the same one the list displays.
+- `ComponentDetailResponse` (detail view, existing DTO) gets the full per-attribute ACTUAL range list (Java and Maven), plus warning entries on any DEFAULT/OVERRIDDEN row that disagrees with an intersecting ACTUAL range — each entry names the disagreeing sub-range and ACTUAL's value there; a row intersecting several differently-valued ACTUAL ranges gets one entry per disagreement.
 
-**Known limitation of the max rollup.** "Maximum" means the highest version number ever seen, across every range — not what the component builds on today. Example: an old, still-maintained line once used Java 21, but the current line has since moved down to Java 8. The list view shows "21," even though the component actually builds on 8 right now. So this rollup can answer "what's the highest version this component has ever recorded" — it cannot answer "which components are still on an old Java version." That's an accepted trade-off (see Part A requirements), not something we missed.
-
-The same rule applies to Maven's `"LATEST"`: if it shows up anywhere in a component's history, it always wins the rollup, regardless of what numbered versions also exist — by definition, "latest" outranks any fixed number.
+**Known limitation of this rollup.** When RMS has data, "the maximum version ever seen" is not necessarily what the component builds on today. Example: an old, still-maintained line once used Java 21, but the current line has since moved down to Java 8. The list view shows "21," even though the component actually builds on 8 right now. Accepted trade-off, not something we missed.
 
 **How warnings are computed.** Warnings aren't stored — they're worked out fresh each time a component is read, by comparing its configured rows against its cached ACTUAL ranges. This is cheap (a handful of rows against a handful of ranges), so there's no need to cache the result separately.
 
 If RMS is down at that moment, warnings just use whatever ACTUAL data was last successfully fetched (same stale-but-honest rule as Decision 3). They're only hidden entirely for a component that has never had a single successful sweep.
+
+### 4a. Filtering by effective Java version
+
+`GET /api/4/components?javaVersion=...` matches a component against its **effective** Java version — the same value the summary response's `javaVersion` field now shows — not the raw BASE column. RMS's ACTUAL data isn't a DB column, so this can't be pushed into the SQL query the way `buildSystem` and the other list filters are:
+
+- `listComponents` runs the existing `Specification` (every filter except `javaVersion`) against the DB, sorted, unpaginated, then computes each candidate's effective Java version in memory (`RegisteredBuildParametersMapper.effectiveJavaVersion`, reusing the sweep's already-in-memory report — no extra RMS calls), filters to the requested values, and paginates the result itself (`PageImpl`).
+- This trades DB-side pagination for an in-memory pass over every other-filter-matching candidate, only when `javaVersion` is part of the request. Acceptable while that candidate set stays in the low thousands (current data volume); revisit if it grows an order of magnitude past that.
 
 ### 5. Write-time check — live, strict on ambiguity
 
@@ -214,9 +219,10 @@ ACTUAL is never written to CRS's database. It is kept structurally separate from
 ### 10. Module and package placement
 
 Everything lives in `components-registry-service-server` — no new Gradle module. New code lives under:
-- `service/rms/` — the RMS client, the sweep service, its scheduler, and the write-time override gate.
+- `service/rms/` — the sweep service, its scheduler, and the write-time override gate.
+- `service/rms/client/` (added post-review, moved from `service/rms/` directly) — `RMSClient`, `DefaultRMSClient`, `RMSClientConfig`: the RMS client itself, split into its own subpackage separate from the collaborators that use it.
 - `util/BuildRangeCollapser.kt` — the pure, sequential-run collapsing function, alongside `VersionRangePartition`.
-- `dto/v4/RegisteredBuildParametersDtos.kt` — the new response DTOs (per-attribute range list + warning entries for detail; max-value rollup for summary).
+- `dto/v4/RegisteredBuildParametersDtos.kt` — the new detail-view DTOs (per-attribute range list + warning entries). The summary view has no dedicated DTO or new field — its existing `javaVersion` field is repointed to the effective value.
 
 `service/rms/` satisfies the existing ArchUnit rule (`ArchitectureFitnessTest.kt`: `@Service`-annotated beans must reside under `..service..` or `..teamcity..`) without a rule change. Decided: `service/rms/`, not a dedicated top-level `rms/` package — no ArchUnit rule change needed.
 

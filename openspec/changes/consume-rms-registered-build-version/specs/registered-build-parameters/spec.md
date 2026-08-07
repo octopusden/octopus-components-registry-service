@@ -105,21 +105,35 @@ Two values are considered equal, for both range collapsing and the write check, 
 #### Scenario: Equivalent Java spellings do not produce a false maximum
 
 - **WHEN** a component's ACTUAL Java ranges include one recorded as `"8"` and another recorded as `"1.8"`, and no other Java version is recorded
-- **THEN** the summary rollup (below) reflects a single Java 8 value, not two distinct values
+- **THEN** the effective Java version (below) reflects a single Java 8 value, not two distinct values
 
-#### Scenario: Maven's "LATEST" always wins the rollup
+### Requirement: The components list view's javaVersion field shows the effective Java version
 
-- **WHEN** a component's ACTUAL Maven ranges include `"3.3.9"` and, for a different range, the literal value `"LATEST"`
-- **THEN** the summary rollup shows `"LATEST"`, not `"3.3.9"`
-
-### Requirement: The components list view shows one rollup value per attribute
-
-The list/summary response SHALL show a single value per attribute: the maximum version number seen across all of that attribute's ACTUAL ranges, using the normalization above. This reflects the highest version ever recorded across any range — not the value of the component's current (most recent) range, which may differ.
+The list/summary response's existing `javaVersion` field SHALL show the component's *effective* Java version, not always the raw configured value: RMS's registered Java version when it has any (the maximum, normalized value across the component's ACTUAL Java ranges), else the component's own configured `javaVersion` (BASE row) — the same value it always showed before this requirement. There is no equivalent Maven field on the list view. This reflects the highest version ever recorded across any ACTUAL range — not the value of the component's current (most recent) range, which may differ.
 
 #### Scenario: Maximum, not most recent
 
 - **WHEN** a component's ACTUAL Java ranges are `[1.0,2.0)` → 17 and `[2.0,)` → 11
-- **THEN** the summary rollup shows 17
+- **THEN** the list response's `javaVersion` shows 17
+
+#### Scenario: No RMS data falls back to the configured value
+
+- **WHEN** a component has no ACTUAL Java ranges (never swept, or RMS has no data for it)
+- **THEN** the list response's `javaVersion` shows the component's configured `javaVersion` (BASE row), exactly as before this requirement
+
+### Requirement: The javaVersion list filter matches the effective value, not the raw configured column
+
+`GET /api/4/components?javaVersion=...` SHALL match a component against its effective Java version (the same value the list response's `javaVersion` field now shows), not directly against the BASE configuration row's `javaVersion` column. Because RMS's data isn't a database column, this filter's matching and the list's pagination SHALL be computed together outside the database query, over every component matching the request's other filters.
+
+#### Scenario: RMS's registered value overrides the configured one for filtering
+
+- **WHEN** a component's configured `javaVersion` is `"8"` but RMS's registered rollup for it is `"21"`
+- **THEN** `?javaVersion=21` matches this component and `?javaVersion=8` does not
+
+#### Scenario: No RMS data falls back to the configured value for filtering
+
+- **WHEN** a component has no ACTUAL Java data
+- **THEN** `?javaVersion=...` matches it exactly as it would have matched its configured `javaVersion` column directly
 
 ### Requirement: Display degrades gracefully when RMS is unreachable
 

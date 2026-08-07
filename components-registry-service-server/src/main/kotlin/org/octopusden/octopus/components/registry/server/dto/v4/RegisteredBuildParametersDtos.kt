@@ -17,8 +17,3 @@ data class RegisteredBuildParametersDetail(
     val mavenWarnings: List<ActualDisagreement>,
     val actualDataUnavailable: Boolean,
 )
-
-data class RegisteredBuildParametersSummary(
-    val java: String?,
-    val maven: String?,
-)
