@@ -111,10 +111,17 @@ Two values are considered equal, for both range collapsing and the write check, 
 
 The list/summary response's existing `javaVersion` field SHALL show the component's *effective* Java version, not always the raw configured value: RMS's registered Java version when it has any (the maximum, normalized value across the component's ACTUAL Java ranges), else the component's own configured `javaVersion` (BASE row) — the same value it always showed before this requirement. There is no equivalent Maven field on the list view. This reflects the highest version ever recorded across any ACTUAL range — not the value of the component's current (most recent) range, which may differ.
 
+This redefines an existing field rather than adding one: the list response SHALL NOT carry a second field holding the raw configured value. A caller needing the configured value specifically SHALL read the component's detail response, where configured rows and ACTUAL ranges are exposed separately.
+
 #### Scenario: Maximum, not most recent
 
 - **WHEN** a component's ACTUAL Java ranges are `[1.0,2.0)` → 17 and `[2.0,)` → 11
 - **THEN** the list response's `javaVersion` shows 17
+
+#### Scenario: The configured value is not separately exposed on the list
+
+- **WHEN** a component's configured `javaVersion` is `"8"` and RMS's registered rollup for it is `"21"`
+- **THEN** the list response reports `21` for that component and carries no other field from which `8` could be read
 
 #### Scenario: No RMS data falls back to the configured value
 
@@ -134,6 +141,34 @@ The list/summary response's existing `javaVersion` field SHALL show the componen
 
 - **WHEN** a component has no ACTUAL Java data
 - **THEN** `?javaVersion=...` matches it exactly as it would have matched its configured `javaVersion` column directly
+
+### Requirement: The javaVersion filter compares major versions, not literal strings
+
+`?javaVersion=` SHALL match a component whose effective Java version is the same *version* as a requested value, in either the legacy `1.x` spelling or the plain major-version spelling — the same equivalence used everywhere else in this capability. RMS is expected to record Java in the same spellings CRS uses (`1.8`, `17`, `21`, `25`), so both sides normally agree on the literal string; this requirement makes that an expectation rather than a dependency, and it also covers CRS's own configured column, which is not constrained to a single spelling. A value that cannot be read as a Java version at all SHALL still match by exact string, so a hand-typed configured value remains findable. Matching SHALL remain exact-per-value (IN), never a prefix or substring match.
+
+#### Scenario: Either spelling finds either recorded form
+
+- **WHEN** one component's effective Java version is `"1.8"` and another's is `"8"`
+- **THEN** both `?javaVersion=8` and `?javaVersion=1.8` return both components
+
+#### Scenario: A shorter numeric value is not a prefix match
+
+- **WHEN** components' effective Java versions are `"17"` and `"1.8"`
+- **THEN** `?javaVersion=1` matches neither — `1` is its own major version, not a prefix of `17` or a synonym for `1.8`
+
+#### Scenario: An unparseable value is matchable verbatim
+
+- **WHEN** a component's configured `javaVersion` is a value that cannot be read as a Java version
+- **THEN** `?javaVersion=` with that exact string matches it
+
+### Requirement: The javaVersion filter answers "highest ever recorded", not "currently builds on"
+
+Because the filter matches the same effective value the list displays, and that value is the maximum across all of a component's ACTUAL ranges, `?javaVersion=` SHALL be understood as selecting components whose *highest* recorded Java version equals a requested value. A component that still builds an older line on a lower version SHALL NOT be matched by that lower version. This is intended: the filter and the displayed column always agree, so a filtered result never contains a row whose shown value contradicts the query. Per-range questions are answered by the detail response's ACTUAL ranges, not by this filter.
+
+#### Scenario: An older, still-built version does not match
+
+- **WHEN** a component's ACTUAL Java ranges are `[1.0,2.0)` → 8 and `[2.0,)` → 21
+- **THEN** `?javaVersion=21` matches it and `?javaVersion=8` does not, even though version range `[1.0,2.0)` still records Java 8
 
 ### Requirement: Display degrades gracefully when RMS is unreachable
 

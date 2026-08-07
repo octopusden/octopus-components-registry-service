@@ -497,6 +497,109 @@ class ListComponentsExtendedFiltersTest {
     }
 
     @Test
+    @DisplayName("?javaVersion= matches across legacy 1.x and plain major-version spellings")
+    fun javaVersionFilterMatchesEitherSpelling() {
+        val rmsLegacySpelling = uniqueName("ext_jv_legacy")
+        val configuredPlain = uniqueName("ext_jv_plain")
+        create(baseBody(rmsLegacySpelling, build = """"build":{"buildSystem":"MAVEN"}"""))
+        create(baseBody(configuredPlain, build = """"build":{"buildSystem":"MAVEN","javaVersion":"8"}"""))
+        `when`(rmsBuildParametersService.currentReport()).thenReturn(
+            RMSBuildParametersReport(
+                generatedAt = null,
+                lastAttemptAt = null,
+                refreshError = null,
+                components =
+                    mapOf(
+                        rmsLegacySpelling to
+                            ComponentBuildRanges(
+                                javaRanges = listOf(BuildRangeCollapser.Run("[1,)", "1.8")),
+                                mavenRanges = emptyList(),
+                            ),
+                    ),
+                unavailableComponents = emptySet(),
+            ),
+        )
+
+        // The two components hold the same Java version in two spellings — RMS recorded "1.8",
+        // the other is configured "8". Either query term must return both.
+        val byPlain = names("javaVersion" to "8")
+        assertTrue(byPlain.contains(rmsLegacySpelling), "expected $rmsLegacySpelling (RMS 1.8) for ?javaVersion=8, got $byPlain")
+        assertTrue(byPlain.contains(configuredPlain), "expected $configuredPlain (configured 8) for ?javaVersion=8, got $byPlain")
+
+        val byLegacy = names("javaVersion" to "1.8")
+        assertTrue(byLegacy.contains(rmsLegacySpelling), "expected $rmsLegacySpelling for ?javaVersion=1.8, got $byLegacy")
+        assertTrue(byLegacy.contains(configuredPlain), "expected $configuredPlain for ?javaVersion=1.8, got $byLegacy")
+
+        // Still IN, not a prefix/substring match: "1" is its own (different) major version.
+        val byBareOne = names("javaVersion" to "1")
+        assertFalse(
+            byBareOne.contains(rmsLegacySpelling) || byBareOne.contains(configuredPlain),
+            "javaVersion must compare major versions, not prefixes; got $byBareOne",
+        )
+    }
+
+    @Test
+    @DisplayName("?javaVersion= matches the highest recorded version, not an older still-recorded one")
+    fun javaVersionFilterMatchesRollupNotEveryRange() {
+        val twoLines = uniqueName("ext_jv_rollup")
+        create(baseBody(twoLines, build = """"build":{"buildSystem":"MAVEN"}"""))
+        `when`(rmsBuildParametersService.currentReport()).thenReturn(
+            RMSBuildParametersReport(
+                generatedAt = null,
+                lastAttemptAt = null,
+                refreshError = null,
+                components =
+                    mapOf(
+                        twoLines to
+                            ComponentBuildRanges(
+                                javaRanges =
+                                    listOf(
+                                        BuildRangeCollapser.Run("[1.0,2.0)", "8"),
+                                        BuildRangeCollapser.Run("[2.0,)", "21"),
+                                    ),
+                                mavenRanges = emptyList(),
+                            ),
+                    ),
+                unavailableComponents = emptySet(),
+            ),
+        )
+
+        // Intended, not a gap: the filter matches the same rollup the list column shows, so it
+        // answers "highest ever recorded", never "still builds on". The older line's Java 8 is
+        // visible on the detail response's ranges, not here.
+        assertTrue(names("javaVersion" to "21").contains(twoLines), "expected $twoLines to match its rollup 21")
+        assertFalse(
+            names("javaVersion" to "8").contains(twoLines),
+            "did not expect $twoLines to match 8 — an older range's value is not the effective value",
+        )
+    }
+
+    @Test
+    @DisplayName("?javaVersion= with a page number past Int.MAX returns an empty page, not a 500")
+    fun javaVersionFilterHugePageNumberDoesNotOverflow() {
+        val name = uniqueName("ext_jv_page")
+        create(baseBody(name, build = """"build":{"buildSystem":"MAVEN","javaVersion":"17"}"""))
+
+        // page * size overflows Int well before Int.MAX itself: 200000000 * 20 (the default page
+        // size) already wraps negative, and a negative subList index is an exception, not a page.
+        for (pageParam in listOf("200000000", "2147483647")) {
+            val body =
+                mvc
+                    .perform(
+                        get("/rest/api/4/components")
+                            .with(viewerJwt())
+                            .param("javaVersion", "17")
+                            .param("page", pageParam),
+                    ).andExpect(status().isOk)
+                    .andReturn()
+                    .response.contentAsString
+            val json = objectMapper.readTree(body)
+            assertTrue(json["content"].isEmpty, "expected an empty page past the end for ?page=$pageParam, got $body")
+            assertTrue(json["totalElements"].asLong() >= 1, "totalElements must still count the matches for ?page=$pageParam")
+        }
+    }
+
+    @Test
     @DisplayName("blank extended filter value is treated as no filter")
     fun blankIsNoFilter() {
         val seed = uniqueName("ext_blank_seed")

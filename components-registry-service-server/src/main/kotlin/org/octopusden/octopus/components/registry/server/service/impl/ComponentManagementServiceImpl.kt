@@ -971,7 +971,7 @@ class ComponentManagementServiceImpl(
         // The effective Java version isn't a DB column, so it can't be filtered or paginated
         // by SQL — every other-filter-matching candidate is loaded, sorted DB-side, then
         // filtered and paginated here. Acceptable while the candidate set stays in the low
-        // thousands; revisit if that assumption stops holding.
+        // thousands; revisit if that assumption stops holding. See TD-020.
         val javaVersionFilter = filter.javaVersion.toSet()
         val matches =
             componentRepository
@@ -983,16 +983,33 @@ class ComponentManagementServiceImpl(
                             base?.javaVersion,
                             rmsComponents[entity.componentKey]?.javaRanges.orEmpty(),
                         )
-                    effective != null && effective in javaVersionFilter
+                    effective != null && matchesJavaVersionFilter(effective, javaVersionFilter)
                 }
-        val fromIndex = (sortedPageable.pageNumber * sortedPageable.pageSize).coerceAtMost(matches.size)
-        val toIndex = (fromIndex + sortedPageable.pageSize).coerceAtMost(matches.size)
+        // Long arithmetic then clamp: `pageNumber * pageSize` in Int overflows for a large but
+        // perfectly acceptable page number (`?page=200000000` with the default size of 20 is
+        // already past Int.MAX), and a negative fromIndex reaches subList as an exception, not a
+        // 400. Pageable.offset does the same multiply in long, so it can't wrap.
+        val fromIndex = sortedPageable.offset.coerceIn(0L, matches.size.toLong()).toInt()
+        val toIndex = (fromIndex.toLong() + sortedPageable.pageSize).coerceIn(0L, matches.size.toLong()).toInt()
         val pageContent =
             matches
                 .subList(fromIndex, toIndex)
                 .map { it.toSummaryResponse(teamcityProperties.baseUrl, rmsComponents[it.componentKey]) }
         return PageImpl(pageContent, sortedPageable, matches.size.toLong())
     }
+
+    /**
+     * Java-version filter equality. Compares by major version, so `?javaVersion=8` matches a
+     * component whose effective value RMS recorded as `1.8` — the spec treats those as one version
+     * (`JavaVersionComparator.valuesEqual`), and a filter that disagreed with that would be unable
+     * to match a value the list itself displays. Falls back to exact string equality so a value
+     * neither side can parse as a Java version (a hand-typed configured value, say) is still
+     * matchable by typing it verbatim.
+     */
+    private fun matchesJavaVersionFilter(
+        effective: String,
+        filterValues: Set<String>,
+    ): Boolean = filterValues.any { it == effective || JavaVersionComparator.valuesEqual(effective, it) }
 
     /**
      * Translate API-facing sort field names to `ComponentEntity` property names.
