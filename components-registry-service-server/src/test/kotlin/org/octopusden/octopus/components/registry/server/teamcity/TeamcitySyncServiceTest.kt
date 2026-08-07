@@ -761,6 +761,20 @@ class TeamcitySyncServiceTest {
 
         override fun findDistinctOwners(): List<String> = components.mapNotNull { it.componentOwner }.distinct().sorted()
 
+        override fun findDistinctReleaseManagers(): List<String> =
+            components
+                .flatMap { it.releaseManagerUsernames() }
+                .filter { it.isNotBlank() }
+                .distinct()
+                .sorted()
+
+        override fun findDistinctSecurityChampions(): List<String> =
+            components
+                .flatMap { it.securityChampionUsernames() }
+                .filter { it.isNotBlank() }
+                .distinct()
+                .sorted()
+
         override fun findDistinctClientCodes(): List<String> =
             components
                 .mapNotNull { it.clientCode }
