@@ -29,6 +29,18 @@ interface ComponentConfigurationRepository : JpaRepository<ComponentConfiguratio
     )
     fun findAllNonArchivedJiraRows(): List<JiraRowProjection>
 
+    /**
+     * Component keys of every non-archived component whose BASE row's `buildSystem` is `MAVEN`
+     * or `GRADLE` — the population the RMS-registered-build-parameters sweep considers (any
+     * other build system has no meaningful Java/Maven version).
+     */
+    @Query(
+        "SELECT comp.componentKey FROM ComponentConfigurationEntity cfg " +
+            "JOIN cfg.component comp " +
+            "WHERE comp.archived = false AND cfg.rowType = 'BASE' AND cfg.buildSystem IN ('MAVEN', 'GRADLE')",
+    )
+    fun findNonArchivedMavenOrGradleComponentKeys(): List<String>
+
     /** All configuration rows (base + overrides) for a component, in arbitrary order. */
     fun findByComponentId(componentId: UUID): List<ComponentConfigurationEntity>
 

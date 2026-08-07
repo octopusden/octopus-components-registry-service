@@ -12,7 +12,7 @@
         <error line="363" column="5" source="standard:no-consecutive-comments" />
     </file>
     <file name="src/main/kotlin/org/octopusden/octopus/components/registry/server/dto/v4/ComponentFilter.kt">
-        <error line="92" column="5" source="standard:no-consecutive-comments" />
+        <error line="91" column="5" source="standard:no-consecutive-comments" />
     </file>
     <file name="src/main/kotlin/org/octopusden/octopus/components/registry/server/dto/v4/VersionPreviewDtos.kt">
         <error line="23" column="1" source="standard:no-consecutive-comments" />
@@ -27,7 +27,7 @@
         <error line="393" column="1" source="standard:no-consecutive-comments" />
     </file>
     <file name="src/main/kotlin/org/octopusden/octopus/components/registry/server/mapper/V4Mappers.kt">
-        <error line="411" column="140" source="standard:max-line-length" />
+        <error line="416" column="140" source="standard:max-line-length" />
     </file>
     <file name="src/main/kotlin/org/octopusden/octopus/components/registry/server/model/ServiceStatus.kt">
         <error line="4" column="1" source="standard:no-wildcard-imports" />
@@ -36,10 +36,10 @@
         <error line="14" column="1" source="standard:no-consecutive-comments" />
     </file>
     <file name="src/main/kotlin/org/octopusden/octopus/components/registry/server/service/impl/ComponentManagementServiceImpl.kt">
-        <error line="2816" column="17" source="standard:property-naming" />
-        <error line="2821" column="17" source="standard:property-naming" />
-        <error line="2830" column="17" source="standard:property-naming" />
-        <error line="2867" column="17" source="standard:property-naming" />
+        <error line="2950" column="17" source="standard:property-naming" />
+        <error line="2955" column="17" source="standard:property-naming" />
+        <error line="2964" column="17" source="standard:property-naming" />
+        <error line="3001" column="17" source="standard:property-naming" />
     </file>
     <file name="src/main/kotlin/org/octopusden/octopus/components/registry/server/service/impl/ImportServiceImpl.kt">
         <error line="2701" column="1" source="standard:no-consecutive-comments" />
