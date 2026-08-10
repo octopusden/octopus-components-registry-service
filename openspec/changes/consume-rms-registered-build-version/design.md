@@ -115,7 +115,7 @@ Run separately for Java and for Maven — each pass over the same fetched build 
 
 **Step 1 — Walk the sorted builds, tracking one "current run" (a value + where it started).**
 For each build in order, for the attribute being processed (Java or Maven):
-- If the build's value is **null**, or **differs** from the current run's value: close the current run (if any) at the previous build's version, and — if this build's own value is non-null — start a new run here.
+- If the build's value is **null**, or **differs** from the current run's value: close the current run (if any), using this build's own version as the exclusive upper bound, and — if this build's own value is non-null — start a new run here.
 - If the build's value is the **same** as the current run's value (after normalization, see below): extend the current run; it doesn't matter how large the version gap since the run's last member is — a run bridges *unbuilt* stretches freely, it's only ever broken by an *observed, differing-or-null* build.
 
 **Step 2 — The very last run is open-ended only if it also contains the single highest-version build in the whole fetched list.**
