@@ -1440,6 +1440,8 @@ object id20ValidateComponentsRegistryProductionDataAuto : BuildType({
     id("20ValidateComponentsRegistryProductionDataAuto")
     name = "[2.0] Validate Git-based Components Registry [AUTO]"
 
+    paused = true
+
     artifactRules = "%COMPONENTS_REGISTRY_CHECKOUT_DIR% => %COMPONENTS_REGISTRY_CHECKOUT_DIR%"
     buildNumberPattern = "%BUILD_NUMBER%"
 
@@ -1546,10 +1548,6 @@ object id30Step2AggregateAuto : BuildType({
         param("BUILD_NUMBER", "${id10CompileUtAuto.depParamRefs.buildNumber}")
     }
 
-    vcs {
-        root(AbsoluteId("Octopus_OctopusComponents_OctopusGithubVcsRoot"))
-    }
-
     triggers {
         finishBuildTrigger {
             buildType = "${id10CompileUtAuto.id}"
@@ -1562,10 +1560,6 @@ object id30Step2AggregateAuto : BuildType({
         // [1.0] Compile & UT included so the single "Build Validation" status also
         // covers compile + unit tests, not just the [2.x] fan-out.
         snapshot(id10CompileUtAuto) {
-            reuseBuilds = ReuseBuilds.SUCCESSFUL
-            onDependencyFailure = FailureAction.ADD_PROBLEM
-        }
-        snapshot(id20ValidateComponentsRegistryProductionDataAuto) {
             reuseBuilds = ReuseBuilds.SUCCESSFUL
             onDependencyFailure = FailureAction.ADD_PROBLEM
         }
@@ -1612,19 +1606,15 @@ object id40ReleaseManual : BuildType({
     }
 
     // A release can only cut when the full quality fan-out passed for the SAME
-    // source revision. [2.4] deploy, [2.0] validate, [2.1] integration, and the
-    // [2.2]/[2.3] compat gates all snapshot the same [1.0], so TeamCity pins every
-    // one of them — and this release — to a single [1.0] build. Release params
-    // still come from [1.0] (reachable via any of these deps); the extra gates
-    // only block, they are not a source of release parameters. reuseBuilds =
-    // SUCCESSFUL so a release reuses the green fan-out builds already produced for
-    // that [1.0] instead of re-running the heavy compat/DB suites.
+    // source revision. [2.4] deploy, [2.1] integration, and the [2.2]/[2.3] compat
+    // gates all snapshot the same [1.0], so TeamCity pins every one of them — and
+    // this release — to a single [1.0] build. Release params still come from [1.0]
+    // (reachable via any of these deps); the extra gates only block, they are not
+    // a source of release parameters. reuseBuilds = SUCCESSFUL so a release reuses
+    // the green fan-out builds already produced for that [1.0] instead of
+    // re-running the heavy compat/DB suites.
     dependencies {
         snapshot(id30DeployToOkdQaDevAuto) {
-            reuseBuilds = ReuseBuilds.SUCCESSFUL
-            onDependencyFailure = FailureAction.FAIL_TO_START
-        }
-        snapshot(id20ValidateComponentsRegistryProductionDataAuto) {
             reuseBuilds = ReuseBuilds.SUCCESSFUL
             onDependencyFailure = FailureAction.FAIL_TO_START
         }
