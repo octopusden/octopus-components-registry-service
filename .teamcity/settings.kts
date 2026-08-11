@@ -1548,10 +1548,6 @@ object id30Step2AggregateAuto : BuildType({
         param("BUILD_NUMBER", "${id10CompileUtAuto.depParamRefs.buildNumber}")
     }
 
-    vcs {
-        root(AbsoluteId("Octopus_OctopusComponents_OctopusGithubVcsRoot"))
-    }
-
     triggers {
         finishBuildTrigger {
             buildType = "${id10CompileUtAuto.id}"
