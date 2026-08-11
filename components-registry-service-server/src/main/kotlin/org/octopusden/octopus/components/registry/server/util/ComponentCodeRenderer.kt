@@ -15,6 +15,8 @@ import org.octopusden.octopus.components.registry.server.mapper.ComponentConfigu
 import org.octopusden.octopus.components.registry.server.mapper.MarkerAttributes
 import org.octopusden.octopus.components.registry.server.mapper.NOT_AVAILABLE_EXTERNAL_REGISTRY
 import org.octopusden.octopus.components.registry.server.mapper.extractScalarValue
+import org.octopusden.octopus.components.registry.server.service.rms.ComponentBuildRanges
+import org.octopusden.octopus.components.registry.server.service.rms.RegisteredBuildParametersMapper
 import org.octopusden.releng.versions.NumericVersionFactory
 import org.octopusden.releng.versions.VersionRangeFactory
 import org.springframework.stereotype.Component
@@ -71,7 +73,7 @@ import java.util.UUID
  * quotes so the literal `$placeholder` is preserved (matching the old format).
  */
 @Component
-@Suppress("TooManyFunctions")
+@Suppress("TooManyFunctions", "LargeClass")
 class ComponentCodeRenderer(
     private val versionRangeFactory: VersionRangeFactory,
     private val numericVersionFactory: NumericVersionFactory,
@@ -81,10 +83,16 @@ class ComponentCodeRenderer(
      * [ownershipExportPatterns] maps an ownership mapping's id → its DSL/export `artifactIdPattern`
      * (sibling-aware for ALL_EXCEPT_CLAIMED, computed by the service); a mapping absent from the map
      * falls back to the plain wire render. Empty = legacy/wire rendering everywhere.
+     *
+     * [rmsRanges] — RMS's ACTUAL Java/Maven ranges for this component, if any (`null`/empty
+     * omits the section entirely). Appended as a trailing, RMS-labeled section after the main
+     * component block — see [writeRmsSection]. Never merged into the component's own configured
+     * values; RMS is read-only and CRS never writes it.
      */
     fun renderFull(
         component: ComponentEntity,
         ownershipExportPatterns: Map<UUID, String> = emptyMap(),
+        rmsRanges: ComponentBuildRanges? = null,
     ): String {
         val configs =
             component.configurations.sortedWith(
@@ -160,6 +168,9 @@ class ComponentCodeRenderer(
         }
 
         cb.close()
+        if (rmsRanges != null && (rmsRanges.javaRanges.isNotEmpty() || rmsRanges.mavenRanges.isNotEmpty())) {
+            writeRmsSection(cb, rmsRanges)
+        }
         return cb.toString()
     }
 
@@ -167,12 +178,18 @@ class ComponentCodeRenderer(
      * RESOLVED view for [version]. Returns `null` when the component has no BASE
      * row or [version] is unparseable (the caller maps that to a 404), matching
      * `EntityMappers.toResolvedEscrowModuleConfig`.
+     *
+     * [rmsRanges] — RMS's ACTUAL Java/Maven ranges for this component, if any. For each attribute
+     * independently: if one of its ACTUAL ranges contains [version], that value is used in place of
+     * the configured BASE/override merge below; otherwise the merge result is unchanged. `null`
+     * (no ACTUAL data at all) behaves exactly as before this parameter existed.
      */
     @Suppress("ReturnCount")
     fun renderResolved(
         component: ComponentEntity,
         version: String,
         ownershipExportPatterns: Map<UUID, String> = emptyMap(),
+        rmsRanges: ComponentBuildRanges? = null,
     ): String? {
         val configs = component.configurations.toList()
         val base = configs.firstOrNull { it.rowType == ROW_BASE } ?: return null
@@ -226,6 +243,12 @@ class ComponentCodeRenderer(
 
         val view = ComponentConfigurationView.from(base)
         scalarOverrides.forEach { view.applyScalarOverride(it) }
+        if (rmsRanges != null) {
+            val actualJava = RegisteredBuildParametersMapper.actualValueAt(rmsRanges.javaRanges, numericVersion, versionRangeFactory)
+            if (actualJava != null) view.javaVersion = actualJava
+            val actualMaven = RegisteredBuildParametersMapper.actualValueAt(rmsRanges.mavenRanges, numericVersion, versionRangeFactory)
+            if (actualMaven != null) view.mavenVersion = actualMaven
+        }
 
         val vcs =
             pickMarkerChildren(MarkerAttributes.VCS_SETTINGS, markerOverrides, base.vcsEntries.toList()) { it.vcsEntries.toList() }
@@ -752,8 +775,36 @@ class ComponentCodeRenderer(
     }
 
     // ============================================================
-    // Helpers
+    // RMS ACTUAL data (FULL only) — trailing, read-only, not part of the component block
     // ============================================================
+
+    /**
+     * One block per ACTUAL range, Java then Maven, each in the same shape as a real
+     * `SCALAR_OVERRIDE` block (`"<range>" { build { javaVersion = "<value>" } }`) — only the
+     * header comment marks the section as RMS-sourced; the range blocks themselves are literal,
+     * uncommented text (design.md Decision 16 accepts the reimport-hazard tradeoff deliberately).
+     */
+    private fun writeRmsSection(
+        cb: CodeBuilder,
+        rmsRanges: ComponentBuildRanges,
+    ) {
+        cb.comment("RMS registered parameters (read-only; not written by CRS)")
+        rmsRanges.javaRanges.forEach { writeRmsRangeBlock(cb, it.versionRange, "javaVersion", it.value) }
+        rmsRanges.mavenRanges.forEach { writeRmsRangeBlock(cb, it.versionRange, "mavenVersion", it.value) }
+    }
+
+    private fun writeRmsRangeBlock(
+        cb: CodeBuilder,
+        range: String,
+        field: String,
+        value: String,
+    ) {
+        cb.open(doubleQuoted(range))
+        cb.open("build")
+        cb.str(field, value)
+        cb.close()
+        cb.close()
+    }
 
     private fun <T> pickMarkerChildren(
         attribute: String,
@@ -849,6 +900,11 @@ internal class CodeBuilder {
         values: List<String>,
     ) {
         if (values.isNotEmpty()) raw("$name = ${groovyList(values)}")
+    }
+
+    /** A single-line `// text` comment, at the current indentation level. */
+    fun comment(text: String) {
+        raw("// $text")
     }
 
     private fun raw(text: String) {

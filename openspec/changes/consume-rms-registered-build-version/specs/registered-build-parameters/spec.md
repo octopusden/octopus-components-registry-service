@@ -228,6 +228,39 @@ CRS SHALL expose a read-only admin endpoint reporting the sweep's own status —
 - **WHEN** RMS integration is enabled and has swept at least once
 - **THEN** the response reports the last successful/attempted timestamps, how long the most recent completed sweep took, any current refresh error, and the full, stable-ordered list of components RMS could not be reached for
 
+### Requirement: The as-code export's full view lists every ACTUAL range
+
+`GET rest/api/4/components/{component}/as-code` (no `?version=`) SHALL append a labeled section listing every ACTUAL range the component has, for both Java and Maven, whenever it has any. Each range SHALL be rendered as its own block in the same syntax already used for a real `SCALAR_OVERRIDE` row, preceded by a single comment line marking the section as RMS-sourced and read-only. The section SHALL be omitted entirely — including its header — when the component has no ACTUAL data at all.
+
+#### Scenario: A component with ACTUAL data gets a trailing RMS section
+
+- **WHEN** the full `as-code` view is requested for a component with ACTUAL Java and/or Maven ranges
+- **THEN** the rendered text includes a comment header followed by one block per ACTUAL range, in the same per-range block syntax as a configured override
+
+#### Scenario: No ACTUAL data means no section at all
+
+- **WHEN** the full `as-code` view is requested for a component with no ACTUAL data (ineligible build system, archived, RMS disabled, or never successfully swept)
+- **THEN** the rendered text carries no RMS section, not even the header comment
+
+### Requirement: The as-code export's resolved view prefers ACTUAL's value for the requested version
+
+`GET rest/api/4/components/{component}/as-code?version=X.Y.Z` SHALL compute `javaVersion` and `mavenVersion` independently as: the value of the ACTUAL range that contains the requested version, for that attribute, if one exists; otherwise the value already computed today by merging the BASE row with whichever configured `SCALAR_OVERRIDE`/`MARKER` rows contain the requested version. This applies per attribute — one attribute can resolve from ACTUAL while the other resolves from the configured merge.
+
+#### Scenario: ACTUAL covers the requested version
+
+- **WHEN** the resolved view is requested for a version contained in one of the component's ACTUAL Java ranges
+- **THEN** the rendered `javaVersion` is that ACTUAL range's value, regardless of what the configured merge would otherwise have produced
+
+#### Scenario: ACTUAL does not cover the requested version
+
+- **WHEN** the resolved view is requested for a version not contained in any of the component's ACTUAL ranges for an attribute (no ACTUAL data at all, or ACTUAL exists but none of its ranges contain this version)
+- **THEN** that attribute resolves exactly as it does today, from the configured BASE/override merge, unaffected by ACTUAL
+
+#### Scenario: Java and Maven can resolve from different sources for the same request
+
+- **WHEN** the requested version is covered by an ACTUAL Java range but not by any ACTUAL Maven range
+- **THEN** `javaVersion` resolves from ACTUAL and `mavenVersion` resolves from the configured merge, in the same response
+
 ### Requirement: A rejected write immediately refreshes that component's cached ACTUAL data
 
 When a write is rejected because it disagrees with ACTUAL, the component's cached display data SHALL be refreshed immediately using the data already retrieved for that check, rather than waiting for the next scheduled sweep.

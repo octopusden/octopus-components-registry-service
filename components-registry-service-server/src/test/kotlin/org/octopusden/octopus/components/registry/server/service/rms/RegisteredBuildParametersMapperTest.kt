@@ -10,9 +10,15 @@ import org.octopusden.octopus.components.registry.server.dto.v4.ActualRange
 import org.octopusden.octopus.components.registry.server.util.BuildRangeCollapser
 import org.octopusden.octopus.components.registry.server.util.JavaVersionComparator
 import org.octopusden.octopus.components.registry.server.util.MavenVersionComparator
+import org.octopusden.releng.versions.NumericVersionFactory
+import org.octopusden.releng.versions.VersionNames
+import org.octopusden.releng.versions.VersionRangeFactory
 
 class RegisteredBuildParametersMapperTest {
     private val intCompare: (String, String) -> Int = { a, b -> a.toInt().compareTo(b.toInt()) }
+    private val versionNames = VersionNames("serviceCBranch", "serviceC", "minorC")
+    private val versionRangeFactory = VersionRangeFactory(versionNames)
+    private val numericVersionFactory = NumericVersionFactory(versionNames)
 
     @Test
     @DisplayName("rollup is the maximum value across all ranges")
@@ -60,6 +66,29 @@ class RegisteredBuildParametersMapperTest {
     fun `effectiveJavaVersion is null when both sources are absent`() {
         assertNull(RegisteredBuildParametersMapper.effectiveJavaVersion("   ", emptyList()))
         assertNull(RegisteredBuildParametersMapper.effectiveJavaVersion(null, emptyList()))
+    }
+
+    @Test
+    @DisplayName("actualValueAt returns the value of the range containing the target version")
+    fun `actualValueAt finds the containing range`() {
+        val ranges = listOf(BuildRangeCollapser.Run("(1.0,1.3]", "17"), BuildRangeCollapser.Run("(1.3,)", "21"))
+        val target = numericVersionFactory.create("2.0")
+        assertEquals("21", RegisteredBuildParametersMapper.actualValueAt(ranges, target, versionRangeFactory))
+    }
+
+    @Test
+    @DisplayName("actualValueAt is null when no range contains the target version")
+    fun `actualValueAt is null when nothing matches`() {
+        val ranges = listOf(BuildRangeCollapser.Run("(1.0,1.3]", "17"))
+        val target = numericVersionFactory.create("5.0")
+        assertNull(RegisteredBuildParametersMapper.actualValueAt(ranges, target, versionRangeFactory))
+    }
+
+    @Test
+    @DisplayName("actualValueAt is null for an empty range list")
+    fun `actualValueAt is null when there are no ranges`() {
+        val target = numericVersionFactory.create("1.0")
+        assertNull(RegisteredBuildParametersMapper.actualValueAt(emptyList(), target, versionRangeFactory))
     }
 
     @Test

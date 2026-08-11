@@ -89,6 +89,7 @@ import org.octopusden.octopus.components.registry.server.security.PermissionEval
 import org.octopusden.octopus.components.registry.server.service.ComponentManagementService
 import org.octopusden.octopus.components.registry.server.service.ComponentSourceRegistry
 import org.octopusden.octopus.components.registry.server.service.RenderedComponentCode
+import org.octopusden.octopus.components.registry.server.service.rms.ComponentBuildRanges
 import org.octopusden.octopus.components.registry.server.service.rms.RMSBuildParametersService
 import org.octopusden.octopus.components.registry.server.service.rms.RMSOverrideGate
 import org.octopusden.octopus.components.registry.server.service.rms.RegisteredBuildParametersMapper
@@ -455,7 +456,7 @@ class ComponentManagementServiceImpl(
         val entity = findByIdOrName(idOrName)
         return RenderedComponentCode(
             entity.componentKey,
-            componentCodeRenderer.renderFull(entity, ownershipExportPatterns(entity)),
+            componentCodeRenderer.renderFull(entity, ownershipExportPatterns(entity), rmsRangesFor(entity)),
         )
     }
 
@@ -466,12 +467,21 @@ class ComponentManagementServiceImpl(
     ): RenderedComponentCode {
         val entity = findByIdOrName(idOrName)
         val body =
-            componentCodeRenderer.renderResolved(entity, version, ownershipExportPatterns(entity))
+            componentCodeRenderer.renderResolved(entity, version, ownershipExportPatterns(entity), rmsRangesFor(entity))
                 ?: throw NotFoundException(
                     "No configuration resolves for component '${entity.componentKey}' at version '$version'",
                 )
         return RenderedComponentCode(entity.componentKey, body)
     }
+
+    /**
+     * RMS's ACTUAL ranges for [entity], or `null` when the feature is disabled, the component is
+     * ineligible (non-Maven/Gradle, archived), or it has never been successfully swept — the
+     * sweep's cache map simply has no entry in any of those cases, so no separate eligibility
+     * check is needed here.
+     */
+    private fun rmsRangesFor(entity: ComponentEntity): ComponentBuildRanges? =
+        rmsBuildParametersService?.currentReport()?.components?.get(entity.componentKey)
 
     // employeeDirectory.getManager() is a network call that can take up to the configured
     // read timeout under an employee-service outage (failures are deliberately not cached —

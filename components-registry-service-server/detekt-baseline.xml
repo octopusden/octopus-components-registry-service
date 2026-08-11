@@ -29,7 +29,7 @@
     <ID>ComplexCondition:EntityMappers.kt$ComponentConfigurationView$javaVersion == null &amp;&amp; mavenVersion == null &amp;&amp; gradleVersion == null &amp;&amp; buildTasks == null &amp;&amp; !requiredProject.orFalse() &amp;&amp; projectVersion == null &amp;&amp; systemProperties == null &amp;&amp; tools.isEmpty() &amp;&amp; buildTools.isEmpty()</ID>
     <ID>ComplexCondition:VersionRangePartition.kt$VersionRangePartition$c &gt; 0 || (c == 0 &amp;&amp; !(s.loIncl &amp;&amp; s.hiIncl))</ID>
     <ID>ComplexCondition:VersionRangePartition.kt$VersionRangePartition$seg.lo != null &amp;&amp; seg.lo == seg.hi &amp;&amp; seg.loIncl &amp;&amp; seg.hiIncl</ID>
-    <ID>CyclomaticComplexMethod:ComponentCodeRenderer.kt$ComponentCodeRenderer$@Suppress("ReturnCount") fun renderResolved( component: ComponentEntity, version: String, ownershipExportPatterns: Map&lt;UUID, String&gt; = emptyMap(), ): String?</ID>
+    <ID>CyclomaticComplexMethod:ComponentCodeRenderer.kt$ComponentCodeRenderer$@Suppress("ReturnCount") fun renderResolved( component: ComponentEntity, version: String, ownershipExportPatterns: Map&lt;UUID, String&gt; = emptyMap(), rmsRanges: ComponentBuildRanges? = null, ): String?</ID>
     <ID>CyclomaticComplexMethod:ComponentManagementServiceImpl.kt$ComponentManagementServiceImpl$override fun createComponent(request: ComponentCreateRequest): ComponentDetailResponse</ID>
     <ID>CyclomaticComplexMethod:ComponentManagementServiceImpl.kt$ComponentManagementServiceImpl$private fun applyFieldOverrideDesiredSet( component: ComponentEntity, desired: List&lt;FieldOverrideUpsertRequest&gt;, rmsBuildsCache: MutableMap&lt;String, List&lt;RMSBuild&gt;&gt; = mutableMapOf(), ): FieldOverrideApplyPlan</ID>
     <ID>CyclomaticComplexMethod:ComponentManagementServiceImpl.kt$ComponentManagementServiceImpl$private fun buildSpecification(filter: ComponentFilter): Specification&lt;ComponentEntity&gt;</ID>
@@ -48,6 +48,7 @@
     <ID>ForbiddenComment:ComponentRegistryResolverImpl.kt$ComponentRegistryResolverImpl$// TODO: Remove archived suffix check when all archived components are marked with archived parameter</ID>
     <ID>ForbiddenComment:ComponentRegistryResolverImpl.kt$ComponentRegistryResolverImpl$// TODO: should version be transformed to build/hotfix format in the same way as in getVCSSettings method?</ID>
     <ID>FunctionOnlyReturningConstant:ComponentsRegistryServiceController.kt$ComponentsRegistryServiceController$@GetMapping("ping") fun ping(): String</ID>
+    <ID>LargeClass:ComponentCodeRendererTest.kt$ComponentCodeRendererTest</ID>
     <ID>LargeClass:CrossComponentValidationTest.kt$CrossComponentValidationTest</ID>
     <ID>LargeClass:DatabaseComponentRegistryResolverMavenArtifactsRangeTest.kt$DatabaseComponentRegistryResolverMavenArtifactsRangeTest</ID>
     <ID>LargeClass:DatabaseComponentRegistryResolverTest.kt$DatabaseComponentRegistryResolverTest</ID>

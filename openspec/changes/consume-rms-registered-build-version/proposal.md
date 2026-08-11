@@ -32,6 +32,7 @@ RMS's `server` module already depends on CRS's client library (`components-regis
 - The `javaVersion` list filter now matches the effective value in memory rather than the BASE column in SQL (see design.md, "Filtering by effective Java version"). It compares major versions, so `1.8` and `8` are interchangeable in both the query and the data; it also inherits the rollup's "highest ever recorded" semantics, so it does not find components that merely *still build* an older version on an older line.
 - CRS's v4 write endpoints (base config `PATCH`, field-override create/update, bulk field-overrides apply-plan) gain a new validation gate. `createComponent` is not gated — a new component's key can never collide with prior RMS history, since components are archived, not hard-deleted (so a key is never freed up for reuse).
 - New admin endpoint, `GET rest/api/4/admin/rms-sweep`, exposing the sweep's own status (last run, how long it took, current error, which components RMS is unreachable for) — see design.md, "Admin visibility into the sweep itself".
+- `GET rest/api/4/components/{component}/as-code` (Groovy DSL export) now surfaces ACTUAL data too: the full view (no `?version=`) appends every ACTUAL range, Java and Maven, as a labeled trailing section; the `?version=` resolved view prefers ACTUAL's value over the configured merge for either attribute when an ACTUAL range covers that specific version, falling back to today's merge-based value otherwise — see design.md, "Surfacing RMS data on the as-code (Groovy DSL) export".
 
 ## Out of scope
 

@@ -10,6 +10,8 @@ import org.octopusden.octopus.components.registry.server.util.BuildRangeCollapse
 import org.octopusden.octopus.components.registry.server.util.JavaVersionComparator
 import org.octopusden.octopus.components.registry.server.util.MavenVersionComparator
 import org.octopusden.octopus.components.registry.server.util.VersionRangeIntersector
+import org.octopusden.releng.versions.IVersionInfo
+import org.octopusden.releng.versions.VersionRangeFactory
 
 /**
  * Pure computation over already-collapsed ACTUAL ranges — no RMS call, no DB, no Spring. Kept
@@ -56,6 +58,28 @@ object RegisteredBuildParametersMapper {
         baseJavaVersion: String?,
         javaRanges: List<BuildRangeCollapser.Run>,
     ): String? = rollup(javaRanges, JavaVersionComparator::compare) ?: baseJavaVersion?.takeIf { it.isNotBlank() }
+
+    /**
+     * The value of whichever range in [ranges] contains [target], if any. Ranges are guaranteed
+     * non-overlapping — [BuildRangeCollapser] produces one disjoint, ordered list per attribute —
+     * so at most one match is possible. Used by the as-code resolved view to prefer RMS's
+     * registered value for one specific version over the configured DEFAULT/OVERRIDDEN merge.
+     */
+    fun actualValueAt(
+        ranges: List<BuildRangeCollapser.Run>,
+        target: IVersionInfo,
+        versionRangeFactory: VersionRangeFactory,
+    ): String? {
+        val match =
+            ranges.firstOrNull { range ->
+                try {
+                    versionRangeFactory.create(range.versionRange).containsVersion(target)
+                } catch (_: Exception) {
+                    false
+                }
+            }
+        return match?.value
+    }
 
     private fun toActualRanges(ranges: List<BuildRangeCollapser.Run>): List<ActualRange> =
         ranges.map { ActualRange(it.versionRange, it.value) }
