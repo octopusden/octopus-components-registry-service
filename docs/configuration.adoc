@@ -23,163 +23,180 @@ Components Registry stores the following information about Components:
 * Build/Escrow parameters (used for link:{escrow-automation-tool-link}[Escrow package generation])
 ** build system (Maven, Gradle etc)
 ** groupId/artifactId of artifacts produced and published in Artifactory at each release (*it's recommended to use unique groupId for the component*)
-** java version required for build escrow component
-** additional system properties for maven/gradle build
-* Distribution type and distribution artifacts coordinates
+** required build tools and their versions (Java, Maven, Gradle)
+* Distribution parameters
+** whether the component has its own distribution
+** whether it is delivered to an external customer
+** artifact coordinates to be published
+
+== Where configuration lives
+Configuration is stored in a database and is edited through the Web UI or the REST API.
+
+There is no configuration file to edit, no branch to create and no pull request to merge. Every
+change takes effect immediately, is attributed to its author and is recorded in an audit log.
+
+NOTE: Configuration used to be kept as ConfigSlurper (Groovy) files in a Git repository, changed by
+raising a pull request. That is no longer the case. A read-only Groovy-style rendering of a
+component is still available (see <<Viewing a component as code>>) for anyone used to that shape,
+but it is a projection - it is not parsed back and cannot be edited.
 
 == Information to be provided for registration of Component
-WARNING: In case of difficulties with manual registration of component, raise a public ticket in link:{service-desk-link}[Service Desk].
+// unchanged from the previous revision - the data required has not changed, only the way it is
+// submitted. Retained verbatim; see the section below for how to submit it.
+The information listed in <<Component configuration reference>> is what has to be provided. A
+component owner, a JIRA project key, VCS coordinates and at least one version range are the
+minimum.
 
-Example:
+== How to register or change a Component
+=== Through the Web UI
+The Web UI is the normal way to register and change components. It offers the same fields described
+in <<Component configuration reference>>, validates them as you type, and shows the resulting
+version ranges.
+
+=== Through the REST API
+The REST API is the same surface the UI uses, and is the way to script bulk or repeatable changes.
+
+The endpoints below are the ones needed for day-to-day configuration, not the whole surface. The
+service publishes its own OpenAPI specification and serves an interactive Swagger UI alongside it,
+which is the authoritative and always-current reference - request and response schemas, every
+endpoint, and the ability to try a call. The same specification is committed in this repository
+under `components-registry-service-server/src/main/resources/openapi/`.
+
+Components are addressed by *id*, a UUID - not by component name. Resolve the name first:
+
 ----
-component name: 'NewComponent'
-component owner: <username>
-
-jira project key  = 'NEW'
-majorVersionFormat = '$major.$minor'
-releaseVersionFormat = '$major.$minor.$service-$fix'
-
-groupId = 'org.company.newcomponent'
-artifact = *  // i.e. all artifacts
-
-vcsUrl = 'ssh://git@git.company.org/newproject/newcomponent.git'
-build system = MAVEN
-java version = '11'
-
-distribution:
-explicit = true/false
-external = true/false
-//for explicit/external specify artifacts to be published in DMS
-<artifacts coordinates>
+GET /rest/api/4/components?search=<component name>
 ----
 
-== How to register/change Component configuration manually
-Source is located in link:{components-registry-link}[git repository].
+Read a component, including all of its configuration rows:
 
-* Clone repository
-* Create branch with name of a corresponding JIRA issue key
-* Add/Change component configuration to the specific file in _src/main/resources_
-* Commit and push changes
-* Check (after several minutes) that the new version of configuration has been successfully validated (link:{components-registry-validation-link}[Components Registry Validation])
-* In case of success, create Pull Request, then wait for approvals and merge it
-
-== Component configuration format
-Components Registry is originally stored as configuration files with ConfigSlurper groovy format.
-
-Each Component must be configured in corresponding configuration file according to following format:
 ----
-<component id> {
-        componentDisplayName = "Name of component" //  display name of the component, e.g. in DMS
-        parentComponent      = <component id> // grouping components in DMS
-        clientCode           = <client code> // if component is client specific
-        solution             = <true|false> // true for solution
+GET /rest/api/4/components/{id}
+----
 
-        componentOwner   = "username of component's owner" // without domain part
-        releaseManager   = "list of usernames of component's release manager" // comma separated (e.g. "user1,user2")
-        securityChampion = "list of usernames of component's security champion" // comma separated (e.g. "user1,user2")
+Create a component:
 
-        buildSystem = <build tool> // MAVEN, GRADLE etc. (default for all versions)
-        system      = <{system_name}> // used for differentiation between different corporate policies (license control, etc)
-                                   
-        vcsSettings {
-           vcsUrl = <vsc url> // Repository url. (default for all versions, can be configured using Dynamic variables resolution)
-           branch = <branch> // Repository branch. If not specified "master" is used (default for all versions, can be configured using Dynamic variables resolution)
-           tag = <format of vcs tag> // Tag used for releases labelling (default for all versions, can be configured using Dynamic variables resolution)
-        }
+----
+POST /rest/api/4/components
+----
 
-        groupId = <groupId list> // Comma-separated list of groupId of artifacts that belongs to the component. It's recommended to use unique groupId. (default for all versions)
-        artifactId = <artifactId regexp pattern> // artifactId regex pattern of artifacts that belongs to the component. (default for all versions)
+Change a component:
 
-        jira { // Parameters releated to build/release registration in JIRA and generation of client release notes (default for all versions)
-            projectKey = <JIRA project key>
-            majorVersionFormat = <format of major version in JIRA> (refer to Version format)
-            releaseVersionFormat = <format of release version for registration in JIRA> (refer to Version format)
+----
+PATCH /rest/api/4/components/{id}
+----
 
-            component {
-               versionPrefix = "prefix in component versioning" // to avoid conflicts between different components' versions and to simplify selection of the component version in the "Fix Version(s)" field of the Jira issue
-               versionFormat = <format of major version in JIRA> (refer to Version format)
-            }
-         }
+A `PATCH` body carries only the fields being changed. Two optional fields are worth setting on every
+call, because both are recorded on the audit row:
 
-        build { // Parameters related to escrow build (default for all versions)
-            javaVersion      = <java version>
-            systemProperties = <additional properties for maven build>
-        }
+* *jiraTaskKey* - the JIRA issue motivating the change, e.g. `ABC-123`
+* *changeComment* - free text describing why
 
-        escrow { // Parameters related to escrow package generation (default for all versions)
-            generation = <AUTO|MANUAL|UNSUPPORTED> // Escrow generation mode
-            buildTask = <build task> // Custom build task to execute (optional)
-            providedDependencies = <list of dependencies> // Comma-separated list of provided dependencies (optional)
-            diskSpaceRequirement = <disk space> // Disk space requirement in bytes or with units (KB, MB, GB) (optional)
-            additionalSources = <list of paths> // Comma-separated list of additional source paths to include (optional)
-            reusable = <true|false> // Whether escrow package can be reused by other components (default: true)
-        }
+Example - move a component to a newer Java version:
 
-        distribution { // Distribution parameters (default for all versions)
-            explicit = <true|false> // true - self-distributed component
-            external = <true|false> // true - can be delivered outside the organization
-            GAV = <MAVEN distribution artifacts> (can be configured using Expression Language)
-            DEB = <DEBIAN distribution artifacts> (can be configured using Expression Language)
-            RPM = <RPM distribution artifacts> (can be configured using Expression Language)
-            docker = <Docker distribution image> (one image per component)(example: 'test/test-component')
-        }
-
-    "<version range 1>" {  // configuration of the component for first range of version
-        buildSystem = <build tool> // MAVEN, GRADLE etc. (for specific version range)
-
-        vcsSettings {
-           vcsUrl = <vsc url> // Repository url (for specific version range, can be configured using Dynamic variables resolution)
-           branch = <branch> // Repository branch. If not specified "master" is used (for specific version range, can be configured using Dynamic variables resolution)
-           tag = <format of vcs tag> // Tag used for releases labelling (for specific version range, can be configured using Dynamic variables resolution)
-        }
-
-        groupId = <groupId list> // Comma-separated list of groupId of artifacts that belongs to the component. It's recommended to use unique groupId. (for specific version range)
-        artifactId = <artifactId regexp pattern> // artifactId regex pattern of artifacts that belongs to the component. (for specific version range)
-
-        jira { // Parameters releated to build/release registration in JIRA and generation of client release notes (for specific version range)
-            projectKey = <JIRA project key>
-            majorVersionFormat = <format of major version in JIRA> (refer to Version format)
-            releaseVersionFormat = <format of release version for registration in JIRA> (refer to Version format)
-        }
-
-        build { // Parameters related to escrow build (for specific version range)
-            javaVersion = <java version>
-            systemProperties = <additional properties for maven build>
-        }
-
-        escrow { // Parameters related to escrow package generation (for specific version range)
-            generation = <AUTO|MANUAL|UNSUPPORTED> // Escrow generation mode
-            buildTask = <build task> // Custom build task to execute (optional)
-            providedDependencies = <list of dependencies> // Comma-separated list of provided dependencies (optional)
-            diskSpaceRequirement = <disk space> // Disk space requirement in bytes or with units (KB, MB, GB) (optional)
-            additionalSources = <list of paths> // Comma-separated list of additional source paths to include (optional)
-            reusable = <true|false> // Whether escrow package can be reused by other components (default: true)
-        }
-
-        distribution { // Distribution parameters (for specific version range)
-            explicit = <true|false>
-            external = <true|false>
-            GAV = <MAVEN distribution artifacts> (can be configured using Expression Language)
-            DEB = <DEBIAN distribution artifacts> (can be configured using Expression Language)
-            RPM = <RPM distribution artifacts> (can be configured using Expression Language)
-            docker = <Docker distribution image> (one image per component)(example: 'test/test-component')
-        }
-    }
-    "<version range 2>" {
-            // Configuration of the component for the second range of version
-    }
-    ...
-    "<version range N>" {
-            // Configuration of the component for the N range of version
-    }
+----
+PATCH /rest/api/4/components/{id}
+{
+  "baseConfiguration": { "build": { "javaVersion": "17" } },
+  "jiraTaskKey": "ABC-123",
+  "changeComment": "component's own build moved to JDK 17"
 }
 ----
 
+Allowed values for the enumerated fields are served by the registry itself, so they never go stale
+in this document:
+
+[cols="2,3"]
+|===
+|`GET /rest/api/4/components/meta/java-versions` |Java versions accepted by *javaVersion*
+|`GET /rest/api/4/components/meta/maven-versions` |Maven versions accepted by *mavenVersion*
+|`GET /rest/api/4/components/meta/build-systems` |values accepted by *buildSystem*
+|`GET /rest/api/4/components/meta/escrow-generations` |values accepted by escrow *generation*
+|`GET /rest/api/4/components/meta/systems` |values accepted by *system*
+|`GET /rest/api/4/config/field-config` |which fields are editable, and their labels
+|===
+
+=== Through crsctl
+`crsctl` is a read-only command-line client for the same API, useful for scripting queries and for
+inspecting a component from a terminal. It cannot change configuration.
+
+== Viewing a component as code
+----
+GET /rest/api/4/components/{id}/as-code
+----
+
+Returns a human-readable, Groovy-style rendering of the component definition - the reverse of the
+legacy import. It is read-only: the rendering is a projection and is never parsed back.
+
+== Component configuration reference
+Each component has one *base configuration* covering all versions, and optionally *field overrides*
+that apply to a version range (see <<Version ranges>>).
+
+=== Component-level fields
+
+* *componentDisplayName* - display name of the component, e.g. in DMS
+* *parentComponent* - grouping components in DMS
+* *clientCode* - if the component is client specific
+* *solution* - `true` for a solution
+* *componentOwner* - username of the component's owner, without the domain part
+* *releaseManager* - comma-separated usernames of the component's release managers
+* *securityChampion* - comma-separated usernames of the component's security champions
+* *system* - used for differentiation between different corporate policies (license control, etc)
+
+Person fields are validated against the employee directory when the component is created or
+changed.
+
+=== Build fields
+
+* *buildSystem* - MAVEN, GRADLE etc
+* *javaVersion*, *mavenVersion*, *gradleVersion* - build tool versions
+* *buildFilePath* - path to the build file, when it is not at the repository root
+* *buildTasks* - build tasks to execute
+* *systemProperties* - system properties passed to the build
+* *projectVersion* - required Cards version for building the escrow of this component
+
+=== Artifact fields
+
+* *groupId* - comma-separated list of groupIds of artifacts that belong to the component. It's
+  recommended to use a unique groupId
+* *artifactId* - artifactId regex pattern of artifacts that belong to the component
+
+=== VCS fields
+
+* *vcsUrl* - repository url
+* *branch* - repository branch. If not specified, `master` is used
+* *tag* - tag used for releases labelling
+
+=== JIRA fields
+Parameters related to build/release registration in JIRA and generation of client release notes:
+
+* *projectKey* - JIRA project key
+* *majorVersionFormat* - format of major version in JIRA (refer to <<Version format>>)
+* *releaseVersionFormat* - format of release version in JIRA
+* *versionPrefix*, *versionFormat* - see <<Version format>>
+
 === Version ranges
-Different configurations of component depending on version of its release are supported.
-It can be configured using version range section in configuration of the component.
-For each component at least one version range section should be defined.
-Version range section defines configuration of the component for versions that matches version range specified in the name of the section.
+Different configurations of a component depending on the version of its release are supported. This
+is expressed as a *field override*: a single field, scoped to a version range.
+
+----
+GET    /rest/api/4/components/{id}/field-overrides
+POST   /rest/api/4/components/{id}/field-overrides
+PATCH  /rest/api/4/components/{id}/field-overrides/{overrideId}
+DELETE /rest/api/4/components/{id}/field-overrides/{overrideId}
+----
+
+An override names the attribute it replaces, the range it applies to, and the value:
+
+----
+POST /rest/api/4/components/{id}/field-overrides
+{
+  "overriddenAttribute": "build.javaVersion",
+  "versionRange": "[1.1.517,)",
+  "value": "21"
+}
+----
+
 Version range has Maven 2.x/3.x format.
 
 Examples of version range:
@@ -199,9 +216,15 @@ Examples of version range:
 |version <> 1.1
 |===
 
-*ALL_VERSIONS* constant can also be used as "no limit" version range.
+WARNING: Version ranges of a component should have no intersections! Overlaps are rejected when the
+override is saved.
 
-WARNING: Version ranges of a component should have no intersections!
+Which versions of a component are in scope at all is a separate setting:
+
+----
+GET /rest/api/4/components/{id}/supported-versions
+PUT /rest/api/4/components/{id}/supported-versions
+----
 
 === Version format
 Base version formats like *majorVersionFormat* and *releaseVersionFormat* are configured using following variables:
@@ -246,7 +269,7 @@ Available variables are:
 
 Example:
 ----
-tag = '$module-$major02.$minor02.$service02'
+$module-$major02.$minor02.$service02
 ----
 
 === Multiple release branches
@@ -254,7 +277,7 @@ If your component uses multiple release branches, specify them in the `branch` p
 
 Example:
 ----
-branch = 'master|release/$major.$minor'
+master|release/$major.$minor
 ----
 
 === Escrow section
@@ -273,17 +296,6 @@ Below is the list of available parameters:
   ** String with units: `"1GB"`, `"512MB"`, `"1024KB"` (or `"1G"`, `"512M"`, `"1024K"`)
 * *additionalSources* - Comma-separated list of additional source paths to include in the escrow package (optional). For example: `"spa/.gradle,spa/node_modules"`.
 * *reusable* - Whether the escrow package can be reused by other components that depend on this component (default: `true`). When set to `true`, the escrow process will reuse already built escrow package instead of rebuilding dependencies.
-
-Example:
-----
-escrow {
-    generation = AUTO
-    buildTask = "clean build -x test"
-    providedDependencies = "test:test:1.1"
-    additionalSources = "spa/.gradle,spa/node_modules"
-    reusable = false
-}
-----
 
 === Distribution section
 The distribution section of the component configuration describes how the component is distributed.
@@ -326,5 +338,16 @@ File URL can be extended with query parameters *artifactId* and/or *classifier* 
 
 Example:
 ----
-GAV='org.company.newcomponent:artifact:jar,file:///target/application-${version}.exe?artifactId=NewComponent'
+org.company.newcomponent:artifact:jar,file:///target/application-${version}.exe?artifactId=NewComponent
 ----
+
+== Audit
+Every change is recorded. The history of a component, and the recent history across the registry,
+are available through:
+
+----
+GET /rest/api/4/audit/{entityType}/{entityId}
+GET /rest/api/4/audit/recent
+----
+
+This is what replaced the Git history of the old configuration files.
