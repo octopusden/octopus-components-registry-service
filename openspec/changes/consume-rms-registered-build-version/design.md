@@ -293,14 +293,20 @@ Because warnings and ACTUAL display are served from the sweep's cache (Decision 
 
 `GET rest/api/4/components/{component}/as-code` renders a component as Groovy-style DSL text (`ComponentCodeRenderer`, plain-text, not JSON) — a separate path entirely from `ComponentDetailResponse`/`ComponentSummaryResponse`, with no prior RMS involvement. This decision adds ACTUAL data to both of its modes.
 
-**Full view (no `?version=`).** Appends a trailing section listing every one of the component's ACTUAL ranges — both Java and Maven, whichever exist — rendered with the exact same per-range block shape already used for a real `SCALAR_OVERRIDE` row (`"<range>" { build { javaVersion = "<value>" } }`), preceded by a single comment line marking the section as RMS-sourced:
+**Full view (no `?version=`).** Appends a trailing section, *inside* the component block (after its own override-range blocks, before the closing `}`), listing every one of the component's ACTUAL ranges — both Java and Maven, whichever exist — rendered with the exact same per-range block shape already used for a real `SCALAR_OVERRIDE` row (`"<range>" { build { javaVersion = "<value>" } }`), preceded by a single comment line marking the section as RMS-sourced:
 ```groovy
-// RMS registered parameters (read-only; not written by CRS)
-"(1.0,1.3]" { build { javaVersion = "17" } }
-"(1.3,)" { build { javaVersion = "21" } }
-"(2.0,)" { build { mavenVersion = "3.3.9" } }
+"componentkey" {
+    ...
+    "[5.0,5.0.24)" {
+        build { javaVersion = "1.8" }
+    }
+    // RMS registered parameters (read-only; not written by CRS)
+    "(1.0,1.3]" { build { javaVersion = "17" } }
+    "(1.3,)" { build { javaVersion = "21" } }
+    "(2.0,)" { build { mavenVersion = "3.3.9" } }
+}
 ```
-Only the comment line is a comment — the range blocks themselves are rendered as literal, uncommented text, identical in shape to a real configured override. This was a deliberate choice, not an oversight: see Risks for the reimport hazard it accepts. The section is entirely omitted (not even the header) when the component has no ACTUAL data at all — ineligible build system, archived, RMS disabled, or never successfully swept — the same "nothing shown" behavior the detail/list views already use in those cases.
+Nested inside the component block, not appended as a sibling after its closing brace — a top-level block sitting outside `"componentkey" { ... }` would read as belonging to a different (nonexistent) component entirely. Only the comment line is a comment — the range blocks themselves are rendered as literal, uncommented text, identical in shape to a real configured override. This was a deliberate choice, not an oversight: see Risks for the reimport hazard it accepts. The section is entirely omitted (not even the header) when the component has no ACTUAL data at all — ineligible build system, archived, RMS disabled, or never successfully swept — the same "nothing shown" behavior the detail/list views already use in those cases.
 
 **Resolved view (`?version=X.Y.Z`).** Today, `renderResolved` computes `javaVersion`/`mavenVersion` by merging the BASE row with whichever configured `SCALAR_OVERRIDE`/`MARKER` rows contain the target version (`ComponentCodeRenderer.renderResolved`, mirrored in `EntityMappers.toResolvedEscrowModuleConfig`). This decision adds one more preference step on top, per attribute, independently: if an ACTUAL range for that attribute contains the target version, its value is used instead of the merge-computed one; otherwise the merge-computed value is used exactly as today — unconditional fallback, not a special case. This mirrors the list view's `effectiveJavaVersion` precedent (Decision 4: RMS if present, else configured) but evaluated per specific version rather than as a whole-history rollup, and applied to both Java and Maven (unlike Decision 4, which is Java-only, because the list's single `javaVersion` field has no Maven counterpart to repoint — `as-code` isn't fighting that same naming constraint).
 

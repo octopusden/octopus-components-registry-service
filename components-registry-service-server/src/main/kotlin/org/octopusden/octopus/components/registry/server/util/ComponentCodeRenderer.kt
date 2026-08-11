@@ -85,9 +85,10 @@ class ComponentCodeRenderer(
      * falls back to the plain wire render. Empty = legacy/wire rendering everywhere.
      *
      * [rmsRanges] — RMS's ACTUAL Java/Maven ranges for this component, if any (`null`/empty
-     * omits the section entirely). Appended as a trailing, RMS-labeled section after the main
-     * component block — see [writeRmsSection]. Never merged into the component's own configured
-     * values; RMS is read-only and CRS never writes it.
+     * omits the section entirely). Appended as a trailing, RMS-labeled section inside the
+     * component block, after its own override ranges but before the closing brace — see
+     * [writeRmsSection]. Never merged into the component's own configured values; RMS is
+     * read-only and CRS never writes it.
      */
     fun renderFull(
         component: ComponentEntity,
@@ -167,10 +168,10 @@ class ComponentCodeRenderer(
             )
         }
 
-        cb.close()
         if (rmsRanges != null && (rmsRanges.javaRanges.isNotEmpty() || rmsRanges.mavenRanges.isNotEmpty())) {
             writeRmsSection(cb, rmsRanges)
         }
+        cb.close()
         return cb.toString()
     }
 
@@ -775,7 +776,7 @@ class ComponentCodeRenderer(
     }
 
     // ============================================================
-    // RMS ACTUAL data (FULL only) — trailing, read-only, not part of the component block
+    // RMS ACTUAL data (FULL only) — trailing, read-only, inside the component block
     // ============================================================
 
     /**

@@ -754,6 +754,8 @@ class ComponentCodeRendererTest {
         assertTrue(out.contains("javaVersion = \"21\""), out)
         assertTrue(out.contains("\"(2.0,)\" {"), out)
         assertTrue(out.contains("mavenVersion = \"3.3.9\""), out)
+        assertTrue(out.contains("    // RMS registered parameters"), out)
+        assertEquals("}", out.trim().lines().last())
     }
 
     @Test
