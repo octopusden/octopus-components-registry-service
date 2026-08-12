@@ -41,11 +41,11 @@ component is still available (see <<Viewing a component as code>>) for anyone us
 but it is a projection - it is not parsed back and cannot be edited.
 
 == Information to be provided for registration of Component
-// unchanged from the previous revision - the data required has not changed, only the way it is
-// submitted. Retained verbatim; see the section below for how to submit it.
-The information listed in <<Component configuration reference>> is what has to be provided. A
-component owner, a JIRA project key, VCS coordinates and at least one version range are the
-minimum.
+The information listed in <<Component configuration reference>> is what a component's
+configuration can hold. The REST API itself only hard-requires a component name and a base build
+system; the Web UI's registration form asks for more - owner, JIRA project key, VCS coordinates -
+as client-side validation, not a server-enforced minimum. Version ranges are not required at all:
+a component with only a base configuration and no field overrides is valid.
 
 == How to register or change a Component
 === Through the Web UI
@@ -86,8 +86,9 @@ Change a component:
 PATCH /rest/api/4/components/{id}
 ----
 
-A `PATCH` body carries only the fields being changed. Two optional fields are worth setting on every
-call, because both are recorded on the audit row:
+A `PATCH` body carries only the fields being changed, plus `version` - the optimistic-lock value
+read from the preceding `GET`; a stale value is rejected with `409`. Two further fields are worth
+setting on every call, because both are recorded on the audit row:
 
 * *jiraTaskKey* - the JIRA issue motivating the change, e.g. `ABC-123`
 * *changeComment* - free text describing why
@@ -97,6 +98,7 @@ Example - move a component to a newer Java version:
 ----
 PATCH /rest/api/4/components/{id}
 {
+  "version": 3,
   "baseConfiguration": { "build": { "javaVersion": "17" } },
   "jiraTaskKey": "ABC-123",
   "changeComment": "component's own build moved to JDK 17"
@@ -153,7 +155,8 @@ changed.
 * *buildFilePath* - path to the build file, when it is not at the repository root
 * *buildTasks* - build tasks to execute
 * *systemProperties* - system properties passed to the build
-* *projectVersion* - required Cards version for building the escrow of this component
+* *projectVersion* - identifies which build project owns this component's release line, used
+  internally by the escrow/build automation
 
 === Artifact fields
 
