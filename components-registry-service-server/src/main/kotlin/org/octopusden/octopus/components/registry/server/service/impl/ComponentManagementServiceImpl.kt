@@ -89,11 +89,18 @@ import org.octopusden.octopus.components.registry.server.security.PermissionEval
 import org.octopusden.octopus.components.registry.server.service.ComponentManagementService
 import org.octopusden.octopus.components.registry.server.service.ComponentSourceRegistry
 import org.octopusden.octopus.components.registry.server.service.RenderedComponentCode
+import org.octopusden.octopus.components.registry.server.service.rms.ComponentBuildRanges
+import org.octopusden.octopus.components.registry.server.service.rms.RMSBuildParametersService
+import org.octopusden.octopus.components.registry.server.service.rms.RMSOverrideGate
+import org.octopusden.octopus.components.registry.server.service.rms.RegisteredBuildParametersMapper
+import org.octopusden.octopus.components.registry.server.service.rms.client.RMSBuild
 import org.octopusden.octopus.components.registry.server.teamcity.TeamcityProperties
 import org.octopusden.octopus.components.registry.server.util.ArtifactOwnershipModeClassifier
 import org.octopusden.octopus.components.registry.server.util.ComponentCodeRenderer
+import org.octopusden.octopus.components.registry.server.util.JavaVersionComparator
 import org.octopusden.octopus.components.registry.server.util.JiraRowView
 import org.octopusden.octopus.components.registry.server.util.MavenGavCollision
+import org.octopusden.octopus.components.registry.server.util.MavenVersionComparator
 import org.octopusden.octopus.components.registry.server.util.VersionRangePartition
 import org.octopusden.octopus.components.registry.server.util.computeEffectiveJiraPairs
 import org.octopusden.octopus.escrow.config.ConfigHelper
@@ -102,6 +109,7 @@ import org.octopusden.releng.versions.VersionRangeFactory
 import org.springframework.context.ApplicationEventPublisher
 import org.springframework.core.env.Environment
 import org.springframework.data.domain.Page
+import org.springframework.data.domain.PageImpl
 import org.springframework.data.domain.PageRequest
 import org.springframework.data.domain.Pageable
 import org.springframework.data.domain.Sort
@@ -161,6 +169,15 @@ class ComponentManagementServiceImpl(
     // Spring injects the singleton bean in production. Used to attach TeamCity validation findings
     // onto the component detail response (see toDetail / attachTeamcityValidations).
     private val teamcityValidationRepository: TeamcityValidationRepository? = null,
+    // Defaulted (nullable) so unit tests constructing this service directly need no new wiring;
+    // Spring injects the singleton bean in production (always registered, self-gates on
+    // RMSProperties.enabled — see RMSBuildParametersService). Used to attach RMS-registered
+    // build parameters onto both the summary rollup and the detail ranges/warnings.
+    private val rmsBuildParametersService: RMSBuildParametersService? = null,
+    // Defaulted (nullable) so unit tests constructing this service directly need no new wiring;
+    // Spring always registers the bean in production (RMSOverrideGate itself self-gates on
+    // RMSProperties.enabled and a null RMSClient) — see RMSOverrideGate.
+    private val rmsOverrideGate: RMSOverrideGate? = null,
 ) : ComponentManagementService {
     // ConfigHelper is constructed lazily because it touches the Spring
     // Environment on first access; mirrors the pattern used by
@@ -439,7 +456,7 @@ class ComponentManagementServiceImpl(
         val entity = findByIdOrName(idOrName)
         return RenderedComponentCode(
             entity.componentKey,
-            componentCodeRenderer.renderFull(entity, ownershipExportPatterns(entity)),
+            componentCodeRenderer.renderFull(entity, ownershipExportPatterns(entity), rmsRangesFor(entity)),
         )
     }
 
@@ -450,12 +467,21 @@ class ComponentManagementServiceImpl(
     ): RenderedComponentCode {
         val entity = findByIdOrName(idOrName)
         val body =
-            componentCodeRenderer.renderResolved(entity, version, ownershipExportPatterns(entity))
+            componentCodeRenderer.renderResolved(entity, version, ownershipExportPatterns(entity), rmsRangesFor(entity))
                 ?: throw NotFoundException(
                     "No configuration resolves for component '${entity.componentKey}' at version '$version'",
                 )
         return RenderedComponentCode(entity.componentKey, body)
     }
+
+    /**
+     * RMS's ACTUAL ranges for [entity], or `null` when the feature is disabled, the component is
+     * ineligible (non-Maven/Gradle, archived), or it has never been successfully swept — the
+     * sweep's cache map simply has no entry in any of those cases, so no separate eligibility
+     * check is needed here.
+     */
+    private fun rmsRangesFor(entity: ComponentEntity): ComponentBuildRanges? =
+        rmsBuildParametersService?.currentReport()?.components?.get(entity.componentKey)
 
     // employeeDirectory.getManager() is a network call that can take up to the configured
     // read timeout under an employee-service outage (failures are deliberately not cached —
@@ -596,7 +622,10 @@ class ComponentManagementServiceImpl(
         // warning) must tolerate an unchanged echo; only a real transition (flag false→true while
         // WHISKEY, or buildSystem→WHISKEY while the flag is set) is rejected 422.
         val oldSkipCommitCheck = entity.skipCommitCheck
-        val oldBaseBuildSystem = entity.configurations.firstOrNull { it.rowType == "BASE" }?.buildSystem
+        val oldBase = entity.configurations.firstOrNull { it.rowType == ROW_TYPE_BASE }
+        val oldBaseBuildSystem = oldBase?.buildSystem
+        val oldBaseJavaVersion = oldBase?.javaVersion
+        val oldBaseMavenVersion = oldBase?.mavenVersion
 
         if (isRename) entity.componentKey = normalizedNewKey!!
 
@@ -761,17 +790,42 @@ class ComponentManagementServiceImpl(
         // that echoes an unchanged skipCommitCheck=true or buildSystem="WHISKEY" on a grandfathered
         // row (import admits WHISKEY+sentinel with a warning) is legal, mirroring the CRS-B
         // change-based write-gate and the "grandfathered on update" convention below.
-        val newBaseBuildSystem = entity.configurations.firstOrNull { it.rowType == "BASE" }?.buildSystem
+        val newBase = entity.configurations.firstOrNull { it.rowType == ROW_TYPE_BASE }
+
+        val newBaseBuildSystem = newBase?.buildSystem
         if (entity.skipCommitCheck != oldSkipCommitCheck || newBaseBuildSystem != oldBaseBuildSystem) {
             validateSkipCommitCheckNotWhiskey(entity)
         }
+
+        // RMS write-gate: the BASE row's own javaVersion/mavenVersion, change-based against the
+        // oldBase* snapshots above. rmsBuildsCache is shared with applyFieldOverrideDesiredSet,
+        // so one PATCH fetches RMS data at most once.
+        val rmsBuildsCache = mutableMapOf<String, List<RMSBuild>>()
+        checkRMSOverrideGate(
+            entity,
+            ATTR_JAVA_VERSION,
+            newBase?.javaVersion != oldBaseJavaVersion,
+            newBase?.javaVersion,
+            newBase?.mavenVersion,
+            ALL_VERSIONS,
+            rmsBuildsCache,
+        )
+        checkRMSOverrideGate(
+            entity,
+            ATTR_MAVEN_VERSION,
+            newBase?.mavenVersion != oldBaseMavenVersion,
+            newBase?.javaVersion,
+            newBase?.mavenVersion,
+            ALL_VERSIONS,
+            rmsBuildsCache,
+        )
 
         // Field overrides (item D): desired-FULL-SET applied in-place on the
         // configuration collection — cascade (orphanRemoval) persists the
         // inserts/deletes on the saveAndFlush below, bumping the aggregate
         // @Version once. null = don't touch. The returned plan carries the
         // post-flush required-tool syncs + per-override audit rows.
-        val fieldOverridePlan = request.fieldOverrides?.let { applyFieldOverrideDesiredSet(entity, it) }
+        val fieldOverridePlan = request.fieldOverrides?.let { applyFieldOverrideDesiredSet(entity, it, rmsBuildsCache) }
 
         // Cross-component / malformed-input checks are GRANDFATHERED on update:
         // they re-run only when the PATCH actually touches a field they govern
@@ -913,10 +967,58 @@ class ComponentManagementServiceImpl(
     override fun listComponents(
         filter: ComponentFilter,
         pageable: Pageable,
-    ): Page<ComponentSummaryResponse> =
-        componentRepository
-            .findAll(buildSpecification(filter), translateSort(pageable))
-            .map { it.toSummaryResponse(teamcityProperties.baseUrl) }
+    ): Page<ComponentSummaryResponse> {
+        val rmsComponents = rmsBuildParametersService?.currentReport()?.components.orEmpty()
+        val sortedPageable = translateSort(pageable)
+        if (filter.javaVersion.isNullOrEmpty()) {
+            return componentRepository
+                .findAll(buildSpecification(filter), sortedPageable)
+                .map { it.toSummaryResponse(teamcityProperties.baseUrl, rmsComponents[it.componentKey]) }
+        }
+
+        // The effective Java version isn't a DB column, so it can't be filtered or paginated
+        // by SQL — every other-filter-matching candidate is loaded, sorted DB-side, then
+        // filtered and paginated here. Acceptable while the candidate set stays in the low
+        // thousands; revisit if that assumption stops holding. See TD-020.
+        val javaVersionFilter = filter.javaVersion.toSet()
+        val matches =
+            componentRepository
+                .findAll(buildSpecification(filter), sortedPageable.sort)
+                .filter { entity ->
+                    val base = entity.configurations.firstOrNull { it.rowType == "BASE" }
+                    val effective =
+                        RegisteredBuildParametersMapper.effectiveJavaVersion(
+                            base?.javaVersion,
+                            rmsComponents[entity.componentKey]?.javaRanges.orEmpty(),
+                        )
+                    effective != null && matchesJavaVersionFilter(effective, javaVersionFilter)
+                }
+
+        // Long arithmetic then clamp: `pageNumber * pageSize` in Int overflows for a large but
+        // perfectly acceptable page number (`?page=200000000` with the default size of 20 is
+        // already past Int.MAX), and a negative fromIndex reaches subList as an exception, not a
+        // 400. Pageable.offset does the same multiply in long, so it can't wrap.
+        val fromIndex = sortedPageable.offset.coerceIn(0L, matches.size.toLong()).toInt()
+        val toIndex = (fromIndex.toLong() + sortedPageable.pageSize).coerceIn(0L, matches.size.toLong()).toInt()
+        val pageContent =
+            matches
+                .subList(fromIndex, toIndex)
+                .map { it.toSummaryResponse(teamcityProperties.baseUrl, rmsComponents[it.componentKey]) }
+        return PageImpl(pageContent, sortedPageable, matches.size.toLong())
+    }
+
+    /**
+     * Java-version filter equality. Compares by major version, so `?javaVersion=8` matches a
+     * component whose effective value RMS recorded as `1.8` — the spec treats those as one version
+     * (`JavaVersionComparator.valuesEqual`), and a filter that disagreed with that would be unable
+     * to match a value the list itself displays. Falls back to exact string equality so a value
+     * neither side can parse as a Java version (a hand-typed configured value, say) is still
+     * matchable by typing it verbatim.
+     */
+    private fun matchesJavaVersionFilter(
+        effective: String,
+        filterValues: Set<String>,
+    ): Boolean = filterValues.any { it == effective || JavaVersionComparator.valuesEqual(effective, it) }
 
     /**
      * Translate API-facing sort field names to `ComponentEntity` property names.
@@ -1022,6 +1124,16 @@ class ComponentManagementServiceImpl(
                         "Scalar override '${request.overriddenAttribute}' must not carry markerChildren"
                     }
                     row.applyScalarValue(request.overriddenAttribute, request.value)
+                    // CRS-B (above): introducing an override is always an effective change — there
+                    // was nothing at this range/attribute before.
+                    checkRMSOverrideGate(
+                        component = component,
+                        attribute = request.overriddenAttribute,
+                        effectiveChange = true,
+                        javaVersion = row.javaVersion,
+                        mavenVersion = row.mavenVersion,
+                        newRange = canonicalRange,
+                    )
                     null
                 }
 
@@ -1109,9 +1221,18 @@ class ComponentManagementServiceImpl(
         // override on a non-editable field. Snapshot-diff keeps it change-based across
         // both scalar and marker attributes — an unchanged echo leaves the snapshot
         // equal and is allowed (the transaction rolls back on the thrown 403/422).
-        if (fieldOverrideAuditSnapshot(row) != beforeSnapshot) {
+        val effectiveChange = fieldOverrideAuditSnapshot(row) != beforeSnapshot
+        if (effectiveChange) {
             enforceOverrideEditable(row.overriddenAttribute!!)
         }
+        checkRMSOverrideGate(
+            component = row.component,
+            attribute = row.overriddenAttribute!!,
+            effectiveChange = effectiveChange,
+            javaVersion = row.javaVersion,
+            mavenVersion = row.mavenVersion,
+            newRange = row.versionRange,
+        )
 
         val saved = configurationRepository.save(row)
         if (pendingTools != null) {
@@ -1232,6 +1353,7 @@ class ComponentManagementServiceImpl(
     private fun applyFieldOverrideDesiredSet(
         component: ComponentEntity,
         desired: List<FieldOverrideUpsertRequest>,
+        rmsBuildsCache: MutableMap<String, List<RMSBuild>> = mutableMapOf(),
     ): FieldOverrideApplyPlan {
         fun isImportManaged(row: ComponentConfigurationEntity) = row.rowType == "MARKER" && row.overriddenAttribute !in MarkerAttributes.ALL
 
@@ -1284,9 +1406,19 @@ class ComponentManagementServiceImpl(
             // CRS-B: gate any actual change (value / markerChildren / range) to an
             // override on a non-editable field; an unchanged echo (combined Save
             // re-sends the whole set) leaves the snapshot equal and is left alone.
-            if (fieldOverrideAuditSnapshot(row) != before) {
+            val effectiveChange = fieldOverrideAuditSnapshot(row) != before
+            if (effectiveChange) {
                 enforceOverrideEditable(d.overriddenAttribute)
             }
+            checkRMSOverrideGate(
+                component = component,
+                attribute = d.overriddenAttribute,
+                effectiveChange = effectiveChange,
+                javaVersion = row.javaVersion,
+                mavenVersion = row.mavenVersion,
+                newRange = row.versionRange,
+                rmsBuildsCache = rmsBuildsCache,
+            )
             updated += row to before
         }
 
@@ -1306,6 +1438,17 @@ class ComponentManagementServiceImpl(
                 )
             applyOverrideUpsertPayload(component, row, d, excludeOverrideId = null)?.let { pendingTools[row] = it }
             component.configurations.add(row)
+            // A new override is always an effective change — there was nothing at this
+            // range/attribute before (mirrors the single-row create path).
+            checkRMSOverrideGate(
+                component = component,
+                attribute = d.overriddenAttribute,
+                effectiveChange = true,
+                javaVersion = row.javaVersion,
+                mavenVersion = row.mavenVersion,
+                newRange = row.versionRange,
+                rmsBuildsCache = rmsBuildsCache,
+            )
             // Explicit save (like the single-row create path) so the generated id
             // is assigned to this instance now — the parent saveAndFlush's cascade
             // does not back-populate it onto our reference, which the post-flush
@@ -3294,7 +3437,7 @@ class ComponentManagementServiceImpl(
      * preview needs the negative-lookahead, which depends on OTHER components' claims).
      */
     private fun toDetail(entity: ComponentEntity): ComponentDetailResponse {
-        val response = attachTeamcityValidations(entity.toDetailResponse(teamcityProperties.baseUrl))
+        val response = attachRegisteredBuildParameters(attachTeamcityValidations(entity.toDetailResponse(teamcityProperties.baseUrl)))
         val patterns = ownershipExportPatterns(entity)
         if (patterns.isEmpty()) return response
         return response.copy(
@@ -3331,6 +3474,77 @@ class ComponentManagementServiceImpl(
                     )
                 },
         )
+    }
+
+    /**
+     * Attach RMS-registered build parameters (ACTUAL) onto [response]: the per-attribute range
+     * lists, warnings for any DEFAULT/OVERRIDDEN row that disagrees with an intersecting ACTUAL
+     * range, and an unavailable flag when RMS has never successfully reported this component.
+     * Left `null` for a non-Maven/Gradle component, when no bean is present (no-db mode), or when
+     * RMS integration is disabled — a disabled integration must show nothing at all, not an
+     * "unavailable" indicator, since there was never an attempt to check RMS in the first place.
+     */
+    private fun attachRegisteredBuildParameters(response: ComponentDetailResponse): ComponentDetailResponse {
+        val service = rmsBuildParametersService ?: return response
+        if (!service.isEnabled()) return response
+        val detail =
+            RegisteredBuildParametersMapper.detailFor(
+                response,
+                service.currentReport().components,
+                numericVersionComparator(numericVersionFactory),
+            )
+        return response.copy(registeredBuildParameters = detail)
+    }
+
+    /**
+     * Live write-time check for a single `build.javaVersion`/`build.mavenVersion` write. A no-op
+     * for any other attribute, when the feature is off/unconfigured, or when [component]'s build
+     * system isn't Maven/Gradle — [RMSOverrideGate] itself makes those calls, this just resolves
+     * the attribute-specific comparator pair and the component's build system.
+     * Throws [org.octopusden.octopus.components.registry.core.exceptions.RMSRegisteredValueConflictException]
+     * or [org.octopusden.octopus.components.registry.core.exceptions.RMSUnavailableException].
+     */
+    private fun checkRMSOverrideGate(
+        component: ComponentEntity,
+        attribute: String,
+        effectiveChange: Boolean,
+        javaVersion: String?,
+        mavenVersion: String?,
+        newRange: String,
+        rmsBuildsCache: MutableMap<String, List<RMSBuild>> = mutableMapOf(),
+    ) {
+        val gate = rmsOverrideGate ?: return
+        val buildSystem = component.configurations.firstOrNull { it.rowType == ROW_TYPE_BASE }?.buildSystem
+        val compare = numericVersionComparator(numericVersionFactory)
+        when (attribute) {
+            ATTR_JAVA_VERSION ->
+                gate.check(
+                    componentKey = component.componentKey,
+                    buildSystem = buildSystem,
+                    effectiveChange = effectiveChange,
+                    newValue = javaVersion,
+                    newRange = newRange,
+                    selectValue = { it.javaVersion },
+                    valuesEqual = JavaVersionComparator::valuesEqual,
+                    compare = compare,
+                    buildsCache = rmsBuildsCache,
+                )
+
+            ATTR_MAVEN_VERSION ->
+                gate.check(
+                    componentKey = component.componentKey,
+                    buildSystem = buildSystem,
+                    effectiveChange = effectiveChange,
+                    newValue = mavenVersion,
+                    newRange = newRange,
+                    selectValue = { it.mavenVersion },
+                    valuesEqual = MavenVersionComparator::valuesEqual,
+                    compare = compare,
+                    buildsCache = rmsBuildsCache,
+                )
+
+            else -> Unit
+        }
     }
 
     /**
@@ -3814,26 +4028,11 @@ class ComponentManagementServiceImpl(
                     },
                 )
         }
-        // OR across selected javaVersions — same scalar-on-BASE-row shape as
-        // buildSystem above: one JOIN through configurations with rowType=BASE +
-        // IN(...). A component has exactly one BASE javaVersion at a time, so
-        // multi-select is "any of these". `distinct(true)` guards against row
-        // multiplication from the join. The controller's normalisation
-        // guarantees the list, if present, is non-empty, blank-free, and
-        // duplicate-free.
-        if (!filter.javaVersion.isNullOrEmpty()) {
-            spec =
-                spec.and(
-                    Specification { root, query, cb ->
-                        val join = root.join<ComponentEntity, ComponentConfigurationEntity>("configurations")
-                        query?.distinct(true)
-                        cb.and(
-                            cb.equal(join.get<String>("rowType"), "BASE"),
-                            join.get<String>("javaVersion").`in`(filter.javaVersion),
-                        )
-                    },
-                )
-        }
+
+        // javaVersion is deliberately NOT filtered here — it matches against the effective
+        // Java version (RMS's registered value, falling back to this BASE row's configured
+        // value), which the DB doesn't have. See listComponents.
+
         // OR across selected system codes — a component matches when ANY of its
         // system junctions has a code in the list. Unlike labels (also
         // junction-backed but AND across selections), the picker semantics here
@@ -4260,5 +4459,9 @@ class ComponentManagementServiceImpl(
 
         // Same shape as the old EscrowConfigValidator.CLIENT_CODE_PATTERN.
         private val CLIENT_CODE_PATTERN = Regex("[A-Z_0-9]+")
+
+        private const val ROW_TYPE_BASE = "BASE"
+        private const val ATTR_JAVA_VERSION = "build.javaVersion"
+        private const val ATTR_MAVEN_VERSION = "build.mavenVersion"
     }
 }
