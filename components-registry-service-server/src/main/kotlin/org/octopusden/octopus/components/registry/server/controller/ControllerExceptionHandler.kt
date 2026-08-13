@@ -6,6 +6,8 @@ import org.octopusden.octopus.components.registry.core.exceptions.BaseComponents
 import org.octopusden.octopus.components.registry.core.exceptions.ComponentNameConflictException
 import org.octopusden.octopus.components.registry.core.exceptions.CrossComponentConflictException
 import org.octopusden.octopus.components.registry.core.exceptions.NotFoundException
+import org.octopusden.octopus.components.registry.core.exceptions.RMSRegisteredValueConflictException
+import org.octopusden.octopus.components.registry.core.exceptions.RMSUnavailableException
 import org.octopusden.octopus.components.registry.core.exceptions.RepositoryNotPreparedException
 import org.octopusden.octopus.components.registry.server.config.PayloadTooLargeException
 import org.slf4j.Logger
@@ -109,6 +111,22 @@ class ControllerExceptionHandler {
     fun crossComponentConflictExceptionHandler(e: CrossComponentConflictException): HttpEntity<ErrorResponse> {
         log.warn(e.localizedMessage)
         return HttpEntity(ErrorResponse(e.localizedMessage, ErrorCodes.UNIQUENESS_VIOLATION))
+    }
+
+    /** A build parameters write disagrees with RMS's registered ACTUAL value — 409, same family as the other conflict handlers above. */
+    @ExceptionHandler(RMSRegisteredValueConflictException::class)
+    @ResponseStatus(HttpStatus.CONFLICT)
+    fun rmsRegisteredValueConflictExceptionHandler(e: RMSRegisteredValueConflictException): HttpEntity<ErrorResponse> {
+        log.warn(e.localizedMessage)
+        return HttpEntity(ErrorResponse(e.localizedMessage, ErrorCodes.RMS_REGISTERED_VALUE_CONFLICT))
+    }
+
+    /** The live RMS check for a build parameters write failed, timed out, or was ambiguous. */
+    @ExceptionHandler(RMSUnavailableException::class)
+    @ResponseStatus(HttpStatus.SERVICE_UNAVAILABLE)
+    fun rmsUnavailableExceptionHandler(e: RMSUnavailableException): HttpEntity<ErrorResponse> {
+        log.warn(e.localizedMessage)
+        return HttpEntity(ErrorResponse(e.localizedMessage, ErrorCodes.RMS_UNAVAILABLE))
     }
 
     /**

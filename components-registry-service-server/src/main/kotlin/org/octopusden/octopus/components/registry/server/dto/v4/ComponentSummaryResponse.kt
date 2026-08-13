@@ -13,6 +13,10 @@ import java.util.UUID
  * components render their primary link the same way single-target components do.
  * Blank/empty strings are normalized to null so callers can treat "absent" and
  * "empty" alike.
+ *
+ * [javaVersion] is the component's *effective* Java version: RMS's registered value when
+ * available, else the BASE row's configured value — see [ComponentFilter.javaVersion], which
+ * filters against this same effective value.
  */
 data class ComponentSummaryResponse(
     val id: UUID,

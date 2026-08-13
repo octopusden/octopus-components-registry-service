@@ -1,6 +1,36 @@
 {
   "components" : {
     "schemas" : {
+      "ActualDisagreement" : {
+        "properties" : {
+          "actualValue" : {
+            "type" : "string"
+          },
+          "subRange" : {
+            "type" : "string"
+          }
+        },
+        "required" : [
+          "actualValue",
+          "subRange"
+        ],
+        "type" : "object"
+      },
+      "ActualRange" : {
+        "properties" : {
+          "value" : {
+            "type" : "string"
+          },
+          "versionRange" : {
+            "type" : "string"
+          }
+        },
+        "required" : [
+          "value",
+          "versionRange"
+        ],
+        "type" : "object"
+      },
       "ArtifactIdRequest" : {
         "properties" : {
           "artifactTokens" : {
@@ -660,6 +690,9 @@
           },
           "productType" : {
             "type" : "string"
+          },
+          "registeredBuildParameters" : {
+            "$ref" : "#/components/schemas/RegisteredBuildParametersDetail"
           },
           "releaseManager" : {
             "items" : {
@@ -2463,6 +2496,83 @@
         },
         "type" : "object"
       },
+      "RMSSweepStatusResponse" : {
+        "properties" : {
+          "componentsWithData" : {
+            "format" : "int32",
+            "type" : "integer"
+          },
+          "enabled" : {
+            "type" : "boolean"
+          },
+          "generatedAt" : {
+            "format" : "date-time",
+            "type" : "string"
+          },
+          "lastAttemptAt" : {
+            "format" : "date-time",
+            "type" : "string"
+          },
+          "lastSweepDurationMillis" : {
+            "format" : "int64",
+            "type" : "integer"
+          },
+          "refreshError" : {
+            "type" : "string"
+          },
+          "unavailableComponents" : {
+            "items" : {
+              "type" : "string"
+            },
+            "type" : "array"
+          }
+        },
+        "required" : [
+          "componentsWithData",
+          "enabled",
+          "unavailableComponents"
+        ],
+        "type" : "object"
+      },
+      "RegisteredBuildParametersDetail" : {
+        "properties" : {
+          "actualDataUnavailable" : {
+            "type" : "boolean"
+          },
+          "javaActualRanges" : {
+            "items" : {
+              "$ref" : "#/components/schemas/ActualRange"
+            },
+            "type" : "array"
+          },
+          "javaWarnings" : {
+            "items" : {
+              "$ref" : "#/components/schemas/ActualDisagreement"
+            },
+            "type" : "array"
+          },
+          "mavenActualRanges" : {
+            "items" : {
+              "$ref" : "#/components/schemas/ActualRange"
+            },
+            "type" : "array"
+          },
+          "mavenWarnings" : {
+            "items" : {
+              "$ref" : "#/components/schemas/ActualDisagreement"
+            },
+            "type" : "array"
+          }
+        },
+        "required" : [
+          "actualDataUnavailable",
+          "javaActualRanges",
+          "javaWarnings",
+          "mavenActualRanges",
+          "mavenWarnings"
+        ],
+        "type" : "object"
+      },
       "Role" : {
         "properties" : {
           "name" : {
@@ -3261,6 +3371,16 @@
               }
             },
             "description" : "Bad Gateway"
+          },
+          "503" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description" : "Service Unavailable"
           }
         },
         "tags" : [
@@ -3377,6 +3497,16 @@
               }
             },
             "description" : "Bad Gateway"
+          },
+          "503" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description" : "Service Unavailable"
           }
         },
         "tags" : [
@@ -3493,6 +3623,16 @@
               }
             },
             "description" : "Bad Gateway"
+          },
+          "503" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description" : "Service Unavailable"
           }
         },
         "tags" : [
@@ -3596,6 +3736,16 @@
               }
             },
             "description" : "Bad Gateway"
+          },
+          "503" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description" : "Service Unavailable"
           }
         },
         "tags" : [
@@ -3722,6 +3872,16 @@
               }
             },
             "description" : "Bad Gateway"
+          },
+          "503" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description" : "Service Unavailable"
           }
         },
         "tags" : [
@@ -3822,6 +3982,16 @@
               }
             },
             "description" : "Bad Gateway"
+          },
+          "503" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description" : "Service Unavailable"
           }
         },
         "tags" : [
@@ -3933,6 +4103,16 @@
               }
             },
             "description" : "Bad Gateway"
+          },
+          "503" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description" : "Service Unavailable"
           }
         },
         "tags" : [
@@ -4054,6 +4234,16 @@
               }
             },
             "description" : "Bad Gateway"
+          },
+          "503" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description" : "Service Unavailable"
           }
         },
         "tags" : [
@@ -4175,6 +4365,16 @@
               }
             },
             "description" : "Bad Gateway"
+          },
+          "503" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description" : "Service Unavailable"
           }
         },
         "tags" : [
@@ -4275,6 +4475,16 @@
               }
             },
             "description" : "Bad Gateway"
+          },
+          "503" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description" : "Service Unavailable"
           }
         },
         "tags" : [
@@ -4375,6 +4585,16 @@
               }
             },
             "description" : "Bad Gateway"
+          },
+          "503" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description" : "Service Unavailable"
           }
         },
         "tags" : [
@@ -4494,6 +4714,16 @@
               }
             },
             "description" : "Bad Gateway"
+          },
+          "503" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description" : "Service Unavailable"
           }
         },
         "tags" : [
@@ -4594,6 +4824,16 @@
               }
             },
             "description" : "Bad Gateway"
+          },
+          "503" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description" : "Service Unavailable"
           }
         },
         "tags" : [
@@ -4697,6 +4937,16 @@
               }
             },
             "description" : "Bad Gateway"
+          },
+          "503" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description" : "Service Unavailable"
           }
         },
         "tags" : [
@@ -4816,6 +5066,16 @@
               }
             },
             "description" : "Bad Gateway"
+          },
+          "503" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description" : "Service Unavailable"
           }
         },
         "tags" : [
@@ -4927,6 +5187,16 @@
               }
             },
             "description" : "Bad Gateway"
+          },
+          "503" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description" : "Service Unavailable"
           }
         },
         "tags" : [
@@ -5027,6 +5297,16 @@
               }
             },
             "description" : "Bad Gateway"
+          },
+          "503" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description" : "Service Unavailable"
           }
         },
         "tags" : [
@@ -5127,6 +5407,16 @@
               }
             },
             "description" : "Bad Gateway"
+          },
+          "503" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description" : "Service Unavailable"
           }
         },
         "tags" : [
@@ -5227,6 +5517,16 @@
               }
             },
             "description" : "Bad Gateway"
+          },
+          "503" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description" : "Service Unavailable"
           }
         },
         "tags" : [
@@ -5330,10 +5630,130 @@
               }
             },
             "description" : "Bad Gateway"
+          },
+          "503" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description" : "Service Unavailable"
           }
         },
         "tags" : [
           "admin-controller-v-4"
+        ]
+      }
+    },
+    "/rest/api/4/admin/rms-sweep" : {
+      "get" : {
+        "operationId" : "getRmsSweepStatus",
+        "responses" : {
+          "200" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/RMSSweepStatusResponse"
+                }
+              }
+            },
+            "description" : "OK"
+          },
+          "400" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description" : "Bad Request"
+          },
+          "404" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description" : "Not Found"
+          },
+          "409" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description" : "Conflict"
+          },
+          "413" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description" : "Payload Too Large"
+          },
+          "425" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description" : "Too Early"
+          },
+          "500" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description" : "Internal Server Error"
+          },
+          "501" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description" : "Not Implemented"
+          },
+          "502" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description" : "Bad Gateway"
+          },
+          "503" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description" : "Service Unavailable"
+          }
+        },
+        "tags" : [
+          "rms-sweep-controller-v-4"
         ]
       }
     },
@@ -5490,6 +5910,16 @@
               }
             },
             "description" : "Bad Gateway"
+          },
+          "503" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description" : "Service Unavailable"
           }
         },
         "tags" : [
@@ -5618,6 +6048,16 @@
               }
             },
             "description" : "Bad Gateway"
+          },
+          "503" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description" : "Service Unavailable"
           }
         },
         "tags" : [
@@ -5725,6 +6165,16 @@
               }
             },
             "description" : "Bad Gateway"
+          },
+          "503" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description" : "Service Unavailable"
           }
         },
         "tags" : [
@@ -5825,6 +6275,16 @@
               }
             },
             "description" : "Bad Gateway"
+          },
+          "503" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description" : "Service Unavailable"
           }
         },
         "tags" : [
@@ -5932,6 +6392,16 @@
               }
             },
             "description" : "Bad Gateway"
+          },
+          "503" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description" : "Service Unavailable"
           }
         },
         "tags" : [
@@ -6032,6 +6502,16 @@
               }
             },
             "description" : "Bad Gateway"
+          },
+          "503" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description" : "Service Unavailable"
           }
         },
         "tags" : [
@@ -6164,6 +6644,16 @@
               }
             },
             "description" : "Bad Gateway"
+          },
+          "503" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description" : "Service Unavailable"
           }
         },
         "tags" : [
@@ -6264,6 +6754,16 @@
               }
             },
             "description" : "Bad Gateway"
+          },
+          "503" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description" : "Service Unavailable"
           }
         },
         "tags" : [
@@ -6374,6 +6874,16 @@
               }
             },
             "description" : "Bad Gateway"
+          },
+          "503" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description" : "Service Unavailable"
           }
         },
         "tags" : [
@@ -6567,6 +7077,16 @@
               }
             },
             "description" : "Bad Gateway"
+          },
+          "503" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description" : "Service Unavailable"
           }
         },
         "tags" : [
@@ -6702,6 +7222,16 @@
               }
             },
             "description" : "Bad Gateway"
+          },
+          "503" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description" : "Service Unavailable"
           }
         },
         "tags" : [
@@ -7013,6 +7543,16 @@
               }
             },
             "description" : "Bad Gateway"
+          },
+          "503" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description" : "Service Unavailable"
           }
         },
         "tags" : [
@@ -7121,6 +7661,16 @@
               }
             },
             "description" : "Bad Gateway"
+          },
+          "503" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description" : "Service Unavailable"
           }
         },
         "tags" : [
@@ -7224,6 +7774,16 @@
               }
             },
             "description" : "Bad Gateway"
+          },
+          "503" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description" : "Service Unavailable"
           }
         },
         "tags" : [
@@ -7327,6 +7887,16 @@
               }
             },
             "description" : "Bad Gateway"
+          },
+          "503" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description" : "Service Unavailable"
           }
         },
         "tags" : [
@@ -7440,6 +8010,16 @@
               }
             },
             "description" : "Bad Gateway"
+          },
+          "503" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description" : "Service Unavailable"
           }
         },
         "tags" : [
@@ -7540,6 +8120,16 @@
               }
             },
             "description" : "Bad Gateway"
+          },
+          "503" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description" : "Service Unavailable"
           }
         },
         "tags" : [
@@ -7656,6 +8246,16 @@
               }
             },
             "description" : "Bad Gateway"
+          },
+          "503" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description" : "Service Unavailable"
           }
         },
         "tags" : [
@@ -7759,6 +8359,16 @@
               }
             },
             "description" : "Bad Gateway"
+          },
+          "503" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description" : "Service Unavailable"
           }
         },
         "tags" : [
@@ -7862,6 +8472,16 @@
               }
             },
             "description" : "Bad Gateway"
+          },
+          "503" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description" : "Service Unavailable"
           }
         },
         "tags" : [
@@ -7965,6 +8585,16 @@
               }
             },
             "description" : "Bad Gateway"
+          },
+          "503" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description" : "Service Unavailable"
           }
         },
         "tags" : [
@@ -8068,6 +8698,16 @@
               }
             },
             "description" : "Bad Gateway"
+          },
+          "503" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description" : "Service Unavailable"
           }
         },
         "tags" : [
@@ -8171,6 +8811,16 @@
               }
             },
             "description" : "Bad Gateway"
+          },
+          "503" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description" : "Service Unavailable"
           }
         },
         "tags" : [
@@ -8274,6 +8924,16 @@
               }
             },
             "description" : "Bad Gateway"
+          },
+          "503" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description" : "Service Unavailable"
           }
         },
         "tags" : [
@@ -8377,6 +9037,16 @@
               }
             },
             "description" : "Bad Gateway"
+          },
+          "503" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description" : "Service Unavailable"
           }
         },
         "tags" : [
@@ -8480,6 +9150,16 @@
               }
             },
             "description" : "Bad Gateway"
+          },
+          "503" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description" : "Service Unavailable"
           }
         },
         "tags" : [
@@ -8583,6 +9263,16 @@
               }
             },
             "description" : "Bad Gateway"
+          },
+          "503" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description" : "Service Unavailable"
           }
         },
         "tags" : [
@@ -8686,6 +9376,16 @@
               }
             },
             "description" : "Bad Gateway"
+          },
+          "503" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description" : "Service Unavailable"
           }
         },
         "tags" : [
@@ -8789,6 +9489,16 @@
               }
             },
             "description" : "Bad Gateway"
+          },
+          "503" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description" : "Service Unavailable"
           }
         },
         "tags" : [
@@ -8892,6 +9602,16 @@
               }
             },
             "description" : "Bad Gateway"
+          },
+          "503" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description" : "Service Unavailable"
           }
         },
         "tags" : [
@@ -9002,6 +9722,16 @@
               }
             },
             "description" : "Bad Gateway"
+          },
+          "503" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description" : "Service Unavailable"
           }
         },
         "tags" : [
@@ -9106,6 +9836,16 @@
               }
             },
             "description" : "Bad Gateway"
+          },
+          "503" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description" : "Service Unavailable"
           }
         },
         "tags" : [
@@ -9214,6 +9954,16 @@
               }
             },
             "description" : "Bad Gateway"
+          },
+          "503" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description" : "Service Unavailable"
           }
         },
         "tags" : [
@@ -9333,6 +10083,16 @@
               }
             },
             "description" : "Bad Gateway"
+          },
+          "503" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description" : "Service Unavailable"
           }
         },
         "tags" : [
@@ -9451,6 +10211,16 @@
               }
             },
             "description" : "Bad Gateway"
+          },
+          "503" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description" : "Service Unavailable"
           }
         },
         "tags" : [
@@ -9565,6 +10335,16 @@
               }
             },
             "description" : "Bad Gateway"
+          },
+          "503" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description" : "Service Unavailable"
           }
         },
         "tags" : [
@@ -9684,6 +10464,16 @@
               }
             },
             "description" : "Bad Gateway"
+          },
+          "503" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description" : "Service Unavailable"
           }
         },
         "tags" : [
@@ -9797,6 +10587,16 @@
               }
             },
             "description" : "Bad Gateway"
+          },
+          "503" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description" : "Service Unavailable"
           }
         },
         "tags" : [
@@ -9925,6 +10725,16 @@
               }
             },
             "description" : "Bad Gateway"
+          },
+          "503" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description" : "Service Unavailable"
           }
         },
         "tags" : [
@@ -10036,6 +10846,16 @@
               }
             },
             "description" : "Bad Gateway"
+          },
+          "503" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description" : "Service Unavailable"
           }
         },
         "tags" : [
@@ -10155,6 +10975,16 @@
               }
             },
             "description" : "Bad Gateway"
+          },
+          "503" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description" : "Service Unavailable"
           }
         },
         "tags" : [
@@ -10258,6 +11088,16 @@
               }
             },
             "description" : "Bad Gateway"
+          },
+          "503" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description" : "Service Unavailable"
           }
         },
         "tags" : [
@@ -10361,6 +11201,16 @@
               }
             },
             "description" : "Bad Gateway"
+          },
+          "503" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description" : "Service Unavailable"
           }
         },
         "tags" : [
@@ -10491,6 +11341,16 @@
               }
             },
             "description" : "Bad Gateway"
+          },
+          "503" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description" : "Service Unavailable"
           }
         },
         "tags" : [
@@ -10591,6 +11451,16 @@
               }
             },
             "description" : "Bad Gateway"
+          },
+          "503" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description" : "Service Unavailable"
           }
         },
         "tags" : [
@@ -10691,6 +11561,16 @@
               }
             },
             "description" : "Bad Gateway"
+          },
+          "503" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description" : "Service Unavailable"
           }
         },
         "tags" : [
@@ -10791,6 +11671,16 @@
               }
             },
             "description" : "Bad Gateway"
+          },
+          "503" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description" : "Service Unavailable"
           }
         },
         "tags" : [
@@ -10902,6 +11792,16 @@
               }
             },
             "description" : "Bad Gateway"
+          },
+          "503" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description" : "Service Unavailable"
           }
         },
         "summary" : "Preview version coordinates from ad-hoc formats",
