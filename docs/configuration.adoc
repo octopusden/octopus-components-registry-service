@@ -54,69 +54,12 @@ in <<Component configuration reference>>, validates them as you type, and shows 
 version ranges.
 
 === Through the REST API
-The REST API is the same surface the UI uses, and is the way to script bulk or repeatable changes.
-
-The endpoints below are the ones needed for day-to-day configuration, not the whole surface. The
-service publishes its own OpenAPI specification and serves an interactive Swagger UI alongside it,
-which is the authoritative and always-current reference - request and response schemas, every
-endpoint, and the ability to try a call. The same specification is committed in this repository
-under `components-registry-service-server/src/main/resources/openapi/`.
-
-Components are addressed by *id*, a UUID - not by component name. Resolve the name first:
-
-----
-GET /rest/api/4/components?search=<component name>
-----
-
-Read a component, including all of its configuration rows:
-
-----
-GET /rest/api/4/components/{id}
-----
-
-Create a component:
-
-----
-POST /rest/api/4/components
-----
-
-Change a component:
-
-----
-PATCH /rest/api/4/components/{id}
-----
-
-A `PATCH` body carries only the fields being changed, plus `version` - the optimistic-lock value
-read from the preceding `GET`; a stale value is rejected with `409`. Two further fields are worth
-setting on every call, because both are recorded on the audit row:
-
-* *jiraTaskKey* - the JIRA issue motivating the change, e.g. `ABC-123`
-* *changeComment* - free text describing why
-
-Example - move a component to a newer Java version:
-
-----
-PATCH /rest/api/4/components/{id}
-{
-  "version": 3,
-  "baseConfiguration": { "build": { "javaVersion": "17" } },
-  "jiraTaskKey": "ABC-123",
-  "changeComment": "component's own build moved to JDK 17"
-}
-----
-
-Allowed values for the enumerated fields are served by the registry itself, so they never go stale
-in this document:
-
-[cols="2,3"]
-|===
-|`GET /rest/api/4/components/meta/java-versions` |Java versions accepted by *javaVersion*
-|`GET /rest/api/4/components/meta/maven-versions` |Maven versions accepted by *mavenVersion*
-|`GET /rest/api/4/components/meta/build-systems` |values accepted by *buildSystem*
-|`GET /rest/api/4/components/meta/escrow-generations` |values accepted by escrow *generation*
-|`GET /rest/api/4/components/meta/systems` |values accepted by *system*
-|`GET /rest/api/4/config/field-config` |which fields are editable, and their labels
-|===
+The REST API is the same surface the UI uses, and is the way to script bulk or repeatable changes -
+end users configuring a single component are better served by the Web UI above. The service
+publishes its own OpenAPI specification and serves an interactive Swagger UI alongside it, which is
+the authoritative and always-current reference - request and response schemas, every endpoint, and
+the ability to try a call. The same specification is committed in this repository under
+`components-registry-service-server/src/main/resources/openapi/`.
 
 === Through crsctl
 `crsctl` is a read-only command-line client for the same API, useful for scripting queries and for
@@ -136,7 +79,7 @@ that apply to a version range (see <<Version ranges>>).
 
 === Component-level fields
 
-* *componentDisplayName* - display name of the component, e.g. in DMS
+* *displayName* - display name of the component, e.g. in DMS
 * *parentComponent* - grouping components in DMS
 * *clientCode* - if the component is client specific
 * *solution* - `true` for a solution
@@ -219,8 +162,8 @@ Examples of version range:
 |version <> 1.1
 |===
 
-WARNING: Version ranges of a component should have no intersections! Overlaps are rejected when the
-override is saved.
+WARNING: Version ranges for the same overridden attribute must not intersect. Overlaps are rejected
+when the override is saved; different attributes may reuse the same range.
 
 Which versions of a component are in scope at all is a separate setting:
 
