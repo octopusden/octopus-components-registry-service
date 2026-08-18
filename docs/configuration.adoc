@@ -42,10 +42,8 @@ but it is a projection - it is not parsed back and cannot be edited.
 
 == Information to be provided for registration of Component
 The information listed in <<Component configuration reference>> is what a component's
-configuration can hold. The REST API itself only hard-requires a component name and a base build
-system; the Web UI's registration form asks for more - owner, JIRA project key, VCS coordinates -
-as client-side validation, not a server-enforced minimum. Version ranges are not required at all:
-a component with only a base configuration and no field overrides is valid.
+configuration can hold. The REST API enforces its own, smaller set of mandatory fields; the Web
+UI's registration form can ask for more as client-side validation, not a server-enforced minimum.
 
 == How to register or change a Component
 === Through the Web UI
