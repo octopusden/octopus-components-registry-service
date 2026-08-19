@@ -53,13 +53,14 @@ class ModelConfigPostProcessor {
             return null
         }
         return new Distribution(
-                distribution.explicit(),
-                distribution.external(),
-                distribution.GAV(),
-                distribution.DEB(),
-                distribution.RPM(),
-                distribution.docker(),
-                distribution.securityGroups
+            distribution.explicit(),
+            distribution.external(),
+            distribution.GAV(),
+            distribution.DEB(),
+            distribution.RPM(),
+            distribution.docker(),
+            distribution.generic(),
+            distribution.securityGroups
         )
     }
 

@@ -26,6 +26,7 @@ import org.octopusden.octopus.components.registry.server.entity.ComponentSourceE
 import org.octopusden.octopus.components.registry.server.entity.ComponentSystemEntity
 import org.octopusden.octopus.components.registry.server.entity.DistributionDockerImageEntity
 import org.octopusden.octopus.components.registry.server.entity.DistributionFileUrlArtifactEntity
+import org.octopusden.octopus.components.registry.server.entity.DistributionGenericArtifactEntity
 import org.octopusden.octopus.components.registry.server.entity.DistributionMavenArtifactEntity
 import org.octopusden.octopus.components.registry.server.entity.DistributionPackageEntity
 import org.octopusden.octopus.components.registry.server.entity.DistributionSecurityGroupEntity
@@ -1908,6 +1909,11 @@ class ImportServiceImpl(
                 attachPackages(row, overDist)
             }?.let { saved += it }
         }
+        if (genericArtifactsDiffer(baseDist, overDist)) {
+            saveMarkerRowWithChildren(component, versionRange, MarkerAttributes.DISTRIBUTION_GENERIC) { row ->
+                attachGenericArtifacts(row, overDist)
+            }?.let { saved += it }
+        }
 
         // Required tools override (junction rows need the config ID; handled inside).
         // Use the same effective base tools that were attached to the BASE row in
@@ -2013,6 +2019,7 @@ class ImportServiceImpl(
         attachFileUrlArtifacts(row, dist)
         attachDockerImages(row, dist)
         attachPackages(row, dist)
+        attachGenericArtifacts(row, dist)
     }
 
     private fun attachMavenArtifacts(
@@ -2113,6 +2120,24 @@ class ImportServiceImpl(
                     ),
                 )
             }
+        }
+    }
+
+    private fun attachGenericArtifacts(
+        row: ComponentConfigurationEntity,
+        dist: Distribution?,
+    ) {
+        val genericCsv = dist?.generic() ?: return
+        var sortOrder = 0
+        for (url in splitCsv(genericCsv)) {
+            if (url.isBlank()) continue
+            row.genericArtifacts.add(
+                DistributionGenericArtifactEntity(
+                    componentConfiguration = row,
+                    url = url,
+                    sortOrder = sortOrder++,
+                ),
+            )
         }
     }
 
@@ -2398,6 +2423,11 @@ class ImportServiceImpl(
         base: Distribution?,
         override: Distribution?,
     ): Boolean = base?.DEB() != override?.DEB() || base?.RPM() != override?.RPM()
+
+    private fun genericArtifactsDiffer(
+        base: Distribution?,
+        override: Distribution?,
+    ): Boolean = base?.generic() != override?.generic()
 
     private fun extractMavenGavs(gavCsv: String?): List<String> {
         gavCsv ?: return emptyList()

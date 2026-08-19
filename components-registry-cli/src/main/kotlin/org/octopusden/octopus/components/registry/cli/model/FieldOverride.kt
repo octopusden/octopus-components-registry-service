@@ -15,6 +15,7 @@ data class MarkerChildrenPayload(
     val buildToolBeans: List<BuildToolBeanItem>? = null,
     val dockerImages: List<DockerImageItem>? = null,
     val fileUrlArtifacts: List<FileUrlArtifactItem>? = null,
+    val genericArtifacts: List<GenericArtifactItem>? = null,
     val mavenArtifacts: List<MavenArtifactItem>? = null,
     val packages: List<PackageItem>? = null,
     val requiredTools: List<String>? = null,
@@ -70,6 +71,14 @@ data class MavenArtifactItem(
 data class PackageItem(
     val packageName: String,
     val packageType: String,
+)
+
+/**
+ * Mirror of v4.json `GenericArtifactRequest` (used inside [MarkerChildrenPayload]). `url` required.
+ */
+@Serializable
+data class GenericArtifactItem(
+    val url: String,
 )
 
 /**

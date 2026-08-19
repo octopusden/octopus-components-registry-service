@@ -74,7 +74,7 @@ class EscrowConfigurationLoaderTest extends GroovyTestCase {
                                 sourceLocation: "env.BUILD_ENV", installScript: "script")], []),
                 deprecated: false,
                 archived: false,
-                distribution: new Distribution(true, true, "org.octopusden.octopus.bcomponent:builder:war,org.octopusden.octopus.bcomponent:builder:jar", null, null, null, new SecurityGroups(null)),
+                distribution: new Distribution(true, true, "org.octopusden.octopus.bcomponent:builder:war,org.octopusden.octopus.bcomponent:builder:jar", null, null, null, null, new SecurityGroups(null)),
                 componentDisplayName: "BCOMPONENT Official Name")
         assertEquals(expectedConfig.vcsSettings, escrowModuleConfig.vcsSettings)
         assertEquals(expectedConfig, escrowModuleConfig)
@@ -108,7 +108,7 @@ class EscrowConfigurationLoaderTest extends GroovyTestCase {
                         BuildParameters.create(null, null, null, false, null, null, null, [new Tool(name: "BuildEnv", escrowEnvironmentVariable: "BUILD_ENV", targetLocation: "tools/BUILD_ENV",
                                 sourceLocation: "env.BUILD_ENV", installScript: "script")], []),
                 deprecated: false,
-                distribution: new Distribution(true, true, "org.octopusden.octopus.bcomponent:builder:war,org.octopusden.octopus.bcomponent:builder:jar", null, null, null, new SecurityGroups(null)),
+                distribution: new Distribution(true, true, "org.octopusden.octopus.bcomponent:builder:war,org.octopusden.octopus.bcomponent:builder:jar", null, null, null, null, new SecurityGroups(null)),
                 componentDisplayName: "BCOMPONENT Official Name",
                 archived: true
         )
@@ -209,7 +209,7 @@ class EscrowConfigurationLoaderTest extends GroovyTestCase {
                         ComponentVersionFormat.create('$major.$minor', '$major.$minor.$service'),
                         new ComponentInfo(null, '$versionPrefix-$baseVersionFormat'), false, false),
                 buildConfiguration: EMPTY_BUILD_CONFIG,
-                distribution: new Distribution(false, true, null, null, null, null, new SecurityGroups(null)),
+                distribution: new Distribution(false, true, null, null, null, null, null, new SecurityGroups(null)),
                 componentDisplayName: "BCOMPONENT DISPLAY NAME"
         )
         def expectedConfig2 = new EscrowModuleConfig(
@@ -492,7 +492,7 @@ class EscrowConfigurationLoaderTest extends GroovyTestCase {
                         [new Tool(name: "BuildEnv", escrowEnvironmentVariable: "BUILD_ENV", targetLocation: "tools/BUILD_ENV", sourceLocation: "env.BUILD_ENV"),
                         ], []),
                 deprecated: true,
-                distribution: new Distribution(false, true, null, null, null, null, new SecurityGroups(null)),
+                distribution: new Distribution(false, true, null, null, null, null, null, new SecurityGroups(null)),
                 componentOwner: "someowner",
                 releaseManager: "somereleasemanager",
                 securityChampion: "somesecuritychampion",
@@ -522,7 +522,7 @@ class EscrowConfigurationLoaderTest extends GroovyTestCase {
                 buildConfiguration: BuildParameters.create("1.8", "3.3.9", "2.10", false, null, null, "build",
                         [new Tool(name: "BuildEnv", escrowEnvironmentVariable: "BUILD_ENV", targetLocation: "tools/BUILD_ENV", sourceLocation: "env.BUILD_ENV")], []),
                 deprecated: false,
-                distribution: new Distribution(true, false, null, null, null, null, new SecurityGroups(null)),
+                distribution: new Distribution(true, false, null, null, null, null, null, new SecurityGroups(null)),
                 componentOwner: "someowner",
                 releaseManager: "somereleasemanager",
                 securityChampion: "somesecuritychampion",
@@ -545,7 +545,7 @@ class EscrowConfigurationLoaderTest extends GroovyTestCase {
                         '$major.$minor.$service.$fix-$build', '$major', null), new ComponentInfo('sub-component-with-defaults', null), false, false),
                 buildConfiguration: DEFAULT_BUILD_PARAMETERS,
                 deprecated: false,
-                distribution: new Distribution(false, true, null, null, null, null, new SecurityGroups(null)),
+                distribution: new Distribution(false, true, null, null, null, null, null, new SecurityGroups(null)),
                 componentDisplayName: "Human readable sub-component-with-defaults name",
                 componentOwner: "Another Owner",
                 releaseManager: "anotherreleasemanager",
@@ -729,7 +729,7 @@ class EscrowConfigurationLoaderTest extends GroovyTestCase {
             loadConfiguration("invalid/noGAVorDockerOrDebOrRPMInExplicitDistributed.groovy")
         })
         assert exception.message == "Validation of module config failed due following errors: \n" +
-                "External explicitly distributed components for version range '(,0),[0,)' must define at least one distribution coordinate (distribution->GAV, DEB, RPM, or Docker) in 'component'."
+                "External explicitly distributed components for version range '(,0),[0,)' must define at least one distribution coordinate (distribution->GAV, DEB, RPM, Docker, or generic) in 'component'."
     }
 
     @Test
@@ -882,5 +882,23 @@ class EscrowConfigurationLoaderTest extends GroovyTestCase {
                 "Hotfix is enabled but hotfixVersionFormat is not defined for 'component_hotfix_1'\n" +
                 "Invalid hotfixVersionFormat '\$major.\$minor.\$service' for 'component_hotfix_4', it must be different from buildVersionFormat/releaseVersionFormat: '\$major.\$minor.\$service'\n" +
                 "Hotfix is enabled for 'component_hotfix_3', buildVersionFormat must be the same as releaseVersionFormat (buildVersionFormat='\$major.\$minor.\$service-\$build', releaseVersionFormat='\$major.\$minor.\$service')"
+    }
+
+    @Test
+    void testGenericDistributionRoundTrip() {
+        EscrowConfiguration configuration = loadConfiguration("single-module/genericDistribution.groovy")
+        def cfg = configuration.escrowModules.get(TEST_MODULE).moduleConfigurations.get(0)
+        assert 'releases/bcomponent/${version}/bcomponent.tar.gz' == cfg.distribution.generic()
+        assert null == cfg.distribution.GAV()
+        assert null == cfg.distribution.DEB()
+        assert null == cfg.distribution.RPM()
+        assert null == cfg.distribution.docker()
+    }
+
+    @Test
+    void testDistributionWithoutGenericStaysNull() {
+        EscrowConfiguration configuration = loadConfiguration("single-module/simpleConfig.groovy")
+        def cfg = configuration.escrowModules.get(TEST_MODULE).moduleConfigurations.get(0)
+        assert null == cfg.distribution.generic()
     }
 }

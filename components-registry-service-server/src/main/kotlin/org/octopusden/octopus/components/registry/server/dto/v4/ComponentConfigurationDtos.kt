@@ -60,6 +60,7 @@ data class ComponentConfigurationResponse(
     val fileUrlArtifacts: List<FileUrlArtifactResponse> = emptyList(),
     val dockerImages: List<DockerImageResponse> = emptyList(),
     val packages: List<PackageResponse> = emptyList(),
+    val genericArtifacts: List<GenericArtifactResponse> = emptyList(),
     val requiredTools: List<String> = emptyList(),
     val buildToolBeans: List<BuildToolBeanResponse> = emptyList(),
 )
@@ -166,6 +167,12 @@ data class PackageResponse(
     val sortOrder: Int,
 )
 
+data class GenericArtifactResponse(
+    val id: UUID,
+    val url: String,
+    val sortOrder: Int,
+)
+
 // ----------------------------------------------------------------------------
 // Write side — shared by ComponentCreate/UpdateRequest base-configuration body
 // and FieldOverrideCreate/UpdateRequest marker children payload.
@@ -188,6 +195,7 @@ data class BaseConfigurationRequest(
     val fileUrlArtifacts: List<FileUrlArtifactRequest>? = null,
     val dockerImages: List<DockerImageRequest>? = null,
     val packages: List<PackageRequest>? = null,
+    val genericArtifacts: List<GenericArtifactRequest>? = null,
     val requiredTools: List<String>? = null,
     val buildToolBeans: List<BuildToolBeanRequest>? = null,
 )
@@ -293,6 +301,10 @@ data class DockerImageRequest(
 data class PackageRequest(
     val packageType: String,
     val packageName: String,
+)
+
+data class GenericArtifactRequest(
+    val url: String,
 )
 
 /**

@@ -24,10 +24,11 @@
         <error line="31" column="1" source="standard:no-consecutive-comments" />
     </file>
     <file name="src/main/kotlin/org/octopusden/octopus/components/registry/server/mapper/EntityMappers.kt">
-        <error line="393" column="1" source="standard:no-consecutive-comments" />
+        <error line="396" column="1" source="standard:no-consecutive-comments" />
     </file>
     <file name="src/main/kotlin/org/octopusden/octopus/components/registry/server/mapper/V4Mappers.kt">
-        <error line="411" column="140" source="standard:max-line-length" />
+        <error line="425" column="140" source="standard:max-line-length" />
+        <error line="442" column="140" source="standard:max-line-length" />
     </file>
     <file name="src/main/kotlin/org/octopusden/octopus/components/registry/server/model/ServiceStatus.kt">
         <error line="4" column="1" source="standard:no-wildcard-imports" />
@@ -36,13 +37,13 @@
         <error line="14" column="1" source="standard:no-consecutive-comments" />
     </file>
     <file name="src/main/kotlin/org/octopusden/octopus/components/registry/server/service/impl/ComponentManagementServiceImpl.kt">
-        <error line="2816" column="17" source="standard:property-naming" />
-        <error line="2821" column="17" source="standard:property-naming" />
-        <error line="2830" column="17" source="standard:property-naming" />
-        <error line="2867" column="17" source="standard:property-naming" />
+        <error line="2844" column="17" source="standard:property-naming" />
+        <error line="2849" column="17" source="standard:property-naming" />
+        <error line="2858" column="17" source="standard:property-naming" />
+        <error line="2895" column="17" source="standard:property-naming" />
     </file>
     <file name="src/main/kotlin/org/octopusden/octopus/components/registry/server/service/impl/ImportServiceImpl.kt">
-        <error line="2701" column="1" source="standard:no-consecutive-comments" />
+        <error line="2731" column="1" source="standard:no-consecutive-comments" />
     </file>
     <file name="src/test/kotlin/org/octopusden/octopus/components/registry/server/controller/TeamcityValidationControllerV4SecurityTest.kt">
         <error line="62" column="9" source="standard:function-naming" />
