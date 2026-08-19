@@ -150,6 +150,12 @@
             },
             "type" : "array"
           },
+          "genericArtifacts" : {
+            "items" : {
+              "$ref" : "#/components/schemas/GenericArtifactRequest"
+            },
+            "type" : "array"
+          },
           "jira" : {
             "$ref" : "#/components/schemas/JiraAspectRequest"
           },
@@ -376,6 +382,12 @@
             },
             "type" : "array"
           },
+          "genericArtifacts" : {
+            "items" : {
+              "$ref" : "#/components/schemas/GenericArtifactResponse"
+            },
+            "type" : "array"
+          },
           "id" : {
             "format" : "uuid",
             "type" : "string"
@@ -430,6 +442,7 @@
           "buildToolBeans",
           "dockerImages",
           "fileUrlArtifacts",
+          "genericArtifacts",
           "id",
           "isSyntheticBase",
           "mavenArtifacts",
@@ -1638,6 +1651,38 @@
         ],
         "type" : "object"
       },
+      "GenericArtifactRequest" : {
+        "properties" : {
+          "url" : {
+            "type" : "string"
+          }
+        },
+        "required" : [
+          "url"
+        ],
+        "type" : "object"
+      },
+      "GenericArtifactResponse" : {
+        "properties" : {
+          "id" : {
+            "format" : "uuid",
+            "type" : "string"
+          },
+          "sortOrder" : {
+            "format" : "int32",
+            "type" : "integer"
+          },
+          "url" : {
+            "type" : "string"
+          }
+        },
+        "required" : [
+          "id",
+          "sortOrder",
+          "url"
+        ],
+        "type" : "object"
+      },
       "HealthStatisticsResponse" : {
         "properties" : {
           "activeComponents" : {
@@ -1902,6 +1947,12 @@
           "fileUrlArtifacts" : {
             "items" : {
               "$ref" : "#/components/schemas/FileUrlArtifactRequest"
+            },
+            "type" : "array"
+          },
+          "genericArtifacts" : {
+            "items" : {
+              "$ref" : "#/components/schemas/GenericArtifactRequest"
             },
             "type" : "array"
           },

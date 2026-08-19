@@ -44,6 +44,10 @@ class GroovySlurperConfigValidator {
     private static final String DOCKER_ENTRY_PATTERN_V2 = "$DOCKER_IMAGE_PATH_PATTERN(:$DOCKER_IMAGE_TAG_SUFFIX_PATTERN_V2)?"
     public static final Pattern DOCKER_PATTERN_V2 = Pattern.compile("^($DOCKER_ENTRY_PATTERN_V2)(,($DOCKER_ENTRY_PATTERN_V2))*\$")
 
+    private static final String GENERIC_SEGMENT_PATTERN = "[A-Za-z0-9._\\-]+"
+    private static final String GENERIC_ENTRY_PATTERN = "($GENERIC_SEGMENT_PATTERN/){2,}$GENERIC_SEGMENT_PATTERN"
+    public static final Pattern GENERIC_PATTERN = Pattern.compile("^($GENERIC_ENTRY_PATTERN)(,($GENERIC_ENTRY_PATTERN))*\$")
+
     public static final List<String> SUPPORTED_ATTRIBUTES = ['buildSystem', VCS_URL, REPOSITORY_TYPE, 'groupId', 'artifactId',
                                           TAG, 'versionRange', 'version', 'module',
                                           'teamcityReleaseConfigId', 'jiraProjectKey', 'jiraMajorVersionFormat', 'jiraReleaseVersionFormat',
@@ -65,7 +69,7 @@ class GroovySlurperConfigValidator {
 
     static SUPPORTED_DOC_ATTRIBUTES = ['component', 'majorVersion']
 
-    static SUPPORTED_DISTRIBUTION_ATTRIBUTES = ['external', 'explicit', 'GAV', 'DEB', 'RPM', 'docker', 'securityGroups']
+    static SUPPORTED_DISTRIBUTION_ATTRIBUTES = ['external', 'explicit', 'GAV', 'DEB', 'RPM', 'docker', 'generic', 'securityGroups']
     static SUPPORTED_DEPENDENCIES_ATTRIBUTES = ['autoUpdate']
     static SUPPORTED_SECURITY_GROUPS_ATTRIBUTES = [SECURITY_GROUPS_READ]
 
@@ -283,6 +287,8 @@ class GroovySlurperConfigValidator {
 
         validateValueByPattern(distributionSection, "docker", DOCKER_PATTERN_V2, expressionContext)
         validateNoExpressionInImageName(distributionSection)
+
+        validateValueByPattern(distributionSection, "generic", GENERIC_PATTERN, expressionContext)
 
         if (distributionSection.containsKey(SECURITY_GROUPS)) {
             validateSecurityGroupsParameters(distributionSection, SECURITY_GROUPS, moduleName)

@@ -20,6 +20,8 @@ import org.octopusden.octopus.components.registry.server.dto.v4.EscrowAspectResp
 import org.octopusden.octopus.components.registry.server.dto.v4.FieldOverrideResponse
 import org.octopusden.octopus.components.registry.server.dto.v4.FileUrlArtifactRequest
 import org.octopusden.octopus.components.registry.server.dto.v4.FileUrlArtifactResponse
+import org.octopusden.octopus.components.registry.server.dto.v4.GenericArtifactRequest
+import org.octopusden.octopus.components.registry.server.dto.v4.GenericArtifactResponse
 import org.octopusden.octopus.components.registry.server.dto.v4.JiraAspectResponse
 import org.octopusden.octopus.components.registry.server.dto.v4.MarkerChildrenPayload
 import org.octopusden.octopus.components.registry.server.dto.v4.MavenArtifactRequest
@@ -160,6 +162,9 @@ fun ComponentConfigurationEntity.toConfigurationResponse(): ComponentConfigurati
     val packages = pickChildRows(rowType, MarkerAttributes.DISTRIBUTION_PACKAGES) {
         this.packages.sortedBy { it.sortOrder }.map { it.toResponse() }
     }
+    val generic = pickChildRows(rowType, MarkerAttributes.DISTRIBUTION_GENERIC) {
+        genericArtifacts.sortedBy { it.sortOrder }.map { it.toResponse() }
+    }
     val tools = pickChildRows(rowType, MarkerAttributes.BUILD_REQUIRED_TOOLS) { requiredToolJunctions.map { it.toolName } }
     val buildBeans = pickChildRows(rowType, MarkerAttributes.BUILD_TOOLS) {
         buildToolBeans.sortedBy { it.sortOrder }.map { it.toBuildToolBeanResponse() }
@@ -179,6 +184,7 @@ fun ComponentConfigurationEntity.toConfigurationResponse(): ComponentConfigurati
         fileUrlArtifacts = fileUrl,
         dockerImages = docker,
         packages = packages,
+        genericArtifacts = generic,
         requiredTools = tools,
         buildToolBeans = buildBeans,
     )
@@ -370,6 +376,14 @@ private fun ComponentConfigurationEntity.toMarkerChildrenPayload(): MarkerChildr
                     },
             )
 
+        MarkerAttributes.DISTRIBUTION_GENERIC ->
+            MarkerChildrenPayload(
+                genericArtifacts =
+                    genericArtifacts.sortedBy { it.sortOrder }.map { e ->
+                        GenericArtifactRequest(url = e.url)
+                    },
+            )
+
         MarkerAttributes.BUILD_REQUIRED_TOOLS ->
             MarkerChildrenPayload(requiredTools = requiredToolJunctions.map { it.toolName })
 
@@ -422,6 +436,13 @@ private fun org.octopusden.octopus.components.registry.server.entity.Distributio
         id = this.id!!,
         imageName = this.imageName,
         flavor = this.flavor,
+        sortOrder = this.sortOrder,
+    )
+
+private fun org.octopusden.octopus.components.registry.server.entity.DistributionGenericArtifactEntity.toResponse(): GenericArtifactResponse =
+    GenericArtifactResponse(
+        id = this.id!!,
+        url = this.url,
         sortOrder = this.sortOrder,
     )
 
