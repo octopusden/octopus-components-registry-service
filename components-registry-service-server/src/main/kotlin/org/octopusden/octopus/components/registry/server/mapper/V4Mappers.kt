@@ -37,6 +37,8 @@ import org.octopusden.octopus.components.registry.server.entity.ComponentArtifac
 import org.octopusden.octopus.components.registry.server.entity.ComponentBuildToolBeanEntity
 import org.octopusden.octopus.components.registry.server.entity.ComponentConfigurationEntity
 import org.octopusden.octopus.components.registry.server.entity.ComponentEntity
+import org.octopusden.octopus.components.registry.server.service.rms.ComponentBuildRanges
+import org.octopusden.octopus.components.registry.server.service.rms.RegisteredBuildParametersMapper
 
 /**
  * Maps a fully-loaded `ComponentEntity` (with `configurations` + per-component
@@ -102,7 +104,10 @@ fun ComponentEntity.toDetailResponse(teamcityBaseUrl: String? = null): Component
  * (`sort_order = 0`) so multi-VCS / multi-TC components render their primary
  * link the same way single-target components do. Blank strings → null.
  */
-fun ComponentEntity.toSummaryResponse(teamcityBaseUrl: String? = null): ComponentSummaryResponse {
+fun ComponentEntity.toSummaryResponse(
+    teamcityBaseUrl: String? = null,
+    rmsRanges: ComponentBuildRanges? = null,
+): ComponentSummaryResponse {
     val base = this.configurations.firstOrNull { it.rowType == "BASE" }
     val firstTcProject = this.versionLines.minByOrNull { it.teamcityProject.projectId }
     val firstVcsEntry = base?.vcsEntries?.minByOrNull { it.sortOrder }
@@ -120,7 +125,7 @@ fun ComponentEntity.toSummaryResponse(teamcityBaseUrl: String? = null): Componen
         releaseManagers = this.releaseManagerUsernames(),
         securityChampions = this.securityChampionUsernames(),
         buildSystem = base?.buildSystem?.takeIf { it.isNotBlank() },
-        javaVersion = base?.javaVersion?.takeIf { it.isNotBlank() },
+        javaVersion = RegisteredBuildParametersMapper.effectiveJavaVersion(base?.javaVersion, rmsRanges?.javaRanges.orEmpty()),
         jiraProjectKey = base?.jiraProjectKey?.takeIf { it.isNotBlank() },
         vcsPath = firstVcsEntry?.vcsPath?.takeIf { it.isNotBlank() }?.sshUrlToProjectRepo(),
         teamcityProjectId = firstTcProject?.teamcityProject?.projectId,
