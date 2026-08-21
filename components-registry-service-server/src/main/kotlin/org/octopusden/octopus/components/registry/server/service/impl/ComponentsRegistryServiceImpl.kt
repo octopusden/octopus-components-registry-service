@@ -4,6 +4,7 @@ import jakarta.annotation.PostConstruct
 import org.octopusden.octopus.components.registry.core.dto.ServiceStatusDTO
 import org.octopusden.octopus.components.registry.server.config.ComponentsRegistryProperties
 import org.octopusden.octopus.components.registry.server.model.ServiceStatus
+import org.octopusden.octopus.components.registry.server.repository.AuditLogRepository
 import org.octopusden.octopus.components.registry.server.repository.ComponentSourceRepository
 import org.octopusden.octopus.components.registry.server.service.ComponentRegistryResolver
 import org.octopusden.octopus.components.registry.server.service.ComponentsRegistryService
@@ -20,12 +21,13 @@ class ComponentsRegistryServiceImpl(
     private val componentRegistryResolver: ComponentRegistryResolver,
     private val serviceStatus: ServiceStatus,
     private val properties: ComponentsRegistryProperties,
-    // Nullable: all three are part of the database layer (@ConditionalOnDatabaseEnabled /
+    // Nullable: all four are part of the database layer (@ConditionalOnDatabaseEnabled /
     // JPA) and absent in no-db mode. Spring injects null for a Kotlin-nullable
     // constructor parameter when no candidate bean exists; in db-mode all are wired.
     private val importService: ImportService?,
     private val componentSourceRepository: ComponentSourceRepository?,
     private val configSyncService: ConfigSyncService?,
+    private val auditLogRepository: AuditLogRepository?,
 ) : ComponentsRegistryService {
     override fun updateConfigCache(): Long {
         log.info("Start update of Component Registry")
@@ -47,6 +49,12 @@ class ComponentsRegistryServiceImpl(
             defaultSource = properties.defaultSource,
             // null-safe: no ComponentSourceRepository in no-db mode → no DB-sourced components.
             dbComponentCount = componentSourceRepository?.countBySource("db") ?: 0L,
+            // Composite cache-actuality token; null when the DB layer is absent (no-db mode
+            // and Git-based installations), so those paths keep the pre-OCTOPUS-2472 behaviour.
+            configRevision =
+                auditLogRepository?.changeStats()?.let { stats ->
+                    "${serviceStatus.versionControlRevision}.${stats.maxId}.${stats.count}"
+                },
         )
 
     @PostConstruct
