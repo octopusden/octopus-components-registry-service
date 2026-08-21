@@ -49,8 +49,6 @@ class ComponentsRegistryServiceImpl(
             defaultSource = properties.defaultSource,
             // null-safe: no ComponentSourceRepository in no-db mode → no DB-sourced components.
             dbComponentCount = componentSourceRepository?.countBySource("db") ?: 0L,
-            // Composite cache-actuality token; null when the DB layer is absent (no-db mode
-            // and Git-based installations), so those paths keep the pre-OCTOPUS-2472 behaviour.
             configRevision =
                 auditLogRepository?.changeStats()?.let { stats ->
                     "${serviceStatus.versionControlRevision}.${stats.maxId}.${stats.count}"

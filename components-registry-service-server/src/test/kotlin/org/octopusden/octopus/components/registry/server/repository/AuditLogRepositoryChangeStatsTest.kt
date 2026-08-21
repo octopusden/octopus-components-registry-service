@@ -52,7 +52,6 @@ class AuditLogRepositoryChangeStatsTest {
 
         val stats = auditLogRepository.changeStats()
 
-        // Backfill baseline is not a live config change: it must move neither aggregate.
         assertEquals(0L, stats.maxId, "git-history rows must be excluded from maxId")
         assertEquals(0L, stats.count, "git-history rows must be excluded from count")
     }
@@ -61,7 +60,6 @@ class AuditLogRepositoryChangeStatsTest {
     fun `changeStats counts every non-git-history row regardless of id ordering`() {
         auditLogRepository.deleteAll()
 
-        // Interleave a git-history row so the count reflects only the three live rows.
         auditLogRepository.save(newRow("Component", "a", "CREATE", source = "api"))
         auditLogRepository.save(newRow("Component", "b", "MIGRATED", source = "git-history"))
         auditLogRepository.save(newRow("Component", "c", "UPDATE", source = "api"))
@@ -69,8 +67,6 @@ class AuditLogRepositoryChangeStatsTest {
 
         val stats = auditLogRepository.changeStats()
 
-        // count catches a lower id that commits after a higher one — it tracks the number
-        // of live rows, not just the top id, so three non-git rows must count as three.
         assertEquals(3L, stats.count, "count must include every non-git-history row")
     }
 
@@ -84,8 +80,6 @@ class AuditLogRepositoryChangeStatsTest {
         val before = auditLogRepository.changeStats()
         assertEquals(2L, before.count)
 
-        // Delete one row and insert a fresh one: count returns to 2, but IDENTITY never
-        // reuses the id, so the new row's id is strictly higher than the old max.
         auditLogRepository.delete(doomed)
         auditLogRepository.save(newRow("Component", "c", "CREATE", source = "api"))
 

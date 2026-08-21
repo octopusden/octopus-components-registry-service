@@ -105,13 +105,6 @@ class SnapshotPreconditionTest : CompatibilityTestBase() {
 /**
  * Minimal local mirror of ServiceStatusDTO. Internal so jackson-module-kotlin
  * can instantiate it via reflection.
- *
- * `ignoreUnknown = true` mirrors the real `ServiceStatusDTO`'s contract: the DTO
- * is a diagnostic surface that permits additive fields, so the precondition probe
- * must decode successfully in the presence of fields it does not model (e.g.
- * `configRevision`). Without this, any additive field on the candidate makes the
- * strict decode throw, the snapshot resolves to null, and the run mis-reports the
- * candidate `/service/status` as "undecodable".
  */
 @JsonIgnoreProperties(ignoreUnknown = true)
 internal data class ServiceStatusSnapshot(

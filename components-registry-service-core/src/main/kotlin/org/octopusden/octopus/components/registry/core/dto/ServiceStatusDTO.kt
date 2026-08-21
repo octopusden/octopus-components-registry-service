@@ -30,17 +30,12 @@ import java.util.*
  *                                        by env-preconditions to detect partial-migration
  *                                        states. **Nullable** for the same backward-compat
  *                                        reason as `defaultSource`.
- * @property configRevision              composite cache-actuality token `"[gitRevision].[maxId].[count]"`,
- *                                        where `maxId`/`count` are aggregates over `audit_log`
- *                                        excluding the git-history backfill. Moves when *either*
- *                                        side of the hybrid prod config changes — a new VCS
- *                                        revision, or a portal/DB write — so the Jira releng
- *                                        plugin can invalidate its cache even while
- *                                        `versionControlRevision` is frozen (OCTOPUS-2472).
- *                                        **Nullable**: `null` in no-db mode and on Git-based
- *                                        installations (no `AuditLogRepository`), so those paths
- *                                        see no behaviour change; old servers omit it (Jackson
- *                                        reads null), same backward-compat contract as above.
+ * @property configRevision              composite cache-actuality token
+ *                                        `"[gitRevision].[maxId].[count]"` — changes when either
+ *                                        the VCS revision or an `audit_log` write moves, letting
+ *                                        consumers detect config changes while
+ *                                        `versionControlRevision` is frozen. **Nullable**: `null`
+ *                                        without the database layer (no-db / Git-based installs).
  */
 @JsonIgnoreProperties(ignoreUnknown = true)
 data class ServiceStatusDTO(

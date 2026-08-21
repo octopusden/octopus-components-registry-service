@@ -44,21 +44,6 @@ interface AuditLogRepository :
     @Transactional
     fun deleteBySource(source: String): Int
 
-    /**
-     * Aggregates over `audit_log` for the `configRevision` cache-actuality token
-     * (OCTOPUS-2472), excluding the one-shot git-history backfill baseline.
-     *
-     * Returns BOTH aggregates on purpose — each catches a case the other misses:
-     *  - `count` catches a transaction that commits late with a *lower* id (the
-     *    INSERT-gets-id / BEFORE_COMMIT-becomes-visible ordering gap `maxId` alone
-     *    would skip).
-     *  - `maxId` catches a delete-then-reinsert pair, which leaves `count` unchanged.
-     *
-     * `COALESCE(MAX(a.id), 0)` yields `(0, 0)` on an empty table rather than a null
-     * max. The `<> 'git-history'` filter is a deny-list on purpose: a `source` value
-     * introduced later is included by default, so the token fails toward invalidating
-     * too often — the safe direction.
-     */
     @Query(
         """
         SELECT COALESCE(MAX(a.id), 0) AS maxId, COUNT(a) AS count
@@ -69,10 +54,6 @@ interface AuditLogRepository :
     fun changeStats(): AuditChangeStats
 }
 
-/**
- * Projection for [AuditLogRepository.changeStats]: the `(maxId, count)` pair that
- * composes the audit half of the `configRevision` token.
- */
 interface AuditChangeStats {
     val maxId: Long
     val count: Long
