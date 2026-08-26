@@ -51,7 +51,7 @@ class ComponentsRegistryServiceImpl(
             dbComponentCount = componentSourceRepository?.countBySource("db") ?: 0L,
             configRevision =
                 auditLogRepository?.changeStats()?.let { stats ->
-                    "${serviceStatus.versionControlRevision}.${stats.maxId}.${stats.count}"
+                    "${serviceStatus.versionControlRevision.orEmpty()}.${stats.maxId}.${stats.count}"
                 },
         )
 
