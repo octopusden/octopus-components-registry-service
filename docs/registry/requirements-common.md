@@ -86,6 +86,7 @@
 | SYS-091 | Component detail (`GET /rest/api/4/components/{id}`) embeds stored WARNING/ERROR findings per linked TeamCity project as `{type, status, message, updatedAt}`; a project with no stored findings is presented as clean (no entries), not as "not yet validated" vs "validated clean"                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                    | Medium | integration-test | ✅ Tested |
 | SYS-092 | The admin dashboard read APIs (`GET /admin/teamcity-validations` + `.../summary`) join stored findings back to their owning component(s) via `version_line`, de-duplicate a component reachable through more than one version line to the same project, and count DISTINCT components (not raw finding rows) per type/status; both endpoints are IMPORT_DATA-gated                                                                                                                                                                                                                                                                                                                                                                                                                                                                      | High | unit + integration-test | ✅ Tested |
 | SYS-093 | `component-validation` module: `JAVA_HOME_NOT_FROM_ENV` is WARNING when a build step resolves a Java version whose java-home (`target.jdk.home`, or a java-resolving command-line token) does not reference `%env.JAVA_HOME%` at any point in its recursive parameter-reference chain — i.e. it points at a specific JDK directly instead of the agent's configured default; OK when every resolved java-home goes through `%env.JAVA_HOME%`, NOT_APPLICABLE when nothing Java was inspectable                                                                                                                                                                                                                                                                                                                                            | High | unit-test | ✅ Tested |
+| SYS-094 | `GET /service/status` exposes `configRevision` — an opaque composite cache-actuality token `"[gitRevision].[maxId].[count]"` built from the VCS revision plus the max-id and row-count aggregates of the non-`git-history` `audit_log` rows, so a consumer can detect DB-side config changes while `versionControlRevision` is frozen; `null` without the database layer (no-db / Git-based installs) | Medium | integration-test + context-load test | ✅ Tested |
 
 ---
 
@@ -1606,8 +1607,9 @@ Postgres for nothing (follow-up from #308 / #309, issue #310).
 2. The `@Primary` `ComponentRoutingResolver` and all DB-coupled beans (v4 CRUD,
    TeamCity sync, …) are absent; the sole `ComponentRegistryResolver` is the
    pure-Git `ComponentRegistryResolverImpl`.
-3. `GET /rest/api/2/components-registry/service/status` reports `defaultSource=git`
-   and `dbComponentCount=0`.
+3. `GET /rest/api/2/components-registry/service/status` reports `defaultSource=git`,
+   `dbComponentCount=0`, and a **null** `configRevision` — no `AuditLogRepository` is
+   wired, so the audit-derived half of the token has no source (see SYS-094).
 4. db-mode (no `no-db` profile) is unchanged — every gated bean is `matchIfMissing=true`.
 
 **Test method:** `NoDbModeContextTest` — four methods, each carrying `SYS-047` in
@@ -1615,7 +1617,8 @@ its name + a `@DisplayName("SYS-047: …")` (test-to-requirement traceability):
 `SYS-047 no DataSource bean exists in no-db mode`,
 `SYS-047 git resolver is the sole resolver in no-db mode`,
 `SYS-047 db-only beans absent and git read path present in no-db mode`,
-`SYS-047 status reports defaultSource git and zero db components in no-db mode`.
+`SYS-047 status reports defaultSource git and zero db components in no-db mode`
+(the last one also asserts the null `configRevision` — SYS-094).
 
 ### SYS-048: no-op save writes no audit row
 
@@ -3041,3 +3044,75 @@ version but never references `%env.JAVA_HOME%` is pointing at a specific JDK dir
 `ParameterReferenceResolverTest` — `collect records the whole reference chain`,
 `collect records missing reference`, `collect is cycle safe`.
 (These support tests carry no SYS id, matching the convention for the other resolver-level tests.)
+
+### SYS-094: `configRevision` cache-actuality token on `/service/status`
+
+**Priority:** Medium
+**Test layer:** integration-test + context-load test
+**Status:** ✅ Tested
+
+**Motivation:**
+Consumers that cache registry data (build tooling, the Portal, downstream services)
+need a cheap "has anything changed?" probe. `versionControlRevision` only answers that
+for the Git-sourced half of the registry: it moves when the config repo picks up a new
+tag, and stays **frozen** across every DB-side edit made through the v4 CRUD / import /
+field-override paths. A consumer polling it alone silently serves stale data after any
+Portal save. Component counts are no better — an edit that changes a field without
+adding or removing a component leaves them identical.
+
+**Description:**
+- `ServiceStatusDTO` gains `configRevision: String?` (`@JsonProperty("configRevision")`,
+  defaulted to `null` — additive and backward-compatible, like `defaultSource` /
+  `dbComponentCount`).
+- The value is the composite `"[gitRevision].[maxId].[count]"`, where `gitRevision` is
+  `serviceStatus.versionControlRevision` (rendered as an **empty segment** when there is
+  no VCS revision — FS / VCS-disabled mode — never the literal `null`), and `maxId` /
+  `count` come from `AuditLogRepository.changeStats()`:
+  `SELECT COALESCE(MAX(a.id), 0), COUNT(a) FROM AuditLogEntity a WHERE a.source <> 'git-history'`.
+- **Why both aggregates.** Neither is sufficient alone, and the pair covers every
+  audit-visible mutation:
+  - `maxId` alone misses a **pure delete** — removing rows leaves the max id untouched.
+  - `count` alone misses a **delete-then-reinsert** — the row count returns to its
+    previous value while the config has in fact changed.
+  Together, any insert moves `maxId`, any delete moves `count`, and a delete plus a
+  reinsert moves `maxId` while `count` holds. Pairing them with `gitRevision` covers the
+  Git-sourced half, so one token tracks both sources.
+- **Why `git-history` rows are excluded.** They are the backfill baseline imported from
+  Git commit history (`GitHistoryImportService`, `action = MIGRATED`), wiped and
+  re-imported wholesale by the backfill job. Counting them would churn the token on a
+  history re-import that changed no configuration — the same reason SYS-049 hides them
+  from the audit feed by default.
+- **Opaque to consumers.** The format is a compare-for-equality token, not a parseable
+  structure: consumers store the previous value and refresh when it differs. Nothing in
+  it is ordered or monotonic across restarts, and the segment layout may change.
+- `AuditLogRepository` is injected as a Kotlin-nullable (optional) dependency into
+  `ComponentsRegistryServiceImpl`, alongside the three DB-layer dependencies already
+  handled that way — so in no-db mode the whole token is `null` rather than a
+  half-populated string (see SYS-047).
+- The compat-test's local `ServiceStatusSnapshot` projection is annotated
+  `@JsonIgnoreProperties(ignoreUnknown = true)` so an additive `/service/status` field
+  does not break the precondition probe against an older baseline. `/service/status`
+  stays outside the compat surface (`docs/registry/api-compat-deltas.md`), and this is a
+  v2 operational endpoint, so the v4 `api-changelog.md` does not apply.
+
+**Acceptance criteria:**
+1. With the database layer wired, `GET /rest/api/2/components-registry/service/status`
+   returns `configRevision` as `"[gitRevision].[maxId].[count]"`; with no VCS revision the
+   leading segment is empty (`".12.34"`), never the string `null`.
+2. `changeStats()` on an empty `audit_log` is `maxId = 0` (COALESCE, not null) and
+   `count = 0`.
+3. Rows with `source = 'git-history'` are excluded from **both** aggregates.
+4. Every non-`git-history` row is counted, regardless of id ordering or interleaving with
+   excluded rows.
+5. A delete-then-reinsert advances `maxId` while `count` holds — the token changes even
+   though the row count did not.
+6. Without the database layer (no-db profile / Git-based installs) `configRevision` is
+   `null` — see SYS-047 criterion 3.
+
+**Test method:** `AuditLogRepositoryChangeStatsTest` (Testcontainers Postgres,
+`@Tag("integration")`) — `changeStats on an empty table is zero-zero`,
+`changeStats excludes git-history rows from both fields`,
+`changeStats counts every non-git-history row regardless of id ordering`,
+`changeStats advances maxId on delete-then-reinsert while count holds`;
+plus `NoDbModeContextTest.SYS-047 status reports defaultSource git and zero db components in no-db mode`
+for the null case (criterion 6).
