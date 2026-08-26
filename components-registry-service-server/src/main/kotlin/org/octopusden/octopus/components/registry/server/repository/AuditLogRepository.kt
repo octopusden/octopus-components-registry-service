@@ -6,6 +6,7 @@ import org.springframework.data.domain.Pageable
 import org.springframework.data.jpa.repository.JpaRepository
 import org.springframework.data.jpa.repository.JpaSpecificationExecutor
 import org.springframework.data.jpa.repository.Modifying
+import org.springframework.data.jpa.repository.Query
 import org.springframework.stereotype.Repository
 import org.springframework.transaction.annotation.Transactional
 
@@ -42,4 +43,18 @@ interface AuditLogRepository :
     @Modifying
     @Transactional
     fun deleteBySource(source: String): Int
+
+    @Query(
+        """
+        SELECT COALESCE(MAX(a.id), 0) AS maxId, COUNT(a) AS count
+        FROM AuditLogEntity a
+        WHERE a.source <> 'git-history'
+        """,
+    )
+    fun changeStats(): AuditChangeStats
+}
+
+interface AuditChangeStats {
+    val maxId: Long
+    val count: Long
 }

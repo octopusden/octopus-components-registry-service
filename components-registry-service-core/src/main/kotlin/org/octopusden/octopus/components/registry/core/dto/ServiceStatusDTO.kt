@@ -30,6 +30,15 @@ import java.util.*
  *                                        by env-preconditions to detect partial-migration
  *                                        states. **Nullable** for the same backward-compat
  *                                        reason as `defaultSource`.
+ * @property configRevision              composite cache-actuality token
+ *                                        `"[gitRevision].[maxId].[count]"`, where `gitRevision`
+ *                                        is empty when there is no VCS revision (FS / VCS-disabled
+ *                                        mode). Opaque to consumers — compare for equality, don't
+ *                                        parse: it changes when either the VCS revision or an
+ *                                        `audit_log` write moves, letting consumers detect config
+ *                                        changes while `versionControlRevision` is frozen.
+ *                                        **Nullable**: `null` without the database layer (no-db /
+ *                                        Git-based installs).
  */
 @JsonIgnoreProperties(ignoreUnknown = true)
 data class ServiceStatusDTO(
@@ -38,4 +47,5 @@ data class ServiceStatusDTO(
     @JsonProperty("versionControlRevision") val versionControlRevision: String?,
     @JsonProperty("defaultSource") val defaultSource: String? = null,
     @JsonProperty("dbComponentCount") val dbComponentCount: Long? = null,
+    @JsonProperty("configRevision") val configRevision: String? = null,
 )

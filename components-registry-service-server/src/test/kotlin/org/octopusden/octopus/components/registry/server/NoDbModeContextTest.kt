@@ -139,5 +139,9 @@ class NoDbModeContextTest {
             status.dbComponentCount,
             "dbComponentCount must be 0 (null-safe) when no ComponentSourceRepository is wired",
         )
+        Assertions.assertNull(
+            status.configRevision,
+            "configRevision must be null when no AuditLogRepository is wired (no-db mode / Git-based installs)",
+        )
     }
 }
