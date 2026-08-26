@@ -21,6 +21,7 @@ import org.octopusden.octopus.components.registry.server.dto.v4.FieldOverrideRes
 import org.octopusden.octopus.components.registry.server.dto.v4.FieldOverrideUpdateRequest
 import org.octopusden.octopus.components.registry.server.dto.v4.FieldOverrideUpsertRequest
 import org.octopusden.octopus.components.registry.server.dto.v4.FileUrlArtifactRequest
+import org.octopusden.octopus.components.registry.server.dto.v4.GenericArtifactRequest
 import org.octopusden.octopus.components.registry.server.dto.v4.MarkerChildrenPayload
 import org.octopusden.octopus.components.registry.server.dto.v4.MavenArtifactRequest
 import org.octopusden.octopus.components.registry.server.dto.v4.PackageRequest
@@ -42,6 +43,7 @@ import org.octopusden.octopus.components.registry.server.entity.ComponentSecurit
 import org.octopusden.octopus.components.registry.server.entity.ComponentSystemEntity
 import org.octopusden.octopus.components.registry.server.entity.DistributionDockerImageEntity
 import org.octopusden.octopus.components.registry.server.entity.DistributionFileUrlArtifactEntity
+import org.octopusden.octopus.components.registry.server.entity.DistributionGenericArtifactEntity
 import org.octopusden.octopus.components.registry.server.entity.DistributionMavenArtifactEntity
 import org.octopusden.octopus.components.registry.server.entity.DistributionPackageEntity
 import org.octopusden.octopus.components.registry.server.entity.DistributionSecurityGroupEntity
@@ -2556,6 +2558,7 @@ class ComponentManagementServiceImpl(
         request.fileUrlArtifacts?.let { replaceFileUrlArtifacts(config, it) }
         request.dockerImages?.let { replaceDockerImages(config, it) }
         request.packages?.let { replacePackages(config, it) }
+        request.genericArtifacts?.let { replaceGenericArtifacts(config, it) }
         request.buildToolBeans?.let {
             validateBuildToolBeans(it)
             replaceBuildToolBeans(config, it)
@@ -2654,6 +2657,7 @@ class ComponentManagementServiceImpl(
         patch.fileUrlArtifacts?.let { replaceFileUrlArtifacts(config, it) }
         patch.dockerImages?.let { replaceDockerImages(config, it) }
         patch.packages?.let { replacePackages(config, it) }
+        patch.genericArtifacts?.let { replaceGenericArtifacts(config, it) }
         patch.buildToolBeans?.let {
             validateBuildToolBeans(it)
             replaceBuildToolBeans(config, it)
@@ -2763,6 +2767,23 @@ class ComponentManagementServiceImpl(
         }
     }
 
+    private fun replaceGenericArtifacts(
+        config: ComponentConfigurationEntity,
+        generics: List<GenericArtifactRequest>,
+    ) {
+        generics.forEach { require(it.url.isNotBlank()) { "url is not specified for a genericArtifact" } }
+        config.genericArtifacts.clear()
+        generics.forEachIndexed { index, req ->
+            config.genericArtifacts.add(
+                DistributionGenericArtifactEntity(
+                    componentConfiguration = config,
+                    url = req.url,
+                    sortOrder = index,
+                ),
+            )
+        }
+    }
+
     private fun replaceBuildToolBeans(
         config: ComponentConfigurationEntity,
         beans: List<BuildToolBeanRequest>,
@@ -2847,6 +2868,11 @@ class ComponentManagementServiceImpl(
                 replacePackages(row, payload.packages)
                 null
             }
+            MarkerAttributes.DISTRIBUTION_GENERIC -> {
+                requireNotNull(payload.genericArtifacts) { "Marker '$markerName' requires genericArtifacts payload" }
+                replaceGenericArtifacts(row, payload.genericArtifacts)
+                null
+            }
             MarkerAttributes.BUILD_REQUIRED_TOOLS -> {
                 requireNotNull(payload.requiredTools) { "Marker '$markerName' requires requiredTools payload" }
                 payload.requiredTools
@@ -2878,6 +2904,7 @@ class ComponentManagementServiceImpl(
                 if (payload.fileUrlArtifacts != null) add("fileUrlArtifacts")
                 if (payload.dockerImages != null) add("dockerImages")
                 if (payload.packages != null) add("packages")
+                if (payload.genericArtifacts != null) add("genericArtifacts")
                 if (payload.requiredTools != null) add("requiredTools")
                 if (payload.buildToolBeans != null) add("buildToolBeans")
             }
@@ -2888,6 +2915,7 @@ class ComponentManagementServiceImpl(
                 MarkerAttributes.DISTRIBUTION_FILE_URL -> "fileUrlArtifacts"
                 MarkerAttributes.DISTRIBUTION_DOCKER -> "dockerImages"
                 MarkerAttributes.DISTRIBUTION_PACKAGES -> "packages"
+                MarkerAttributes.DISTRIBUTION_GENERIC -> "genericArtifacts"
                 MarkerAttributes.BUILD_REQUIRED_TOOLS -> "requiredTools"
                 MarkerAttributes.BUILD_TOOLS -> "buildToolBeans"
                 else -> error("Unknown marker '$markerName' — caller did not validate")
@@ -3245,7 +3273,8 @@ class ComponentManagementServiceImpl(
         entity.configurations.any { cfg ->
             cfg.mavenArtifacts.isNotEmpty() ||
                 cfg.dockerImages.isNotEmpty() ||
-                cfg.packages.isNotEmpty()
+                cfg.packages.isNotEmpty() ||
+                cfg.genericArtifacts.isNotEmpty()
         }
 
     /**
@@ -4354,6 +4383,10 @@ class ComponentManagementServiceImpl(
                         "packageType" to it.packageType,
                         "packageName" to it.packageName,
                     )
+                },
+            "genericArtifacts" to
+                base?.genericArtifacts.orEmpty().sortedBy { it.sortOrder }.map {
+                    mapOf("url" to it.url)
                 },
             "buildToolBeans" to
                 base?.buildToolBeans.orEmpty().sortedBy { it.sortOrder }.map {

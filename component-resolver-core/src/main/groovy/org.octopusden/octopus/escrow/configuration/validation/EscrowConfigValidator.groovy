@@ -160,7 +160,7 @@ class EscrowConfigValidator {
 
     /**
      * Validate distributions section of the component.
-     * At least one distribution coordinate (distribution->GAV, DEB, RPM, or Docker) must be defined.
+     * At least one distribution coordinate (distribution->GAV, DEB, RPM, Docker, or generic) must be defined.
      * @param moduleConfig
      * @param component
      */
@@ -172,10 +172,11 @@ class EscrowConfigValidator {
                 moduleConfig.distribution?.GAV(),
                 moduleConfig.distribution?.DEB(),
                 moduleConfig.distribution?.RPM(),
-                moduleConfig.distribution?.docker()
+                moduleConfig.distribution?.docker(),
+                moduleConfig.distribution?.generic()
         ]
         if (distributions.every { StringUtils.isBlank(it) }) {
-            registerError("External explicitly distributed components for version range '${moduleConfig.versionRangeString}' must define at least one distribution coordinate (distribution->GAV, DEB, RPM, or Docker) in '${component}'.")
+            registerError("External explicitly distributed components for version range '${moduleConfig.versionRangeString}' must define at least one distribution coordinate (distribution->GAV, DEB, RPM, Docker, or generic) in '${component}'.")
         }
     }
 

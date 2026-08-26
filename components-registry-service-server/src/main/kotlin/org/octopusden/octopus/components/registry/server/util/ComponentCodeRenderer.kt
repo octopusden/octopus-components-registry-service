@@ -7,6 +7,7 @@ import org.octopusden.octopus.components.registry.server.entity.ComponentConfigu
 import org.octopusden.octopus.components.registry.server.entity.ComponentEntity
 import org.octopusden.octopus.components.registry.server.entity.DistributionDockerImageEntity
 import org.octopusden.octopus.components.registry.server.entity.DistributionFileUrlArtifactEntity
+import org.octopusden.octopus.components.registry.server.entity.DistributionGenericArtifactEntity
 import org.octopusden.octopus.components.registry.server.entity.DistributionMavenArtifactEntity
 import org.octopusden.octopus.components.registry.server.entity.DistributionPackageEntity
 import org.octopusden.octopus.components.registry.server.entity.VcsSettingsEntryEntity
@@ -136,6 +137,7 @@ class ComponentCodeRenderer(
             fileUrlArtifacts = base.fileUrlArtifacts.toList(),
             dockerImages = base.dockerImages.toList(),
             packages = base.packages.toList(),
+            genericArtifacts = base.genericArtifacts.toList(),
             requiredTools = base.requiredToolJunctions.map { it.toolName },
             buildToolBeans = base.buildToolBeans.toList(),
             ownershipMappings = ownershipByRange[ALL_VERSIONS_RANGE].orEmpty(),
@@ -267,6 +269,10 @@ class ComponentCodeRenderer(
             }
         val pkgs =
             pickMarkerChildren(MarkerAttributes.DISTRIBUTION_PACKAGES, markerOverrides, base.packages.toList()) { it.packages.toList() }
+        val generic =
+            pickMarkerChildren(MarkerAttributes.DISTRIBUTION_GENERIC, markerOverrides, base.genericArtifacts.toList()) {
+                it.genericArtifacts.toList()
+            }
         val tools =
             pickMarkerChildren(MarkerAttributes.BUILD_REQUIRED_TOOLS, markerOverrides, base.requiredToolJunctions.toList()) {
                 it.requiredToolJunctions.toList()
@@ -305,6 +311,7 @@ class ComponentCodeRenderer(
             fileUrlArtifacts = fileUrl,
             dockerImages = docker,
             packages = pkgs,
+            genericArtifacts = generic,
             requiredTools = tools,
             buildToolBeans = beans,
             ownershipMappings = effectiveOwnership,
@@ -328,6 +335,7 @@ class ComponentCodeRenderer(
         fileUrlArtifacts: List<DistributionFileUrlArtifactEntity>,
         dockerImages: List<DistributionDockerImageEntity>,
         packages: List<DistributionPackageEntity>,
+        genericArtifacts: List<DistributionGenericArtifactEntity>,
         requiredTools: List<String>,
         buildToolBeans: List<ComponentBuildToolBeanEntity>,
         ownershipMappings: List<ComponentArtifactMappingEntity>,
@@ -363,7 +371,7 @@ class ComponentCodeRenderer(
         writeBuild(cb, scalars, requiredTools, buildToolBeans)
         writeArtifactIds(cb, ownershipMappings, ownershipExportPatterns)
         writeJira(cb, scalars, component)
-        writeDistribution(cb, component, mavenArtifacts, fileUrlArtifacts, dockerImages, packages)
+        writeDistribution(cb, component, mavenArtifacts, fileUrlArtifacts, dockerImages, packages, genericArtifacts)
         writeEscrow(cb, scalars)
         writeDocs(cb, component)
         cb.strList(
@@ -540,7 +548,7 @@ class ComponentCodeRenderer(
         cb.close()
     }
 
-    @Suppress("LongParameterList")
+    @Suppress("LongParameterList", "CyclomaticComplexMethod")
     private fun writeDistribution(
         cb: CodeBuilder,
         component: ComponentEntity,
@@ -548,6 +556,7 @@ class ComponentCodeRenderer(
         fileUrlArtifacts: List<DistributionFileUrlArtifactEntity>,
         dockerImages: List<DistributionDockerImageEntity>,
         packages: List<DistributionPackageEntity>,
+        genericArtifacts: List<DistributionGenericArtifactEntity>,
     ) {
         val securityGroups = component.securityGroups
         val hasContent =
@@ -557,6 +566,7 @@ class ComponentCodeRenderer(
                 fileUrlArtifacts.isNotEmpty() ||
                 dockerImages.isNotEmpty() ||
                 packages.isNotEmpty() ||
+                genericArtifacts.isNotEmpty() ||
                 securityGroups.isNotEmpty()
         if (!hasContent) return
         cb.open("distribution")
@@ -587,6 +597,11 @@ class ComponentCodeRenderer(
             cb.open("package")
             cb.bare("type", p.packageType)
             cb.str("name", p.packageName)
+            cb.close()
+        }
+        genericArtifacts.sortedBy { it.sortOrder }.forEach { g ->
+            cb.open("generic")
+            cb.str("url", g.url)
             cb.close()
         }
         if (securityGroups.isNotEmpty()) {
@@ -743,7 +758,8 @@ class ComponentCodeRenderer(
         val fileUrl = markers.firstOrNull { it.overriddenAttribute == MarkerAttributes.DISTRIBUTION_FILE_URL }
         val docker = markers.firstOrNull { it.overriddenAttribute == MarkerAttributes.DISTRIBUTION_DOCKER }
         val pkgs = markers.firstOrNull { it.overriddenAttribute == MarkerAttributes.DISTRIBUTION_PACKAGES }
-        if (maven == null && fileUrl == null && docker == null && pkgs == null) return
+        val generic = markers.firstOrNull { it.overriddenAttribute == MarkerAttributes.DISTRIBUTION_GENERIC }
+        if (listOf(maven, fileUrl, docker, pkgs, generic).all { it == null }) return
         cb.open("distribution")
         maven?.mavenArtifacts?.sortedBy { it.sortOrder }?.forEach { m ->
             cb.open("maven")
@@ -770,6 +786,11 @@ class ComponentCodeRenderer(
             cb.open("package")
             cb.bare("type", p.packageType)
             cb.str("name", p.packageName)
+            cb.close()
+        }
+        generic?.genericArtifacts?.sortedBy { it.sortOrder }?.forEach { g ->
+            cb.open("generic")
+            cb.str("url", g.url)
             cb.close()
         }
         cb.close()

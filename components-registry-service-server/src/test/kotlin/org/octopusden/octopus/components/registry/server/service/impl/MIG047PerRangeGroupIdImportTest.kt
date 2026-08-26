@@ -263,11 +263,13 @@ class MIG047PerRangeGroupIdImportTest {
             null,
             null,
             null,
+            null,
         )
         val overrideDist = org.octopusden.octopus.escrow.model.Distribution(
             true,
             false,
             "com.example.new:gamma-lib-v2:jar",
+            null,
             null,
             null,
             null,
@@ -329,11 +331,13 @@ class MIG047PerRangeGroupIdImportTest {
             null,
             null,
             null,
+            null,
         )
         val overrideDist = org.octopusden.octopus.escrow.model.Distribution(
             true,
             false,
             "com.example.fixture:single-dist:zip",
+            null,
             null,
             null,
             null,
