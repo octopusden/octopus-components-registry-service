@@ -64,12 +64,9 @@ the ability to try a call. The same specification is committed in this repositor
 inspecting a component from a terminal. It cannot change configuration.
 
 == Viewing a component as code
-----
-GET /rest/api/4/components/{id}/as-code
-----
-
-Returns a human-readable, Groovy-style rendering of the component definition - the reverse of the
-legacy import. It is read-only: the rendering is a projection and is never parsed back.
+A human-readable, Groovy-style rendering of a component's definition - the reverse of the legacy
+import - is available read-only through the REST API (see <<Through the REST API>> for how to find
+the exact endpoint). It is a projection and is never parsed back; there is no Web UI equivalent.
 
 == Component configuration reference
 Each component has one *base configuration* covering all versions, and optionally *field overrides*
@@ -121,19 +118,13 @@ Parameters related to build/release registration in JIRA and generation of clien
 
 === Version ranges
 Different configurations of a component depending on the version of its release are supported. This
-is expressed as a *field override*: a single field, scoped to a version range.
+is expressed as a *field override*: a single field, scoped to a version range. Overrides are managed
+the same way as the rest of a component's configuration - through the Web UI, or through the REST
+API (see <<Through the REST API>>).
+
+An override names the attribute it replaces, the range it applies to, and the value it takes, e.g.:
 
 ----
-GET    /rest/api/4/components/{id}/field-overrides
-POST   /rest/api/4/components/{id}/field-overrides
-PATCH  /rest/api/4/components/{id}/field-overrides/{overrideId}
-DELETE /rest/api/4/components/{id}/field-overrides/{overrideId}
-----
-
-An override names the attribute it replaces, the range it applies to, and the value:
-
-----
-POST /rest/api/4/components/{id}/field-overrides
 {
   "overriddenAttribute": "build.javaVersion",
   "versionRange": "[1.1.517,)",
@@ -163,12 +154,8 @@ Examples of version range:
 WARNING: Version ranges for the same overridden attribute must not intersect. Overlaps are rejected
 when the override is saved; different attributes may reuse the same range.
 
-Which versions of a component are in scope at all is a separate setting:
-
-----
-GET /rest/api/4/components/{id}/supported-versions
-PUT /rest/api/4/components/{id}/supported-versions
-----
+Which versions of a component are in scope at all is a separate setting, managed the same way as
+field overrides - through the Web UI or the REST API.
 
 === Version format
 Base version formats like *majorVersionFormat* and *releaseVersionFormat* are configured using following variables:
@@ -287,11 +274,6 @@ org.company.newcomponent:artifact:jar,file:///target/application-${version}.exe?
 
 == Audit
 Every change is recorded. The history of a component, and the recent history across the registry,
-are available through:
-
-----
-GET /rest/api/4/audit/{entityType}/{entityId}
-GET /rest/api/4/audit/recent
-----
+are available through the REST API (see <<Through the REST API>>).
 
 This is what replaced the Git history of the old configuration files.
