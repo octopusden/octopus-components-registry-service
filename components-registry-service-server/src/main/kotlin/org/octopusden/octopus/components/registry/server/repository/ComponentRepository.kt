@@ -50,6 +50,45 @@ interface ComponentRepository :
     fun findDistinctOwners(): List<String>
 
     /**
+     * Distinct release-manager usernames currently assigned to at least one
+     * component. Source for the `/meta/release-managers` dropdown — parity with
+     * [findDistinctOwners], but joined through the ordered
+     * `component_release_managers` child collection rather than a scalar column,
+     * since a component may carry several release managers.
+     *
+     * Joins from `ComponentEntity` (rather than living on a child-entity
+     * repository) to mirror [findDistinctJiraProjectKeys]; the child entities are
+     * parent-owned and have no repository of their own.
+     *
+     * `username` is a NOT NULL column, so only the non-blank guard is needed —
+     * defence-in-depth against migration drift or a direct DB write leaving a
+     * whitespace-only row, which would otherwise surface as an unselectable
+     * blank chip in the picker.
+     */
+    @Query(
+        "SELECT DISTINCT rm.username FROM ComponentEntity c JOIN c.releaseManagers rm " +
+            "WHERE TRIM(rm.username) <> '' " +
+            "ORDER BY rm.username",
+    )
+    fun findDistinctReleaseManagers(): List<String>
+
+    /**
+     * Distinct security-champion usernames currently assigned to at least one
+     * component. Source for the `/meta/security-champions` dropdown; identical
+     * shape and rationale to [findDistinctReleaseManagers], against the
+     * `component_security_champions` child collection. Kept a separate query (not
+     * a shared one over both collections) because `?releaseManager=` and
+     * `?securityChampion=` are separate filters — a merged list would advertise
+     * dead options in both pickers.
+     */
+    @Query(
+        "SELECT DISTINCT sc.username FROM ComponentEntity c JOIN c.securityChampions sc " +
+            "WHERE TRIM(sc.username) <> '' " +
+            "ORDER BY sc.username",
+    )
+    fun findDistinctSecurityChampions(): List<String>
+
+    /**
      * Distinct client codes currently in use on at least one component. Source for
      * the `/meta/client-codes` dropdown (SYS-046). Scalar `components.client_code`
      * column; same IS NOT NULL + non-blank defence as [findDistinctOwners].
