@@ -52,6 +52,17 @@ dependencies {
     implementation("org.springdoc:springdoc-openapi-starter-webmvc-ui:${project.properties["openapi.version"]}")
     implementation "org.octopusden.octopus.octopus-external-systems-clients:teamcity-client:${project.properties['octopus-external-systems-clients.version']}"
 
+    // vcs-facade client — getRepository(sshUrl) + nullable Repository.archived
+    implementation("org.octopusden.octopus.vcsfacade:client:${project.properties['vcsfacade.version']}")
+
+    // Atlassian REST Java client — for Jira issue search (JIRA_ISSUES entries)
+    implementation("com.atlassian.jira:jira-rest-java-client-api:${project.properties['atlassian-jira-rest-client.version']}")
+    implementation("com.atlassian.jira:jira-rest-java-client-core:${project.properties['atlassian-jira-rest-client.version']}")
+    implementation("io.atlassian.fugue:fugue:${project.properties['atlassian-fugue.version']}")
+
+    // Octopus jira-client — for getProject(key).projectCategory (JIRA_PROJECT entries)
+    implementation("org.octopusden.octopus.octopus-external-systems-clients:jira-client:${project.properties['octopus-external-systems-clients.version']}")
+
     implementation("org.eclipse.jgit:org.eclipse.jgit:5.13.0.202109080827-r")
 
     // Database (JPA + PostgreSQL + Flyway)
