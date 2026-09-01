@@ -10,7 +10,6 @@ import org.mockito.kotlin.whenever
 import org.octopusden.octopus.components.registry.server.dto.v4.Outcome
 import org.octopusden.octopus.vcsfacade.client.VcsFacadeClient
 import org.octopusden.octopus.vcsfacade.client.common.dto.Repository
-import org.octopusden.octopus.vcsfacade.client.common.exception.ArgumentsNotCompatibleException
 import org.octopusden.octopus.vcsfacade.client.common.exception.NotFoundException
 import org.octopusden.octopus.vcsfacade.client.common.exception.VcsFacadeException
 import java.util.UUID
@@ -74,17 +73,27 @@ class RepositoryCheckerTest {
     }
 
     @Test
-    fun `bare VcsFacadeException (not a NotFoundException subtype) yields UNKNOWN, not treated as absence`() {
+    fun `bare VcsFacadeException with an unrelated message yields UNKNOWN via the generic reason, not the no-provider reason`() {
+        // Guards against the message-substring check firing on every exception: an unrelated
+        // message must still fall through to the old generic "system could not be consulted"
+        // reason, not be misread as "URL unresolvable by any configured VCS provider".
         whenever(vcsFacadeClient.getRepository(target.targetId))
             .thenThrow(VcsFacadeException("unexpected server error"))
         val result = checker.check(target)
         assertThat(result.outcome).isEqualTo(Outcome.UNKNOWN)
+        assertThat(result.reason).contains("VCS system could not be consulted")
+        assertThat(result.reason).doesNotContain("unresolvable")
     }
 
     @Test
-    fun `unresolvable URL (ArgumentsNotCompatibleException) yields UNKNOWN naming the URL, not a VCS outage`() {
+    fun `unresolvable URL (bare VcsFacadeException with the vcs-facade no-provider message) yields UNKNOWN naming the URL, not a VCS outage`() {
+        // The real vcs-facade server (pinned 3.0.36) throws a plain IllegalStateException with
+        // this exact message from VcsManagerImpl.getVcsServiceForSshUrl when no configured VCS
+        // provider matches the URL. It has no dedicated @ExceptionHandler, so it falls to the
+        // catch-all handler (VcsFacadeErrorCode.OTHER) and the client decodes it back into a bare
+        // VcsFacadeException — not ArgumentsNotCompatibleException, not any other specific type.
         whenever(vcsFacadeClient.getRepository(target.targetId))
-            .thenThrow(ArgumentsNotCompatibleException("no provider configured for this URL"))
+            .thenThrow(VcsFacadeException("There is no configured VCS service for '${target.targetId}'"))
         val result = checker.check(target)
         assertThat(result.outcome).isEqualTo(Outcome.UNKNOWN)
         assertThat(result.reason).contains(target.targetId)
