@@ -3,6 +3,7 @@ package org.octopusden.octopus.components.registry.server.service.archivereadine
 import org.octopusden.octopus.components.registry.server.dto.v4.Outcome
 import org.octopusden.octopus.components.registry.server.util.VcsUrlCanonicalizer
 import org.octopusden.octopus.vcsfacade.client.VcsFacadeClient
+import org.octopusden.octopus.vcsfacade.client.common.exception.ArgumentsNotCompatibleException
 import org.octopusden.octopus.vcsfacade.client.common.exception.NotFoundException
 import org.springframework.stereotype.Service
 
@@ -20,6 +21,16 @@ class RepositoryChecker(
             // Absence is a stronger end state than archived, so it passes.
             // sharedWith is always empty on an absence-PASSED entry (design decision 11).
             return CheckResult(Outcome.PASSED, reason = "Repository no longer exists")
+        } catch (e: ArgumentsNotCompatibleException) {
+            // No configured VCS provider serves this URL at all — a registry-data problem
+            // (the recorded URL is unresolvable), not a VCS-system-outage. Naming the URL here
+            // (rather than "VCS system unavailable") points whoever reads this at fixing the
+            // component's data instead of waiting on a system that is, in fact, healthy
+            // (design decision 14).
+            return CheckResult(
+                Outcome.UNKNOWN,
+                reason = "Recorded repository URL is unresolvable by any configured VCS provider: ${target.targetId}",
+            )
         } catch (e: Exception) {
             // Ambiguous failure — could be system unavailable, credential error, or
             // "no configured VCS provider for this URL". Fail closed.

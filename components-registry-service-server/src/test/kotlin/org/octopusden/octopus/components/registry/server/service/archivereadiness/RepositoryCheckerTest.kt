@@ -10,7 +10,9 @@ import org.mockito.kotlin.whenever
 import org.octopusden.octopus.components.registry.server.dto.v4.Outcome
 import org.octopusden.octopus.vcsfacade.client.VcsFacadeClient
 import org.octopusden.octopus.vcsfacade.client.common.dto.Repository
+import org.octopusden.octopus.vcsfacade.client.common.exception.ArgumentsNotCompatibleException
 import org.octopusden.octopus.vcsfacade.client.common.exception.NotFoundException
+import org.octopusden.octopus.vcsfacade.client.common.exception.VcsFacadeException
 import java.util.UUID
 
 class RepositoryCheckerTest {
@@ -59,6 +61,34 @@ class RepositoryCheckerTest {
         val result = checker.check(target)
         assertThat(result.outcome).isEqualTo(Outcome.PASSED)
         assertThat(result.sharedWith).isEmpty()
+    }
+
+    @Test
+    fun `generic exception (not NotFoundException) yields UNKNOWN, not treated as absence`() {
+        // Locks the catch-order: NotFoundException before the generic Exception catch. Nothing
+        // would fail today if a future edit broke that ordering without this regression test.
+        whenever(vcsFacadeClient.getRepository(target.targetId))
+            .thenThrow(RuntimeException("connection reset"))
+        val result = checker.check(target)
+        assertThat(result.outcome).isEqualTo(Outcome.UNKNOWN)
+    }
+
+    @Test
+    fun `bare VcsFacadeException (not a NotFoundException subtype) yields UNKNOWN, not treated as absence`() {
+        whenever(vcsFacadeClient.getRepository(target.targetId))
+            .thenThrow(VcsFacadeException("unexpected server error"))
+        val result = checker.check(target)
+        assertThat(result.outcome).isEqualTo(Outcome.UNKNOWN)
+    }
+
+    @Test
+    fun `unresolvable URL (ArgumentsNotCompatibleException) yields UNKNOWN naming the URL, not a VCS outage`() {
+        whenever(vcsFacadeClient.getRepository(target.targetId))
+            .thenThrow(ArgumentsNotCompatibleException("no provider configured for this URL"))
+        val result = checker.check(target)
+        assertThat(result.outcome).isEqualTo(Outcome.UNKNOWN)
+        assertThat(result.reason).contains(target.targetId)
+        assertThat(result.reason).doesNotContain("VCS system could not be consulted")
     }
 
     @Test
