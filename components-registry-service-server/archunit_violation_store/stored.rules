@@ -1,3 +1,4 @@
 #
 #Mon Jul 20 17:20:39 EEST 2026
 no\ classes\ that\ reside\ in\ a\ package\ '..controller..'\ should\ access\ classes\ that\ assignable\ to\ org.springframework.data.repository.Repository\ or\ annotated\ with\ @Repository,\ because\ controllers\ must\ go\ through\ the\ service\ layer,\ not\ Spring\ Data\ repositories\ directly\ (non-functional-spec\ \u00A75.3)=3e61e124-fe37-40db-9ea6-91a90f6afc18
+no\ classes\ that\ do\ not\ belong\ to\ any\ of\ [org.octopusden.octopus.components.registry.server.service.archivereadiness.SharingHelper]\ and\ reside\ outside\ of\ package\ '..test..'\ should\ call\ method\ VersionLineRepository.findByProjectIdsWithComponent(Collection)\ or\ should\ call\ method\ VersionLineRepository.findDistinctLinkedProjectIds(),\ because\ SharingHelper\ is\ the\ single\ sharing\ computation\ unit\ (design\ decision\ 7)=ad4327f8-3a9f-4c41-82da-10cd2b55c756

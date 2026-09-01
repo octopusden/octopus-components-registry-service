@@ -88,6 +88,11 @@ dependencies {
 
     // Architecture fitness functions (see server/architecture/*ArchitectureTest)
     testImplementation "com.tngtech.archunit:archunit-junit5:${project['archunit.version']}"
+
+    // Kotlin-idiomatic Mockito DSL (mock<T>() / whenever / any) — used by the
+    // archive-readiness-gate unit tests (SharingHelper, TcDescendantLookup).
+    // Compatible with mockito-core 5.x already on the classpath via spring-boot-starter-test.
+    testImplementation "org.mockito.kotlin:mockito-kotlin:5.4.0"
 }
 
 // HHH-18551 (array-type leak → OOM). Spring Boot 3.2.x recommends hibernate-core

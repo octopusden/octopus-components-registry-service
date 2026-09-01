@@ -6,10 +6,13 @@ import com.tngtech.archunit.core.importer.ImportOption
 import com.tngtech.archunit.junit.AnalyzeClasses
 import com.tngtech.archunit.junit.ArchTest
 import com.tngtech.archunit.lang.ArchRule
+import com.tngtech.archunit.lang.syntax.ArchRuleDefinition
 import com.tngtech.archunit.lang.syntax.ArchRuleDefinition.classes
 import com.tngtech.archunit.lang.syntax.ArchRuleDefinition.noClasses
 import com.tngtech.archunit.library.freeze.FreezingArchRule
 import jakarta.persistence.Entity
+import org.octopusden.octopus.components.registry.server.repository.VersionLineRepository
+import org.octopusden.octopus.components.registry.server.service.archivereadiness.SharingHelper
 import org.springframework.data.repository.Repository
 import org.springframework.stereotype.Service
 import org.springframework.web.bind.annotation.RestController
@@ -105,6 +108,34 @@ class ArchitectureFitnessTest {
     //   @ArchTest
     //   val serverSlicesMustBeFreeOfCycles: ArchRule =
     //       slices().matching("$BASE_PACKAGE.(*)..").should().beFreeOfCycles()
+
+    // --- Sharing-query encapsulation (design decision 7): only SharingHelper may call the two
+    //     VersionLineRepository methods that enumerate target-sharing across live components.
+    //     This prevents ad-hoc duplicate queries leaking into controllers or other services.
+    //     Two pre-existing callers in the teamcity validation package are baselined as accepted
+    //     violations (frozen ratchet, same pattern as controllersMustNotUseRepositoriesDirectly).
+    //     Any NEW caller outside those two will fail the build. ---
+    @ArchTest
+    val sharingHelperIsOnlyCodeThatQueriesComponentTargetUsage: ArchRule =
+        FreezingArchRule.freeze(
+            ArchRuleDefinition.noClasses()
+                .that()
+                .doNotBelongToAnyOf(SharingHelper::class.java)
+                .and()
+                .resideOutsideOfPackage("..test..")
+                .should()
+                .callMethod(
+                    VersionLineRepository::class.java,
+                    "findByProjectIdsWithComponent",
+                    Collection::class.java,
+                )
+                .orShould()
+                .callMethod(
+                    VersionLineRepository::class.java,
+                    "findDistinctLinkedProjectIds",
+                )
+                .because("SharingHelper is the single sharing computation unit (design decision 7)"),
+        )
 
     companion object {
         const val BASE_PACKAGE = "org.octopusden.octopus.components.registry.server"
