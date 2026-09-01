@@ -15,6 +15,11 @@ class JiraProjectChecker(
 ) {
     private val log = LoggerFactory.getLogger(JiraProjectChecker::class.java)
 
+    // Catching Exception broadly is deliberate: this check must fail closed to UNKNOWN on
+    // ANY failure from the Jira project read call, not just specific exception types — an
+    // unanticipated exception type from a third-party client is itself evidence the system
+    // couldn't be consulted reliably.
+    @Suppress("TooGenericExceptionCaught")
     fun checkProject(
         projectKey: String,
         componentId: UUID,

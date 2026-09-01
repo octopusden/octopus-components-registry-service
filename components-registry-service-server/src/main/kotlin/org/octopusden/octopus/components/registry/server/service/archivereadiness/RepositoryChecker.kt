@@ -12,6 +12,13 @@ class RepositoryChecker(
     private val sharingHelper: SharingHelper,
 ) : TargetChecker {
 
+    // NotFoundException here is expected, successful information (the repository was
+    // confirmed absent), not a discarded error, so it is intentionally not logged/rethrown.
+    // The plain Exception catch below is likewise deliberate: this check must fail closed
+    // to UNKNOWN on ANY failure from the VCS client, not just specific exception types — an
+    // unanticipated exception type from a third-party client is itself evidence the system
+    // couldn't be consulted reliably.
+    @Suppress("TooGenericExceptionCaught", "SwallowedException")
     override fun check(target: CheckTarget): CheckResult {
         val repo = try {
             vcsFacadeClient.getRepository(target.targetId)

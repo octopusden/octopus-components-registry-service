@@ -59,6 +59,11 @@ class TcDescendantLookup(
 
     private fun client(): TeamcityClient = clientOverride ?: lazyClient
 
+    // Catching Exception broadly is deliberate: this method must fail closed to
+    // SystemUnavailable on ANY failure from TeamCity, not just specific exception types —
+    // an unanticipated exception type from a third-party client is itself evidence the
+    // system couldn't be consulted reliably.
+    @Suppress("TooGenericExceptionCaught")
     fun findDescendantsAndSelf(projectId: String): TcDescendantResult {
         if (properties.baseUrl.isBlank()) return TcDescendantResult.SystemUnavailable
         return try {

@@ -19,7 +19,11 @@ class JiraIssuesChecker(
     // componentId is accepted (not used in the body) to keep this checker's call shape
     // symmetric with TargetChecker.check(CheckTarget) — sharedWith is always empty here
     // (sharing never excuses open issues), so no component-scoped sharing lookup is needed.
-    @Suppress("UnusedParameter")
+    // TooGenericExceptionCaught: catching Exception broadly here is deliberate — this check
+    // must fail closed to UNKNOWN on ANY failure from the Jira issue search call, not just
+    // specific exception types, because an unanticipated exception type from a third-party
+    // client is itself evidence the system couldn't be consulted reliably.
+    @Suppress("UnusedParameter", "TooGenericExceptionCaught")
     fun checkPair(
         projectKey: String,
         prefix: String?,

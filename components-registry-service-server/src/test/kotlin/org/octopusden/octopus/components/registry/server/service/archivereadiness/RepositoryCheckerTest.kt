@@ -86,7 +86,7 @@ class RepositoryCheckerTest {
     }
 
     @Test
-    fun `unresolvable URL (bare VcsFacadeException with the vcs-facade no-provider message) yields UNKNOWN naming the URL, not a VCS outage`() {
+    fun `unresolvable URL (bare VcsFacadeException with vcs-facade no-provider message) yields UNKNOWN naming the URL, not a VCS outage`() {
         // The real vcs-facade server (pinned 3.0.36) throws a plain IllegalStateException with
         // this exact message from VcsManagerImpl.getVcsServiceForSshUrl when no configured VCS
         // provider matches the URL. It has no dedicated @ExceptionHandler, so it falls to the
