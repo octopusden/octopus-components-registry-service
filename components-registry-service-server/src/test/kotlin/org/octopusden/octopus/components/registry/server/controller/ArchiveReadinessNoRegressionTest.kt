@@ -111,6 +111,16 @@ class ArchiveReadinessNoRegressionTest {
                     .contentType(MediaType.APPLICATION_JSON)
                     .content("""{"version":$version,"archived":true}"""),
             ).andExpect(status().isOk)
+        // The write must have actually taken effect, not just returned 200 while silently
+        // ignoring the `archived` field.
+        val detail =
+            objectMapper.readTree(
+                mvc
+                    .perform(get("/rest/api/4/components/$id").with(adminJwt()))
+                    .andReturn()
+                    .response.contentAsString,
+            )
+        assert(detail["archived"].asBoolean()) { "update must actually archive the component" }
     }
 
     @Test
