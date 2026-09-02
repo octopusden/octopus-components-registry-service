@@ -1,5 +1,6 @@
 package org.octopusden.octopus.components.registry.server.service.archivereadiness
 
+import org.octopusden.octopus.components.registry.server.config.ConditionalOnDatabaseEnabled
 import org.octopusden.octopus.components.registry.server.entity.ComponentConfigurationEntity
 import org.octopusden.octopus.components.registry.server.repository.ComponentConfigurationRepository
 import org.octopusden.octopus.components.registry.server.repository.ComponentRepository
@@ -8,6 +9,9 @@ import org.octopusden.octopus.components.registry.server.util.computeEffectiveJi
 import org.springframework.stereotype.Service
 import java.util.UUID
 
+// SYS-047: injects JPA repositories directly, so it must be dropped in no-db mode too — see
+// ConditionalOnDatabaseEnabled's kdoc ("or another bean so annotated").
+@ConditionalOnDatabaseEnabled
 @Service
 class JiraEffectivePairResolver(
     private val configRepo: ComponentConfigurationRepository,

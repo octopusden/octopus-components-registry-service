@@ -1,5 +1,6 @@
 package org.octopusden.octopus.components.registry.server.service.archivereadiness
 
+import org.octopusden.octopus.components.registry.server.config.ConditionalOnDatabaseEnabled
 import org.octopusden.octopus.components.registry.server.dto.v4.ArchiveReadinessEntry
 import org.octopusden.octopus.components.registry.server.dto.v4.ArchiveReadinessResponse
 import org.octopusden.octopus.components.registry.server.dto.v4.Outcome
@@ -18,6 +19,9 @@ private const val VCS_LIVENESS_REASON = "VCS system could not be consulted"
 private const val JIRA_ISSUES_LIVENESS_REASON = "Jira issue search could not be consulted"
 private const val JIRA_PROJECT_LIVENESS_REASON = "Jira project client could not be consulted"
 
+// SYS-047: injects JPA repositories directly, so it must be dropped in no-db mode too — see
+// ConditionalOnDatabaseEnabled's kdoc ("or another bean so annotated").
+
 /**
  * Orchestrator for `GET rest/api/4/components/{idOrName}/archive-readiness`: discovers a
  * component's targets, applies liveness gating (design.md decision 12/13), calls the per-kind
@@ -25,6 +29,7 @@ private const val JIRA_PROJECT_LIVENESS_REASON = "Jira project client could not 
  *
  * This is read-only — nothing here writes to the registry or to any external system.
  */
+@ConditionalOnDatabaseEnabled
 @Service
 class ArchiveReadinessAssembler(
     private val versionLineRepository: VersionLineRepository,

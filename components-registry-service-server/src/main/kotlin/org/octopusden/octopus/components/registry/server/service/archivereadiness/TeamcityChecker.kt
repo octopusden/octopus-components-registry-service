@@ -1,9 +1,14 @@
 package org.octopusden.octopus.components.registry.server.service.archivereadiness
 
+import org.octopusden.octopus.components.registry.server.config.ConditionalOnDatabaseEnabled
 import org.octopusden.octopus.components.registry.server.dto.v4.Outcome
 import org.octopusden.octopus.components.registry.server.dto.v4.ReasonKind
 import org.springframework.stereotype.Service
 
+// SYS-047: depends (via SharingHelper) on beans that inject JPA repositories, so it must be
+// dropped in no-db mode too — see ConditionalOnDatabaseEnabled's kdoc ("or another bean so
+// annotated").
+@ConditionalOnDatabaseEnabled
 @Service
 class TeamcityChecker(
     private val tcDescendantLookup: TcDescendantLookup,

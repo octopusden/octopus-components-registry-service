@@ -1,6 +1,7 @@
 package org.octopusden.octopus.components.registry.server.service.archivereadiness
 
 import com.atlassian.jira.rest.client.api.JiraRestClient
+import org.octopusden.octopus.components.registry.server.config.ConditionalOnDatabaseEnabled
 import org.octopusden.octopus.components.registry.server.dto.v4.JiraIssueRef
 import org.octopusden.octopus.components.registry.server.dto.v4.Outcome
 import org.octopusden.octopus.components.registry.server.dto.v4.ReasonKind
@@ -10,6 +11,10 @@ import java.util.UUID
 
 private val BARE_VERSION = Regex("^\\d")
 
+// SYS-047: depends (via JiraEffectivePairResolver) on a bean that injects JPA repositories, so
+// it must be dropped in no-db mode too — see ConditionalOnDatabaseEnabled's kdoc ("or another
+// bean so annotated").
+@ConditionalOnDatabaseEnabled
 @Service
 class JiraIssuesChecker(
     private val jiraRestClient: JiraRestClient?,

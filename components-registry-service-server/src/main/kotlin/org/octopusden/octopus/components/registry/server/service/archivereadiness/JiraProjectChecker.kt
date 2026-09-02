@@ -1,6 +1,7 @@
 package org.octopusden.octopus.components.registry.server.service.archivereadiness
 
 import org.octopusden.octopus.components.registry.server.config.ArchiveReadinessProperties
+import org.octopusden.octopus.components.registry.server.config.ConditionalOnDatabaseEnabled
 import org.octopusden.octopus.components.registry.server.dto.v4.Outcome
 import org.octopusden.octopus.components.registry.server.dto.v4.ReasonKind
 import org.octopusden.octopus.infrastructure.jira.JiraClient
@@ -8,6 +9,10 @@ import org.slf4j.LoggerFactory
 import org.springframework.stereotype.Service
 import java.util.UUID
 
+// SYS-047: depends (via SharingHelper) on beans that inject JPA repositories, so it must be
+// dropped in no-db mode too — see ConditionalOnDatabaseEnabled's kdoc ("or another bean so
+// annotated").
+@ConditionalOnDatabaseEnabled
 @Service
 class JiraProjectChecker(
     private val octopusJiraClient: JiraClient?,

@@ -1,5 +1,6 @@
 package org.octopusden.octopus.components.registry.server.service.archivereadiness
 
+import org.octopusden.octopus.components.registry.server.config.ConditionalOnDatabaseEnabled
 import org.octopusden.octopus.components.registry.server.dto.v4.Outcome
 import org.octopusden.octopus.components.registry.server.dto.v4.ReasonKind
 import org.octopusden.octopus.components.registry.server.util.VcsUrlCanonicalizer
@@ -7,6 +8,10 @@ import org.octopusden.octopus.vcsfacade.client.VcsFacadeClient
 import org.octopusden.octopus.vcsfacade.client.common.exception.NotFoundException
 import org.springframework.stereotype.Service
 
+// SYS-047: depends (via SharingHelper) on beans that inject JPA repositories, so it must be
+// dropped in no-db mode too — see ConditionalOnDatabaseEnabled's kdoc ("or another bean so
+// annotated").
+@ConditionalOnDatabaseEnabled
 @Service
 class RepositoryChecker(
     private val vcsFacadeClient: VcsFacadeClient,
