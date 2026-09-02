@@ -19,6 +19,8 @@ class VcsUrlCanonicalizerTest {
         "https://git.example.com/repo.GIT, https://git.example.com/repo.git",
         "http://git.example.com/repo.git, https://git.example.com/repo",
         "git://git.example.com/repo.git, https://git.example.com/repo",
+        "ssh://git@git.example.com/owner/repo.git, git@git.example.com:owner/repo.git",
+        "ssh://git@git.example.com/owner/repo.git, https://git.example.com/owner/repo",
     )
     fun `equivalent URLs canonicalize to the same value`(
         a: String,
@@ -48,5 +50,16 @@ class VcsUrlCanonicalizerTest {
         val b = VcsUrlCanonicalizer.canonicalize("ssh://git.example.com:2222/owner/repo.git")
         assertThat(a).isEqualTo(b)
         assertThat(a).isEqualTo("git.example.com:2222/owner/repo")
+    }
+
+    @Test
+    fun `explicit scheme with both userinfo and port strips both and matches the scp-style equivalent`() {
+        val withUserinfoAndPort = VcsUrlCanonicalizer.canonicalize("ssh://git@git.example.com:2222/owner/repo")
+        assertThat(withUserinfoAndPort).isEqualTo("git.example.com:2222/owner/repo")
+        // Still distinct from the (portless) scp-style form — a URL with an explicit port is
+        // NOT the same repository address as one without, same intent as the existing
+        // "scp-style URL is not confused with an explicit scheme plus port" test above.
+        val scpStyleNoPort = VcsUrlCanonicalizer.canonicalize("git@git.example.com:owner/repo.git")
+        assertThat(withUserinfoAndPort).isNotEqualTo(scpStyleNoPort)
     }
 }
