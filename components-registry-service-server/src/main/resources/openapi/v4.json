@@ -31,6 +31,82 @@
         ],
         "type" : "object"
       },
+      "ArchiveReadinessEntry" : {
+        "properties" : {
+          "openIssues" : {
+            "items" : {
+              "$ref" : "#/components/schemas/JiraIssueRef"
+            },
+            "type" : "array"
+          },
+          "outcome" : {
+            "enum" : [
+              "PASSED",
+              "FAILED",
+              "UNKNOWN"
+            ],
+            "type" : "string"
+          },
+          "reason" : {
+            "type" : "string"
+          },
+          "reasonKind" : {
+            "enum" : [
+              "SYSTEM_UNAVAILABLE",
+              "REGISTRY_DATA",
+              "NOT_CONFIGURED"
+            ],
+            "type" : "string"
+          },
+          "sharedWith" : {
+            "items" : {
+              "type" : "string"
+            },
+            "type" : "array"
+          },
+          "targetId" : {
+            "type" : "string"
+          },
+          "targetKind" : {
+            "enum" : [
+              "JIRA_ISSUES",
+              "JIRA_PROJECT",
+              "TEAMCITY_PROJECT",
+              "REPOSITORY"
+            ],
+            "type" : "string"
+          },
+          "targetUrl" : {
+            "type" : "string"
+          }
+        },
+        "required" : [
+          "openIssues",
+          "outcome",
+          "sharedWith",
+          "targetId",
+          "targetKind"
+        ],
+        "type" : "object"
+      },
+      "ArchiveReadinessResponse" : {
+        "properties" : {
+          "entries" : {
+            "items" : {
+              "$ref" : "#/components/schemas/ArchiveReadinessEntry"
+            },
+            "type" : "array"
+          },
+          "ready" : {
+            "type" : "boolean"
+          }
+        },
+        "required" : [
+          "entries",
+          "ready"
+        ],
+        "type" : "object"
+      },
       "ArtifactIdRequest" : {
         "properties" : {
           "artifactTokens" : {
@@ -1916,6 +1992,21 @@
             "type" : "string"
           }
         },
+        "type" : "object"
+      },
+      "JiraIssueRef" : {
+        "properties" : {
+          "key" : {
+            "type" : "string"
+          },
+          "summary" : {
+            "type" : "string"
+          }
+        },
+        "required" : [
+          "key",
+          "summary"
+        ],
         "type" : "object"
       },
       "MarkerChildrenPayload" : {
@@ -9948,6 +10039,126 @@
               "*/*" : {
                 "schema" : {
                   "$ref" : "#/components/schemas/ComponentDetailResponse"
+                }
+              }
+            },
+            "description" : "OK"
+          },
+          "400" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description" : "Bad Request"
+          },
+          "404" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description" : "Not Found"
+          },
+          "409" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description" : "Conflict"
+          },
+          "413" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description" : "Payload Too Large"
+          },
+          "425" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description" : "Too Early"
+          },
+          "500" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description" : "Internal Server Error"
+          },
+          "501" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description" : "Not Implemented"
+          },
+          "502" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description" : "Bad Gateway"
+          },
+          "503" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description" : "Service Unavailable"
+          }
+        },
+        "tags" : [
+          "component-controller-v-4"
+        ]
+      }
+    },
+    "/rest/api/4/components/{id}/archive-readiness" : {
+      "get" : {
+        "operationId" : "getArchiveReadiness",
+        "parameters" : [
+          {
+            "in" : "path",
+            "name" : "id",
+            "required" : true,
+            "schema" : {
+              "type" : "string"
+            }
+          }
+        ],
+        "responses" : {
+          "200" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ArchiveReadinessResponse"
                 }
               }
             },
