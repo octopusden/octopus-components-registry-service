@@ -132,6 +132,32 @@ class JiraIssuesCheckerTest {
     }
 
     @Test
+    fun `a truncated page with no match on it yields UNKNOWN, not a false PASSED`() {
+        // Jira reports more open issues (80) than this check fetched (2, none matching) — the
+        // one matching issue, if any, could be sitting unread beyond the fetched page. An empty
+        // match on a truncated page is not trustworthy evidence of PASSED.
+        val page = listOf(mockIssue("PROJ-6", "unrelated version", listOf("2.0.0")))
+        val result = SearchResult(0, 50, 80, page)
+        whenever(searchClient.searchJql(any(), any(), any(), any())).thenReturn(Promises.promise(result))
+        val outcome = checker.checkPair("PROJ", "1.", UUID.randomUUID())
+        assertThat(outcome.outcome).isEqualTo(Outcome.UNKNOWN)
+        assertThat(outcome.reasonKind).isEqualTo(ReasonKind.SYSTEM_UNAVAILABLE)
+        assertThat(outcome.openIssues).isEmpty()
+    }
+
+    @Test
+    fun `a truncated page with a match on it still yields FAILED — truncation only matters for PASSED`() {
+        // More open issues exist beyond the fetched page, but a match was already found on this
+        // page — additional unseen issues would only reinforce FAILED, never overturn it.
+        val page = listOf(mockIssue("PROJ-7", "matching", listOf("1.5")))
+        val result = SearchResult(0, 50, 80, page)
+        whenever(searchClient.searchJql(any(), any(), any(), any())).thenReturn(Promises.promise(result))
+        val outcome = checker.checkPair("PROJ", "1.", UUID.randomUUID())
+        assertThat(outcome.outcome).isEqualTo(Outcome.FAILED)
+        assertThat(outcome.openIssues).extracting("key").containsExactly("PROJ-7")
+    }
+
+    @Test
     fun `search failure yields UNKNOWN classified SYSTEM_UNAVAILABLE`() {
         whenever(searchClient.searchJql(any(), any(), any(), any())).thenThrow(RuntimeException("boom"))
         val result = checker.checkPair("PROJ", "1.", UUID.randomUUID())

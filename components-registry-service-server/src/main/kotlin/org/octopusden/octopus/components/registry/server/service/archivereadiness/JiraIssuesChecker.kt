@@ -10,6 +10,7 @@ import org.springframework.stereotype.Service
 import java.util.UUID
 
 private val BARE_VERSION = Regex("^\\d")
+private const val PAGE_SIZE = 50
 
 // SYS-047: depends (via JiraEffectivePairResolver) on a bean that injects JPA repositories, so
 // it must be dropped in no-db mode too — see ConditionalOnDatabaseEnabled's kdoc ("or another
@@ -64,9 +65,10 @@ class JiraIssuesChecker(
         val jql = "project = \"$projectKey\" AND statusCategory != Done"
         return try {
             val results = jiraRestClient.searchClient
-                .searchJql(jql, 50, 0, setOf("summary", "fixVersions", "status"))
+                .searchJql(jql, PAGE_SIZE, 0, setOf("summary", "fixVersions", "status"))
                 .claim()
-            val matching = results.issues.filter { issue ->
+            val page = results.issues.toList()
+            val matching = page.filter { issue ->
                 val fixVersionNames = issue.fixVersions?.mapNotNull { it.name } ?: emptyList()
                 when {
                     // Client-side prefix match — replaces the invalid JQL "fixVersion ~ prefix*" clause.
@@ -80,10 +82,22 @@ class JiraIssuesChecker(
                 }
             }
             val openIssues = matching.map { JiraIssueRef(it.key, it.summary ?: "") }
-            if (openIssues.isEmpty()) {
-                CheckResult(Outcome.PASSED)
-            } else {
-                CheckResult(Outcome.FAILED, openIssues = openIssues)
+            when {
+                openIssues.isNotEmpty() -> CheckResult(Outcome.FAILED, openIssues = openIssues)
+                // A match found among the fetched page is trustworthy evidence on its own (more
+                // open issues on later pages would only reinforce FAILED), but an EMPTY match on a
+                // truncated page is not trustworthy evidence of PASSED — the one matching issue
+                // could be sitting unread on page 2. Filtering is entirely client-side now (see the
+                // JQL comment above), so a truncated fetch would otherwise silently report a
+                // component ready to archive while its own open issues go unseen — the fail-open
+                // direction this check exists to prevent everywhere else.
+                results.total > page.size -> CheckResult(
+                    Outcome.UNKNOWN,
+                    reason = "Jira project $projectKey has ${results.total} open issues, more than the " +
+                        "$PAGE_SIZE this check reads — cannot confirm none are in scope",
+                    reasonKind = ReasonKind.SYSTEM_UNAVAILABLE,
+                )
+                else -> CheckResult(Outcome.PASSED)
             }
         } catch (e: Exception) {
             log.warn("Jira issue search failed for $projectKey: ${e.message}")
