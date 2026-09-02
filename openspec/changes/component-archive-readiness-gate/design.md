@@ -41,12 +41,17 @@ GET rest/api/4/components/{idOrName}/archive-readiness
       "targetUrl":  "<deep link>" | null,
       "outcome":    "PASSED" | "FAILED" | "UNKNOWN",
       "reason":     "<why it failed or could not be read>" | null,
+      "reasonKind": "SYSTEM_UNAVAILABLE" | "REGISTRY_DATA" | "NOT_CONFIGURED" | null,
       "sharedWith": ["<component name>", ...],
       "openIssues": [ { "key": "...", "summary": "..." }, ... ]
     }
   ]
 }
 ```
+
+`reasonKind` classifies an `UNKNOWN` by the remedy it needs, because `reason` is prose a caller cannot branch on. `SYSTEM_UNAVAILABLE` is waited out and retried. `REGISTRY_DATA` never resolves by retrying — an unresolvable repository URL, or two pairs both claiming a null prefix on one project key — and is corrected by editing the component. `NOT_CONFIGURED` is corrected in CRS's own configuration, the `JIRA_PROJECT` entry with no retired category configured being the case that produces it. It is null on `PASSED` and on `FAILED`, where the outcome already implies the remedy.
+
+Without it a caller can only offer one remedy for all three, and offering "try again later" for a registry-data problem is advice that can never succeed — the same misdirection decisions 2 and 14 exist to prevent.
 
 `openIssues` is populated only on `JIRA_ISSUES` entries, and `sharedWith` is always empty there. `targetUrl` is nullable so a caller renders identity as text rather than a broken link. `ready` is CRS's verdict; callers gate on it rather than deriving one, so that an outcome value a caller does not recognise can never unblock it.
 

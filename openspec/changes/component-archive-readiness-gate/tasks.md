@@ -104,7 +104,11 @@ Why this exists: `UNKNOWN` blocks and there is no override, so a target whose st
 - [ ] 4b.7 Failing test: systems are configured independently, so one being unconfigured does not affect another's entries
 - [ ] 4b.7a Failing test: the issue tracker's two connections — issue search and project read — are probed independently; a failure on one leaves the other's entries carrying real outcomes
 - [ ] 4b.7b Failing test: the issue tracker's two connections are configured independently; one unconfigured while the other is configured checks only the configured one's entries
-- [ ] 4b.8 Implement the per-system probe and the unconfigured-system omission, with the issue tracker's two connections as independent units throughout
+- [ ] 4b.9 Failing test: an `UNKNOWN` from an unreachable system classifies `SYSTEM_UNAVAILABLE`
+- [ ] 4b.10 Failing test: an `UNKNOWN` from an unresolvable recorded URL, or from two pairs both claiming a null prefix on one project key, classifies `REGISTRY_DATA`
+- [ ] 4b.11 Failing test: the issue-tracker project entry with no retired category configured classifies `NOT_CONFIGURED`
+- [ ] 4b.12 Failing test: a `PASSED` or `FAILED` entry carries no classification
+- [ ] 4b.8 Implement the per-system probe, the unconfigured-system omission, and the remedy classification, with the issue tracker's two connections as independent units throughout
 
 ## 5. Assembler and verdict
 

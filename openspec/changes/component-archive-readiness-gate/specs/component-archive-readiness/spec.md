@@ -208,6 +208,39 @@ The action differs: an outage is waited out, whereas this is corrected by editin
 - **WHEN** one repository URL is unresolvable and another is read successfully
 - **THEN** only the unresolvable entry is `UNKNOWN`, and no reason states that the VCS system is unavailable
 
+### Requirement: An UNKNOWN entry classifies the remedy it needs
+
+Every `UNKNOWN` entry SHALL carry, alongside its prose reason, a classification of what would resolve it: the system was unavailable, the registry's own data cannot be resolved, or the required configuration is absent. A caller SHALL be able to act on that classification without parsing the reason text.
+
+The three need opposite actions. An unavailable system is waited out and retried. A registry-data problem never resolves by retrying and is corrected by editing the component. Missing configuration is corrected in CRS. Offering one remedy for all three means offering advice that can never succeed for two of them.
+
+The classification SHALL be absent on `PASSED` and `FAILED`, where the outcome already implies what to do.
+
+#### Scenario: An unreachable system classifies as unavailable
+
+- **WHEN** an entry is `UNKNOWN` because its system could not be consulted
+- **THEN** its classification says the system was unavailable
+
+#### Scenario: An unresolvable recorded URL classifies as registry data
+
+- **WHEN** an entry is `UNKNOWN` because no configured provider serves the recorded repository URL
+- **THEN** its classification says the registry data cannot be resolved, not that the system was unavailable
+
+#### Scenario: A null-prefix conflict classifies as registry data
+
+- **WHEN** an open-issues entry is `UNKNOWN` because two pairs both claim a null prefix on one project key
+- **THEN** its classification says the registry data cannot be resolved
+
+#### Scenario: A missing retired-category configuration classifies as not configured
+
+- **WHEN** the issue-tracker project entry is `UNKNOWN` because no retired category is configured
+- **THEN** its classification says the configuration is absent, not that the system was unavailable
+
+#### Scenario: A passing or failing entry carries no classification
+
+- **WHEN** an entry is `PASSED` or `FAILED`
+- **THEN** it carries no remedy classification
+
 ### Requirement: A target still used by a live component is not blocked by being unarchived, and the sharing is reported
 
 When a target is also used by a component that is not archived, the entry SHALL list those components, and the target's own archived state SHALL NOT block — for a target a live component still needs, "not archived" is the correct end state, not a failure.
