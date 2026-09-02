@@ -57,7 +57,22 @@ dependencies {
 
     // Atlassian REST Java client — for Jira issue search (JIRA_ISSUES entries)
     implementation("com.atlassian.jira:jira-rest-java-client-api:${project.properties['atlassian-jira-rest-client.version']}")
-    implementation("com.atlassian.jira:jira-rest-java-client-core:${project.properties['atlassian-jira-rest-client.version']}")
+    implementation("com.atlassian.jira:jira-rest-java-client-core:${project.properties['atlassian-jira-rest-client.version']}") {
+        // jira-rest-java-client-core's POM declares org.glassfish.jersey.* (Jersey 2 client),
+        // but the actual runtime path we use — AsynchronousJiraRestClientFactory, backed by
+        // com.atlassian.httpclient:atlassian-httpclient-library (Apache HttpAsyncClient) — never
+        // references a single Jersey class (verified via javap against the jar's bytecode). It's
+        // unused dead weight in the POM, but Spring Boot's dependency-management BOM pins any
+        // org.glassfish.jersey.core:jersey-client on the classpath to 3.1.x (Jakarta), which puts
+        // org.glassfish.jersey.client.JerseyClient on the runtime classpath. Spring Cloud Netflix's
+        // DiscoveryClientOptionalArgsConfiguration gates its RestTemplate-based
+        // TransportClientFactories bean on @ConditionalOnMissingClass("org.glassfish.jersey.client.JerseyClient")
+        // (see spring-cloud-netflix-eureka-client), so that class's mere presence silently disables
+        // Eureka's fallback transport — and since Jersey 1 (com.sun.jersey) isn't on the classpath
+        // either, no TransportClientFactories bean gets created at all, failing eurekaClient startup.
+        exclude group: 'org.glassfish.jersey.core', module: 'jersey-client'
+        exclude group: 'org.glassfish.jersey.media', module: 'jersey-media-json-jettison'
+    }
     implementation("io.atlassian.fugue:fugue:${project.properties['atlassian-fugue.version']}")
 
     // Octopus jira-client — for getProject(key).projectCategory (JIRA_PROJECT entries)
