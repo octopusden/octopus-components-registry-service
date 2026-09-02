@@ -118,7 +118,8 @@ class ArchitectureFitnessTest {
     @ArchTest
     val sharingHelperIsOnlyCodeThatQueriesComponentTargetUsage: ArchRule =
         FreezingArchRule.freeze(
-            ArchRuleDefinition.noClasses()
+            ArchRuleDefinition
+                .noClasses()
                 .that()
                 .doNotBelongToAnyOf(SharingHelper::class.java)
                 .and()
@@ -128,13 +129,11 @@ class ArchitectureFitnessTest {
                     VersionLineRepository::class.java,
                     "findByProjectIdsWithComponent",
                     Collection::class.java,
-                )
-                .orShould()
+                ).orShould()
                 .callMethod(
                     VersionLineRepository::class.java,
                     "findDistinctLinkedProjectIds",
-                )
-                .because("SharingHelper is the single sharing computation unit (design decision 7)"),
+                ).because("SharingHelper is the single sharing computation unit (design decision 7)"),
         )
 
     companion object {

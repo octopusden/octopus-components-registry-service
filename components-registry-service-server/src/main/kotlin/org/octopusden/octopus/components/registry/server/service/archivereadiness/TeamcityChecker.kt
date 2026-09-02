@@ -8,9 +8,8 @@ class TeamcityChecker(
     private val tcDescendantLookup: TcDescendantLookup,
     private val sharingHelper: SharingHelper,
 ) : TargetChecker {
-
-    override fun check(target: CheckTarget): CheckResult {
-        return when (val result = tcDescendantLookup.findDescendantsAndSelf(target.targetId)) {
+    override fun check(target: CheckTarget): CheckResult =
+        when (val result = tcDescendantLookup.findDescendantsAndSelf(target.targetId)) {
             is TcDescendantResult.SystemUnavailable ->
                 CheckResult(Outcome.UNKNOWN, reason = "TeamCity system could not be consulted")
             is TcDescendantResult.ProjectAbsent ->
@@ -26,5 +25,4 @@ class TeamcityChecker(
                 }
             }
         }
-    }
 }

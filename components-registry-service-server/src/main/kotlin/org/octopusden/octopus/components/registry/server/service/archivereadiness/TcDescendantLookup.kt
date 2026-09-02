@@ -18,9 +18,16 @@ import org.springframework.stereotype.Service
 private const val DESCENDANT_FIELDS = "project(id,name,webUrl,href,archived)"
 
 sealed class TcDescendantResult {
-    data class Found(val projectIds: Set<String>, val archivedIds: Set<String>) : TcDescendantResult()
+    data class Found(
+        val projectIds: Set<String>,
+        val archivedIds: Set<String>,
+    ) : TcDescendantResult()
+
     object SystemUnavailable : TcDescendantResult()
-    data class ProjectAbsent(val reason: String) : TcDescendantResult()
+
+    data class ProjectAbsent(
+        val reason: String,
+    ) : TcDescendantResult()
 }
 
 /**
@@ -51,8 +58,8 @@ class TcDescendantLookup(
         TeamcityClassicClient(
             object : ClientParametersProvider {
                 override fun getApiUrl(): String = properties.baseUrl.trimEnd('/')
-                override fun getAuth(): CredentialProvider =
-                    StandardBasicCredCredentialProvider(properties.username, properties.password)
+
+                override fun getAuth(): CredentialProvider = StandardBasicCredCredentialProvider(properties.username, properties.password)
             },
         )
     }
@@ -82,7 +89,7 @@ class TcDescendantLookup(
             val response = client().getProjectsWithLocatorAndFields(locator, DESCENDANT_FIELDS)
             val descendants = response.projects
             val allIds = descendants.map { it.id }.toMutableSet()
-            allIds += projectId  // add root back explicitly
+            allIds += projectId // add root back explicitly
             val archivedIds = descendants.filter { it.archived == true }.map { it.id }.toMutableSet()
             if (rootProject.archived == true) archivedIds += projectId
             TcDescendantResult.Found(allIds, archivedIds)

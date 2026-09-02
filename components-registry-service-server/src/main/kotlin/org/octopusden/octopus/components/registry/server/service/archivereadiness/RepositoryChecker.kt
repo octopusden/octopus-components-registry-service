@@ -11,7 +11,6 @@ class RepositoryChecker(
     private val vcsFacadeClient: VcsFacadeClient,
     private val sharingHelper: SharingHelper,
 ) : TargetChecker {
-
     // NotFoundException here is expected, successful information (the repository was
     // confirmed absent), not a discarded error, so it is intentionally not logged/rethrown.
     // The plain Exception catch below is likewise deliberate: this check must fail closed
@@ -53,14 +52,21 @@ class RepositoryChecker(
         return when (repo.archived) {
             true -> {
                 val shared = sharingHelper.sharedWithForRepo(
-                    VcsUrlCanonicalizer.canonicalize(target.targetId), target.componentId)
+                    VcsUrlCanonicalizer.canonicalize(target.targetId),
+                    target.componentId,
+                )
                 CheckResult(Outcome.PASSED, sharedWith = shared)
             }
             false -> {
                 val shared = sharingHelper.sharedWithForRepo(
-                    VcsUrlCanonicalizer.canonicalize(target.targetId), target.componentId)
-                if (shared.isNotEmpty()) CheckResult(Outcome.PASSED, sharedWith = shared)
-                else CheckResult(Outcome.FAILED)
+                    VcsUrlCanonicalizer.canonicalize(target.targetId),
+                    target.componentId,
+                )
+                if (shared.isNotEmpty()) {
+                    CheckResult(Outcome.PASSED, sharedWith = shared)
+                } else {
+                    CheckResult(Outcome.FAILED)
+                }
             }
             null -> CheckResult(Outcome.UNKNOWN, reason = "VCS system returned indeterminate archived state")
         }

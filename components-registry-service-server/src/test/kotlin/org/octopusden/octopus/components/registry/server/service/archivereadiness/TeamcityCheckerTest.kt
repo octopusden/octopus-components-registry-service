@@ -19,7 +19,7 @@ class TeamcityCheckerTest {
     @Test
     fun `archived project yields PASSED`() {
         whenever(tcLookup.findDescendantsAndSelf("TC_PROJECT_1")).thenReturn(
-            TcDescendantResult.Found(setOf("TC_PROJECT_1"), setOf("TC_PROJECT_1"))
+            TcDescendantResult.Found(setOf("TC_PROJECT_1"), setOf("TC_PROJECT_1")),
         )
         whenever(sharingHelper.sharedWithForTcProject(any(), any(), eq(componentId))).thenReturn(emptyList())
         assertThat(checker.check(target).outcome).isEqualTo(Outcome.PASSED)
@@ -28,7 +28,7 @@ class TeamcityCheckerTest {
     @Test
     fun `unarchived project with no sharing yields FAILED`() {
         whenever(tcLookup.findDescendantsAndSelf("TC_PROJECT_1")).thenReturn(
-            TcDescendantResult.Found(setOf("TC_PROJECT_1"), emptySet())
+            TcDescendantResult.Found(setOf("TC_PROJECT_1"), emptySet()),
         )
         whenever(sharingHelper.sharedWithForTcProject(any(), any(), eq(componentId))).thenReturn(emptyList())
         assertThat(checker.check(target).outcome).isEqualTo(Outcome.FAILED)
@@ -37,7 +37,7 @@ class TeamcityCheckerTest {
     @Test
     fun `unarchived project shared with live component yields PASSED`() {
         whenever(tcLookup.findDescendantsAndSelf("TC_PROJECT_1")).thenReturn(
-            TcDescendantResult.Found(setOf("TC_PROJECT_1"), emptySet())
+            TcDescendantResult.Found(setOf("TC_PROJECT_1"), emptySet()),
         )
         whenever(sharingHelper.sharedWithForTcProject(any(), any(), eq(componentId))).thenReturn(listOf("other"))
         val result = checker.check(target)
@@ -54,7 +54,7 @@ class TeamcityCheckerTest {
     @Test
     fun `absent project yields PASSED`() {
         whenever(tcLookup.findDescendantsAndSelf("TC_PROJECT_1")).thenReturn(
-            TcDescendantResult.ProjectAbsent("not found")
+            TcDescendantResult.ProjectAbsent("not found"),
         )
         val result = checker.check(target)
         assertThat(result.outcome).isEqualTo(Outcome.PASSED)

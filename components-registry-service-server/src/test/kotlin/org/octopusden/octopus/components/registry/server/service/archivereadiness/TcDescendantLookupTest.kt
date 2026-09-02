@@ -20,7 +20,6 @@ import org.octopusden.octopus.infrastructure.teamcity.client.dto.locator.Project
 import java.nio.charset.StandardCharsets
 
 class TcDescendantLookupTest {
-
     private val client = mock(TeamcityClient::class.java)
     private val properties = TeamcityProperties(baseUrl = "http://tc.example.com")
     private val lookup = TcDescendantLookup(properties, clientOverride = client)
@@ -30,8 +29,7 @@ class TcDescendantLookupTest {
      * throws NPE before Mockito can intercept. We fall back to an empty [ProjectLocator]
      * as the non-null sentinel so stubbing still matches any locator argument.
      */
-    private fun anyLocator(): ProjectLocator =
-        ArgumentMatchers.any(ProjectLocator::class.java) ?: ProjectLocator()
+    private fun anyLocator(): ProjectLocator = ArgumentMatchers.any(ProjectLocator::class.java) ?: ProjectLocator()
 
     /** Matches the direct-by-id root lookup (`ProjectLocator(id = ...)`, no `affectedProject`). */
     private fun rootLocator(): ProjectLocator =
@@ -41,19 +39,23 @@ class TcDescendantLookupTest {
     private fun descendantLocator(): ProjectLocator =
         ArgumentMatchers.argThat<ProjectLocator> { it != null && it.affectedProject != null } ?: ProjectLocator()
 
-    private fun project(id: String, archived: Boolean? = false) =
-        TeamcityProject(id = id, name = id, archived = archived, webUrl = "", href = "")
+    private fun project(
+        id: String,
+        archived: Boolean? = false,
+    ) = TeamcityProject(id = id, name = id, archived = archived, webUrl = "", href = "")
 
     /** Stubs the direct-by-id root lookup to report [project] as found. */
     private fun stubRoot(project: TeamcityProject) {
         doReturn(TeamcityProjects(projects = listOf(project)))
-            .`when`(client).getProjectsWithLocatorAndFields(rootLocator(), anyString())
+            .`when`(client)
+            .getProjectsWithLocatorAndFields(rootLocator(), anyString())
     }
 
     /** Stubs the `affectedProject` subtree lookup to report [projects] as the descendants. */
     private fun stubDescendants(projects: List<TeamcityProject>) {
         doReturn(TeamcityProjects(projects = projects))
-            .`when`(client).getProjectsWithLocatorAndFields(descendantLocator(), anyString())
+            .`when`(client)
+            .getProjectsWithLocatorAndFields(descendantLocator(), anyString())
     }
 
     @Test
@@ -107,7 +109,8 @@ class TcDescendantLookupTest {
     @Test
     fun `TC failure returns SystemUnavailable not empty set`() {
         doThrow(RuntimeException("connection refused"))
-            .`when`(client).getProjectsWithLocatorAndFields(anyLocator(), anyString())
+            .`when`(client)
+            .getProjectsWithLocatorAndFields(anyLocator(), anyString())
         val result = lookup.findDescendantsAndSelf("TC_ROOT")
         assertThat(result).isInstanceOf(TcDescendantResult.SystemUnavailable::class.java)
     }
@@ -115,7 +118,8 @@ class TcDescendantLookupTest {
     @Test
     fun `root project not found via empty response yields ProjectAbsent`() {
         doReturn(TeamcityProjects(projects = emptyList()))
-            .`when`(client).getProjectsWithLocatorAndFields(anyLocator(), anyString())
+            .`when`(client)
+            .getProjectsWithLocatorAndFields(anyLocator(), anyString())
         val result = lookup.findDescendantsAndSelf("TC_ROOT")
         assertThat(result).isInstanceOf(TcDescendantResult.ProjectAbsent::class.java)
     }
@@ -132,17 +136,26 @@ class TcDescendantLookupTest {
         )
         val notFound = FeignException.NotFound("Project not found", request, null, emptyMap())
         doThrow(notFound)
-            .`when`(client).getProjectsWithLocatorAndFields(anyLocator(), anyString())
+            .`when`(client)
+            .getProjectsWithLocatorAndFields(anyLocator(), anyString())
         val result = lookup.findDescendantsAndSelf("TC_ROOT")
         assertThat(result).isInstanceOf(TcDescendantResult.ProjectAbsent::class.java)
     }
 
     /** Extracts the flat column names from a `project(a,b,c)`-shaped fields spec. */
     private fun columnsOf(fields: String): List<String> =
-        fields.substringAfter("project(").substringBeforeLast(")").split(",").map { it.trim() }
+        fields
+            .substringAfter("project(")
+            .substringBeforeLast(")")
+            .split(",")
+            .map { it.trim() }
 
     /** Builds a JSON object containing ONLY the requested [columns], the way TC's `fields` locator would. */
-    private fun projectJson(columns: List<String>, id: String, archived: Boolean): String {
+    private fun projectJson(
+        columns: List<String>,
+        id: String,
+        archived: Boolean,
+    ): String {
         val sampleValues: Map<String, Any> = mapOf(
             "id" to id,
             "name" to "Name-$id",

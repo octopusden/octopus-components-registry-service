@@ -21,8 +21,7 @@ class RepositoryCheckerTest {
     private val componentId = UUID.randomUUID()
     private val target = CheckTarget("ssh://git.example.com/repo.git", componentId, "my-comp")
 
-    private fun repo(archived: Boolean?) =
-        Repository("ssh://git.example.com/repo.git", "https://git.example.com/repo", null, archived)
+    private fun repo(archived: Boolean?) = Repository("ssh://git.example.com/repo.git", "https://git.example.com/repo", null, archived)
 
     @Test
     fun `archived true yields PASSED`() {

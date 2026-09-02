@@ -15,25 +15,28 @@ import org.octopusden.octopus.components.registry.server.util.VcsUrlCanonicalize
 import java.util.UUID
 
 class SharingHelperTest {
-
     private val versionLineRepo = mock<VersionLineRepository>()
     private val componentRepo = mock<ComponentRepository>()
     private val vcsRepo = mock<VcsSettingsEntryRepository>()
     private val configRepo = mock<ComponentConfigurationRepository>()
     private val helper = SharingHelper(versionLineRepo, componentRepo, vcsRepo, configRepo)
 
-    private fun liveComponent(name: String, id: UUID = UUID.randomUUID()) =
-        ComponentEntity(id = id, componentKey = name, archived = false)
+    private fun liveComponent(
+        name: String,
+        id: UUID = UUID.randomUUID(),
+    ) = ComponentEntity(id = id, componentKey = name, archived = false)
 
-    private fun archivedComponent(name: String, id: UUID = UUID.randomUUID()) =
-        ComponentEntity(id = id, componentKey = name, archived = true)
+    private fun archivedComponent(
+        name: String,
+        id: UUID = UUID.randomUUID(),
+    ) = ComponentEntity(id = id, componentKey = name, archived = true)
 
     @Test
     fun `sharedWithForRepo returns empty when no other component uses the repo`() {
         whenever(componentRepo.findAll()).thenReturn(emptyList())
         val result = helper.sharedWithForRepo(
             VcsUrlCanonicalizer.canonicalize("ssh://git.example.com/only-repo.git"),
-            UUID.randomUUID()
+            UUID.randomUUID(),
         )
         assertThat(result).isEmpty()
     }

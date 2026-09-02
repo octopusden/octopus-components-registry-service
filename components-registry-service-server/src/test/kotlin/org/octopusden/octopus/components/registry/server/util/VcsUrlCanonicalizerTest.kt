@@ -6,7 +6,6 @@ import org.junit.jupiter.params.ParameterizedTest
 import org.junit.jupiter.params.provider.CsvSource
 
 class VcsUrlCanonicalizerTest {
-
     @ParameterizedTest(name = "{0} and {1} canonicalize to the same value")
     @CsvSource(
         "ssh://git.example.com/repo.git, https://git.example.com/repo",
@@ -21,7 +20,10 @@ class VcsUrlCanonicalizerTest {
         "http://git.example.com/repo.git, https://git.example.com/repo",
         "git://git.example.com/repo.git, https://git.example.com/repo",
     )
-    fun `equivalent URLs canonicalize to the same value`(a: String, b: String) {
+    fun `equivalent URLs canonicalize to the same value`(
+        a: String,
+        b: String,
+    ) {
         assertThat(VcsUrlCanonicalizer.canonicalize(a))
             .isEqualTo(VcsUrlCanonicalizer.canonicalize(b))
     }

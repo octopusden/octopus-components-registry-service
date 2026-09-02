@@ -8,7 +8,11 @@ interface TargetChecker {
     fun check(target: CheckTarget): CheckResult
 }
 
-data class CheckTarget(val targetId: String, val componentId: UUID, val componentKey: String)
+data class CheckTarget(
+    val targetId: String,
+    val componentId: UUID,
+    val componentKey: String,
+)
 
 data class CheckResult(
     val outcome: Outcome,

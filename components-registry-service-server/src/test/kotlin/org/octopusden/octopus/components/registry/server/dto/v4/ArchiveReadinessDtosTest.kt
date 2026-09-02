@@ -20,8 +20,8 @@ class ArchiveReadinessDtosTest {
                     reason = null,
                     sharedWith = emptyList(),
                     openIssues = emptyList(),
-                )
-            )
+                ),
+            ),
         )
         val json = mapper.writeValueAsString(response)
         assertThat(json).contains("\"ready\":false")
