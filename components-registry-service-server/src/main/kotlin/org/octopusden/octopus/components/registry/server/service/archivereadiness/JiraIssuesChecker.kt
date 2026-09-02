@@ -50,20 +50,34 @@ class JiraIssuesChecker(
                 reasonKind = ReasonKind.REGISTRY_DATA,
             )
         }
-        val jql = if (prefix != null) {
-            "project = \"$projectKey\" AND fixVersion ~ \"$prefix*\" AND statusCategory != Done"
-        } else {
-            "project = \"$projectKey\" AND statusCategory != Done"
-        }
+        // Whole-project scope applies only when this null-prefix pair is the SOLE claimant of
+        // projectKey (spec.md "A sole claim on a project is scoped by the whole project") — the
+        // null/null conflict case above is already handled, so if another pair exists here it
+        // necessarily has its own non-null prefix, and the bare-version-pattern filter below
+        // still applies. Only computed for the null-prefix path: a prefixed pair never needs it.
+        val wholeProjectScope = prefix == null && !pairResolver.hasOtherPairOnProjectKey(projectKey)
+        // `fixVersion` is a VERSION-typed JQL field: it does not support the `~` (CONTAINS)
+        // operator, which is TEXT-field only (supported operators: = != > >= < <= is "is not" in
+        // "not in"). A `fixVersion ~ "prefix*"` clause is therefore invalid JQL and would make
+        // Jira reject the whole search. All prefix/bare-version matching is done client-side
+        // below, on the `fixVersions` field already requested, instead.
+        val jql = "project = \"$projectKey\" AND statusCategory != Done"
         return try {
             val results = jiraRestClient.searchClient
                 .searchJql(jql, 50, 0, setOf("summary", "fixVersions", "status"))
                 .claim()
             val matching = results.issues.filter { issue ->
-                prefix != null || (issue.fixVersions?.any { v -> BARE_VERSION.containsMatchIn(v.name ?: "") } == true)
-                // ^ when prefix != null, the JQL clause already scoped it; when prefix == null,
-                //   apply the bare-pattern test client-side on each issue's own recorded fix
-                //   version values, never by excluding other pairs' registered prefixes.
+                val fixVersionNames = issue.fixVersions?.mapNotNull { it.name } ?: emptyList()
+                when {
+                    // Client-side prefix match — replaces the invalid JQL "fixVersion ~ prefix*" clause.
+                    prefix != null -> fixVersionNames.any { it.startsWith(prefix) }
+                    // Sole claimant on the project: nothing excuses any open issue here, so every
+                    // issue counts regardless of its fixVersions.
+                    wholeProjectScope -> true
+                    // Shares the project key with another (prefixed) pair: only bare-version-
+                    // pattern issues belong to this null-prefix pair; the rest belong to the sibling.
+                    else -> fixVersionNames.any { BARE_VERSION.containsMatchIn(it) }
+                }
             }
             val openIssues = matching.map { JiraIssueRef(it.key, it.summary ?: "") }
             if (openIssues.isEmpty()) {

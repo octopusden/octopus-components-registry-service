@@ -41,4 +41,24 @@ class JiraEffectivePairResolverTest {
         whenever(configRepo.findAllNonArchivedJiraRows()).thenReturn(rows)
         assertThat(resolver.hasNullPrefixConflict("PROJ")).isTrue()
     }
+
+    @Test
+    fun `no other pair when this pair is the only one claiming the project key`() {
+        val rows = listOf(
+            FakeJiraRow("comp-a", "ALL_VERSIONS", "BASE", null, "PROJ", null),
+            FakeJiraRow("comp-b", "ALL_VERSIONS", "BASE", null, "OTHER", "REL-"),
+        )
+        whenever(configRepo.findAllNonArchivedJiraRows()).thenReturn(rows)
+        assertThat(resolver.hasOtherPairOnProjectKey("PROJ")).isFalse()
+    }
+
+    @Test
+    fun `other pair exists when another pair with its own prefix also claims the project key`() {
+        val rows = listOf(
+            FakeJiraRow("comp-a", "ALL_VERSIONS", "BASE", null, "PROJ", null),
+            FakeJiraRow("comp-b", "ALL_VERSIONS", "BASE", null, "PROJ", "REL-"),
+        )
+        whenever(configRepo.findAllNonArchivedJiraRows()).thenReturn(rows)
+        assertThat(resolver.hasOtherPairOnProjectKey("PROJ")).isTrue()
+    }
 }

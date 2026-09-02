@@ -34,6 +34,15 @@ class JiraEffectivePairResolver(
         return computeEffectiveJiraPairs(jiraRows)[component.componentKey] ?: emptySet()
     }
 
+    /** Every effective (project key, prefix) pair, across every component in the registry. */
+    private fun allPairsRegistryWide(): List<Pair<String, String?>> {
+        val rows = configRepo.findAllNonArchivedJiraRows()
+        val jiraRows = rows.map { r ->
+            JiraRowView(r.componentKey, r.versionRange, r.rowType, r.overriddenAttribute, r.projectKey, r.versionPrefix)
+        }
+        return computeEffectiveJiraPairs(jiraRows).values.flatten()
+    }
+
     /**
      * True when TWO OR MORE pairs — across every component in the registry, including this
      * component's own other version ranges — claim a null prefix on [projectKey]. The registry's
@@ -43,12 +52,19 @@ class JiraEffectivePairResolver(
      * search — see JiraIssuesChecker below. Not needed for JIRA_PROJECT (that entry doesn't
      * depend on prefix at all).
      */
-    fun hasNullPrefixConflict(projectKey: String): Boolean {
-        val rows = configRepo.findAllNonArchivedJiraRows()
-        val jiraRows = rows.map { r ->
-            JiraRowView(r.componentKey, r.versionRange, r.rowType, r.overriddenAttribute, r.projectKey, r.versionPrefix)
-        }
-        val allPairs = computeEffectiveJiraPairs(jiraRows).values.flatten()
-        return allPairs.count { (pk, prefix) -> pk == projectKey && prefix == null } > 1
-    }
+    fun hasNullPrefixConflict(projectKey: String): Boolean =
+        allPairsRegistryWide().count { (pk, prefix) -> pk == projectKey && prefix == null } > 1
+
+    /**
+     * True when MORE THAN ONE effective pair — registry-wide, any component, any version range —
+     * has this [projectKey], regardless of prefix. Used by [JiraIssuesChecker] to decide whether
+     * a null-prefix pair is the project's SOLE claimant (scope = whole project, spec.md's "A sole
+     * claim on a project is scoped by the whole project") or shares the project key with another
+     * pair that has its own non-null prefix (scope = bare-version-pattern issues only — a
+     * null-prefix conflict, where two pairs both claim null, is already ruled out by
+     * [hasNullPrefixConflict] before this is consulted). Counting is sufficient: if exactly one
+     * pair claims [projectKey], that pair IS the one being checked, so "sole claim" holds without
+     * needing to exclude it by componentId explicitly.
+     */
+    fun hasOtherPairOnProjectKey(projectKey: String): Boolean = allPairsRegistryWide().count { (pk, _) -> pk == projectKey } > 1
 }
