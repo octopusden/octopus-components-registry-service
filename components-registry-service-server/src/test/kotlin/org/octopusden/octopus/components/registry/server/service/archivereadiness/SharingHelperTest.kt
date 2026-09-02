@@ -2,10 +2,15 @@ package org.octopusden.octopus.components.registry.server.service.archivereadine
 
 import org.assertj.core.api.Assertions.assertThat
 import org.junit.jupiter.api.Test
+import org.mockito.kotlin.argThat
 import org.mockito.kotlin.mock
+import org.mockito.kotlin.never
+import org.mockito.kotlin.verify
 import org.mockito.kotlin.whenever
+import org.octopusden.octopus.components.registry.server.entity.ComponentConfigurationEntity
 import org.octopusden.octopus.components.registry.server.entity.ComponentEntity
 import org.octopusden.octopus.components.registry.server.entity.TeamcityProjectEntity
+import org.octopusden.octopus.components.registry.server.entity.VcsSettingsEntryEntity
 import org.octopusden.octopus.components.registry.server.entity.VersionLineEntity
 import org.octopusden.octopus.components.registry.server.repository.ComponentConfigurationRepository
 import org.octopusden.octopus.components.registry.server.repository.ComponentRepository
@@ -39,6 +44,34 @@ class SharingHelperTest {
             UUID.randomUUID(),
         )
         assertThat(result).isEmpty()
+    }
+
+    @Test
+    fun `sharedWithForRepo matches components recording the same repo via canonically-equivalent but textually different URLs`() {
+        // Proves the I1 canonicalizer fix (userinfo stripping in the "://"-scheme branch) works
+        // end-to-end through SharingHelper, not just in VcsUrlCanonicalizer isolation: the
+        // sharing component records the repo via SCP-style shorthand, the checked component's
+        // own URL (below, fed into canonicalize()) uses an explicit "ssh://" scheme with
+        // userinfo — the same repository, two different textual forms.
+        val sharingId = UUID.randomUUID()
+        val sharingComp = liveComponent("sharing-comp", sharingId)
+        val cfg = ComponentConfigurationEntity(id = UUID.randomUUID(), component = sharingComp, rowType = "BASE")
+        val vcsEntry = VcsSettingsEntryEntity(
+            id = UUID.randomUUID(),
+            componentConfiguration = cfg,
+            name = "main",
+            vcsPath = "git@git.example.com:owner/repo.git",
+        )
+        whenever(componentRepo.findAll()).thenReturn(listOf(sharingComp))
+        whenever(configRepo.findByComponentId(sharingId)).thenReturn(listOf(cfg))
+        whenever(vcsRepo.findByComponentConfigurationId(cfg.id!!)).thenReturn(listOf(vcsEntry))
+
+        val result = helper.sharedWithForRepo(
+            VcsUrlCanonicalizer.canonicalize("ssh://git@git.example.com/owner/repo.git"),
+            UUID.randomUUID(),
+        )
+
+        assertThat(result).containsExactly("sharing-comp")
     }
 
     @Test
@@ -102,6 +135,10 @@ class SharingHelperTest {
         whenever(versionLineRepo.findDistinctLinkedProjectIds()).thenReturn(registryIds)
         whenever(versionLineRepo.findByProjectIdsWithComponent(listOf("MATCH_A"))).thenReturn(emptyList())
         helper.sharedWithForTcProject("SOME_PARENT", descendantIds, UUID.randomUUID())
-        assertThat(true).isTrue()
+        // The query must be scoped down to the small registry-linked intersection ("MATCH_A"
+        // only — "MATCH_B" isn't a descendant), never blown up to (a subset of) the 1000+
+        // descendant ids, which is what running the intersection the other way around would risk.
+        verify(versionLineRepo).findByProjectIdsWithComponent(listOf("MATCH_A"))
+        verify(versionLineRepo, never()).findByProjectIdsWithComponent(argThat { size > 2 })
     }
 }

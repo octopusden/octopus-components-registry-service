@@ -97,6 +97,17 @@ class ArchiveReadinessNoRegressionTest {
         mvc
             .perform(delete("/rest/api/4/components/$id").with(adminJwt()))
             .andExpect(status().isNoContent)
+        // The delete must have actually taken effect (soft-delete sets archived=true), not just
+        // returned 204 while silently no-op'ing — same regression this sibling test's fix
+        // (commit c48cb0ab) already guards for the PATCH write path.
+        val detail =
+            objectMapper.readTree(
+                mvc
+                    .perform(get("/rest/api/4/components/$id").with(adminJwt()))
+                    .andReturn()
+                    .response.contentAsString,
+            )
+        assert(detail["archived"].asBoolean()) { "delete must actually archive the component" }
     }
 
     @Test
