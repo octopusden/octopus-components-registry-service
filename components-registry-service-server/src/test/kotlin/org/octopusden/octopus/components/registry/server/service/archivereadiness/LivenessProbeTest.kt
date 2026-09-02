@@ -6,6 +6,7 @@ import com.atlassian.jira.rest.client.api.domain.Session
 import io.atlassian.util.concurrent.Promise
 import org.assertj.core.api.Assertions.assertThat
 import org.junit.jupiter.api.Test
+import org.mockito.kotlin.any
 import org.mockito.kotlin.mock
 import org.mockito.kotlin.never
 import org.mockito.kotlin.times
@@ -15,21 +16,27 @@ import org.octopusden.octopus.components.registry.server.config.ArchiveReadiness
 import org.octopusden.octopus.components.registry.server.teamcity.TeamcityProperties
 import org.octopusden.octopus.infrastructure.teamcity.client.TeamcityClient
 import org.octopusden.octopus.infrastructure.teamcity.client.dto.TeamcityServer
+import org.octopusden.octopus.vcsfacade.client.VcsFacadeClient
+import org.octopusden.octopus.vcsfacade.client.common.dto.IndexReport
 
 class LivenessProbeTest {
     private val teamcityClient = mock<TeamcityClient>()
     private val jiraRestClient = mock<JiraRestClient>()
+    private val vcsFacadeClient = mock<VcsFacadeClient>()
 
     private fun probe(
         teamcityBaseUrl: String = "http://tc.example.com",
         jiraBaseUrl: String = "http://jira.example.com",
         jiraClient: JiraRestClient? = jiraRestClient,
+        vcsBaseUrl: String = "http://vcs-facade.example.com",
     ) = LivenessProbe(
         teamcityProperties = TeamcityProperties(baseUrl = teamcityBaseUrl),
         jiraRestClient = jiraClient,
         archiveReadinessProperties = ArchiveReadinessProperties(
             jira = ArchiveReadinessProperties.JiraConnectionProperties(baseUrl = jiraBaseUrl),
+            vcsFacade = ArchiveReadinessProperties.VcsFacadeConnectionProperties(baseUrl = vcsBaseUrl),
         ),
+        vcsFacadeClient = vcsFacadeClient,
         teamcityClientOverride = teamcityClient,
     )
 
@@ -105,12 +112,34 @@ class LivenessProbeTest {
     }
 
     @Test
-    fun `VCS has no configured concept and no probe call - always reported live`() {
+    fun `configured VCS connection is probed exactly once`() {
         whenever(teamcityClient.getServer()).thenReturn(TeamcityServer("2024.03"))
         stubJiraSessionSucceeds()
+        whenever(vcsFacadeClient.indexReport(false)).thenReturn(IndexReport(emptyList()))
         val snapshot = probe().probe()
         assertThat(snapshot.vcsConfigured).isTrue()
         assertThat(snapshot.vcsLive).isTrue()
+        verify(vcsFacadeClient, times(1)).indexReport(false)
+    }
+
+    @Test
+    fun `unconfigured VCS is never probed and reports configured false`() {
+        whenever(teamcityClient.getServer()).thenReturn(TeamcityServer("2024.03"))
+        stubJiraSessionSucceeds()
+        val snapshot = probe(vcsBaseUrl = "").probe()
+        assertThat(snapshot.vcsConfigured).isFalse()
+        assertThat(snapshot.vcsLive).isFalse()
+        verify(vcsFacadeClient, never()).indexReport(any())
+    }
+
+    @Test
+    fun `configured VCS whose probe call throws reports live false, not an exception out of probe`() {
+        whenever(teamcityClient.getServer()).thenReturn(TeamcityServer("2024.03"))
+        stubJiraSessionSucceeds()
+        whenever(vcsFacadeClient.indexReport(false)).thenThrow(RuntimeException("connection refused"))
+        val snapshot = probe().probe()
+        assertThat(snapshot.vcsConfigured).isTrue()
+        assertThat(snapshot.vcsLive).isFalse()
     }
 
     @Test

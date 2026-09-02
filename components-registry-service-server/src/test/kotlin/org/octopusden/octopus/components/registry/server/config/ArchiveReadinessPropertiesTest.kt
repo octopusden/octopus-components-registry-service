@@ -39,4 +39,23 @@ class ArchiveReadinessPropertiesTest {
         val blank = ArchiveReadinessProperties()
         assertThat(blank.isJiraConfigured()).isFalse()
     }
+
+    @Test
+    fun `vcs-facade baseUrl is blank by default`() {
+        val blank = ArchiveReadinessProperties()
+        assertThat(blank.vcsFacade.baseUrl).isBlank()
+    }
+
+    @Test
+    fun `vcs-facade properties bind when set`() {
+        contextRunner
+            .withPropertyValues(
+                "archive-readiness.vcs-facade.base-url=https://vcs-facade.example.com",
+                "archive-readiness.vcs-facade.time-retry-in-millis=5000",
+            ).run { context ->
+                val props = context.getBean(ArchiveReadinessProperties::class.java)
+                assertThat(props.vcsFacade.baseUrl).isEqualTo("https://vcs-facade.example.com")
+                assertThat(props.vcsFacade.timeRetryInMillis).isEqualTo(5000)
+            }
+    }
 }

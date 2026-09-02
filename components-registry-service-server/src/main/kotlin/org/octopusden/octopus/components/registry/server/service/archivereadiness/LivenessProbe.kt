@@ -8,6 +8,7 @@ import org.octopusden.octopus.infrastructure.client.commons.CredentialProvider
 import org.octopusden.octopus.infrastructure.client.commons.StandardBasicCredCredentialProvider
 import org.octopusden.octopus.infrastructure.teamcity.client.TeamcityClassicClient
 import org.octopusden.octopus.infrastructure.teamcity.client.TeamcityClient
+import org.octopusden.octopus.vcsfacade.client.VcsFacadeClient
 import org.slf4j.LoggerFactory
 import org.springframework.stereotype.Service
 
@@ -27,13 +28,14 @@ import org.springframework.stereotype.Service
  * - Jira issue-search (Atlassian): `JiraRestClient.sessionClient.getCurrentSession()` is the
  *   equivalent "who am I" call on `jira-rest-java-client-api:5.2.7` — lightweight, no project
  *   key needed.
- * - VCS (vcs-facade): `VcsFacadeClient` (`vcsfacade:client:3.0.36`) exposes no health/info/
- *   version endpoint — every method needs an `sshUrl`, `issueKeys`, or similar per-target
- *   argument. There is also no configured/unconfigured concept for VCS anywhere in this
- *   codebase (unlike the nullable Jira client beans, `VcsFacadeClient` is a plain non-nullable
- *   dependency of [RepositoryChecker]), so VCS is always treated as configured. With no probe
- *   call available, VCS liveness is always reported live; actual outage detection is deferred
- *   to [RepositoryChecker]'s own existing fail-closed-to-UNKNOWN behaviour, per target.
+ * - VCS (vcs-facade): `VcsFacadeClient.indexReport(scanRequired: Boolean?)`
+ *   (`GET rest/api/1/indexer/report`) is a genuine target-independent "is the server reachable"
+ *   call — confirmed present, with no per-target argument, on the pinned `vcsfacade:client:3.0.36`
+ *   (verified against the library's own sources jar). `vcsConfigured` follows
+ *   `archive-readiness.vcs-facade.base-url` being non-blank, the same "blank = unconfigured, no
+ *   entries" convention TeamCity/Jira already use (see [ArchiveReadinessProperties] and
+ *   [org.octopusden.octopus.components.registry.server.config.VcsFacadeClientConfig]'s lazy-client
+ *   wrapper, which is what makes probing with a blank base URL safe to skip entirely).
  * - Jira project-read (octopus): the octopus `JiraClient` interface's only read is
  *   `getProject(projectKey)`, which necessarily needs a project key — there is no
  *   project-independent call. Same fallback as VCS: reported live whenever configured, with
@@ -56,6 +58,7 @@ class LivenessProbe(
     private val teamcityProperties: TeamcityProperties,
     private val jiraRestClient: JiraRestClient?,
     private val archiveReadinessProperties: ArchiveReadinessProperties,
+    private val vcsFacadeClient: VcsFacadeClient,
     // Allows tests to inject a mock without needing to create a real TCP connection.
     // Production callers leave this null; Spring injects only the beans/properties above.
     private val teamcityClientOverride: TeamcityClient? = null,
@@ -79,6 +82,7 @@ class LivenessProbe(
 
     /** Probes every configured connection exactly once. Never throws — a failed probe reports `live = false`. */
     fun probe(): LivenessSnapshot {
+        val vcsConfigured = archiveReadinessProperties.vcsFacade.baseUrl.isNotBlank()
         val teamcityConfigured = teamcityProperties.baseUrl.isNotBlank()
         val jiraIssuesConfigured = archiveReadinessProperties.isJiraConfigured()
         // Jira project-read shares today's single on/off switch with issue-search (decision 17
@@ -87,10 +91,8 @@ class LivenessProbe(
         val jiraProjectConfigured = archiveReadinessProperties.isJiraConfigured()
 
         return LivenessSnapshot(
-            // No configured/unconfigured concept exists for VCS in this codebase, and no
-            // system-wide probe call is available on VcsFacadeClient — see class kdoc.
-            vcsConfigured = true,
-            vcsLive = true,
+            vcsConfigured = vcsConfigured,
+            vcsLive = vcsConfigured && probeVcs(),
             teamcityConfigured = teamcityConfigured,
             teamcityLive = teamcityConfigured && probeTeamcity(),
             jiraIssuesConfigured = jiraIssuesConfigured,
@@ -114,6 +116,17 @@ class LivenessProbe(
             true
         } catch (e: Exception) {
             log.warn("TeamCity liveness probe failed: ${e.message}")
+            false
+        }
+
+    // TooGenericExceptionCaught: same fail-closed rationale as probeTeamcity above.
+    @Suppress("TooGenericExceptionCaught")
+    private fun probeVcs(): Boolean =
+        try {
+            vcsFacadeClient.indexReport(false)
+            true
+        } catch (e: Exception) {
+            log.warn("VCS liveness probe failed: ${e.message}")
             false
         }
 
