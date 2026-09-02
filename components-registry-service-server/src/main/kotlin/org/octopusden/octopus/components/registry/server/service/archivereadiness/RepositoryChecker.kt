@@ -1,6 +1,7 @@
 package org.octopusden.octopus.components.registry.server.service.archivereadiness
 
 import org.octopusden.octopus.components.registry.server.dto.v4.Outcome
+import org.octopusden.octopus.components.registry.server.dto.v4.ReasonKind
 import org.octopusden.octopus.components.registry.server.util.VcsUrlCanonicalizer
 import org.octopusden.octopus.vcsfacade.client.VcsFacadeClient
 import org.octopusden.octopus.vcsfacade.client.common.exception.NotFoundException
@@ -43,11 +44,16 @@ class RepositoryChecker(
                 return CheckResult(
                     Outcome.UNKNOWN,
                     reason = "Recorded repository URL is unresolvable by any configured VCS provider: ${target.targetId}",
+                    reasonKind = ReasonKind.REGISTRY_DATA,
                 )
             }
             // Ambiguous failure — could be system unavailable, credential error, or some other
             // unrecognised server-side error. Fail closed.
-            return CheckResult(Outcome.UNKNOWN, reason = "VCS system could not be consulted: ${e.message}")
+            return CheckResult(
+                Outcome.UNKNOWN,
+                reason = "VCS system could not be consulted: ${e.message}",
+                reasonKind = ReasonKind.SYSTEM_UNAVAILABLE,
+            )
         }
         return when (repo.archived) {
             true -> {
@@ -68,7 +74,11 @@ class RepositoryChecker(
                     CheckResult(Outcome.FAILED)
                 }
             }
-            null -> CheckResult(Outcome.UNKNOWN, reason = "VCS system returned indeterminate archived state")
+            null -> CheckResult(
+                Outcome.UNKNOWN,
+                reason = "VCS system returned indeterminate archived state",
+                reasonKind = ReasonKind.SYSTEM_UNAVAILABLE,
+            )
         }
     }
 }

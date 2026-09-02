@@ -2,6 +2,7 @@ package org.octopusden.octopus.components.registry.server.service.archivereadine
 
 import org.octopusden.octopus.components.registry.server.dto.v4.JiraIssueRef
 import org.octopusden.octopus.components.registry.server.dto.v4.Outcome
+import org.octopusden.octopus.components.registry.server.dto.v4.ReasonKind
 import java.util.UUID
 
 interface TargetChecker {
@@ -17,6 +18,7 @@ data class CheckTarget(
 data class CheckResult(
     val outcome: Outcome,
     val reason: String? = null,
+    val reasonKind: ReasonKind? = null,
     val sharedWith: List<String> = emptyList(),
     val openIssues: List<JiraIssueRef> = emptyList(),
 )

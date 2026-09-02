@@ -2,6 +2,7 @@ package org.octopusden.octopus.components.registry.server.service.archivereadine
 
 import org.octopusden.octopus.components.registry.server.config.ArchiveReadinessProperties
 import org.octopusden.octopus.components.registry.server.dto.v4.Outcome
+import org.octopusden.octopus.components.registry.server.dto.v4.ReasonKind
 import org.octopusden.octopus.infrastructure.jira.JiraClient
 import org.slf4j.LoggerFactory
 import org.springframework.stereotype.Service
@@ -24,9 +25,15 @@ class JiraProjectChecker(
         projectKey: String,
         componentId: UUID,
     ): CheckResult {
-        if (octopusJiraClient == null) return CheckResult(Outcome.UNKNOWN, reason = "Jira client not configured")
+        if (octopusJiraClient == null) {
+            return CheckResult(Outcome.UNKNOWN, reason = "Jira client not configured", reasonKind = ReasonKind.NOT_CONFIGURED)
+        }
         if (properties.retiredJiraProjectCategories.isEmpty()) {
-            return CheckResult(Outcome.UNKNOWN, reason = "No retired Jira project categories configured")
+            return CheckResult(
+                Outcome.UNKNOWN,
+                reason = "No retired Jira project categories configured",
+                reasonKind = ReasonKind.NOT_CONFIGURED,
+            )
         }
         return try {
             val project = octopusJiraClient.getProject(projectKey)
@@ -43,7 +50,7 @@ class JiraProjectChecker(
             }
         } catch (e: Exception) {
             log.warn("Jira project read failed for $projectKey: ${e.message}")
-            CheckResult(Outcome.UNKNOWN, reason = "Jira project client unavailable")
+            CheckResult(Outcome.UNKNOWN, reason = "Jira project client unavailable", reasonKind = ReasonKind.SYSTEM_UNAVAILABLE)
         }
     }
 }

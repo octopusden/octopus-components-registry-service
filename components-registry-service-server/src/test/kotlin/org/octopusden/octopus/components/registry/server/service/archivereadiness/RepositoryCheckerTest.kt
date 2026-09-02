@@ -8,6 +8,7 @@ import org.mockito.kotlin.mock
 import org.mockito.kotlin.verify
 import org.mockito.kotlin.whenever
 import org.octopusden.octopus.components.registry.server.dto.v4.Outcome
+import org.octopusden.octopus.components.registry.server.dto.v4.ReasonKind
 import org.octopusden.octopus.vcsfacade.client.VcsFacadeClient
 import org.octopusden.octopus.vcsfacade.client.common.dto.Repository
 import org.octopusden.octopus.vcsfacade.client.common.exception.NotFoundException
@@ -27,14 +28,18 @@ class RepositoryCheckerTest {
     fun `archived true yields PASSED`() {
         whenever(vcsFacadeClient.getRepository(target.targetId)).thenReturn(repo(true))
         whenever(sharingHelper.sharedWithForRepo(any(), eq(componentId))).thenReturn(emptyList())
-        assertThat(checker.check(target).outcome).isEqualTo(Outcome.PASSED)
+        val result = checker.check(target)
+        assertThat(result.outcome).isEqualTo(Outcome.PASSED)
+        assertThat(result.reasonKind).isNull()
     }
 
     @Test
     fun `archived false with no sharing yields FAILED`() {
         whenever(vcsFacadeClient.getRepository(target.targetId)).thenReturn(repo(false))
         whenever(sharingHelper.sharedWithForRepo(any(), eq(componentId))).thenReturn(emptyList())
-        assertThat(checker.check(target).outcome).isEqualTo(Outcome.FAILED)
+        val result = checker.check(target)
+        assertThat(result.outcome).isEqualTo(Outcome.FAILED)
+        assertThat(result.reasonKind).isNull()
     }
 
     @Test
@@ -44,35 +49,40 @@ class RepositoryCheckerTest {
         val result = checker.check(target)
         assertThat(result.outcome).isEqualTo(Outcome.PASSED)
         assertThat(result.sharedWith).containsExactly("other-comp")
+        assertThat(result.reasonKind).isNull()
     }
 
     @Test
-    fun `archived null yields UNKNOWN`() {
+    fun `archived null yields UNKNOWN classified SYSTEM_UNAVAILABLE`() {
         whenever(vcsFacadeClient.getRepository(target.targetId)).thenReturn(repo(null))
-        assertThat(checker.check(target).outcome).isEqualTo(Outcome.UNKNOWN)
+        val result = checker.check(target)
+        assertThat(result.outcome).isEqualTo(Outcome.UNKNOWN)
+        assertThat(result.reasonKind).isEqualTo(ReasonKind.SYSTEM_UNAVAILABLE)
     }
 
     @Test
-    fun `absent repository (NotFoundException) yields PASSED`() {
+    fun `absent repository (NotFoundException) yields PASSED with no classification`() {
         whenever(vcsFacadeClient.getRepository(target.targetId))
             .thenThrow(NotFoundException("Repository not found"))
         val result = checker.check(target)
         assertThat(result.outcome).isEqualTo(Outcome.PASSED)
         assertThat(result.sharedWith).isEmpty()
+        assertThat(result.reasonKind).isNull()
     }
 
     @Test
-    fun `generic exception (not NotFoundException) yields UNKNOWN, not treated as absence`() {
+    fun `generic exception (not NotFoundException) yields UNKNOWN classified SYSTEM_UNAVAILABLE, not treated as absence`() {
         // Locks the catch-order: NotFoundException before the generic Exception catch. Nothing
         // would fail today if a future edit broke that ordering without this regression test.
         whenever(vcsFacadeClient.getRepository(target.targetId))
             .thenThrow(RuntimeException("connection reset"))
         val result = checker.check(target)
         assertThat(result.outcome).isEqualTo(Outcome.UNKNOWN)
+        assertThat(result.reasonKind).isEqualTo(ReasonKind.SYSTEM_UNAVAILABLE)
     }
 
     @Test
-    fun `bare VcsFacadeException with an unrelated message yields UNKNOWN via the generic reason, not the no-provider reason`() {
+    fun `bare VcsFacadeException with an unrelated message yields UNKNOWN via the generic reason, classified SYSTEM_UNAVAILABLE`() {
         // Guards against the message-substring check firing on every exception: an unrelated
         // message must still fall through to the old generic "system could not be consulted"
         // reason, not be misread as "URL unresolvable by any configured VCS provider".
@@ -82,10 +92,11 @@ class RepositoryCheckerTest {
         assertThat(result.outcome).isEqualTo(Outcome.UNKNOWN)
         assertThat(result.reason).contains("VCS system could not be consulted")
         assertThat(result.reason).doesNotContain("unresolvable")
+        assertThat(result.reasonKind).isEqualTo(ReasonKind.SYSTEM_UNAVAILABLE)
     }
 
     @Test
-    fun `unresolvable URL (bare VcsFacadeException with vcs-facade no-provider message) yields UNKNOWN naming the URL, not a VCS outage`() {
+    fun `unresolvable URL yields UNKNOWN naming the URL, classified REGISTRY_DATA`() {
         // The real vcs-facade server (pinned 3.0.36) throws a plain IllegalStateException with
         // this exact message from VcsManagerImpl.getVcsServiceForSshUrl when no configured VCS
         // provider matches the URL. It has no dedicated @ExceptionHandler, so it falls to the
@@ -97,6 +108,7 @@ class RepositoryCheckerTest {
         assertThat(result.outcome).isEqualTo(Outcome.UNKNOWN)
         assertThat(result.reason).contains(target.targetId)
         assertThat(result.reason).doesNotContain("VCS system could not be consulted")
+        assertThat(result.reasonKind).isEqualTo(ReasonKind.REGISTRY_DATA)
     }
 
     @Test

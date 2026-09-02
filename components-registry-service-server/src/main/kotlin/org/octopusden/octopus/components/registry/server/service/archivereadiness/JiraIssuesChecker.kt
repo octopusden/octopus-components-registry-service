@@ -3,6 +3,7 @@ package org.octopusden.octopus.components.registry.server.service.archivereadine
 import com.atlassian.jira.rest.client.api.JiraRestClient
 import org.octopusden.octopus.components.registry.server.dto.v4.JiraIssueRef
 import org.octopusden.octopus.components.registry.server.dto.v4.Outcome
+import org.octopusden.octopus.components.registry.server.dto.v4.ReasonKind
 import org.slf4j.LoggerFactory
 import org.springframework.stereotype.Service
 import java.util.UUID
@@ -29,12 +30,19 @@ class JiraIssuesChecker(
         prefix: String?,
         componentId: UUID,
     ): CheckResult {
-        if (jiraRestClient == null) return CheckResult(Outcome.UNKNOWN, reason = "Jira issue search not configured")
+        if (jiraRestClient == null) {
+            return CheckResult(
+                Outcome.UNKNOWN,
+                reason = "Jira issue search not configured",
+                reasonKind = ReasonKind.NOT_CONFIGURED,
+            )
+        }
         if (prefix == null && pairResolver.hasNullPrefixConflict(projectKey)) {
             return CheckResult(
                 Outcome.UNKNOWN,
                 reason = "More than one component claims the default (no-prefix) bucket on Jira " +
                     "project $projectKey — registry data to correct",
+                reasonKind = ReasonKind.REGISTRY_DATA,
             )
         }
         val jql = if (prefix != null) {
@@ -60,7 +68,7 @@ class JiraIssuesChecker(
             }
         } catch (e: Exception) {
             log.warn("Jira issue search failed for $projectKey: ${e.message}")
-            CheckResult(Outcome.UNKNOWN, reason = "Jira issue search unavailable")
+            CheckResult(Outcome.UNKNOWN, reason = "Jira issue search unavailable", reasonKind = ReasonKind.SYSTEM_UNAVAILABLE)
         }
     }
 }

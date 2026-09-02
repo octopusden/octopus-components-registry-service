@@ -10,6 +10,7 @@ import org.mockito.kotlin.times
 import org.mockito.kotlin.verify
 import org.mockito.kotlin.whenever
 import org.octopusden.octopus.components.registry.server.dto.v4.Outcome
+import org.octopusden.octopus.components.registry.server.dto.v4.ReasonKind
 import org.octopusden.octopus.components.registry.server.dto.v4.TargetKind
 import org.octopusden.octopus.components.registry.server.entity.ComponentConfigurationEntity
 import org.octopusden.octopus.components.registry.server.entity.ComponentEntity
@@ -102,6 +103,7 @@ class ArchiveReadinessAssemblerTest {
         assertThat(response.ready).isTrue()
         assertThat(response.entries).hasSize(4)
         assertThat(response.entries).allMatch { it.outcome == Outcome.PASSED }
+        assertThat(response.entries).allMatch { it.reasonKind == null }
     }
 
     @Test
@@ -117,21 +119,25 @@ class ArchiveReadinessAssemblerTest {
         assertThat(response.ready).isFalse()
         assertThat(response.entries).hasSize(1)
         assertThat(response.entries[0].outcome).isEqualTo(Outcome.FAILED)
+        assertThat(response.entries[0].reasonKind).isNull()
     }
 
     @Test
-    fun `one UNKNOWN entry makes response not ready`() {
+    fun `one UNKNOWN entry makes response not ready and carries the checker's reasonKind`() {
         whenever(livenessProbe.probe()).thenReturn(liveSnapshot)
         whenever(versionLineRepository.findByComponentId(componentId)).thenReturn(listOf(versionLine("TC1")))
         whenever(componentConfigurationRepository.findByComponentId(componentId)).thenReturn(emptyList())
         whenever(pairResolver.pairsFor(componentId)).thenReturn(emptySet())
-        whenever(teamcityChecker.check(any())).thenReturn(CheckResult(Outcome.UNKNOWN, reason = "TC down"))
+        whenever(teamcityChecker.check(any())).thenReturn(
+            CheckResult(Outcome.UNKNOWN, reason = "TC down", reasonKind = ReasonKind.SYSTEM_UNAVAILABLE),
+        )
 
         val response = assembler.assemble(component)
 
         assertThat(response.ready).isFalse()
         assertThat(response.entries).hasSize(1)
         assertThat(response.entries[0].outcome).isEqualTo(Outcome.UNKNOWN)
+        assertThat(response.entries[0].reasonKind).isEqualTo(ReasonKind.SYSTEM_UNAVAILABLE)
     }
 
     @Test
@@ -172,7 +178,7 @@ class ArchiveReadinessAssemblerTest {
     }
 
     @Test
-    fun `TeamCity liveness down yields UNKNOWN for every target with one shared reason, checker never called`() {
+    fun `TeamCity liveness down yields UNKNOWN, one shared reason classified SYSTEM_UNAVAILABLE`() {
         val downSnapshot = liveSnapshot.copy(teamcityConfigured = true, teamcityLive = false)
         whenever(livenessProbe.probe()).thenReturn(downSnapshot)
         whenever(versionLineRepository.findByComponentId(componentId)).thenReturn(
@@ -187,7 +193,42 @@ class ArchiveReadinessAssemblerTest {
         assertThat(response.entries).allMatch { it.outcome == Outcome.UNKNOWN }
         assertThat(response.entries[0].reason).isEqualTo(response.entries[1].reason)
         assertThat(response.entries[0].reason).isNotNull()
+        assertThat(response.entries).allMatch { it.reasonKind == ReasonKind.SYSTEM_UNAVAILABLE }
         verify(teamcityChecker, never()).check(any())
+    }
+
+    @Test
+    fun `VCS liveness down yields UNKNOWN entries classified SYSTEM_UNAVAILABLE`() {
+        val downSnapshot = liveSnapshot.copy(vcsConfigured = true, vcsLive = false)
+        whenever(livenessProbe.probe()).thenReturn(downSnapshot)
+        whenever(versionLineRepository.findByComponentId(componentId)).thenReturn(emptyList())
+        val row = configRowWithVcsEntries("ssh://git.example.com/repo.git")
+        whenever(componentConfigurationRepository.findByComponentId(componentId)).thenReturn(listOf(row))
+        whenever(pairResolver.pairsFor(componentId)).thenReturn(emptySet())
+
+        val response = assembler.assemble(component)
+
+        assertThat(response.entries).hasSize(1)
+        assertThat(response.entries[0].outcome).isEqualTo(Outcome.UNKNOWN)
+        assertThat(response.entries[0].reasonKind).isEqualTo(ReasonKind.SYSTEM_UNAVAILABLE)
+        verify(repositoryChecker, never()).check(any())
+    }
+
+    @Test
+    fun `Jira issues and project liveness down yields UNKNOWN entries classified SYSTEM_UNAVAILABLE`() {
+        val downSnapshot = liveSnapshot.copy(jiraIssuesLive = false, jiraProjectLive = false)
+        whenever(livenessProbe.probe()).thenReturn(downSnapshot)
+        whenever(versionLineRepository.findByComponentId(componentId)).thenReturn(emptyList())
+        whenever(componentConfigurationRepository.findByComponentId(componentId)).thenReturn(emptyList())
+        whenever(pairResolver.pairsFor(componentId)).thenReturn(setOf("PROJ" to null))
+
+        val response = assembler.assemble(component)
+
+        assertThat(response.entries).hasSize(2)
+        assertThat(response.entries).allMatch { it.outcome == Outcome.UNKNOWN }
+        assertThat(response.entries).allMatch { it.reasonKind == ReasonKind.SYSTEM_UNAVAILABLE }
+        verify(jiraIssuesChecker, never()).checkPair(any(), anyOrNull(), any())
+        verify(jiraProjectChecker, never()).checkProject(any(), any())
     }
 
     @Test

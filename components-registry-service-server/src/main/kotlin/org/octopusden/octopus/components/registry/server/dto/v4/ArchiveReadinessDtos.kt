@@ -22,6 +22,8 @@ data class ArchiveReadinessResponse(
  * @param targetUrl   deep link into the external system, or null when none is available
  * @param outcome     PASSED / FAILED / UNKNOWN
  * @param reason      human-readable reason for FAILED or UNKNOWN; null on PASSED
+ * @param reasonKind  classifies the remedy an UNKNOWN entry needs; null on PASSED and FAILED,
+ *                    where the outcome already implies what to do
  * @param sharedWith  live components that share this target (always empty for JIRA_ISSUES)
  * @param openIssues  open issues in scope; non-empty only on JIRA_ISSUES FAILED entries
  */
@@ -31,6 +33,7 @@ data class ArchiveReadinessEntry(
     val targetUrl: String?,
     val outcome: Outcome,
     val reason: String?,
+    val reasonKind: ReasonKind? = null,
     val sharedWith: List<String>,
     val openIssues: List<JiraIssueRef>,
 )
@@ -64,4 +67,28 @@ enum class Outcome {
      * of absence.
      */
     UNKNOWN,
+}
+
+/**
+ * Classifies the remedy an [Outcome.UNKNOWN] entry needs, because [ArchiveReadinessEntry.reason]
+ * is prose a caller cannot branch on. Always null on [Outcome.PASSED] and [Outcome.FAILED],
+ * where the outcome already implies the remedy.
+ */
+enum class ReasonKind {
+    /** An external system or connection could not be consulted. Wait and retry. */
+    SYSTEM_UNAVAILABLE,
+
+    /**
+     * The registry's own recorded data cannot be resolved — an unresolvable repository URL,
+     * or two components both claiming a null Jira version-prefix on the same project key.
+     * Never resolves by retrying; corrected by editing the component.
+     */
+    REGISTRY_DATA,
+
+    /**
+     * A piece of CRS's own configuration is missing — the canonical example is the
+     * JIRA_PROJECT entry when no retired-category set is configured. Corrected by editing
+     * CRS's own configuration.
+     */
+    NOT_CONFIGURED,
 }

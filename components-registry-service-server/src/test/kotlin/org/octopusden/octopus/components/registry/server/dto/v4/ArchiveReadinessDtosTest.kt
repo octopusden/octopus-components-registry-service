@@ -28,5 +28,29 @@ class ArchiveReadinessDtosTest {
         assertThat(json).contains("\"targetKind\":\"REPOSITORY\"")
         assertThat(json).contains("\"outcome\":\"FAILED\"")
         assertThat(json).contains("\"openIssues\":[]")
+        // FAILED carries no remedy classification.
+        assertThat(json).contains("\"reasonKind\":null")
+    }
+
+    @Test
+    fun `serialises a populated reasonKind on an UNKNOWN entry`() {
+        val response = ArchiveReadinessResponse(
+            ready = false,
+            entries = listOf(
+                ArchiveReadinessEntry(
+                    targetKind = TargetKind.JIRA_PROJECT,
+                    targetId = "PROJ",
+                    targetUrl = null,
+                    outcome = Outcome.UNKNOWN,
+                    reason = "No retired Jira project categories configured",
+                    reasonKind = ReasonKind.NOT_CONFIGURED,
+                    sharedWith = emptyList(),
+                    openIssues = emptyList(),
+                ),
+            ),
+        )
+        val json = mapper.writeValueAsString(response)
+        assertThat(json).contains("\"outcome\":\"UNKNOWN\"")
+        assertThat(json).contains("\"reasonKind\":\"NOT_CONFIGURED\"")
     }
 }

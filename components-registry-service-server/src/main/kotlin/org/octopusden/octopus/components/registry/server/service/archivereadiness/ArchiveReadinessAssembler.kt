@@ -3,6 +3,7 @@ package org.octopusden.octopus.components.registry.server.service.archivereadine
 import org.octopusden.octopus.components.registry.server.dto.v4.ArchiveReadinessEntry
 import org.octopusden.octopus.components.registry.server.dto.v4.ArchiveReadinessResponse
 import org.octopusden.octopus.components.registry.server.dto.v4.Outcome
+import org.octopusden.octopus.components.registry.server.dto.v4.ReasonKind
 import org.octopusden.octopus.components.registry.server.dto.v4.TargetKind
 import org.octopusden.octopus.components.registry.server.entity.ComponentEntity
 import org.octopusden.octopus.components.registry.server.repository.ComponentConfigurationRepository
@@ -126,6 +127,7 @@ class ArchiveReadinessAssembler(
                     targetUrl = null,
                     outcome = result.outcome,
                     reason = result.reason,
+                    reasonKind = result.reasonKind,
                     // Belt-and-suspenders: JIRA_ISSUES never carries sharedWith, even if a
                     // checker result happened to populate it (it shouldn't, per Task 7).
                     sharedWith = emptyList(),
@@ -168,10 +170,15 @@ class ArchiveReadinessAssembler(
             targetUrl = null,
             outcome = result.outcome,
             reason = result.reason,
+            reasonKind = result.reasonKind,
             sharedWith = result.sharedWith,
             openIssues = result.openIssues,
         )
 
+    // Called only from the liveness-gating paths above (design.md decision 12/13): the
+    // connection itself could not be consulted, so every target it would have checked is
+    // UNKNOWN for the same reason — SYSTEM_UNAVAILABLE, never REGISTRY_DATA or NOT_CONFIGURED,
+    // since there is no per-target CheckResult to classify it from.
     private fun unknownEntry(
         kind: TargetKind,
         targetId: String,
@@ -183,6 +190,7 @@ class ArchiveReadinessAssembler(
             targetUrl = null,
             outcome = Outcome.UNKNOWN,
             reason = reason,
+            reasonKind = ReasonKind.SYSTEM_UNAVAILABLE,
             sharedWith = emptyList(),
             openIssues = emptyList(),
         )

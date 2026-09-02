@@ -14,6 +14,7 @@ import org.mockito.kotlin.never
 import org.mockito.kotlin.verify
 import org.mockito.kotlin.whenever
 import org.octopusden.octopus.components.registry.server.dto.v4.Outcome
+import org.octopusden.octopus.components.registry.server.dto.v4.ReasonKind
 import java.util.UUID
 
 class JiraIssuesCheckerTest {
@@ -50,12 +51,13 @@ class JiraIssuesCheckerTest {
     }
 
     @Test
-    fun `prefixed pair — matching issue yields FAILED`() {
+    fun `prefixed pair — matching issue yields FAILED with no classification`() {
         mockSearch(listOf(mockIssue("PROJ-1", "some issue", listOf("1.2.3"))))
         val result = checker.checkPair("PROJ", "1.", UUID.randomUUID())
         assertThat(result.outcome).isEqualTo(Outcome.FAILED)
         assertThat(result.sharedWith).isEmpty()
         assertThat(result.openIssues).extracting("key").containsExactly("PROJ-1")
+        assertThat(result.reasonKind).isNull()
     }
 
     @Test
@@ -77,30 +79,35 @@ class JiraIssuesCheckerTest {
     }
 
     @Test
-    fun `null prefix with a registry conflict yields UNKNOWN without searching`() {
+    fun `null prefix with a registry conflict yields UNKNOWN classified REGISTRY_DATA without searching`() {
         whenever(pairResolver.hasNullPrefixConflict("PROJ")).thenReturn(true)
         val result = checker.checkPair("PROJ", null, UUID.randomUUID())
         assertThat(result.outcome).isEqualTo(Outcome.UNKNOWN)
+        assertThat(result.reasonKind).isEqualTo(ReasonKind.REGISTRY_DATA)
         verify(searchClient, never()).searchJql(any(), any(), any(), any())
     }
 
     @Test
-    fun `no open issue yields PASSED`() {
+    fun `no open issue yields PASSED with no classification`() {
         mockSearch(emptyList())
         val result = checker.checkPair("PROJ", "1.", UUID.randomUUID())
         assertThat(result.outcome).isEqualTo(Outcome.PASSED)
+        assertThat(result.reasonKind).isNull()
     }
 
     @Test
-    fun `search failure yields UNKNOWN`() {
+    fun `search failure yields UNKNOWN classified SYSTEM_UNAVAILABLE`() {
         whenever(searchClient.searchJql(any(), any(), any(), any())).thenThrow(RuntimeException("boom"))
-        assertThat(checker.checkPair("PROJ", "1.", UUID.randomUUID()).outcome).isEqualTo(Outcome.UNKNOWN)
+        val result = checker.checkPair("PROJ", "1.", UUID.randomUUID())
+        assertThat(result.outcome).isEqualTo(Outcome.UNKNOWN)
+        assertThat(result.reasonKind).isEqualTo(ReasonKind.SYSTEM_UNAVAILABLE)
     }
 
     @Test
-    fun `jira rest client not configured yields UNKNOWN`() {
+    fun `jira rest client not configured yields UNKNOWN classified NOT_CONFIGURED`() {
         val noClientChecker = JiraIssuesChecker(null, pairResolver)
         val result = noClientChecker.checkPair("PROJ", "1.", UUID.randomUUID())
         assertThat(result.outcome).isEqualTo(Outcome.UNKNOWN)
+        assertThat(result.reasonKind).isEqualTo(ReasonKind.NOT_CONFIGURED)
     }
 }

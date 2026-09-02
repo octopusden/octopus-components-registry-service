@@ -1,6 +1,7 @@
 package org.octopusden.octopus.components.registry.server.service.archivereadiness
 
 import org.octopusden.octopus.components.registry.server.dto.v4.Outcome
+import org.octopusden.octopus.components.registry.server.dto.v4.ReasonKind
 import org.springframework.stereotype.Service
 
 @Service
@@ -11,7 +12,11 @@ class TeamcityChecker(
     override fun check(target: CheckTarget): CheckResult =
         when (val result = tcDescendantLookup.findDescendantsAndSelf(target.targetId)) {
             is TcDescendantResult.SystemUnavailable ->
-                CheckResult(Outcome.UNKNOWN, reason = "TeamCity system could not be consulted")
+                CheckResult(
+                    Outcome.UNKNOWN,
+                    reason = "TeamCity system could not be consulted",
+                    reasonKind = ReasonKind.SYSTEM_UNAVAILABLE,
+                )
             is TcDescendantResult.ProjectAbsent ->
                 CheckResult(Outcome.PASSED, reason = "TeamCity project no longer exists")
             is TcDescendantResult.Found -> {

@@ -8,6 +8,7 @@ import org.mockito.kotlin.mock
 import org.mockito.kotlin.whenever
 import org.octopusden.octopus.components.registry.server.config.ArchiveReadinessProperties
 import org.octopusden.octopus.components.registry.server.dto.v4.Outcome
+import org.octopusden.octopus.components.registry.server.dto.v4.ReasonKind
 import org.octopusden.octopus.infrastructure.jira.JiraClient
 import org.octopusden.octopus.infrastructure.jira.dto.Project
 import org.octopusden.octopus.infrastructure.jira.dto.ProjectCategory
@@ -21,17 +22,21 @@ class JiraProjectCheckerTest {
     private val componentId = UUID.randomUUID()
 
     @Test
-    fun `category in retired set yields PASSED`() {
+    fun `category in retired set yields PASSED with no classification`() {
         whenever(jiraClient.getProject("PROJ")).thenReturn(Project("PROJ", ProjectCategory("X Archive")))
         whenever(sharingHelper.sharedWithForJiraProject(any(), eq(componentId))).thenReturn(emptyList())
-        assertThat(checker.checkProject("PROJ", componentId).outcome).isEqualTo(Outcome.PASSED)
+        val result = checker.checkProject("PROJ", componentId)
+        assertThat(result.outcome).isEqualTo(Outcome.PASSED)
+        assertThat(result.reasonKind).isNull()
     }
 
     @Test
-    fun `category not retired yields FAILED`() {
+    fun `category not retired yields FAILED with no classification`() {
         whenever(jiraClient.getProject("PROJ")).thenReturn(Project("PROJ", ProjectCategory("Development")))
         whenever(sharingHelper.sharedWithForJiraProject(any(), eq(componentId))).thenReturn(emptyList())
-        assertThat(checker.checkProject("PROJ", componentId).outcome).isEqualTo(Outcome.FAILED)
+        val result = checker.checkProject("PROJ", componentId)
+        assertThat(result.outcome).isEqualTo(Outcome.FAILED)
+        assertThat(result.reasonKind).isNull()
     }
 
     @Test
@@ -48,28 +53,35 @@ class JiraProjectCheckerTest {
         val result = checker.checkProject("PROJ", componentId)
         assertThat(result.outcome).isEqualTo(Outcome.PASSED)
         assertThat(result.sharedWith).containsExactly("other-comp")
+        assertThat(result.reasonKind).isNull()
     }
 
     @Test
-    fun `no retired categories configured yields UNKNOWN`() {
+    fun `no retired categories configured yields UNKNOWN classified NOT_CONFIGURED`() {
         val noCatChecker = JiraProjectChecker(
             jiraClient,
             sharingHelper,
             ArchiveReadinessProperties(retiredJiraProjectCategories = emptySet()),
         )
         whenever(jiraClient.getProject("PROJ")).thenReturn(Project("PROJ", ProjectCategory("Development")))
-        assertThat(noCatChecker.checkProject("PROJ", componentId).outcome).isEqualTo(Outcome.UNKNOWN)
+        val result = noCatChecker.checkProject("PROJ", componentId)
+        assertThat(result.outcome).isEqualTo(Outcome.UNKNOWN)
+        assertThat(result.reasonKind).isEqualTo(ReasonKind.NOT_CONFIGURED)
     }
 
     @Test
-    fun `jira client not configured yields UNKNOWN`() {
+    fun `jira client not configured yields UNKNOWN classified NOT_CONFIGURED`() {
         val noClientChecker = JiraProjectChecker(null, sharingHelper, props)
-        assertThat(noClientChecker.checkProject("PROJ", componentId).outcome).isEqualTo(Outcome.UNKNOWN)
+        val result = noClientChecker.checkProject("PROJ", componentId)
+        assertThat(result.outcome).isEqualTo(Outcome.UNKNOWN)
+        assertThat(result.reasonKind).isEqualTo(ReasonKind.NOT_CONFIGURED)
     }
 
     @Test
-    fun `jira project read failure yields UNKNOWN`() {
+    fun `jira project read failure yields UNKNOWN classified SYSTEM_UNAVAILABLE`() {
         whenever(jiraClient.getProject("PROJ")).thenThrow(RuntimeException("boom"))
-        assertThat(checker.checkProject("PROJ", componentId).outcome).isEqualTo(Outcome.UNKNOWN)
+        val result = checker.checkProject("PROJ", componentId)
+        assertThat(result.outcome).isEqualTo(Outcome.UNKNOWN)
+        assertThat(result.reasonKind).isEqualTo(ReasonKind.SYSTEM_UNAVAILABLE)
     }
 }
