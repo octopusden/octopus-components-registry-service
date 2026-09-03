@@ -196,6 +196,11 @@ allprojects {
         maven {
             url = uri("https://oss.sonatype.org/content/repositories/releases/")
         }
+        // Atlassian's jira-rest-java-client (api/core) and fugue are not published to Maven
+        // Central — they resolve from Atlassian's own public repository instead.
+        maven {
+            url = uri("https://maven.artifacts.atlassian.com")
+        }
     }
 }
 
