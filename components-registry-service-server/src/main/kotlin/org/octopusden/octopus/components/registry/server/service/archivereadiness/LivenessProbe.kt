@@ -9,6 +9,7 @@ import org.octopusden.octopus.infrastructure.client.commons.StandardBasicCredCre
 import org.octopusden.octopus.infrastructure.teamcity.client.TeamcityClassicClient
 import org.octopusden.octopus.infrastructure.teamcity.client.TeamcityClient
 import org.octopusden.octopus.vcsfacade.client.VcsFacadeClient
+import org.octopusden.octopus.vcsfacade.client.common.exception.NotFoundException
 import org.slf4j.LoggerFactory
 import org.springframework.stereotype.Service
 
@@ -28,12 +29,19 @@ import org.springframework.stereotype.Service
  * - Jira issue-search (Atlassian): `JiraRestClient.sessionClient.getCurrentSession()` is the
  *   equivalent "who am I" call on `jira-rest-java-client-api:5.2.7` — lightweight, no project
  *   key needed.
- * - VCS (vcs-facade): `VcsFacadeClient.indexReport(scanRequired: Boolean?)`
- *   (`GET rest/api/1/indexer/report`) is a genuine target-independent "is the server reachable"
- *   call — confirmed present, with no per-target argument, on the pinned `vcsfacade:client:3.0.36`
- *   (verified against the library's own sources jar). `vcsConfigured` follows
- *   `archive-readiness.vcs-facade.base-url` being non-blank, the same "blank = unconfigured, no
- *   entries" convention TeamCity/Jira already use (see [ArchiveReadinessProperties] and
+ * - VCS (vcs-facade): no project-independent probe call exists on the real, deployed server —
+ *   `indexReport`/`reindexRepository` (the "indexer" module) was removed from the server side at
+ *   some point after `vcsfacade:client:3.0.36`'s API was written; the client interface still
+ *   declares it (confirmed against `vcsfacade:client:3.0.37`'s own sources), so calling it fails
+ *   every time with a 500 the client can't distinguish from a real outage. `getRepository(sshUrl)`
+ *   against a sentinel URL that can never be a real repository is used instead: both a
+ *   [NotFoundException] and a normal response prove the connection and credential are good, and
+ *   only a genuine connection/5xx failure counts as not-live — confirmed live directly against
+ *   the deployed server via `oc exec` (2026-09-03), bypassing the api-gateway, since the pinned
+ *   client version can't be trusted against server API drift going forward. `vcsConfigured`
+ *   follows `archive-readiness.vcs-facade.base-url` being non-blank, the same "blank =
+ *   unconfigured, no entries" convention TeamCity/Jira already use (see
+ *   [ArchiveReadinessProperties] and
  *   [org.octopusden.octopus.components.registry.server.config.VcsFacadeClientConfig]'s lazy-client
  *   wrapper, which is what makes probing with a blank base URL safe to skip entirely).
  * - Jira project-read (octopus): the octopus `JiraClient` interface's only read is
@@ -137,15 +145,27 @@ class LivenessProbe(
             false
         }
 
-    // TooGenericExceptionCaught: same fail-closed rationale as probeTeamcity above.
-    @Suppress("TooGenericExceptionCaught")
+    // TooGenericExceptionCaught: same fail-closed rationale as probeTeamcity above. The sentinel
+    // URL's host is deliberately not any real VCS provider — hardcoding one from this
+    // environment's config would break the probe anywhere that host isn't configured — so
+    // vcs-facade answers "no configured VCS service for" this URL rather than a genuine
+    // NotFoundException. Both outcomes, like a normal response, are a well-formed answer from a
+    // live server and are treated the same way here — RepositoryChecker's own message-matching
+    // heuristic already establishes this exact string as recognized, not fragile guesswork.
+    @Suppress("TooGenericExceptionCaught", "SwallowedException")
     private fun probeVcs(): Boolean =
         try {
-            vcsFacadeClient.indexReport(false)
+            vcsFacadeClient.getRepository(VCS_LIVENESS_SENTINEL_URL)
+            true
+        } catch (e: NotFoundException) {
             true
         } catch (e: Exception) {
-            log.warn("VCS liveness probe failed: ${e.message}")
-            false
+            if (e.message?.contains("There is no configured VCS service for") == true) {
+                true
+            } else {
+                log.warn("VCS liveness probe failed: ${e.message}")
+                false
+            }
         }
 
     // TooGenericExceptionCaught: same fail-closed rationale as probeTeamcity above.
@@ -159,5 +179,9 @@ class LivenessProbe(
             log.warn("Jira issue-search liveness probe failed: ${e.message}")
             false
         }
+    }
+
+    companion object {
+        private const val VCS_LIVENESS_SENTINEL_URL = "ssh://git@archive-readiness-liveness-probe.invalid/does-not-exist.git"
     }
 }

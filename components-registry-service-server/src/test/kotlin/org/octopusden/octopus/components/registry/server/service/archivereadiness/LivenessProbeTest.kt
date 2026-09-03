@@ -17,7 +17,7 @@ import org.octopusden.octopus.components.registry.server.teamcity.TeamcityProper
 import org.octopusden.octopus.infrastructure.teamcity.client.TeamcityClient
 import org.octopusden.octopus.infrastructure.teamcity.client.dto.TeamcityServer
 import org.octopusden.octopus.vcsfacade.client.VcsFacadeClient
-import org.octopusden.octopus.vcsfacade.client.common.dto.IndexReport
+import org.octopusden.octopus.vcsfacade.client.common.exception.NotFoundException
 
 class LivenessProbeTest {
     private val teamcityClient = mock<TeamcityClient>()
@@ -115,11 +115,11 @@ class LivenessProbeTest {
     fun `configured VCS connection is probed exactly once`() {
         whenever(teamcityClient.getServer()).thenReturn(TeamcityServer("2024.03"))
         stubJiraSessionSucceeds()
-        whenever(vcsFacadeClient.indexReport(false)).thenReturn(IndexReport(emptyList()))
+        whenever(vcsFacadeClient.getRepository(any())).thenReturn(mock())
         val snapshot = probe().probe()
         assertThat(snapshot.vcsConfigured).isTrue()
         assertThat(snapshot.vcsLive).isTrue()
-        verify(vcsFacadeClient, times(1)).indexReport(false)
+        verify(vcsFacadeClient, times(1)).getRepository(any())
     }
 
     @Test
@@ -129,17 +129,42 @@ class LivenessProbeTest {
         val snapshot = probe(vcsBaseUrl = "").probe()
         assertThat(snapshot.vcsConfigured).isFalse()
         assertThat(snapshot.vcsLive).isFalse()
-        verify(vcsFacadeClient, never()).indexReport(any())
+        verify(vcsFacadeClient, never()).getRepository(any())
     }
 
     @Test
     fun `configured VCS whose probe call throws reports live false, not an exception out of probe`() {
         whenever(teamcityClient.getServer()).thenReturn(TeamcityServer("2024.03"))
         stubJiraSessionSucceeds()
-        whenever(vcsFacadeClient.indexReport(false)).thenThrow(RuntimeException("connection refused"))
+        whenever(vcsFacadeClient.getRepository(any())).thenThrow(RuntimeException("connection refused"))
         val snapshot = probe().probe()
         assertThat(snapshot.vcsConfigured).isTrue()
         assertThat(snapshot.vcsLive).isFalse()
+    }
+
+    @Test
+    fun `VCS sentinel URL not found on a real provider is still live`() {
+        // The sentinel host is never a real VCS provider, so a NotFoundException here means the
+        // server understood the request and answered — proof of life, not a real absence.
+        whenever(teamcityClient.getServer()).thenReturn(TeamcityServer("2024.03"))
+        stubJiraSessionSucceeds()
+        whenever(vcsFacadeClient.getRepository(any())).thenThrow(NotFoundException("not found"))
+        val snapshot = probe().probe()
+        assertThat(snapshot.vcsConfigured).isTrue()
+        assertThat(snapshot.vcsLive).isTrue()
+    }
+
+    @Test
+    fun `VCS sentinel URL matching no configured provider is still live`() {
+        // Same rationale as the NotFoundException case above, for the other well-formed
+        // "I answered, this URL just isn't mine" response RepositoryChecker already recognizes.
+        whenever(teamcityClient.getServer()).thenReturn(TeamcityServer("2024.03"))
+        stubJiraSessionSucceeds()
+        whenever(vcsFacadeClient.getRepository(any()))
+            .thenThrow(RuntimeException("There is no configured VCS service for this url"))
+        val snapshot = probe().probe()
+        assertThat(snapshot.vcsConfigured).isTrue()
+        assertThat(snapshot.vcsLive).isTrue()
     }
 
     @Test

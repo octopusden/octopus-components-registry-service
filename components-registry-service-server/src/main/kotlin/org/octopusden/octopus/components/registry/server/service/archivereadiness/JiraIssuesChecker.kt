@@ -53,8 +53,12 @@ class JiraIssuesChecker(
         // here, so prefix/version matching happens client-side below instead.
         val jql = "project = \"$projectKey\" AND statusCategory != Done"
         return try {
+            // "issuetype" is never read by this check, but the client's own Issue parser calls
+            // JSONObject.get("issuetype") unconditionally with no fallback — omitting it from the
+            // requested fields doesn't just leave the field null, it throws a raw JSONException
+            // for every issue on the page.
             val results = jiraRestClient.searchClient
-                .searchJql(jql, PAGE_SIZE, 0, setOf("summary", "fixVersions", "status"))
+                .searchJql(jql, PAGE_SIZE, 0, setOf("summary", "fixVersions", "status", "issuetype"))
                 .claim()
             val page = results.issues.toList()
             val matching = page.filter { issue ->
