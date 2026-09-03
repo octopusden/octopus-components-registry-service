@@ -31,9 +31,11 @@ class JiraProjectChecker(
         componentId: UUID,
     ): CheckResult {
         if (octopusJiraClient == null) {
+            log.info("JIRA_PROJECT: skipped for {} — Jira client not configured", projectKey)
             return CheckResult(Outcome.UNKNOWN, reason = "Jira client not configured", reasonKind = ReasonKind.NOT_CONFIGURED)
         }
         if (properties.retiredJiraProjectCategories.isEmpty()) {
+            log.info("JIRA_PROJECT: {} is UNKNOWN — no retired Jira project categories configured", projectKey)
             return CheckResult(
                 Outcome.UNKNOWN,
                 reason = "No retired Jira project categories configured",

@@ -6,6 +6,7 @@ import org.octopusden.octopus.components.registry.server.dto.v4.ReasonKind
 import org.octopusden.octopus.components.registry.server.util.VcsUrlCanonicalizer
 import org.octopusden.octopus.vcsfacade.client.VcsFacadeClient
 import org.octopusden.octopus.vcsfacade.client.common.exception.NotFoundException
+import org.slf4j.LoggerFactory
 import org.springframework.stereotype.Service
 
 // SYS-047: depends (via SharingHelper) on beans that inject JPA repositories, so it must be
@@ -17,6 +18,8 @@ class RepositoryChecker(
     private val vcsFacadeClient: VcsFacadeClient,
     private val sharingHelper: SharingHelper,
 ) : TargetChecker {
+    private val log = LoggerFactory.getLogger(RepositoryChecker::class.java)
+
     // NotFoundException here is expected, successful information (the repository was
     // confirmed absent), not a discarded error, so it is intentionally not logged/rethrown.
     // The plain Exception catch below is likewise deliberate: this check must fail closed
@@ -46,6 +49,7 @@ class RepositoryChecker(
             // project avoids elsewhere. A non-matching message falls through to the generic
             // reason below, which was already the safe default (design decision 14).
             if (e.message?.contains("There is no configured VCS service for") == true) {
+                log.warn("REPOSITORY: {} is unresolvable by any configured VCS provider — registry data to correct", target.targetId)
                 return CheckResult(
                     Outcome.UNKNOWN,
                     reason = "Recorded repository URL is unresolvable by any configured VCS provider: ${target.targetId}",
@@ -54,6 +58,7 @@ class RepositoryChecker(
             }
             // Ambiguous failure — could be system unavailable, credential error, or some other
             // unrecognised server-side error. Fail closed.
+            log.warn("REPOSITORY: {} could not be consulted: {}", target.targetId, e.message)
             return CheckResult(
                 Outcome.UNKNOWN,
                 reason = "VCS system could not be consulted: ${e.message}",
@@ -79,11 +84,14 @@ class RepositoryChecker(
                     CheckResult(Outcome.FAILED)
                 }
             }
-            null -> CheckResult(
-                Outcome.UNKNOWN,
-                reason = "VCS system returned indeterminate archived state",
-                reasonKind = ReasonKind.SYSTEM_UNAVAILABLE,
-            )
+            null -> {
+                log.warn("REPOSITORY: {} — VCS system returned indeterminate archived state", target.targetId)
+                CheckResult(
+                    Outcome.UNKNOWN,
+                    reason = "VCS system returned indeterminate archived state",
+                    reasonKind = ReasonKind.SYSTEM_UNAVAILABLE,
+                )
+            }
         }
     }
 }

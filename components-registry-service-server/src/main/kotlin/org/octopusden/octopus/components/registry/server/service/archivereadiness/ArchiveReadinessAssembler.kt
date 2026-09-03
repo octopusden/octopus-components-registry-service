@@ -11,6 +11,7 @@ import org.octopusden.octopus.components.registry.server.repository.ComponentCon
 import org.octopusden.octopus.components.registry.server.repository.VcsSettingsEntryRepository
 import org.octopusden.octopus.components.registry.server.repository.VersionLineRepository
 import org.octopusden.octopus.components.registry.server.util.VcsUrlCanonicalizer
+import org.slf4j.LoggerFactory
 import org.springframework.stereotype.Service
 import java.util.UUID
 
@@ -42,8 +43,11 @@ class ArchiveReadinessAssembler(
     private val jiraProjectChecker: JiraProjectChecker,
     private val pairResolver: JiraEffectivePairResolver,
 ) {
+    private val log = LoggerFactory.getLogger(ArchiveReadinessAssembler::class.java)
+
     fun assemble(component: ComponentEntity): ArchiveReadinessResponse {
         val componentId = requireNotNull(component.id) { "Cannot assemble archive-readiness for an unpersisted component" }
+        log.info("Assembling archive-readiness for component {} ({})", component.componentKey, componentId)
         // Probed exactly once per call — never once per target (design.md decision 12).
         val snapshot = livenessProbe.probe()
 
@@ -54,6 +58,16 @@ class ArchiveReadinessAssembler(
         entries += jiraProjectEntries(componentId, snapshot)
 
         val ready = entries.none { it.outcome == Outcome.FAILED || it.outcome == Outcome.UNKNOWN }
+        log.info(
+            "Archive-readiness for component {} ({}): {} entries ({}), ready={}",
+            component.componentKey,
+            componentId,
+            entries.size,
+            TargetKind.entries.joinToString(", ") { kind ->
+                "$kind=${entries.count { it.targetKind == kind }}"
+            },
+            ready,
+        )
         return ArchiveReadinessResponse(ready = ready, entries = entries)
     }
 
@@ -63,12 +77,18 @@ class ArchiveReadinessAssembler(
         componentId: UUID,
         snapshot: LivenessSnapshot,
     ): List<ArchiveReadinessEntry> {
-        if (!snapshot.teamcityConfigured) return emptyList()
+        if (!snapshot.teamcityConfigured) {
+            log.info("TEAMCITY_PROJECT: skipped for component {} — TeamCity not configured", componentId)
+            return emptyList()
+        }
         val projectIds =
             versionLineRepository
                 .findByComponentId(componentId)
                 .map { it.teamcityProject.projectId }
                 .distinct()
+        if (projectIds.isEmpty()) {
+            log.info("TEAMCITY_PROJECT: component {} has no version lines — nothing to check", componentId)
+        }
         return if (!snapshot.teamcityLive) {
             // Liveness down: every target still gets an entry, but all share ONE reason and
             // NONE of them calls teamcityChecker (no wasteful per-target timeouts).
@@ -91,7 +111,10 @@ class ArchiveReadinessAssembler(
         componentId: UUID,
         snapshot: LivenessSnapshot,
     ): List<ArchiveReadinessEntry> {
-        if (!snapshot.vcsConfigured) return emptyList()
+        if (!snapshot.vcsConfigured) {
+            log.info("REPOSITORY: skipped for component {} — VCS not configured", componentId)
+            return emptyList()
+        }
         val configRows = componentConfigurationRepository.findByComponentId(componentId)
         val rawUrlByCanonical = LinkedHashMap<String, String>()
         configRows.forEach { row ->
@@ -102,6 +125,13 @@ class ArchiveReadinessAssembler(
             }
         }
         val rawUrls = rawUrlByCanonical.values
+        if (rawUrls.isEmpty()) {
+            log.info(
+                "REPOSITORY: component {} has {} configuration row(s) but no VCS entries on any of them — nothing to check",
+                componentId,
+                configRows.size,
+            )
+        }
         return if (!snapshot.vcsLive) {
             rawUrls.map { unknownEntry(TargetKind.REPOSITORY, it, VCS_LIVENESS_REASON) }
         } else {
@@ -117,8 +147,14 @@ class ArchiveReadinessAssembler(
         componentId: UUID,
         snapshot: LivenessSnapshot,
     ): List<ArchiveReadinessEntry> {
-        if (!snapshot.jiraIssuesConfigured) return emptyList()
+        if (!snapshot.jiraIssuesConfigured) {
+            log.info("JIRA_ISSUES: skipped for component {} — Jira issue-search not configured", componentId)
+            return emptyList()
+        }
         val pairs = pairResolver.pairsFor(componentId)
+        if (pairs.isEmpty()) {
+            log.info("JIRA_ISSUES: component {} has no effective (project key, prefix) pairs — nothing to check", componentId)
+        }
         return if (!snapshot.jiraIssuesLive) {
             pairs.map { (projectKey, prefix) ->
                 unknownEntry(TargetKind.JIRA_ISSUES, jiraIssuesTargetId(projectKey, prefix), JIRA_ISSUES_LIVENESS_REASON)
@@ -147,8 +183,14 @@ class ArchiveReadinessAssembler(
         componentId: UUID,
         snapshot: LivenessSnapshot,
     ): List<ArchiveReadinessEntry> {
-        if (!snapshot.jiraProjectConfigured) return emptyList()
+        if (!snapshot.jiraProjectConfigured) {
+            log.info("JIRA_PROJECT: skipped for component {} — Jira project-read not configured", componentId)
+            return emptyList()
+        }
         val projectKeys = pairResolver.pairsFor(componentId).map { it.first }.distinct()
+        if (projectKeys.isEmpty()) {
+            log.info("JIRA_PROJECT: component {} has no effective project keys — nothing to check", componentId)
+        }
         return if (!snapshot.jiraProjectLive) {
             projectKeys.map { unknownEntry(TargetKind.JIRA_PROJECT, it, JIRA_PROJECT_LIVENESS_REASON) }
         } else {

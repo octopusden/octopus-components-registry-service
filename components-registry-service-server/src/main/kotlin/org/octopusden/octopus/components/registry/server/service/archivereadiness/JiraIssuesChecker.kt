@@ -30,6 +30,7 @@ class JiraIssuesChecker(
         componentId: UUID,
     ): CheckResult {
         if (jiraRestClient == null) {
+            log.info("JIRA_ISSUES: skipped for {}:{} — Jira issue search not configured", projectKey, prefix)
             return CheckResult(
                 Outcome.UNKNOWN,
                 reason = "Jira issue search not configured",
@@ -37,6 +38,7 @@ class JiraIssuesChecker(
             )
         }
         if (prefix == null && pairResolver.hasNullPrefixConflict(projectKey)) {
+            log.warn("JIRA_ISSUES: null-prefix conflict on Jira project {} — registry data to correct", projectKey)
             return CheckResult(
                 Outcome.UNKNOWN,
                 reason = "More than one component claims the default (no-prefix) bucket on Jira " +
@@ -78,12 +80,20 @@ class JiraIssuesChecker(
                 // JQL comment above), so a truncated fetch would otherwise silently report a
                 // component ready to archive while its own open issues go unseen — the fail-open
                 // direction this check exists to prevent everywhere else.
-                results.total > page.size -> CheckResult(
-                    Outcome.UNKNOWN,
-                    reason = "Jira project $projectKey has ${results.total} open issues, more than the " +
-                        "$PAGE_SIZE this check reads — cannot confirm none are in scope",
-                    reasonKind = ReasonKind.SYSTEM_UNAVAILABLE,
-                )
+                results.total > page.size -> {
+                    log.warn(
+                        "JIRA_ISSUES: {} has {} open issues, more than the {} this check reads — cannot confirm none are in scope",
+                        projectKey,
+                        results.total,
+                        PAGE_SIZE,
+                    )
+                    CheckResult(
+                        Outcome.UNKNOWN,
+                        reason = "Jira project $projectKey has ${results.total} open issues, more than the " +
+                            "$PAGE_SIZE this check reads — cannot confirm none are in scope",
+                        reasonKind = ReasonKind.SYSTEM_UNAVAILABLE,
+                    )
+                }
                 else -> CheckResult(Outcome.PASSED)
             }
         } catch (e: Exception) {

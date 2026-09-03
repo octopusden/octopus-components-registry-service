@@ -90,19 +90,37 @@ class LivenessProbe(
         // split switch is a small change, not a rewrite.
         val jiraProjectConfigured = archiveReadinessProperties.isJiraConfigured()
 
-        return LivenessSnapshot(
-            vcsConfigured = vcsConfigured,
-            vcsLive = vcsConfigured && probeVcs(),
-            teamcityConfigured = teamcityConfigured,
-            teamcityLive = teamcityConfigured && probeTeamcity(),
-            jiraIssuesConfigured = jiraIssuesConfigured,
-            jiraIssuesLive = jiraIssuesConfigured && probeJiraIssues(),
-            jiraProjectConfigured = jiraProjectConfigured,
-            // No project-independent probe call is available on the octopus JiraClient
-            // interface — see class kdoc. Reported live whenever configured; outage detection
-            // is deferred to JiraProjectChecker's existing per-target fail-closed behaviour.
-            jiraProjectLive = jiraProjectConfigured,
+        if (!vcsConfigured) log.info("VCS check disabled: archive-readiness.vcs-facade.base-url is blank")
+        if (!teamcityConfigured) log.info("TeamCity check disabled: teamcity.base-url is blank")
+        if (!jiraIssuesConfigured) log.info("Jira issue-search check disabled: archive-readiness.jira.base-url is blank")
+
+        val snapshot =
+            LivenessSnapshot(
+                vcsConfigured = vcsConfigured,
+                vcsLive = vcsConfigured && probeVcs(),
+                teamcityConfigured = teamcityConfigured,
+                teamcityLive = teamcityConfigured && probeTeamcity(),
+                jiraIssuesConfigured = jiraIssuesConfigured,
+                jiraIssuesLive = jiraIssuesConfigured && probeJiraIssues(),
+                jiraProjectConfigured = jiraProjectConfigured,
+                // No project-independent probe call is available on the octopus JiraClient
+                // interface — see class kdoc. Reported live whenever configured; outage detection
+                // is deferred to JiraProjectChecker's existing per-target fail-closed behaviour.
+                jiraProjectLive = jiraProjectConfigured,
+            )
+        log.info(
+            "Archive-readiness liveness snapshot: vcs(configured={}, live={}) teamcity(configured={}, live={}) " +
+                "jiraIssues(configured={}, live={}) jiraProject(configured={}, live={})",
+            snapshot.vcsConfigured,
+            snapshot.vcsLive,
+            snapshot.teamcityConfigured,
+            snapshot.teamcityLive,
+            snapshot.jiraIssuesConfigured,
+            snapshot.jiraIssuesLive,
+            snapshot.jiraProjectConfigured,
+            snapshot.jiraProjectLive,
         )
+        return snapshot
     }
 
     // Catching Exception broadly is deliberate: this probe must fail closed to `live = false`

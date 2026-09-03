@@ -72,7 +72,10 @@ class TcDescendantLookup(
     // system couldn't be consulted reliably.
     @Suppress("TooGenericExceptionCaught")
     fun findDescendantsAndSelf(projectId: String): TcDescendantResult {
-        if (properties.baseUrl.isBlank()) return TcDescendantResult.SystemUnavailable
+        if (properties.baseUrl.isBlank()) {
+            log.info("TC descendant lookup skipped for project {} — TeamCity not configured", projectId)
+            return TcDescendantResult.SystemUnavailable
+        }
         return try {
             // affectedProject never reports the root project's OWN archived flag (it structurally
             // excludes the root — see the class KDoc), so we fetch the root directly, by id, to
