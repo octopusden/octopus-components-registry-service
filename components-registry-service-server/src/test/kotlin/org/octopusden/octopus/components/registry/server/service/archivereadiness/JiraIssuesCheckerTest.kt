@@ -9,7 +9,9 @@ import io.atlassian.util.concurrent.Promises
 import org.assertj.core.api.Assertions.assertThat
 import org.junit.jupiter.api.Test
 import org.mockito.kotlin.any
+import org.mockito.kotlin.anyOrNull
 import org.mockito.kotlin.argumentCaptor
+import org.mockito.kotlin.isNull
 import org.mockito.kotlin.mock
 import org.mockito.kotlin.never
 import org.mockito.kotlin.verify
@@ -48,7 +50,7 @@ class JiraIssuesCheckerTest {
 
     private fun mockSearch(issues: List<Issue>) {
         val result = SearchResult(0, 50, issues.size, issues)
-        whenever(searchClient.searchJql(any(), any(), any(), any())).thenReturn(Promises.promise(result))
+        whenever(searchClient.searchJql(any(), any(), any(), anyOrNull())).thenReturn(Promises.promise(result))
     }
 
     @Test
@@ -109,9 +111,20 @@ class JiraIssuesCheckerTest {
         mockSearch(emptyList())
         checker.checkPair("PROJ", "1.", UUID.randomUUID())
         val jqlCaptor = argumentCaptor<String>()
-        verify(searchClient).searchJql(jqlCaptor.capture(), any(), any(), any())
+        verify(searchClient).searchJql(jqlCaptor.capture(), any(), any(), anyOrNull())
         assertThat(jqlCaptor.firstValue).isEqualTo("project = \"PROJ\" AND statusCategory != Done")
         assertThat(jqlCaptor.firstValue).doesNotContain("fixVersion")
+    }
+
+    @Test
+    fun `searchJql requests no explicit fields, leaving Jira's own default field set in place`() {
+        // A null fields set makes the client omit the "fields" query param entirely rather than
+        // restrict to an explicit allowlist — the allowlist approach broke in production every
+        // time it omitted a field jira-rest-java-client-core's own parser reads unconditionally
+        // ("issuetype", then "created"), since Jira only returns fields that were requested.
+        mockSearch(emptyList())
+        checker.checkPair("PROJ", "1.", UUID.randomUUID())
+        verify(searchClient).searchJql(any(), any(), any(), isNull())
     }
 
     @Test
@@ -120,7 +133,7 @@ class JiraIssuesCheckerTest {
         val result = checker.checkPair("PROJ", null, UUID.randomUUID())
         assertThat(result.outcome).isEqualTo(Outcome.UNKNOWN)
         assertThat(result.reasonKind).isEqualTo(ReasonKind.REGISTRY_DATA)
-        verify(searchClient, never()).searchJql(any(), any(), any(), any())
+        verify(searchClient, never()).searchJql(any(), any(), any(), anyOrNull())
     }
 
     @Test
@@ -138,7 +151,7 @@ class JiraIssuesCheckerTest {
         // match on a truncated page is not trustworthy evidence of PASSED.
         val page = listOf(mockIssue("PROJ-6", "unrelated version", listOf("2.0.0")))
         val result = SearchResult(0, 50, 80, page)
-        whenever(searchClient.searchJql(any(), any(), any(), any())).thenReturn(Promises.promise(result))
+        whenever(searchClient.searchJql(any(), any(), any(), anyOrNull())).thenReturn(Promises.promise(result))
         val outcome = checker.checkPair("PROJ", "1.", UUID.randomUUID())
         assertThat(outcome.outcome).isEqualTo(Outcome.UNKNOWN)
         assertThat(outcome.reasonKind).isEqualTo(ReasonKind.SYSTEM_UNAVAILABLE)
@@ -151,7 +164,7 @@ class JiraIssuesCheckerTest {
         // page — additional unseen issues would only reinforce FAILED, never overturn it.
         val page = listOf(mockIssue("PROJ-7", "matching", listOf("1.5")))
         val result = SearchResult(0, 50, 80, page)
-        whenever(searchClient.searchJql(any(), any(), any(), any())).thenReturn(Promises.promise(result))
+        whenever(searchClient.searchJql(any(), any(), any(), anyOrNull())).thenReturn(Promises.promise(result))
         val outcome = checker.checkPair("PROJ", "1.", UUID.randomUUID())
         assertThat(outcome.outcome).isEqualTo(Outcome.FAILED)
         assertThat(outcome.openIssues).extracting("key").containsExactly("PROJ-7")
@@ -159,7 +172,7 @@ class JiraIssuesCheckerTest {
 
     @Test
     fun `search failure yields UNKNOWN classified SYSTEM_UNAVAILABLE`() {
-        whenever(searchClient.searchJql(any(), any(), any(), any())).thenThrow(RuntimeException("boom"))
+        whenever(searchClient.searchJql(any(), any(), any(), anyOrNull())).thenThrow(RuntimeException("boom"))
         val result = checker.checkPair("PROJ", "1.", UUID.randomUUID())
         assertThat(result.outcome).isEqualTo(Outcome.UNKNOWN)
         assertThat(result.reasonKind).isEqualTo(ReasonKind.SYSTEM_UNAVAILABLE)
