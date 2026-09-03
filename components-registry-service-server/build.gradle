@@ -73,6 +73,17 @@ dependencies {
         exclude group: 'org.glassfish.jersey.core', module: 'jersey-client'
         exclude group: 'org.glassfish.jersey.media', module: 'jersey-media-json-jettison'
     }
+    // jersey-client (excluded above) was the sole transitive source of a jakarta.ws.rs.ext.
+    // RuntimeDelegate provider: AsynchronousJiraRestClient's constructor calls
+    // jakarta.ws.rs.core.UriBuilder.fromUri(...), which looks one up via
+    // ServiceLoader/META-INF-services at runtime and throws ClassNotFoundException with none
+    // registered — jakarta.ws.rs-api (already on the classpath via Eureka/Spring Boot's BOM) is
+    // the interface only, no implementation. jersey-common carries the provider
+    // (RuntimeDelegateImpl) without jersey-client's org.glassfish.jersey.client.JerseyClient —
+    // the class Eureka's auto-config actually checks for — so adding it back doesn't reintroduce
+    // that conflict. Version is left unpinned so Spring Boot's BOM keeps it aligned with the
+    // jersey-client version it already forces elsewhere on the classpath.
+    runtimeOnly("org.glassfish.jersey.core:jersey-common")
     implementation("io.atlassian.fugue:fugue:${project.properties['atlassian-fugue.version']}")
 
     // Octopus jira-client — for getProject(key).projectCategory (JIRA_PROJECT entries)
