@@ -12,9 +12,7 @@ import java.util.UUID
 private val BARE_VERSION = Regex("^\\d")
 private const val PAGE_SIZE = 50
 
-// SYS-047: depends (via JiraEffectivePairResolver) on a bean that injects JPA repositories, so
-// it must be dropped in no-db mode too — see ConditionalOnDatabaseEnabled's kdoc ("or another
-// bean so annotated").
+// Depends transitively on JPA repos via JiraEffectivePairResolver — drop in no-db mode too.
 @ConditionalOnDatabaseEnabled
 @Service
 class JiraIssuesChecker(
@@ -23,13 +21,8 @@ class JiraIssuesChecker(
 ) {
     private val log = LoggerFactory.getLogger(JiraIssuesChecker::class.java)
 
-    // componentId is accepted (not used in the body) to keep this checker's call shape
-    // symmetric with TargetChecker.check(CheckTarget) — sharedWith is always empty here
-    // (sharing never excuses open issues), so no component-scoped sharing lookup is needed.
-    // TooGenericExceptionCaught: catching Exception broadly here is deliberate — this check
-    // must fail closed to UNKNOWN on ANY failure from the Jira issue search call, not just
-    // specific exception types, because an unanticipated exception type from a third-party
-    // client is itself evidence the system couldn't be consulted reliably.
+    // sharedWith is always empty here (sharing never excuses open issues); componentId is kept
+    // only for call-shape symmetry with TargetChecker.
     @Suppress("UnusedParameter", "TooGenericExceptionCaught")
     fun checkPair(
         projectKey: String,
@@ -51,17 +44,11 @@ class JiraIssuesChecker(
                 reasonKind = ReasonKind.REGISTRY_DATA,
             )
         }
-        // Whole-project scope applies only when this null-prefix pair is the SOLE claimant of
-        // projectKey (spec.md "A sole claim on a project is scoped by the whole project") — the
-        // null/null conflict case above is already handled, so if another pair exists here it
-        // necessarily has its own non-null prefix, and the bare-version-pattern filter below
-        // still applies. Only computed for the null-prefix path: a prefixed pair never needs it.
+        // Sole claimant of projectKey (no sibling pair, prefixed or not) -> scope is the whole
+        // project, since nothing else could own these issues.
         val wholeProjectScope = prefix == null && !pairResolver.hasOtherPairOnProjectKey(projectKey)
-        // `fixVersion` is a VERSION-typed JQL field: it does not support the `~` (CONTAINS)
-        // operator, which is TEXT-field only (supported operators: = != > >= < <= is "is not" in
-        // "not in"). A `fixVersion ~ "prefix*"` clause is therefore invalid JQL and would make
-        // Jira reject the whole search. All prefix/bare-version matching is done client-side
-        // below, on the `fixVersions` field already requested, instead.
+        // fixVersion is a VERSION field: JQL's `~` (CONTAINS) is text-only and Jira rejects it
+        // here, so prefix/version matching happens client-side below instead.
         val jql = "project = \"$projectKey\" AND statusCategory != Done"
         return try {
             val results = jiraRestClient.searchClient
