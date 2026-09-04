@@ -18,35 +18,35 @@ class TeamcityCheckerTest {
     private val target = CheckTarget("TC_PROJECT_1", componentId, "comp")
 
     @Test
-    fun `archived project yields PASSED`() {
+    fun `archived project yields COMPLETED`() {
         whenever(tcLookup.findDescendantsAndSelf("TC_PROJECT_1")).thenReturn(
             TcDescendantResult.Found(setOf("TC_PROJECT_1"), setOf("TC_PROJECT_1")),
         )
         whenever(sharingHelper.sharedWithForTcProject(any(), any(), eq(componentId))).thenReturn(emptyList())
         val result = checker.check(target)
-        assertThat(result.outcome).isEqualTo(Outcome.PASSED)
+        assertThat(result.outcome).isEqualTo(Outcome.COMPLETED)
         assertThat(result.reasonKind).isNull()
     }
 
     @Test
-    fun `unarchived project with no sharing yields FAILED`() {
+    fun `unarchived project with no sharing yields NOT_COMPLETED`() {
         whenever(tcLookup.findDescendantsAndSelf("TC_PROJECT_1")).thenReturn(
             TcDescendantResult.Found(setOf("TC_PROJECT_1"), emptySet()),
         )
         whenever(sharingHelper.sharedWithForTcProject(any(), any(), eq(componentId))).thenReturn(emptyList())
         val result = checker.check(target)
-        assertThat(result.outcome).isEqualTo(Outcome.FAILED)
+        assertThat(result.outcome).isEqualTo(Outcome.NOT_COMPLETED)
         assertThat(result.reasonKind).isNull()
     }
 
     @Test
-    fun `unarchived project shared with live component yields PASSED`() {
+    fun `unarchived project shared with live component yields COMPLETED`() {
         whenever(tcLookup.findDescendantsAndSelf("TC_PROJECT_1")).thenReturn(
             TcDescendantResult.Found(setOf("TC_PROJECT_1"), emptySet()),
         )
         whenever(sharingHelper.sharedWithForTcProject(any(), any(), eq(componentId))).thenReturn(listOf("other"))
         val result = checker.check(target)
-        assertThat(result.outcome).isEqualTo(Outcome.PASSED)
+        assertThat(result.outcome).isEqualTo(Outcome.COMPLETED)
         assertThat(result.sharedWith).containsExactly("other")
         assertThat(result.reasonKind).isNull()
     }
@@ -60,12 +60,12 @@ class TeamcityCheckerTest {
     }
 
     @Test
-    fun `absent project yields PASSED with no classification`() {
+    fun `absent project yields COMPLETED with no classification`() {
         whenever(tcLookup.findDescendantsAndSelf("TC_PROJECT_1")).thenReturn(
             TcDescendantResult.ProjectAbsent("not found"),
         )
         val result = checker.check(target)
-        assertThat(result.outcome).isEqualTo(Outcome.PASSED)
+        assertThat(result.outcome).isEqualTo(Outcome.COMPLETED)
         assertThat(result.sharedWith).isEmpty()
         assertThat(result.reasonKind).isNull()
     }

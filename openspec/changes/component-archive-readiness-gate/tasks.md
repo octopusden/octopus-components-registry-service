@@ -52,32 +52,32 @@
 
 ## 4. The four entry kinds
 
-- [ ] 4.1 Failing test: a repository reporting `archived = true` yields `PASSED`
-- [ ] 4.2 Failing test: `archived = false` with no sharing yields `FAILED`
+- [ ] 4.1 Failing test: a repository reporting `archived = true` yields `COMPLETED`
+- [ ] 4.2 Failing test: `archived = false` with no sharing yields `NOT_COMPLETED`
 - [ ] 4.3 Failing test: `archived = null` yields `UNKNOWN` with a reason naming the system
-- [ ] 4.4 Failing test: a repository the facade reports as absent yields `PASSED` with a reason saying it no longer exists — **on a system proved live**. Absence is a definite answer, and a deleted repository is not live infrastructure
-- [ ] 4.4a Failing test: the same absent report on a system *not* proved live yields `UNKNOWN`, never `PASSED`
+- [ ] 4.4 Failing test: a repository the facade reports as absent yields `COMPLETED` with a reason saying it no longer exists — **on a system proved live**. Absence is a definite answer, and a deleted repository is not live infrastructure
+- [ ] 4.4a Failing test: the same absent report on a system *not* proved live yields `UNKNOWN`, never `COMPLETED`
 - [ ] 4.4b Failing test: a read failing in a way that could be either absence or a permission problem yields `UNKNOWN`
 - [ ] 4.5 Failing test: `vcsPath` is passed through to `getRepository` unmodified — no project-key or slug parsing, no per-platform branching
-- [ ] 4.6 Failing test: an archived TeamCity project yields `PASSED`; an unarchived, unshared one yields `FAILED`
+- [ ] 4.6 Failing test: an archived TeamCity project yields `COMPLETED`; an unarchived, unshared one yields `NOT_COMPLETED`
 - [ ] 4.7 Failing test: a TeamCity project whose state could not be read yields `UNKNOWN`
-- [ ] 4.7a Failing test: a TeamCity project reported absent, on a proved-live system, yields `PASSED` with a reason saying it no longer exists
+- [ ] 4.7a Failing test: a TeamCity project reported absent, on a proved-live system, yields `COMPLETED` with a reason saying it no longer exists
 - [ ] 4.7b Failing test: a repository URL no configured provider serves yields `UNKNOWN` whose reason names the recorded URL as unresolvable, and does not say the VCS system is unavailable
-- [ ] 4.8 Failing test: the `JIRA_ISSUES` entry for a given effective pair — an issue open under that pair's scope yields `FAILED`, and the issue is returned on the entry as structured data
-- [ ] 4.9 Failing test: `JIRA_ISSUES` still `FAILED` when another live component uses the same project key, and its `sharedWith` is empty — sharing never applies to this entry
-- [ ] 4.10 Failing test: no open issue under the pair's scope yields `PASSED`
+- [ ] 4.8 Failing test: the `JIRA_ISSUES` entry for a given effective pair — an issue open under that pair's scope yields `NOT_COMPLETED`, and the issue is returned on the entry as structured data
+- [ ] 4.9 Failing test: `JIRA_ISSUES` still `NOT_COMPLETED` when another live component uses the same project key, and its `sharedWith` is empty — sharing never applies to this entry
+- [ ] 4.10 Failing test: no open issue under the pair's scope yields `COMPLETED`
 - [ ] 4.11 Failing test: an issue scoped to a *different* pair — another component's, or another of this component's own version ranges — is neither returned nor blocking
-- [ ] 4.12 Failing test: a pair with a null prefix and no other pair claiming the same project key is scoped to the whole project, and yields `PASSED`/`FAILED` normally — a null prefix alone SHALL NOT yield `UNKNOWN`
+- [ ] 4.12 Failing test: a pair with a null prefix and no other pair claiming the same project key is scoped to the whole project, and yields `COMPLETED`/`NOT_COMPLETED` normally — a null prefix alone SHALL NOT yield `UNKNOWN`
 - [ ] 4.12a Failing test: a pair with a null prefix and another pair claiming the same project key with its own registered prefix is scoped to issues whose recorded version carries no prefix at all — a bare version string — decided without reading the other pair's specific prefix
 - [ ] 4.12b Failing test: two pairs both claiming a null prefix on the same project key yield `UNKNOWN` on both, naming the conflict as registry data — the one genuine anomaly left in this area
 - [ ] 4.12c Failing test: an issue whose recorded version matches neither a bare pattern nor any pair's registered prefix is counted by no pair's entry and blocks nobody — an accepted trade-off (design decision 15), not a bug to work around by falling back to exclusion
-- [ ] 4.13 Failing test: the `JIRA_PROJECT` entry — the category from `getProject(key).projectCategory` matched against the configured retired set yields `PASSED`; changing the configured set changes the outcome with no code change
-- [ ] 4.13a Failing test: the category is the only signal — a project whose category matches yields `PASSED` even with no `[ARCHIVE]` marker in its name, and a project whose name carries the marker but whose category does not match yields `FAILED`. The project name is never read
+- [ ] 4.13 Failing test: the `JIRA_PROJECT` entry — the category from `getProject(key).projectCategory` matched against the configured retired set yields `COMPLETED`; changing the configured set changes the outcome with no code change
+- [ ] 4.13a Failing test: the category is the only signal — a project whose category matches yields `COMPLETED` even with no `[ARCHIVE]` marker in its name, and a project whose name carries the marker but whose category does not match yields `NOT_COMPLETED`. The project name is never read
 - [ ] 4.13b Failing test: two of a component's own effective pairs sharing one project key produce exactly one `JIRA_PROJECT` entry for it, not two
-- [ ] 4.14 Failing test: `JIRA_PROJECT` not retired but shared yields `PASSED` and lists the sharing component; not retired and unshared yields `FAILED`
-- [ ] 4.15 Failing test: with no retired category configured, `JIRA_PROJECT` is `UNKNOWN` with a reason saying so, never `PASSED`
+- [ ] 4.14 Failing test: `JIRA_PROJECT` not retired but shared yields `COMPLETED` and lists the sharing component; not retired and unshared yields `NOT_COMPLETED`
+- [ ] 4.15 Failing test: with no retired category configured, `JIRA_PROJECT` is `UNKNOWN` with a reason saying so, never `COMPLETED`
 - [ ] 4.16 Failing test: an issue-tracker outage yields `UNKNOWN` on every `JIRA_ISSUES` and `JIRA_PROJECT` entry the component has, and is not read as "no open issues"
-- [ ] 4.17 Failing test: two of a component's effective pairs are decided independently — one pair's project retired with an open issue on that pair yields that pair's `JIRA_ISSUES: FAILED` alongside its own `JIRA_PROJECT: PASSED`, while the other pair's entries reflect its own, unrelated state
+- [ ] 4.17 Failing test: two of a component's effective pairs are decided independently — one pair's project retired with an open issue on that pair yields that pair's `JIRA_ISSUES: NOT_COMPLETED` alongside its own `JIRA_PROJECT: COMPLETED`, while the other pair's entries reflect its own, unrelated state
 - [ ] 4.18 Implement the four checks behind one internal interface, so the assembler does not know which system answered. `JIRA_ISSUES` and `JIRA_PROJECT` are two checks over one client, run once per effective pair (issues) or once per distinct project key (project) — not one check returning two verdicts, and not one run per component
 
 ## 4a. The component's Jira scope is a set of effective pairs
@@ -107,8 +107,17 @@ Why this exists: `UNKNOWN` blocks and there is no override, so a target whose st
 - [ ] 4b.9 Failing test: an `UNKNOWN` from an unreachable system classifies `SYSTEM_UNAVAILABLE`
 - [ ] 4b.10 Failing test: an `UNKNOWN` from an unresolvable recorded URL, or from two pairs both claiming a null prefix on one project key, classifies `REGISTRY_DATA`
 - [ ] 4b.11 Failing test: the issue-tracker project entry with no retired category configured classifies `NOT_CONFIGURED`
-- [ ] 4b.12 Failing test: a `PASSED` or `FAILED` entry carries no classification
+- [ ] 4b.12 Failing test: a `COMPLETED` or `NOT_COMPLETED` entry carries no classification
 - [ ] 4b.8 Implement the per-system probe, the unconfigured-system omission, and the remedy classification, with the issue tracker's two connections as independent units throughout
+
+## 4c. Responsibility
+
+- [ ] 4c.1 Add `responsibility` to the entry DTO as `COMPONENT_OWNER | F1_TEAM | null` — a discrete value, not prose in `reason`, so a caller can group and filter by it
+- [ ] 4c.2 Failing test: a `NOT_COMPLETED` open-issues entry names `COMPONENT_OWNER` — only the component's own people can judge whether an issue may be closed
+- [ ] 4c.3 Failing test: a `NOT_COMPLETED` repository, TeamCity or issue-tracker-project entry names `F1_TEAM`
+- [ ] 4c.4 Failing test: any `UNKNOWN` entry names `F1_TEAM`, whatever its kind or `reasonKind` — unavailable systems, unresolvable URLs and absent configuration are all the platform team's
+- [ ] 4c.5 Failing test: a `COMPLETED` entry names nobody
+- [ ] 4c.6 Implement, keyed on target kind rather than on the outcome's details
 
 ## 5. Assembler and verdict
 
@@ -121,7 +130,7 @@ Why this exists: `UNKNOWN` blocks and there is no override, so a target whose st
 - [ ] 5.3c Failing test: a component with two effective Jira pairs sharing one project key (a prefix-only override) produces three issue-tracker entries — two `JIRA_ISSUES`, one `JIRA_PROJECT`
 - [ ] 5.3d Failing test: two `JIRA_ISSUES` entries on the same component (two effective pairs) never carry the same `targetId`, including when both pairs have a null prefix on different projects
 - [ ] 5.4 Failing test: all entries passing yields `ready = true`
-- [ ] 5.5 Failing test: one `FAILED` entry yields `ready = false`
+- [ ] 5.5 Failing test: one `NOT_COMPLETED` entry yields `ready = false`
 - [ ] 5.6 Failing test: one `UNKNOWN` entry yields `ready = false`
 - [ ] 5.7 Failing test: entries whose only non-passing reason is sharing yield `ready = true`
 - [ ] 5.8 Failing test: `sharedWith` carries component names, and `reason` is not the carrier of that information
@@ -166,5 +175,5 @@ Why this exists: `UNKNOWN` blocks and there is no override, so a target whose st
 - [ ] 8.13 Manual: with a deliberately invalid VCS credential, every repository entry is `UNKNOWN` under one reason about the integration — and no entry claims a repository is absent
 - [ ] 8.14 Manual: with the VCS integration unconfigured, no repository entries appear and archiving is offered
 - [ ] 8.15 Manual: confirm on the live tracker that a genuinely retired project's category reads exactly `X Archive`, and that the deployed configuration carries that value — the whole project entry rests on that string being right
-- [ ] 8.16 Manual: a project that was recategorised but whose schemes were never switched still reports `PASSED`, and confirm with the operator that this limit is understood — the entry attests the marker, not the procedure
+- [ ] 8.16 Manual: a project that was recategorised but whose schemes were never switched still reports `COMPLETED`, and confirm with the operator that this limit is understood — the entry attests the marker, not the procedure
 - [ ] 8.17 Update `docs/registry/functional-spec.md` and the relevant numbered requirements with the gate, recording that the issue-tracker project entry checks one of the procedure's five steps

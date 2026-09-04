@@ -54,10 +54,10 @@ class JiraIssuesCheckerTest {
     }
 
     @Test
-    fun `prefixed pair — matching issue yields FAILED with no classification`() {
+    fun `prefixed pair — matching issue yields NOT_COMPLETED with no classification`() {
         mockSearch(listOf(mockIssue("PROJ-1", "some issue", listOf("1.2.3"))))
         val result = checker.checkPair("PROJ", "1.", UUID.randomUUID())
-        assertThat(result.outcome).isEqualTo(Outcome.FAILED)
+        assertThat(result.outcome).isEqualTo(Outcome.NOT_COMPLETED)
         assertThat(result.sharedWith).isEmpty()
         assertThat(result.openIssues).extracting("key").containsExactly("PROJ-1")
         assertThat(result.reasonKind).isNull()
@@ -69,7 +69,7 @@ class JiraIssuesCheckerTest {
         whenever(pairResolver.hasOtherPairOnProjectKey("PROJ")).thenReturn(false)
         mockSearch(listOf(mockIssue("PROJ-2", "bare issue", listOf("1.2"))))
         val result = checker.checkPair("PROJ", null, UUID.randomUUID())
-        assertThat(result.outcome).isEqualTo(Outcome.FAILED)
+        assertThat(result.outcome).isEqualTo(Outcome.NOT_COMPLETED)
         assertThat(result.openIssues).extracting("key").containsExactly("PROJ-2")
     }
 
@@ -81,7 +81,7 @@ class JiraIssuesCheckerTest {
         whenever(pairResolver.hasOtherPairOnProjectKey("PROJ")).thenReturn(true)
         mockSearch(listOf(mockIssue("PROJ-3", "prefixed issue", listOf("REL-1.2"))))
         val result = checker.checkPair("PROJ", null, UUID.randomUUID())
-        assertThat(result.outcome).isEqualTo(Outcome.PASSED)
+        assertThat(result.outcome).isEqualTo(Outcome.COMPLETED)
         assertThat(result.openIssues).isEmpty()
     }
 
@@ -94,7 +94,7 @@ class JiraIssuesCheckerTest {
         whenever(pairResolver.hasOtherPairOnProjectKey("PROJ")).thenReturn(false)
         mockSearch(listOf(mockIssue("PROJ-4", "non-bare version issue", listOf("v1.2.3"))))
         val result = checker.checkPair("PROJ", null, UUID.randomUUID())
-        assertThat(result.outcome).isEqualTo(Outcome.FAILED)
+        assertThat(result.outcome).isEqualTo(Outcome.NOT_COMPLETED)
         assertThat(result.openIssues).extracting("key").containsExactly("PROJ-4")
     }
 
@@ -102,7 +102,7 @@ class JiraIssuesCheckerTest {
     fun `prefixed pair — issue whose fixVersion does not start with the prefix is not counted`() {
         mockSearch(listOf(mockIssue("PROJ-5", "unrelated version", listOf("2.0.0"))))
         val result = checker.checkPair("PROJ", "1.", UUID.randomUUID())
-        assertThat(result.outcome).isEqualTo(Outcome.PASSED)
+        assertThat(result.outcome).isEqualTo(Outcome.COMPLETED)
         assertThat(result.openIssues).isEmpty()
     }
 
@@ -137,18 +137,18 @@ class JiraIssuesCheckerTest {
     }
 
     @Test
-    fun `no open issue yields PASSED with no classification`() {
+    fun `no open issue yields COMPLETED with no classification`() {
         mockSearch(emptyList())
         val result = checker.checkPair("PROJ", "1.", UUID.randomUUID())
-        assertThat(result.outcome).isEqualTo(Outcome.PASSED)
+        assertThat(result.outcome).isEqualTo(Outcome.COMPLETED)
         assertThat(result.reasonKind).isNull()
     }
 
     @Test
-    fun `a truncated page with no match on it yields UNKNOWN, not a false PASSED`() {
+    fun `a truncated page with no match on it yields UNKNOWN, not a false COMPLETED`() {
         // Jira reports more open issues (80) than this check fetched (2, none matching) — the
         // one matching issue, if any, could be sitting unread beyond the fetched page. An empty
-        // match on a truncated page is not trustworthy evidence of PASSED.
+        // match on a truncated page is not trustworthy evidence of COMPLETED.
         val page = listOf(mockIssue("PROJ-6", "unrelated version", listOf("2.0.0")))
         val result = SearchResult(0, 50, 80, page)
         whenever(searchClient.searchJql(any(), any(), any(), anyOrNull())).thenReturn(Promises.promise(result))
@@ -159,14 +159,14 @@ class JiraIssuesCheckerTest {
     }
 
     @Test
-    fun `a truncated page with a match on it still yields FAILED — truncation only matters for PASSED`() {
+    fun `a truncated page with a match on it still yields NOT_COMPLETED — truncation only matters for COMPLETED`() {
         // More open issues exist beyond the fetched page, but a match was already found on this
-        // page — additional unseen issues would only reinforce FAILED, never overturn it.
+        // page — additional unseen issues would only reinforce NOT_COMPLETED, never overturn it.
         val page = listOf(mockIssue("PROJ-7", "matching", listOf("1.5")))
         val result = SearchResult(0, 50, 80, page)
         whenever(searchClient.searchJql(any(), any(), any(), anyOrNull())).thenReturn(Promises.promise(result))
         val outcome = checker.checkPair("PROJ", "1.", UUID.randomUUID())
-        assertThat(outcome.outcome).isEqualTo(Outcome.FAILED)
+        assertThat(outcome.outcome).isEqualTo(Outcome.NOT_COMPLETED)
         assertThat(outcome.openIssues).extracting("key").containsExactly("PROJ-7")
     }
 

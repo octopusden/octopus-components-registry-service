@@ -57,7 +57,7 @@ class ArchiveReadinessAssembler(
         entries += jiraIssuesEntries(componentId, snapshot)
         entries += jiraProjectEntries(componentId, snapshot)
 
-        val ready = entries.none { it.outcome == Outcome.FAILED || it.outcome == Outcome.UNKNOWN }
+        val ready = entries.none { it.outcome == Outcome.NOT_COMPLETED || it.outcome == Outcome.UNKNOWN }
         log.info(
             "Archive-readiness for component {} ({}): {} entries ({}), ready={}",
             component.componentKey,
@@ -165,7 +165,6 @@ class ArchiveReadinessAssembler(
                 ArchiveReadinessEntry(
                     targetKind = TargetKind.JIRA_ISSUES,
                     targetId = jiraIssuesTargetId(projectKey, prefix),
-                    targetUrl = null,
                     outcome = result.outcome,
                     reason = result.reason,
                     reasonKind = result.reasonKind,
@@ -214,7 +213,6 @@ class ArchiveReadinessAssembler(
         ArchiveReadinessEntry(
             targetKind = kind,
             targetId = targetId,
-            targetUrl = null,
             outcome = result.outcome,
             reason = result.reason,
             reasonKind = result.reasonKind,
@@ -234,7 +232,6 @@ class ArchiveReadinessAssembler(
         ArchiveReadinessEntry(
             targetKind = kind,
             targetId = targetId,
-            targetUrl = null,
             outcome = Outcome.UNKNOWN,
             reason = reason,
             reasonKind = ReasonKind.SYSTEM_UNAVAILABLE,

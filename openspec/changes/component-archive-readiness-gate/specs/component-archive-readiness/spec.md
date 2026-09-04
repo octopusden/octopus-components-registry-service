@@ -67,30 +67,30 @@ A target reached through more than one registry row on the same component — tw
 - **WHEN** readiness is requested for any component
 - **THEN** no component field changes and nothing is archived in any external system
 
-### Requirement: An outcome is PASSED, FAILED, or UNKNOWN
+### Requirement: An outcome is COMPLETED, NOT_COMPLETED, or UNKNOWN
 
-Each entry's outcome SHALL be one of exactly three values. `PASSED` means nothing on the entry blocks — the target was read and is archived, or it is not archived but is still needed by a live component, or it no longer exists. `FAILED` means the entry was read and something on it blocks. `UNKNOWN` means the entry's state could not be determined.
+Each entry's outcome SHALL be one of exactly three values. `COMPLETED` means nothing on the entry blocks — the target was read and is archived, or it is not archived but is still needed by a live component, or it no longer exists. `NOT_COMPLETED` means the entry was read and something on it blocks. `UNKNOWN` means the entry's state could not be determined.
 
 The three ways an entry can pass mean different things about the external system — retired, deliberately still running, gone — so each SHALL carry a reason distinguishing it. A caller must be able to tell them apart without inspecting the external system itself.
 
-`FAILED` and `UNKNOWN` SHALL both block, and SHALL be reported distinguishably — an unreachable system is not evidence that a target is unarchived, and the two call for different action. `UNKNOWN` SHALL carry a reason naming the system that could not be consulted.
+`NOT_COMPLETED` and `UNKNOWN` SHALL both block, and SHALL be reported distinguishably — an unreachable system is not evidence that a target is unarchived, and the two call for different action. `UNKNOWN` SHALL carry a reason naming the system that could not be consulted.
 
 There SHALL NOT be a separate outcome for a shared target; see the sharing requirement.
 
 #### Scenario: An archived target passes
 
 - **WHEN** a repository reports as archived
-- **THEN** its entry's outcome is `PASSED`
+- **THEN** its entry's outcome is `COMPLETED`
 
 #### Scenario: A live target fails
 
 - **WHEN** a repository reports as not archived and no live component shares it
-- **THEN** its entry's outcome is `FAILED`
+- **THEN** its entry's outcome is `NOT_COMPLETED`
 
-#### Scenario: An unreadable target is UNKNOWN, not FAILED
+#### Scenario: An unreadable target is UNKNOWN, not NOT_COMPLETED
 
 - **WHEN** the repository's archived state comes back unresolved
-- **THEN** its entry's outcome is `UNKNOWN`, not `FAILED`, and its reason names the system
+- **THEN** its entry's outcome is `UNKNOWN`, not `NOT_COMPLETED`, and its reason names the system
 
 #### Scenario: An unreachable system blocks
 
@@ -127,47 +127,45 @@ Where a system is reached through more than one independent connection — the i
 - **WHEN** the issue-search connection cannot be reached but the project-read connection can
 - **THEN** every `JIRA_ISSUES` entry is `UNKNOWN` and every `JIRA_PROJECT` entry carries its real outcome
 
-### Requirement: A target the system reports absent passes, but only on a system proved live
+### Requirement: A target the system reports absent passes only when absence cannot be confused with a permission failure
 
-When an external system positively reports that a target does not exist, the entry SHALL be `PASSED` with a reason stating the target no longer exists. A deleted repository or a deleted build project is not live infrastructure, which is what the check asks about — it is a stronger end state than archived, not an unresolved one.
+When an external system positively reports that a target does not exist, the entry SHALL be `COMPLETED` with a reason stating the target no longer exists — **but only for target kinds where that report is known not to be confusable with a permission or credential problem.** A deleted build project is not live infrastructure, which is what the check asks about — it is a stronger end state than archived, not an unresolved one. TeamCity's project-read is such a target kind.
 
-This SHALL apply only when that system was proved live in the same readiness call. On a system not proved live, an absent report SHALL be `UNKNOWN`.
+The VCS repository target kind is not: a hosting platform may answer "not found" for a repository that exists but the credential may not see — a deliberate configuration in hardened installations, so that probing cannot enumerate private repositories — and CRS has no way to confirm its configured VCS credential is provisioned with instance-wide read access that would rule this out. So for `REPOSITORY`, an absent report SHALL be `UNKNOWN`, regardless of whether the VCS system was proved live in the same call: liveness proves the credential authenticates, not that it can see every specific repository. Absence SHALL never be inferred from a report whose meaning is uncertain for that target kind.
 
-The reason a proof of liveness is required: a hosting platform may answer "not found" for a target that exists but the credential may not see — a deliberate configuration in hardened installations, so that probing cannot enumerate private repositories. Absent and not-permitted then arrive indistinguishably. Without the liveness proof, a credential that quietly lost its permissions would make **every** target look deleted and **every** component look ready, which is precisely the failure this check exists to prevent, occurring silently and across the whole registry.
-
-Where a system's absent report cannot be separated from a permission failure even on a live system, the entry SHALL be `UNKNOWN`. Absence SHALL never be inferred from an error whose meaning is uncertain.
+This SHALL apply only when the relevant system was proved live in the same readiness call in the first place — on a system not proved live, an absent report SHALL be `UNKNOWN` regardless of target kind, same as any other read on that system.
 
 An entry that passes because its target is absent SHALL report an empty `sharedWith`, even if the registry separately still records a live component referencing that same target. Absence, not sharing, decided this outcome, and an entry's outcome SHALL be decided by exactly one rule — the same invariant that governs every other entry.
 
-#### Scenario: A deleted repository passes
+#### Scenario: A deleted repository does not pass
 
 - **WHEN** the VCS system is proved live and reports that the component's repository does not exist
-- **THEN** the entry is `PASSED` and its reason states the repository no longer exists
+- **THEN** the entry is `UNKNOWN`, not `COMPLETED` — this system's absent report cannot be told apart from a permission failure
 
 #### Scenario: A deleted build project passes
 
 - **WHEN** TeamCity is proved live and reports that the component's project does not exist
-- **THEN** the entry is `PASSED` and its reason states the project no longer exists
+- **THEN** the entry is `COMPLETED` and its reason states the project no longer exists
 
 #### Scenario: Absent on an unproved system is UNKNOWN
 
-- **WHEN** the VCS system was not proved live and reports that a repository does not exist
-- **THEN** the entry is `UNKNOWN`, not `PASSED`
+- **WHEN** TeamCity was not proved live and reports that a project does not exist
+- **THEN** the entry is `UNKNOWN`, not `COMPLETED`
 
 #### Scenario: A permission failure is never read as absence
 
 - **WHEN** a target read fails in a way that could be either absence or a permission problem
 - **THEN** the entry is `UNKNOWN`
 
-#### Scenario: An absent target does not block
+#### Scenario: An absent build project does not block
 
-- **WHEN** the only non-archived target is one the system reports as absent, on a proved-live system
+- **WHEN** the only non-archived target is a TeamCity project the system reports as absent, on a proved-live system
 - **THEN** `ready` is true
 
 #### Scenario: Absence does not borrow sharing's field
 
-- **WHEN** a target is reported absent on a system proved live, and the registry separately still records a live component referencing that same target
-- **THEN** the entry is `PASSED` for absence, and `sharedWith` is empty
+- **WHEN** a TeamCity project is reported absent on a system proved live, and the registry separately still records a live component referencing that same project
+- **THEN** the entry is `COMPLETED` for absence, and `sharedWith` is empty
 
 ### Requirement: A system that is not configured contributes no entries
 
@@ -214,7 +212,7 @@ Every `UNKNOWN` entry SHALL carry, alongside its prose reason, a classification 
 
 The three need opposite actions. An unavailable system is waited out and retried. A registry-data problem never resolves by retrying and is corrected by editing the component. Missing configuration is corrected in CRS. Offering one remedy for all three means offering advice that can never succeed for two of them.
 
-The classification SHALL be absent on `PASSED` and `FAILED`, where the outcome already implies what to do.
+The classification SHALL be absent on `COMPLETED` and `NOT_COMPLETED`, where the outcome already implies what to do.
 
 #### Scenario: An unreachable system classifies as unavailable
 
@@ -238,7 +236,7 @@ The classification SHALL be absent on `PASSED` and `FAILED`, where the outcome a
 
 #### Scenario: A passing or failing entry carries no classification
 
-- **WHEN** an entry is `PASSED` or `FAILED`
+- **WHEN** an entry is `COMPLETED` or `NOT_COMPLETED`
 - **THEN** it carries no remedy classification
 
 ### Requirement: A target still used by a live component is not blocked by being unarchived, and the sharing is reported
@@ -254,7 +252,7 @@ The component being checked SHALL NOT appear in its own entry's list, and archiv
 #### Scenario: A shared, unarchived target passes
 
 - **WHEN** a TeamCity project is not archived and one live component other than this one uses it
-- **THEN** its entry's outcome is `PASSED` and that component is listed
+- **THEN** its entry's outcome is `COMPLETED` and that component is listed
 
 #### Scenario: Several sharing components are all listed
 
@@ -278,7 +276,7 @@ The component being checked SHALL NOT appear in its own entry's list, and archiv
 
 ### Requirement: A repository target is matched by canonical URL, and consulted by the stored one
 
-Two registry entries SHALL count as the same repository when their URLs differ only in ways that do not change which repository they name — scheme, a trailing `.git`, a trailing slash, or letter case in the host and path. Without this, the same repository recorded two ways in two components reads as two targets, and a live component's use of it is missed — a miss in the dangerous direction, since the entry would then report unshared and `FAILED` rather than shared.
+Two registry entries SHALL count as the same repository when their URLs differ only in ways that do not change which repository they name — scheme, a trailing `.git`, a trailing slash, or letter case in the host and path. Without this, the same repository recorded two ways in two components reads as two targets, and a live component's use of it is missed — a miss in the dangerous direction, since the entry would then report unshared and `NOT_COMPLETED` rather than shared.
 
 Canonicalisation SHALL apply to comparison only. The URL sent to the VCS system SHALL be the one stored on the component, unmodified, so CRS never parses a project key or a slug and never branches on the hosting platform.
 
@@ -360,17 +358,17 @@ The entry SHALL be `UNKNOWN`, with a reason naming it as a registry-data problem
 #### Scenario: An open issue blocks
 
 - **WHEN** an issue is open under one of the component's effective pairs
-- **THEN** that pair's `JIRA_ISSUES` entry is `FAILED` and the issue is returned on it
+- **THEN** that pair's `JIRA_ISSUES` entry is `NOT_COMPLETED` and the issue is returned on it
 
 #### Scenario: Sharing does not excuse open issues
 
 - **WHEN** an issue is open under one of the component's effective pairs and another live component uses the same project key
-- **THEN** that entry is still `FAILED`, and its `sharedWith` is empty
+- **THEN** that entry is still `NOT_COMPLETED`, and its `sharedWith` is empty
 
 #### Scenario: No open issue passes
 
 - **WHEN** no issue is open under a pair's scope
-- **THEN** that pair's entry is `PASSED`
+- **THEN** that pair's entry is `COMPLETED`
 
 #### Scenario: Another pair's open issue does not block
 
@@ -399,38 +397,38 @@ The entry SHALL be `UNKNOWN`, with a reason naming it as a registry-data problem
 
 ### Requirement: The issue-tracker project entry reports the project's own retired state
 
-One `JIRA_PROJECT` entry per distinct project key among the component's effective pairs SHALL report whether that project has been retired. Its subject is the project, which several components (or several of this component's own version ranges) can share, so it SHALL follow the ordinary sharing rule: a project another live component still uses SHALL be `PASSED` with those components listed, whatever its own state.
+One `JIRA_PROJECT` entry per distinct project key among the component's effective pairs SHALL report whether that project has been retired. Its subject is the project, which several components (or several of this component's own version ranges) can share, so it SHALL follow the ordinary sharing rule: a project another live component still uses SHALL be `COMPLETED` with those components listed, whatever its own state.
 
-An issue-tracker project has no archived flag. Its retired state is recorded by reclassifying it into a designated project category — `X Archive` on the live tracker. CRS SHALL read the project's category and compare it against a configured set of categories that mean "retired". That set SHALL be configuration, not a constant compiled into CRS — the category names are the issue tracker's data and can be renamed there without a CRS release. When no such category is configured, this entry SHALL be `UNKNOWN` with a reason saying so, never `PASSED`.
+An issue-tracker project has no archived flag. Its retired state is recorded by reclassifying it into a designated project category — `X Archive` on the live tracker. CRS SHALL read the project's category and compare it against a configured set of categories that mean "retired". That set SHALL be configuration, not a constant compiled into CRS — the category names are the issue tracker's data and can be renamed there without a CRS release. When no such category is configured, this entry SHALL be `UNKNOWN` with a reason saying so, never `COMPLETED`.
 
-The category SHALL be the only signal this entry reads. The retirement procedure also renames the project to carry an `[ARCHIVE]` marker, and that rename SHALL NOT be checked: a project name is free text, so matching it would fail on ordinary variation in spacing, bracketing or spelling, and a false `FAILED` here sends someone to redo a step that was already done. The category is a controlled vocabulary chosen from a fixed list, which is what makes it safe to match exactly.
+The category SHALL be the only signal this entry reads. The retirement procedure also renames the project to carry an `[ARCHIVE]` marker, and that rename SHALL NOT be checked: a project name is free text, so matching it would fail on ordinary variation in spacing, bracketing or spelling, and a false `NOT_COMPLETED` here sends someone to redo a step that was already done. The category is a controlled vocabulary chosen from a fixed list, which is what makes it safe to match exactly.
 
-`PASSED` on this entry SHALL mean the observable marker is set, not that the whole retirement procedure was carried out. The procedure's remaining steps — the issue-type scheme, the workflow scheme, the permission scheme and the notification scheme — are administrative settings readable only with issue-tracker administrator rights, which this check deliberately does not hold. They SHALL NOT be checked, and the entry SHALL NOT be presented as evidence that they were done.
+`COMPLETED` on this entry SHALL mean the observable marker is set, not that the whole retirement procedure was carried out. The procedure's remaining steps — the issue-type scheme, the workflow scheme, the permission scheme and the notification scheme — are administrative settings readable only with issue-tracker administrator rights, which this check deliberately does not hold. They SHALL NOT be checked, and the entry SHALL NOT be presented as evidence that they were done.
 
 #### Scenario: The category alone decides the outcome
 
 - **WHEN** the project's category is a configured retired category but its name carries no `[ARCHIVE]` marker
-- **THEN** the project entry is `PASSED`
+- **THEN** the project entry is `COMPLETED`
 
 #### Scenario: A rename without a recategorisation does not pass
 
 - **WHEN** the project's name carries the `[ARCHIVE]` marker but its category is not a configured retired category
-- **THEN** the project entry is `FAILED`
+- **THEN** the project entry is `NOT_COMPLETED`
 
 #### Scenario: A retired project passes
 
 - **WHEN** the project's category is one of the configured retired categories
-- **THEN** the project entry is `PASSED`
+- **THEN** the project entry is `COMPLETED`
 
 #### Scenario: A shared project's state is excused
 
 - **WHEN** the project is not retired and another live component uses it
-- **THEN** the project entry is `PASSED` and that component is listed
+- **THEN** the project entry is `COMPLETED` and that component is listed
 
 #### Scenario: An unretired, unshared project blocks
 
 - **WHEN** the project is not retired and no live component shares it
-- **THEN** the project entry is `FAILED`
+- **THEN** the project entry is `NOT_COMPLETED`
 
 #### Scenario: The retired categories are configuration
 
@@ -445,7 +443,45 @@ The category SHALL be the only signal this entry reads. The retirement procedure
 #### Scenario: The two issue-tracker entries are decided independently
 
 - **WHEN** an issue is open under one of the component's effective pairs and that pair's project is retired
-- **THEN** that pair's `JIRA_ISSUES` entry is `FAILED`, its `JIRA_PROJECT` entry is `PASSED`, and `ready` is false
+- **THEN** that pair's `JIRA_ISSUES` entry is `NOT_COMPLETED`, its `JIRA_PROJECT` entry is `COMPLETED`, and `ready` is false
+
+### Requirement: An entry that owes work names who owes it
+
+Every entry that does not report `COMPLETED` SHALL name which party owns the remaining work. An entry reporting `COMPLETED` SHALL name none, because nothing is owed.
+
+The assignment SHALL follow the target kind rather than the outcome's details. Open issues belong to the component's own people — nobody else can judge whether an issue may be closed. Every other target is infrastructure the platform team administers, so archiving a repository, archiving a build project and recategorising an issue-tracker project belong to that team, as does anything unreadable: an unavailable system, an unresolvable recorded URL and an absent configuration are all theirs to resolve.
+
+This SHALL be a discrete value, not prose inside the reason, so a caller can group or filter by it without parsing text.
+
+#### Scenario: Open issues are the component's own work
+
+- **WHEN** an open-issues entry reports `NOT_COMPLETED`
+- **THEN** it names the component owner as responsible
+
+#### Scenario: A repository is the platform team's work
+
+- **WHEN** a repository entry reports `NOT_COMPLETED`
+- **THEN** it names the platform team as responsible
+
+#### Scenario: A build project is the platform team's work
+
+- **WHEN** a TeamCity project entry reports `NOT_COMPLETED`
+- **THEN** it names the platform team as responsible
+
+#### Scenario: An issue-tracker project is the platform team's work
+
+- **WHEN** an issue-tracker project entry reports `NOT_COMPLETED`
+- **THEN** it names the platform team as responsible
+
+#### Scenario: Anything unreadable is the platform team's work
+
+- **WHEN** any entry reports `UNKNOWN`, whatever its kind or classification
+- **THEN** it names the platform team as responsible
+
+#### Scenario: A completed entry owes nothing
+
+- **WHEN** an entry reports `COMPLETED`
+- **THEN** it names no responsible party
 
 ### Requirement: The check does not change how the archived flag is written
 

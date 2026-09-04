@@ -51,9 +51,9 @@ class JiraProjectChecker(
             val retired = category != null && category in properties.retiredJiraProjectCategories
             val shared = sharingHelper.sharedWithForJiraProject(projectKey, componentId)
             when {
-                shared.isNotEmpty() -> CheckResult(Outcome.PASSED, sharedWith = shared)
-                retired -> CheckResult(Outcome.PASSED)
-                else -> CheckResult(Outcome.FAILED)
+                shared.isNotEmpty() -> CheckResult(Outcome.COMPLETED, sharedWith = shared)
+                retired -> CheckResult(Outcome.COMPLETED)
+                else -> CheckResult(Outcome.NOT_COMPLETED)
             }
         } catch (e: Exception) {
             log.warn("Jira project read failed for $projectKey: ${e.message}")

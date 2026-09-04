@@ -87,38 +87,38 @@ class ArchiveReadinessAssemblerTest {
     }
 
     @Test
-    fun `all PASSED yields ready`() {
+    fun `all COMPLETED yields ready`() {
         whenever(livenessProbe.probe()).thenReturn(liveSnapshot)
         whenever(versionLineRepository.findByComponentId(componentId)).thenReturn(listOf(versionLine("TC1")))
         val row = configRowWithVcsEntries("ssh://git.example.com/repo.git")
         whenever(componentConfigurationRepository.findByComponentId(componentId)).thenReturn(listOf(row))
         whenever(pairResolver.pairsFor(componentId)).thenReturn(setOf("PROJ" to null))
-        whenever(teamcityChecker.check(any())).thenReturn(CheckResult(Outcome.PASSED))
-        whenever(repositoryChecker.check(any())).thenReturn(CheckResult(Outcome.PASSED))
-        whenever(jiraIssuesChecker.checkPair("PROJ", null, componentId)).thenReturn(CheckResult(Outcome.PASSED))
-        whenever(jiraProjectChecker.checkProject("PROJ", componentId)).thenReturn(CheckResult(Outcome.PASSED))
+        whenever(teamcityChecker.check(any())).thenReturn(CheckResult(Outcome.COMPLETED))
+        whenever(repositoryChecker.check(any())).thenReturn(CheckResult(Outcome.COMPLETED))
+        whenever(jiraIssuesChecker.checkPair("PROJ", null, componentId)).thenReturn(CheckResult(Outcome.COMPLETED))
+        whenever(jiraProjectChecker.checkProject("PROJ", componentId)).thenReturn(CheckResult(Outcome.COMPLETED))
 
         val response = assembler.assemble(component)
 
         assertThat(response.ready).isTrue()
         assertThat(response.entries).hasSize(4)
-        assertThat(response.entries).allMatch { it.outcome == Outcome.PASSED }
+        assertThat(response.entries).allMatch { it.outcome == Outcome.COMPLETED }
         assertThat(response.entries).allMatch { it.reasonKind == null }
     }
 
     @Test
-    fun `one FAILED entry makes response not ready`() {
+    fun `one NOT_COMPLETED entry makes response not ready`() {
         whenever(livenessProbe.probe()).thenReturn(liveSnapshot)
         whenever(versionLineRepository.findByComponentId(componentId)).thenReturn(listOf(versionLine("TC1")))
         whenever(componentConfigurationRepository.findByComponentId(componentId)).thenReturn(emptyList())
         whenever(pairResolver.pairsFor(componentId)).thenReturn(emptySet())
-        whenever(teamcityChecker.check(any())).thenReturn(CheckResult(Outcome.FAILED))
+        whenever(teamcityChecker.check(any())).thenReturn(CheckResult(Outcome.NOT_COMPLETED))
 
         val response = assembler.assemble(component)
 
         assertThat(response.ready).isFalse()
         assertThat(response.entries).hasSize(1)
-        assertThat(response.entries[0].outcome).isEqualTo(Outcome.FAILED)
+        assertThat(response.entries[0].outcome).isEqualTo(Outcome.NOT_COMPLETED)
         assertThat(response.entries[0].reasonKind).isNull()
     }
 
@@ -148,7 +148,7 @@ class ArchiveReadinessAssemblerTest {
         )
         whenever(componentConfigurationRepository.findByComponentId(componentId)).thenReturn(emptyList())
         whenever(pairResolver.pairsFor(componentId)).thenReturn(emptySet())
-        whenever(teamcityChecker.check(any())).thenReturn(CheckResult(Outcome.PASSED))
+        whenever(teamcityChecker.check(any())).thenReturn(CheckResult(Outcome.COMPLETED))
 
         val response = assembler.assemble(component)
 
@@ -166,7 +166,7 @@ class ArchiveReadinessAssemblerTest {
         val row = configRowWithVcsEntries("ssh://GIT.EXAMPLE.COM/Repo.GIT", "https://git.example.com/Repo")
         whenever(componentConfigurationRepository.findByComponentId(componentId)).thenReturn(listOf(row))
         whenever(pairResolver.pairsFor(componentId)).thenReturn(emptySet())
-        whenever(repositoryChecker.check(any())).thenReturn(CheckResult(Outcome.PASSED))
+        whenever(repositoryChecker.check(any())).thenReturn(CheckResult(Outcome.COMPLETED))
 
         val response = assembler.assemble(component)
 
@@ -258,8 +258,8 @@ class ArchiveReadinessAssemblerTest {
         whenever(versionLineRepository.findByComponentId(componentId)).thenReturn(emptyList())
         whenever(componentConfigurationRepository.findByComponentId(componentId)).thenReturn(emptyList())
         whenever(pairResolver.pairsFor(componentId)).thenReturn(setOf("PROJ1" to null, "PROJ2" to "PREFIX"))
-        whenever(jiraIssuesChecker.checkPair(any(), anyOrNull(), any())).thenReturn(CheckResult(Outcome.PASSED))
-        whenever(jiraProjectChecker.checkProject(any(), any())).thenReturn(CheckResult(Outcome.PASSED))
+        whenever(jiraIssuesChecker.checkPair(any(), anyOrNull(), any())).thenReturn(CheckResult(Outcome.COMPLETED))
+        whenever(jiraProjectChecker.checkProject(any(), any())).thenReturn(CheckResult(Outcome.COMPLETED))
 
         val response = assembler.assemble(component)
 
@@ -276,8 +276,8 @@ class ArchiveReadinessAssemblerTest {
         whenever(versionLineRepository.findByComponentId(componentId)).thenReturn(emptyList())
         whenever(componentConfigurationRepository.findByComponentId(componentId)).thenReturn(emptyList())
         whenever(pairResolver.pairsFor(componentId)).thenReturn(setOf("PROJ1" to "A", "PROJ1" to "B"))
-        whenever(jiraIssuesChecker.checkPair(any(), anyOrNull(), any())).thenReturn(CheckResult(Outcome.PASSED))
-        whenever(jiraProjectChecker.checkProject(any(), any())).thenReturn(CheckResult(Outcome.PASSED))
+        whenever(jiraIssuesChecker.checkPair(any(), anyOrNull(), any())).thenReturn(CheckResult(Outcome.COMPLETED))
+        whenever(jiraProjectChecker.checkProject(any(), any())).thenReturn(CheckResult(Outcome.COMPLETED))
 
         val response = assembler.assemble(component)
 
@@ -296,8 +296,8 @@ class ArchiveReadinessAssemblerTest {
         whenever(componentConfigurationRepository.findByComponentId(componentId)).thenReturn(emptyList())
         whenever(pairResolver.pairsFor(componentId)).thenReturn(setOf("PROJ" to null))
         whenever(jiraIssuesChecker.checkPair("PROJ", null, componentId))
-            .thenReturn(CheckResult(Outcome.PASSED, sharedWith = listOf("should-be-dropped")))
-        whenever(jiraProjectChecker.checkProject("PROJ", componentId)).thenReturn(CheckResult(Outcome.PASSED))
+            .thenReturn(CheckResult(Outcome.COMPLETED, sharedWith = listOf("should-be-dropped")))
+        whenever(jiraProjectChecker.checkProject("PROJ", componentId)).thenReturn(CheckResult(Outcome.COMPLETED))
 
         val response = assembler.assemble(component)
 

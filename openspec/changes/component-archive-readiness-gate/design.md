@@ -39,9 +39,10 @@ GET rest/api/4/components/{idOrName}/archive-readiness
       "targetKind": "JIRA_ISSUES" | "JIRA_PROJECT" | "TEAMCITY_PROJECT" | "REPOSITORY",
       "targetId":   "<project key[:version prefix] | project key | TC project id | repository url>",
       "targetUrl":  "<deep link>" | null,
-      "outcome":    "PASSED" | "FAILED" | "UNKNOWN",
+      "outcome":    "COMPLETED" | "NOT_COMPLETED" | "UNKNOWN",
       "reason":     "<why it failed or could not be read>" | null,
       "reasonKind": "SYSTEM_UNAVAILABLE" | "REGISTRY_DATA" | "NOT_CONFIGURED" | null,
+      "responsibility": "COMPONENT_OWNER" | "F1_TEAM" | null,
       "sharedWith": ["<component name>", ...],
       "openIssues": [ { "key": "...", "summary": "..." }, ... ]
     }
@@ -49,7 +50,7 @@ GET rest/api/4/components/{idOrName}/archive-readiness
 }
 ```
 
-`reasonKind` classifies an `UNKNOWN` by the remedy it needs, because `reason` is prose a caller cannot branch on. `SYSTEM_UNAVAILABLE` is waited out and retried. `REGISTRY_DATA` never resolves by retrying — an unresolvable repository URL, or two pairs both claiming a null prefix on one project key — and is corrected by editing the component. `NOT_CONFIGURED` is corrected in CRS's own configuration, the `JIRA_PROJECT` entry with no retired category configured being the case that produces it. It is null on `PASSED` and on `FAILED`, where the outcome already implies the remedy.
+`reasonKind` classifies an `UNKNOWN` by the remedy it needs, because `reason` is prose a caller cannot branch on. `SYSTEM_UNAVAILABLE` is waited out and retried. `REGISTRY_DATA` never resolves by retrying — an unresolvable repository URL, or two pairs both claiming a null prefix on one project key — and is corrected by editing the component. `NOT_CONFIGURED` is corrected in CRS's own configuration, the `JIRA_PROJECT` entry with no retired category configured being the case that produces it. It is null on `COMPLETED` and on `NOT_COMPLETED`, where the outcome already implies the remedy.
 
 Without it a caller can only offer one remedy for all three, and offering "try again later" for a registry-data problem is advice that can never succeed — the same misdirection decisions 2 and 14 exist to prevent.
 
@@ -59,21 +60,21 @@ The number of `JIRA_ISSUES` and `JIRA_PROJECT` entries is not fixed at zero-or-o
 
 Because a component can now carry more than one `JIRA_ISSUES` entry, `targetId` on that kind SHALL identify the pair, not the prefix alone — a bare prefix is not unique across entries (two different projects can each have their own null-prefix "default bucket" pair, and both would render the same otherwise-empty `targetId`). It is the project key, plus the prefix when one is set, joined so the pair reads unambiguously.
 
-A component with an issue-tracker project key produces **two** entries, `JIRA_ISSUES` and `JIRA_PROJECT`, from the same project. They are decided by different rules and can disagree — the common retirement-in-progress state is `JIRA_ISSUES: FAILED` alongside `JIRA_PROJECT: PASSED`.
+A component with an issue-tracker project key produces **two** entries, `JIRA_ISSUES` and `JIRA_PROJECT`, from the same project. They are decided by different rules and can disagree — the common retirement-in-progress state is `JIRA_ISSUES: NOT_COMPLETED` alongside `JIRA_PROJECT: COMPLETED`.
 
 ## Decisions
 
 ### 1. Three outcomes, with sharing carried as data rather than a fourth
 
-An earlier draft had a fourth outcome for a target deliberately left alone. It was collapsed into `PASSED` with a populated `sharedWith`, because the gate only ever needs to know whether something blocks, and sharing never blocks.
+An earlier draft had a fourth outcome for a target deliberately left alone. It was collapsed into `COMPLETED` with a populated `sharedWith`, because the gate only ever needs to know whether something blocks, and sharing never blocks.
 
-Precisely: sharing excuses the *target's* state. Every entry's subject is a target several components can share, and for all of them a populated `sharedWith` and `PASSED` coincide — with one exception, which decision 15 splits out rather than special-cases.
+Precisely: sharing excuses the *target's* state. Every entry's subject is a target several components can share, and for all of them a populated `sharedWith` and `COMPLETED` coincide — with one exception, which decision 15 splits out rather than special-cases.
 
 The information is not discarded, and `sharedWith` is a list of names rather than a sentence in `reason`, because two consumers act on it: the Portal names the components so an operator is not shown an unqualified success for a target that is still running, and the follow-up work that performs the archives must name every target it skips. Neither can be driven from prose.
 
 ### 2. `UNKNOWN` is a first-class outcome and fails closed
 
-`Repository.archived` from octopus-vcs-facade `3.0.36` is a nullable `Boolean`, documented as *"treat null as unknown, not as 'not archived'"*. Folding that into `FAILED` would report an unreachable system as a target needing work, sending someone to archive something that may already be archived. Folding it into `PASSED` would retire a component on no evidence.
+`Repository.archived` from octopus-vcs-facade `3.0.36` is a nullable `Boolean`, documented as *"treat null as unknown, not as 'not archived'"*. Folding that into `NOT_COMPLETED` would report an unreachable system as a target needing work, sending someone to archive something that may already be archived. Folding it into `COMPLETED` would retire a component on no evidence.
 
 So it is its own outcome, it blocks, and it names the system in `reason`.
 
@@ -123,43 +124,39 @@ There is no archived flag on an issue-tracker project. Retirement is recorded by
 
 That set is configuration, not a constant. The names belong to the issue tracker, and renaming a category there must not require a CRS release to keep the gate honest. Configuration also makes the check testable without a live tracker.
 
-Unset means `UNKNOWN`, not `PASSED`. An empty configured set is indistinguishable from "no category matches", and the second reading would report every project as unarchived while the first would need a reason to say so — reporting `UNKNOWN` with that reason is the only option that does not invent evidence. This mirrors decision 2.
+Unset means `UNKNOWN`, not `COMPLETED`. An empty configured set is indistinguishable from "no category matches", and the second reading would report every project as unarchived while the first would need a reason to say so — reporting `UNKNOWN` with that reason is the only option that does not invent evidence. This mirrors decision 2.
 
 **What the real procedure is, and how much of it this sees.** Retiring an issue-tracker project is five steps: rename the project to `X <name> [ARCHIVE]`, set its category to `X Archive`, then switch its issue-type, workflow, permission and notification schemes. Only the first two are observable here. The scheme changes are administrative settings, readable only with issue-tracker administrator rights — which decision 8 deliberately withholds from the service account. Checking them would mean asking for admin read in a third external system for a check that is advisory anyway, and would drag this change into the security review that the archiving follow-up is supposed to carry.
 
-**Of the two observable steps, only the category is matched.** The rename is not checked. A project name is free text, so any matcher is guessing at spacing, bracketing and capitalisation, and it fails in the annoying direction: a `FAILED` on a project that was correctly retired but written `[Archive]` sends someone to redo work already done, and the natural response to that is to stop trusting the gate. The category is picked from a fixed list in the tracker's UI, so exact matching is sound. That the octopus client's `Project` DTO exposes `projectCategory` and not the name is convenient rather than causal — the reasoning would hold either way, and it is why the Atlassian client is taken for issue search only.
+**Of the two observable steps, only the category is matched.** The rename is not checked. A project name is free text, so any matcher is guessing at spacing, bracketing and capitalisation, and it fails in the annoying direction: a `NOT_COMPLETED` on a project that was correctly retired but written `[Archive]` sends someone to redo work already done, and the natural response to that is to stop trusting the gate. The category is picked from a fixed list in the tracker's UI, so exact matching is sound. That the octopus client's `Project` DTO exposes `projectCategory` and not the name is convenient rather than causal — the reasoning would hold either way, and it is why the Atlassian client is taken for issue search only.
 
-The cost is stated in the risks: `PASSED` here means the marker is set, not that the procedure was completed. A project recategorised but never reschemed passes. That is the honest limit of a read-only check, and the spec says so rather than letting the entry imply more.
+The cost is stated in the risks: `COMPLETED` here means the marker is set, not that the procedure was completed. A project recategorised but never reschemed passes. That is the honest limit of a read-only check, and the spec says so rather than letting the entry imply more.
 
 ### 10. Repository targets are compared canonically but consulted verbatim
 
-`vcsPath` is free text entered per component, so the same repository can be recorded two ways — `ssh://` versus `https://`, with or without `.git`, differing in case. Sharing compares those, and a comparison that misses an equivalence fails in the dangerous direction: the target reads as used by nobody and gets reported `FAILED`-then-archived, taking down a live component's repository.
+`vcsPath` is free text entered per component, so the same repository can be recorded two ways — `ssh://` versus `https://`, with or without `.git`, differing in case. Sharing compares those, and a comparison that misses an equivalence fails in the dangerous direction: the target reads as used by nobody and gets reported `NOT_COMPLETED`-then-archived, taking down a live component's repository.
 
 So comparison canonicalises (scheme, trailing `.git`, trailing slash, host and path case) while the call to vcs-facade passes the stored string through untouched. Canonicalising the outbound URL too would put CRS in the business of knowing what each hosting platform accepts, which is precisely what `getRepository(sshUrl)` exists to avoid.
 
 ### 11. A permanently unreadable target would otherwise deadlock the component forever
 
-`UNKNOWN` blocks and there is no override, so any target whose state can never be read makes its component permanently unarchivable. Three real cases produce that: the repository was deleted rather than archived, the build project no longer exists, and the integration credential expired with nobody fixing it. Retrying accomplishes nothing in all three.
+`UNKNOWN` blocks and there is no override, so any target whose state can never be read makes its component permanently unarchivable. Two real cases produce that today: the build project no longer exists, and the integration credential expired with nobody fixing it. A third case — the repository was deleted rather than archived — was originally handled the same way (a positive "not found" treated as a definite, passing answer), but is not, for the reason decision 12 below explains: this check cannot tell that case apart from a private, inaccessible repository using the client it has. A deleted repository still deadlocks its component under `UNKNOWN`, the same as an expired credential, until someone confirms by other means (checking the VCS UI directly, or the credential's actual grants) that it really is gone.
 
-They are not one problem. The first two are a **misclassification**: a system positively reporting that a target does not exist has given a definite answer, and a deleted repository is not live infrastructure — which is the only thing the check actually asks about. Absence is a stronger end state than archived, so it passes. The third is genuinely unknown and genuinely permanent, and needs an operational remedy rather than a per-target one.
+One interaction needs stating explicitly: absence and sharing are two different rules, and both can be true of the same target at once — a project can be deleted from the external system while the registry still lists another live component's version line pointing at it, because that registry row was never cleaned up after the deletion. Were absence ever trustworthy enough to decide the outcome on its own, sharing would not also get to speak on the same entry — see decision 15's identical rule for the issue-tracker split (one entry, one rule) — but with `NotFoundException` no longer treated as confirmed absence, this interaction does not currently arise.
 
-One interaction needs stating explicitly: absence and sharing are two different rules, and both can be true of the same target at once — a project can be deleted from the external system while the registry still lists another live component's version line pointing at it, because that registry row was never cleaned up after the deletion. When absence is what decided the outcome, sharing does not also get to speak on the same entry: `sharedWith` is empty on an absence-`PASSED` entry, even though the sharing computation would return a hit if asked. A populated `sharedWith` earned by a rule other than sharing would break the same invariant decision 15 states for the issue-tracker split — one entry, one rule — so it is held to here too, not just there.
-
-### 12. Absence is only trustworthy on a system proved live, so each system is probed once
+### 12. A "not found" answer cannot be trusted as absence with the client available today
 
 A hardened hosting platform answers "not found" for a target that exists but the credential may not see — deliberately, so probing cannot enumerate private repositories. Absent and not-permitted then arrive indistinguishably.
 
 This is not hypothetical in the chain we depend on. `BitbucketService.findRepository` catches the client's `NotFoundException` and returns `null`; `VcsManagerImpl.getRepository` turns that `null` into the facade's own `NotFoundException`, which the error handler maps to 404. Both meanings are flattened into that one catch block, so by the time the answer reaches CRS the distinction is gone. Reading the status code more carefully cannot recover it — the information no longer exists.
 
-So the check establishes, once per readiness call per system, that the system answers and the credential works. Then a 404 on a specific target is trustworthy as absence. If the probe fails, every target of that system is `UNKNOWN` under one reason about the system.
+An earlier version of this check treated a per-call liveness probe (proving the system answers and the configured credential authenticates at all) as sufficient cover: if the probe passes, a later 404 on a specific target was trusted as absence. That reasoning has a gap the probe does not close — a credential can authenticate successfully in general (passing the probe) while still lacking read access to one *specific* private repository, if it is not provisioned with instance-wide read access. Whether CRS's configured credential has that instance-wide grant is an operational fact this code cannot observe or assume, so `NotFoundException` on a specific `REPOSITORY` target is `UNKNOWN`, unconditionally — see the case matrix. If the credential is later confirmed to have genuine instance-wide read access, trusting `NotFoundException` as absence again would be a deliberate, documented decision to make here, not a default.
+
+The liveness probe (decision 13's per-client probing, run once per readiness call) still matters even though it no longer makes a specific target's `NotFoundException` trustworthy: it establishes that the system answers and the credential works *at all*, so every target of that system gets a real per-target read instead of every one of them failing closed as `UNKNOWN` under one reason about the system before any read is even attempted. A live-but-not-instance-wide credential still gets `JIRA_ISSUES`/`JIRA_PROJECT`/`TEAMCITY_PROJECT` entries genuinely checked; only `REPOSITORY`'s own absence signal is the one this decision no longer trusts.
 
 "System" here is not always one client. The issue tracker is reached through two independent connections — the Atlassian client for issue search (`JIRA_ISSUES`) and the octopus client for project metadata (`JIRA_PROJECT`) — sharing one base URL and one configured/unconfigured switch but nothing else. A credential scoped to search and not to project reads, or the reverse, fails one and not the other. Probing them as a single unit would report a working client `UNKNOWN` because its sibling failed, which is the exact false-blocking decision 13 exists to prevent. So each client is probed on its own: a failed Atlassian probe makes every `JIRA_ISSUES` entry `UNKNOWN` without touching `JIRA_PROJECT`, and the reverse for the octopus client.
 
-Without the probe, a credential that silently lost its permissions would make every target look deleted and every component look ready — the exact failure this check exists to prevent, occurring quietly across the whole registry. The probe is what makes "absent passes" safe rather than reckless.
-
-The probe and the target reads are not atomic: permissions could be revoked in between. The window is milliseconds and the coincidence required is specific, but it is not zero, and it is accepted rather than engineered away.
-
-The architecturally cleaner fix is upstream — stop flattening the two meanings in `findRepository`. That is a separate ticket and another release; this decision solves it from CRS's side without waiting on one.
+The architecturally cleaner fix is upstream — stop flattening the two meanings in `findRepository`, or confirm and document that CRS's configured credential genuinely has instance-wide read access so a 404 can be trusted again. Either is a separate, deliberate change; until one lands, `REPOSITORY` absence fails closed to `UNKNOWN` rather than assuming it.
 
 ### 13. Not configured and configured-but-failing are different facts
 
@@ -179,7 +176,7 @@ The actions are opposite: an outage is waited out, this is corrected by editing 
 
 An earlier draft had a single `JIRA_PROJECT` entry answering two questions: are this component's issues closed, and has the project been retired. The two obey opposite rules. Open issues are scoped to this component's own version prefix — nobody else's component causes them and nobody else can close them, so sharing cannot excuse them. The project is one object shared by every component using it, and if a live component still uses it, "not retired" is the correct end state — so sharing must excuse it.
 
-Carrying both on one entry means its `outcome` is a mix of two verdicts. A caller reading `FAILED` with a populated `sharedWith` cannot tell whether the failure is the issues or the project without re-deriving the rule client-side, which is exactly what the `ready` verdict exists to prevent callers from doing. The Portal would have to explain a target that is simultaneously "still has work" and "deliberately left running".
+Carrying both on one entry means its `outcome` is a mix of two verdicts. A caller reading `NOT_COMPLETED` with a populated `sharedWith` cannot tell whether the failure is the issues or the project without re-deriving the rule client-side, which is exactly what the `ready` verdict exists to prevent callers from doing. The Portal would have to explain a target that is simultaneously "still has work" and "deliberately left running".
 
 So they are separate entries — `JIRA_ISSUES` and `JIRA_PROJECT` — each with one rule and one subject. The invariant that falls out is worth more than the extra entry: **every entry's outcome is decided by exactly one rule, and `sharedWith` is empty on every entry sharing cannot excuse.**
 
@@ -193,7 +190,7 @@ When no other pair claims that project key at all, there is nothing to distingui
 
 When another pair does claim the same project key, the null-prefix pair's scope is every open issue whose recorded version carries **no prefix at all** — a bare version string. This is a direct, positive test on the issue's own recorded value: it does not enumerate the other pairs registered on the project key, does not need their exact prefix strings, and its cost does not grow as a project accumulates more sharing components. That was a deliberate choice over the alternative (excluding every other pair's specific registered prefix): the exclusion form needs this pair's check to know every sibling on its project key, a lookup that scales with sharing; the bare-pattern form needs none of that.
 
-The trade-off, accepted deliberately: an issue whose recorded version matches **neither** a bare pattern **nor** any pair's registered prefix — a typo'd prefix, or a leftover value from a since-removed override — is counted by no pair's entry at all. It is invisible rather than misattributed. The alternative (exclusion) would have counted it toward the null-prefix pair instead — a false `FAILED` on the wrong component, annoying but at least still blocking something — so this is a real, named cost of the simpler mechanism, not a corner case being quietly designed away. It is accepted because the registry-data anomaly it depends on (an issue whose version matches no pair CRS knows about) is expected to be rare, and because the bare-pattern test's independence from the sibling set is worth more in the common case than the coverage it gives up in the rare one.
+The trade-off, accepted deliberately: an issue whose recorded version matches **neither** a bare pattern **nor** any pair's registered prefix — a typo'd prefix, or a leftover value from a since-removed override — is counted by no pair's entry at all. It is invisible rather than misattributed. The alternative (exclusion) would have counted it toward the null-prefix pair instead — a false `NOT_COMPLETED` on the wrong component, annoying but at least still blocking something — so this is a real, named cost of the simpler mechanism, not a corner case being quietly designed away. It is accepted because the registry-data anomaly it depends on (an issue whose version matches no pair CRS knows about) is expected to be rare, and because the bare-pattern test's independence from the sibling set is worth more in the common case than the coverage it gives up in the rare one.
 
 `UNKNOWN` remains reserved for what still cannot be resolved by inspecting the issue at all: two pairs both claiming a null prefix on the same project key, which the registry's uniqueness rule is expected to prevent from occurring in the first place.
 
@@ -226,15 +223,14 @@ Every case the check distinguishes, by target kind. "System" below means the spe
 
 | Case | Outcome | `sharedWith` | Reason names |
 |---|---|---|---|
-| Reported archived | `PASSED` | empty (unless also decision below) | — |
-| Reported not archived, no live component shares it | `FAILED` | empty | — |
-| Reported not archived, a live component shares it (canonical-URL match, decision 10) | `PASSED` | that component(s) | — |
-| Reported absent, system proved live | `PASSED` | **empty always** (decision 11/16 addendum) | target no longer exists |
-| Reported absent, system *not* proved live | `UNKNOWN` | empty | the system |
-| Read fails ambiguously (could be absence or permission) | `UNKNOWN` | empty | the system |
+| Reported archived | `COMPLETED` | empty (unless also decision below) | — |
+| Reported not archived, no live component shares it | `NOT_COMPLETED` | empty | — |
+| Reported not archived, a live component shares it (canonical-URL match, decision 10) | `COMPLETED` | that component(s) | — |
+| Reported absent (`NotFoundException`) | `UNKNOWN` | empty | cannot confirm absence vs. inaccessible (decision 11/12) |
+| Read fails ambiguously (any other error) | `UNKNOWN` | empty | the system |
 | URL matches no configured VCS provider | `UNKNOWN` | empty | the recorded URL is unresolvable (registry data, decision 14) |
 
-**`TEAMCITY_PROJECT`:** same rows as `REPOSITORY`, with "descendant of the project is used by a live component" also counted as sharing (decision 5), resolved via `affectedProject`, never by id-prefix inference.
+**`TEAMCITY_PROJECT`:** same rows as `REPOSITORY` for the archived/shared cases (with "descendant of the project is used by a live component" also counted as sharing, decision 5, resolved via `affectedProject`, never by id-prefix inference), **except** "reported absent": decision 11/12's 404-ambiguity concern is established specifically for the VCS chain (`BitbucketService`/`VcsManagerImpl`), not for TeamCity's API, so `TeamcityChecker` still treats a confirmed-absent project as `COMPLETED`.
 
 One `JIRA_ISSUES` entry and, separately, one `JIRA_PROJECT` entry exist **per effective `(project key, version prefix)` pair the component carries** — base configuration plus every version-range override, resolved the same way the registry's own cross-component uniqueness check resolves them (decision 15). A component with no override still has exactly one pair, so the common case is still exactly one of each entry; `JIRA_PROJECT` entries are further deduplicated by project key, so two of a component's own pairs sharing one project key produce one `JIRA_PROJECT` entry, not two.
 
@@ -242,11 +238,11 @@ One `JIRA_ISSUES` entry and, separately, one `JIRA_PROJECT` entry exist **per ef
 
 | Case | Outcome | Reason names |
 |---|---|---|
-| An issue is open under the pair's scope | `FAILED` | — (issue itself returned in `openIssues`) |
-| No issue open under the pair's scope | `PASSED` | — |
+| An issue is open under the pair's scope | `NOT_COMPLETED` | — (issue itself returned in `openIssues`) |
+| No issue open under the pair's scope | `COMPLETED` | — |
 | Issue scoped to a *different* pair — another component's, or another of this component's own ranges | *(not counted, not returned)* | — |
-| Prefix is null, no other pair claims the same project key | `PASSED`-eligible: scope is the whole project, outcome follows normally | — |
-| Prefix is null, another pair claims the same project key with its own prefix | `PASSED`-eligible: scope is issues whose version is a bare, unprefixed string, outcome follows normally | — |
+| Prefix is null, no other pair claims the same project key | `COMPLETED`-eligible: scope is the whole project, outcome follows normally | — |
+| Prefix is null, another pair claims the same project key with its own prefix | `COMPLETED`-eligible: scope is issues whose version is a bare, unprefixed string, outcome follows normally | — |
 | An issue's version matches neither a bare pattern nor any pair's registered prefix | *(counted by no pair — accepted, not `UNKNOWN`)* | — |
 | Two pairs both claim a null prefix on the same project key | `UNKNOWN` | null-prefix conflict on this project key (registry data, decision 15) |
 | No `jiraProjectKey` at all | *(no entry)* | — |
@@ -255,13 +251,13 @@ One `JIRA_ISSUES` entry and, separately, one `JIRA_PROJECT` entry exist **per ef
 
 | Case | Outcome | `sharedWith` |
 |---|---|---|
-| Category is in the configured retired set | `PASSED` | empty unless also shared |
-| Category not retired, no live component shares the project | `FAILED` | empty |
-| Category not retired, a live component shares the project | `PASSED` | that component(s) |
-| No retired category configured at all | `UNKNOWN` (never `PASSED`) | empty |
+| Category is in the configured retired set | `COMPLETED` | empty unless also shared |
+| Category not retired, no live component shares the project | `NOT_COMPLETED` | empty |
+| Category not retired, a live component shares the project | `COMPLETED` | that component(s) |
+| No retired category configured at all | `UNKNOWN` (never `COMPLETED`) | empty |
 | No `jiraProjectKey` at all | *(no entry)* | — |
 
-`ready` is `false` iff at least one entry above is `FAILED` or `UNKNOWN`; entries that don't exist (unconfigured system, target not recorded) never contribute to that check.
+`ready` is `false` iff at least one entry above is `NOT_COMPLETED` or `UNKNOWN`; entries that don't exist (unconfigured system, target not recorded) never contribute to that check.
 
 ## Risks / Trade-offs
 

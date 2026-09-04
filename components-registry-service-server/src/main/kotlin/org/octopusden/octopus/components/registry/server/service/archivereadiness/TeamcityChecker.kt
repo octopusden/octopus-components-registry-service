@@ -23,15 +23,15 @@ class TeamcityChecker(
                     reasonKind = ReasonKind.SYSTEM_UNAVAILABLE,
                 )
             is TcDescendantResult.ProjectAbsent ->
-                CheckResult(Outcome.PASSED, reason = "TeamCity project no longer exists")
+                CheckResult(Outcome.COMPLETED, reason = "TeamCity project no longer exists")
             is TcDescendantResult.Found -> {
                 val descendants = result.projectIds - target.targetId
                 val shared = sharingHelper.sharedWithForTcProject(target.targetId, descendants, target.componentId)
                 val selfArchived = target.targetId in result.archivedIds
                 when {
-                    shared.isNotEmpty() -> CheckResult(Outcome.PASSED, sharedWith = shared)
-                    selfArchived -> CheckResult(Outcome.PASSED)
-                    else -> CheckResult(Outcome.FAILED)
+                    shared.isNotEmpty() -> CheckResult(Outcome.COMPLETED, sharedWith = shared)
+                    selfArchived -> CheckResult(Outcome.COMPLETED)
+                    else -> CheckResult(Outcome.NOT_COMPLETED)
                 }
             }
         }

@@ -25,29 +25,29 @@ class RepositoryCheckerTest {
     private fun repo(archived: Boolean?) = Repository("ssh://git.example.com/repo.git", "https://git.example.com/repo", null, archived)
 
     @Test
-    fun `archived true yields PASSED`() {
+    fun `archived true yields COMPLETED`() {
         whenever(vcsFacadeClient.getRepository(target.targetId)).thenReturn(repo(true))
         whenever(sharingHelper.sharedWithForRepo(any(), eq(componentId))).thenReturn(emptyList())
         val result = checker.check(target)
-        assertThat(result.outcome).isEqualTo(Outcome.PASSED)
+        assertThat(result.outcome).isEqualTo(Outcome.COMPLETED)
         assertThat(result.reasonKind).isNull()
     }
 
     @Test
-    fun `archived false with no sharing yields FAILED`() {
+    fun `archived false with no sharing yields NOT_COMPLETED`() {
         whenever(vcsFacadeClient.getRepository(target.targetId)).thenReturn(repo(false))
         whenever(sharingHelper.sharedWithForRepo(any(), eq(componentId))).thenReturn(emptyList())
         val result = checker.check(target)
-        assertThat(result.outcome).isEqualTo(Outcome.FAILED)
+        assertThat(result.outcome).isEqualTo(Outcome.NOT_COMPLETED)
         assertThat(result.reasonKind).isNull()
     }
 
     @Test
-    fun `archived false with live sharing yields PASSED`() {
+    fun `archived false with live sharing yields COMPLETED`() {
         whenever(vcsFacadeClient.getRepository(target.targetId)).thenReturn(repo(false))
         whenever(sharingHelper.sharedWithForRepo(any(), eq(componentId))).thenReturn(listOf("other-comp"))
         val result = checker.check(target)
-        assertThat(result.outcome).isEqualTo(Outcome.PASSED)
+        assertThat(result.outcome).isEqualTo(Outcome.COMPLETED)
         assertThat(result.sharedWith).containsExactly("other-comp")
         assertThat(result.reasonKind).isNull()
     }
@@ -61,13 +61,16 @@ class RepositoryCheckerTest {
     }
 
     @Test
-    fun `absent repository (NotFoundException) yields PASSED with no classification`() {
+    fun `absent repository (NotFoundException) yields UNKNOWN, not COMPLETED — cannot confirm absence vs. inaccessible`() {
+        // A hosting platform may answer 404 for a private, inaccessible repository the same way
+        // it does for one that genuinely no longer exists (design.md decision 11/12) — trusting
+        // this as confirmed absence would let a permission problem silently pass this check.
         whenever(vcsFacadeClient.getRepository(target.targetId))
             .thenThrow(NotFoundException("Repository not found"))
         val result = checker.check(target)
-        assertThat(result.outcome).isEqualTo(Outcome.PASSED)
+        assertThat(result.outcome).isEqualTo(Outcome.UNKNOWN)
         assertThat(result.sharedWith).isEmpty()
-        assertThat(result.reasonKind).isNull()
+        assertThat(result.reasonKind).isEqualTo(ReasonKind.SYSTEM_UNAVAILABLE)
     }
 
     @Test

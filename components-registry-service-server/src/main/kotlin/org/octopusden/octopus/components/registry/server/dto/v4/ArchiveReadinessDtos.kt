@@ -5,7 +5,7 @@ package org.octopusden.octopus.components.registry.server.dto.v4
  *
  * `ready` is CRS's verdict — callers gate on it rather than deriving one from entries,
  * so an outcome value a caller does not recognise can never unblock archiving.
- * `ready` is false iff at least one entry has outcome FAILED or UNKNOWN.
+ * `ready` is false iff at least one entry has outcome NOT_COMPLETED or UNKNOWN.
  */
 data class ArchiveReadinessResponse(
     val ready: Boolean,
@@ -19,18 +19,16 @@ data class ArchiveReadinessResponse(
  * @param targetId    stable identity: project key[:version prefix] for JIRA_ISSUES,
  *                    project key for JIRA_PROJECT, TC project id for TEAMCITY_PROJECT,
  *                    repository URL for REPOSITORY
- * @param targetUrl   deep link into the external system, or null when none is available
- * @param outcome     PASSED / FAILED / UNKNOWN
- * @param reason      human-readable reason for FAILED or UNKNOWN; null on PASSED
- * @param reasonKind  classifies the remedy an UNKNOWN entry needs; null on PASSED and FAILED,
+ * @param outcome     COMPLETED / NOT_COMPLETED / UNKNOWN
+ * @param reason      human-readable reason for NOT_COMPLETED or UNKNOWN; null on COMPLETED
+ * @param reasonKind  classifies the remedy an UNKNOWN entry needs; null on COMPLETED and NOT_COMPLETED,
  *                    where the outcome already implies what to do
  * @param sharedWith  live components that share this target (always empty for JIRA_ISSUES)
- * @param openIssues  open issues in scope; non-empty only on JIRA_ISSUES FAILED entries
+ * @param openIssues  open issues in scope; non-empty only on JIRA_ISSUES NOT_COMPLETED entries
  */
 data class ArchiveReadinessEntry(
     val targetKind: TargetKind,
     val targetId: String,
-    val targetUrl: String?,
     val outcome: Outcome,
     val reason: String?,
     val reasonKind: ReasonKind? = null,
@@ -55,10 +53,10 @@ enum class TargetKind {
 /** The three possible outcomes for a single [ArchiveReadinessEntry]. */
 enum class Outcome {
     /** The target is in an acceptable end state (archived, retired, or safely shared). */
-    PASSED,
+    COMPLETED,
 
     /** The target needs work before the component can be archived. */
-    FAILED,
+    NOT_COMPLETED,
 
     /**
      * The state of this target could not be determined — the system was unreachable,
@@ -71,7 +69,7 @@ enum class Outcome {
 
 /**
  * Classifies the remedy an [Outcome.UNKNOWN] entry needs, because [ArchiveReadinessEntry.reason]
- * is prose a caller cannot branch on. Always null on [Outcome.PASSED] and [Outcome.FAILED],
+ * is prose a caller cannot branch on. Always null on [Outcome.COMPLETED] and [Outcome.NOT_COMPLETED],
  * where the outcome already implies the remedy.
  */
 enum class ReasonKind {

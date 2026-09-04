@@ -22,36 +22,36 @@ class JiraProjectCheckerTest {
     private val componentId = UUID.randomUUID()
 
     @Test
-    fun `category in retired set yields PASSED with no classification`() {
+    fun `category in retired set yields COMPLETED with no classification`() {
         whenever(jiraClient.getProject("PROJ")).thenReturn(Project("PROJ", ProjectCategory("X Archive")))
         whenever(sharingHelper.sharedWithForJiraProject(any(), eq(componentId))).thenReturn(emptyList())
         val result = checker.checkProject("PROJ", componentId)
-        assertThat(result.outcome).isEqualTo(Outcome.PASSED)
+        assertThat(result.outcome).isEqualTo(Outcome.COMPLETED)
         assertThat(result.reasonKind).isNull()
     }
 
     @Test
-    fun `category not retired yields FAILED with no classification`() {
+    fun `category not retired yields NOT_COMPLETED with no classification`() {
         whenever(jiraClient.getProject("PROJ")).thenReturn(Project("PROJ", ProjectCategory("Development")))
         whenever(sharingHelper.sharedWithForJiraProject(any(), eq(componentId))).thenReturn(emptyList())
         val result = checker.checkProject("PROJ", componentId)
-        assertThat(result.outcome).isEqualTo(Outcome.FAILED)
+        assertThat(result.outcome).isEqualTo(Outcome.NOT_COMPLETED)
         assertThat(result.reasonKind).isNull()
     }
 
     @Test
-    fun `null category yields FAILED, not a spurious retired match`() {
+    fun `null category yields NOT_COMPLETED, not a spurious retired match`() {
         whenever(jiraClient.getProject("PROJ")).thenReturn(Project("PROJ", null))
         whenever(sharingHelper.sharedWithForJiraProject(any(), eq(componentId))).thenReturn(emptyList())
-        assertThat(checker.checkProject("PROJ", componentId).outcome).isEqualTo(Outcome.FAILED)
+        assertThat(checker.checkProject("PROJ", componentId).outcome).isEqualTo(Outcome.NOT_COMPLETED)
     }
 
     @Test
-    fun `shared with live component yields PASSED regardless of category`() {
+    fun `shared with live component yields COMPLETED regardless of category`() {
         whenever(jiraClient.getProject("PROJ")).thenReturn(Project("PROJ", ProjectCategory("Development")))
         whenever(sharingHelper.sharedWithForJiraProject(any(), eq(componentId))).thenReturn(listOf("other-comp"))
         val result = checker.checkProject("PROJ", componentId)
-        assertThat(result.outcome).isEqualTo(Outcome.PASSED)
+        assertThat(result.outcome).isEqualTo(Outcome.COMPLETED)
         assertThat(result.sharedWith).containsExactly("other-comp")
         assertThat(result.reasonKind).isNull()
     }

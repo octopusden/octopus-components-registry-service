@@ -20,9 +20,12 @@ class RepositoryChecker(
 ) : TargetChecker {
     private val log = LoggerFactory.getLogger(RepositoryChecker::class.java)
 
-    // NotFoundException here is expected, successful information (the repository was
-    // confirmed absent), not a discarded error, so it is intentionally not logged/rethrown.
-    // The plain Exception catch below is likewise deliberate: this check must fail closed
+    // NotFoundException is deliberately NOT treated as "repository confirmed absent" — some VCS
+    // providers return 404 for a private/inaccessible repository the same way they do for one
+    // that genuinely no longer exists, and vcs-facade's client interface exposes no way to tell
+    // those apart (no distinct error code, no separate permission-check call). Trusting a bare
+    // 404 as proof of absence would let a permission or credential problem silently pass this
+    // check. The plain Exception catch below is likewise deliberate: this check must fail closed
     // to UNKNOWN on ANY failure from the VCS client, not just specific exception types — an
     // unanticipated exception type from a third-party client is itself evidence the system
     // couldn't be consulted reliably.
@@ -31,10 +34,13 @@ class RepositoryChecker(
         val repo = try {
             vcsFacadeClient.getRepository(target.targetId)
         } catch (e: NotFoundException) {
-            // Repository does not exist — a deleted repository is not live infrastructure.
-            // Absence is a stronger end state than archived, so it passes.
-            // sharedWith is always empty on an absence-PASSED entry (design decision 11).
-            return CheckResult(Outcome.PASSED, reason = "Repository no longer exists")
+            log.warn("REPOSITORY: {} — VCS system reported not found; cannot confirm absence vs. inaccessible", target.targetId)
+            return CheckResult(
+                Outcome.UNKNOWN,
+                reason = "VCS system reported repository not found — cannot confirm this means the repository " +
+                    "no longer exists rather than being inaccessible to the credential CRS uses: ${target.targetId}",
+                reasonKind = ReasonKind.SYSTEM_UNAVAILABLE,
+            )
         } catch (e: Exception) {
             // "No configured VCS provider for this URL" is a registry-data problem (the recorded
             // URL is unresolvable), not a VCS-system-outage — but the vcs-facade client (pinned
@@ -71,7 +77,7 @@ class RepositoryChecker(
                     VcsUrlCanonicalizer.canonicalize(target.targetId),
                     target.componentId,
                 )
-                CheckResult(Outcome.PASSED, sharedWith = shared)
+                CheckResult(Outcome.COMPLETED, sharedWith = shared)
             }
             false -> {
                 val shared = sharingHelper.sharedWithForRepo(
@@ -79,9 +85,9 @@ class RepositoryChecker(
                     target.componentId,
                 )
                 if (shared.isNotEmpty()) {
-                    CheckResult(Outcome.PASSED, sharedWith = shared)
+                    CheckResult(Outcome.COMPLETED, sharedWith = shared)
                 } else {
-                    CheckResult(Outcome.FAILED)
+                    CheckResult(Outcome.NOT_COMPLETED)
                 }
             }
             null -> {

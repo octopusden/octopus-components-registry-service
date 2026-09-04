@@ -15,8 +15,7 @@ class ArchiveReadinessDtosTest {
                 ArchiveReadinessEntry(
                     targetKind = TargetKind.REPOSITORY,
                     targetId = "ssh://git.example.com/repo.git",
-                    targetUrl = "https://git.example.com/repo",
-                    outcome = Outcome.FAILED,
+                    outcome = Outcome.NOT_COMPLETED,
                     reason = null,
                     sharedWith = emptyList(),
                     openIssues = emptyList(),
@@ -26,9 +25,9 @@ class ArchiveReadinessDtosTest {
         val json = mapper.writeValueAsString(response)
         assertThat(json).contains("\"ready\":false")
         assertThat(json).contains("\"targetKind\":\"REPOSITORY\"")
-        assertThat(json).contains("\"outcome\":\"FAILED\"")
+        assertThat(json).contains("\"outcome\":\"NOT_COMPLETED\"")
         assertThat(json).contains("\"openIssues\":[]")
-        // FAILED carries no remedy classification.
+        // NOT_COMPLETED carries no remedy classification.
         assertThat(json).contains("\"reasonKind\":null")
     }
 
@@ -40,7 +39,6 @@ class ArchiveReadinessDtosTest {
                 ArchiveReadinessEntry(
                     targetKind = TargetKind.JIRA_PROJECT,
                     targetId = "PROJ",
-                    targetUrl = null,
                     outcome = Outcome.UNKNOWN,
                     reason = "No retired Jira project categories configured",
                     reasonKind = ReasonKind.NOT_CONFIGURED,
