@@ -788,6 +788,19 @@ class TeamcitySyncServiceTest {
 
         override fun findByComponentGroupId(groupId: UUID): List<ComponentEntity> = components.filter { it.componentGroup?.id == groupId }
 
+        override fun findNonArchivedComponentVcsPaths(
+            excludeComponentId: UUID,
+        ): List<org.octopusden.octopus.components.registry.server.repository.ComponentVcsPathRow> =
+            components
+                .filter { !it.archived && it.id != excludeComponentId }
+                .flatMap { c -> c.configurations.flatMap { it.vcsEntries }.map { entry -> c.componentKey to entry.vcsPath } }
+                .map { (key, path) ->
+                    object : org.octopusden.octopus.components.registry.server.repository.ComponentVcsPathRow {
+                        override val componentKey: String = key
+                        override val vcsPath: String = path
+                    }
+                }
+
         override fun findComponentOwnerById(id: UUID): String? = components.firstOrNull { it.id == id }?.componentOwner
 
         override fun findReleaseManagerUsernames(id: UUID): List<String> =

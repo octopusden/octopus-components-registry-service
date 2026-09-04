@@ -106,6 +106,32 @@ class ArchitectureFitnessTest {
     //   val serverSlicesMustBeFreeOfCycles: ArchRule =
     //       slices().matching("$BASE_PACKAGE.(*)..").should().beFreeOfCycles()
 
+    // --- Deferred (TD-021): a SharingHelper-only-caller gate for the two VersionLineRepository
+    //     sharing queries. Speculative today — SharingHelper is the only caller in the codebase
+    //     and no second consumer exists yet for this rule to actually guard against; re-add here
+    //     UNFROZEN once a real second caller appears (see TD-021):
+    //
+    //   @ArchTest
+    //   val sharingHelperIsOnlyCodeThatQueriesComponentTargetUsage: ArchRule =
+    //       FreezingArchRule.freeze(
+    //           ArchRuleDefinition
+    //               .noClasses()
+    //               .that()
+    //               .doNotBelongToAnyOf(SharingHelper::class.java)
+    //               .and()
+    //               .resideOutsideOfPackage("..test..")
+    //               .should()
+    //               .callMethod(
+    //                   VersionLineRepository::class.java,
+    //                   "findByProjectIdsWithComponent",
+    //                   Collection::class.java,
+    //               ).orShould()
+    //               .callMethod(
+    //                   VersionLineRepository::class.java,
+    //                   "findDistinctLinkedProjectIds",
+    //               ).because("SharingHelper is the single sharing computation unit (design decision 7)"),
+    //       )
+
     companion object {
         const val BASE_PACKAGE = "org.octopusden.octopus.components.registry.server"
     }
