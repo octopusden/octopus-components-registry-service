@@ -41,8 +41,8 @@
           },
           "outcome" : {
             "enum" : [
-              "PASSED",
-              "FAILED",
+              "COMPLETED",
+              "NOT_COMPLETED",
               "UNKNOWN"
             ],
             "type" : "string"
@@ -74,9 +74,6 @@
               "TEAMCITY_PROJECT",
               "REPOSITORY"
             ],
-            "type" : "string"
-          },
-          "targetUrl" : {
             "type" : "string"
           }
         },

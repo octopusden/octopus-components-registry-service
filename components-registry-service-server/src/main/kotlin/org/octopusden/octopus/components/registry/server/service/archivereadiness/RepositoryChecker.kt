@@ -15,7 +15,7 @@ import org.springframework.stereotype.Service
 @ConditionalOnDatabaseEnabled
 @Service
 class RepositoryChecker(
-    private val vcsFacadeClient: VcsFacadeClient,
+    private val vcsFacadeClient: VcsFacadeClient?,
     private val sharingHelper: SharingHelper,
 ) : TargetChecker {
     private val log = LoggerFactory.getLogger(RepositoryChecker::class.java)
@@ -31,6 +31,14 @@ class RepositoryChecker(
     // couldn't be consulted reliably.
     @Suppress("TooGenericExceptionCaught", "SwallowedException")
     override fun check(target: CheckTarget): CheckResult {
+        if (vcsFacadeClient == null) {
+            log.info("REPOSITORY: skipped for {} — VCS not configured", target.targetId)
+            return CheckResult(
+                Outcome.UNKNOWN,
+                reason = "VCS not configured",
+                reasonKind = ReasonKind.NOT_CONFIGURED,
+            )
+        }
         val repo = try {
             vcsFacadeClient.getRepository(target.targetId)
         } catch (e: NotFoundException) {

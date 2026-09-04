@@ -5,6 +5,7 @@ import org.junit.jupiter.api.Test
 import org.mockito.kotlin.any
 import org.mockito.kotlin.eq
 import org.mockito.kotlin.mock
+import org.mockito.kotlin.never
 import org.mockito.kotlin.verify
 import org.mockito.kotlin.whenever
 import org.octopusden.octopus.components.registry.server.dto.v4.Outcome
@@ -61,7 +62,7 @@ class RepositoryCheckerTest {
     }
 
     @Test
-    fun `absent repository (NotFoundException) yields UNKNOWN, not COMPLETED — cannot confirm absence vs. inaccessible`() {
+    fun `absent repository (NotFoundException) yields UNKNOWN, not COMPLETED — cannot confirm absence vs inaccessible`() {
         // A hosting platform may answer 404 for a private, inaccessible repository the same way
         // it does for one that genuinely no longer exists (design.md decision 11/12) — trusting
         // this as confirmed absence would let a permission problem silently pass this check.
@@ -112,6 +113,15 @@ class RepositoryCheckerTest {
         assertThat(result.reason).contains(target.targetId)
         assertThat(result.reason).doesNotContain("VCS system could not be consulted")
         assertThat(result.reasonKind).isEqualTo(ReasonKind.REGISTRY_DATA)
+    }
+
+    @Test
+    fun `null VcsFacadeClient (VCS not configured) yields UNKNOWN classified NOT_CONFIGURED without calling sharingHelper`() {
+        val noClientChecker = RepositoryChecker(null, sharingHelper)
+        val result = noClientChecker.check(target)
+        assertThat(result.outcome).isEqualTo(Outcome.UNKNOWN)
+        assertThat(result.reasonKind).isEqualTo(ReasonKind.NOT_CONFIGURED)
+        verify(sharingHelper, never()).sharedWithForRepo(any(), any())
     }
 
     @Test

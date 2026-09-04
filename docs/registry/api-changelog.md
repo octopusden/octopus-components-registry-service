@@ -18,6 +18,19 @@ refresh it with `./gradlew :components-registry-service-server:generateOpenApiDo
 
 ## Unreleased
 
+- **`GET /rest/api/4/components/{idOrName}/archive-readiness` added.** Read-only pre-flight check
+  for the archive/delete flow, gated by the same authorization as `deleteComponent`
+  (`ACCESS_COMPONENTS` + `canDeleteComponent`). Returns `{ready: Boolean, entries: [...]}`: one
+  entry per external target the component uses (VCS repository, TeamCity project, Jira open
+  issues, Jira project) with an `outcome` of `COMPLETED` / `NOT_COMPLETED` / `UNKNOWN`, an optional
+  `reason` and `reasonKind` (`SYSTEM_UNAVAILABLE` / `REGISTRY_DATA` / `NOT_CONFIGURED` — classifies
+  what would resolve an `UNKNOWN` entry), `sharedWith` (other live components still using the same
+  target), and `openIssues` (JIRA_ISSUES only). `ready` is `false` if any entry is `NOT_COMPLETED`
+  or `UNKNOWN` — callers should gate on `ready`, not derive it from `entries` themselves. A VCS
+  repository or TeamCity project the external system reports absent needs to be genuinely
+  confirmed gone — a bare "not found" from the VCS system specifically is `UNKNOWN`, not an
+  automatic pass, since some hosting platforms return 404 for a private/inaccessible repository
+  the same way they do for one that no longer exists.
 - **TeamCity validation surfaced in the API — coordinated deploy required.** `TeamcityProjectResponse`
   gains `validations: List<ValidationResponse>` (`type` + `status` + optional `message` +
   optional `updatedAt`, e.g. `USES_OLD_JAVA_VERSION` / `WARNING`), and new admin endpoints

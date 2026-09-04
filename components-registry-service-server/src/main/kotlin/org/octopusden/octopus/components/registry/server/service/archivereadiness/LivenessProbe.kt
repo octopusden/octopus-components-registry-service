@@ -1,7 +1,7 @@
 package org.octopusden.octopus.components.registry.server.service.archivereadiness
 
-import com.atlassian.jira.rest.client.api.JiraRestClient
 import org.octopusden.octopus.components.registry.server.config.ArchiveReadinessProperties
+import org.octopusden.octopus.components.registry.server.jira.JiraIssueSearchClient
 import org.octopusden.octopus.components.registry.server.teamcity.TeamcityProperties
 import org.octopusden.octopus.infrastructure.client.commons.ClientParametersProvider
 import org.octopusden.octopus.infrastructure.client.commons.CredentialProvider
@@ -17,18 +17,17 @@ import org.springframework.stereotype.Service
  * Liveness of each external connection archive-readiness depends on, established once per
  * [ArchiveReadinessAssembler.assemble] call (design.md decision 12: "each system is proved live
  * once"). There are four independent connections, not three — the issue tracker is reached
- * through two separate clients (Atlassian for issue search, octopus for project reads) that
- * share one on/off switch today but can fail independently (decision 12/17), so they are probed
- * as two separate fields even though [ArchiveReadinessProperties.isJiraConfigured] is currently
- * their only switch.
+ * through two separate clients ([JiraIssueSearchClient] for issue search, the octopus `JiraClient`
+ * for project reads) that share one on/off switch today but can fail independently (decision
+ * 12/17), so they are probed as two separate fields even though
+ * [ArchiveReadinessProperties.isJiraConfigured] is currently their only switch.
  *
  * **Not every connection has a real system-wide probe call available:**
  * - TeamCity: `TeamcityClient.getServer()` (`GET .../server`) is a genuine lightweight,
  *   project-independent "is the server reachable and my credential valid" call — verified
  *   against `teamcity-client:2.0.98` sources.
- * - Jira issue-search (Atlassian): `JiraRestClient.sessionClient.getCurrentSession()` is the
- *   equivalent "who am I" call on `jira-rest-java-client-api:5.2.7` — lightweight, no project
- *   key needed.
+ * - Jira issue-search: `GET /rest/auth/1/session` ([JiraIssueSearchClient.checkSession]) is the
+ *   equivalent "who am I" call against Jira's own REST API — lightweight, no project key needed.
  * - VCS (vcs-facade): no project-independent probe call exists on the real, deployed server —
  *   `indexReport`/`reindexRepository` (the "indexer" module) was removed from the server side at
  *   some point after `vcsfacade:client:3.0.36`'s API was written; the client interface still
@@ -42,8 +41,9 @@ import org.springframework.stereotype.Service
  *   follows `archive-readiness.vcs-facade.base-url` being non-blank, the same "blank =
  *   unconfigured, no entries" convention TeamCity/Jira already use (see
  *   [ArchiveReadinessProperties] and
- *   [org.octopusden.octopus.components.registry.server.config.VcsFacadeClientConfig]'s lazy-client
- *   wrapper, which is what makes probing with a blank base URL safe to skip entirely).
+ *   [org.octopusden.octopus.components.registry.server.config.VcsFacadeClientConfig], which
+ *   produces no bean at all on a blank base URL — mirroring the nullable Jira client beans —
+ *   rather than a real client `probeVcs` would otherwise have to guard against constructing).
  * - Jira project-read (octopus): the octopus `JiraClient` interface's only read is
  *   `getProject(projectKey)`, which necessarily needs a project key — there is no
  *   project-independent call. Same fallback as VCS: reported live whenever configured, with
@@ -64,9 +64,9 @@ data class LivenessSnapshot(
 @Service
 class LivenessProbe(
     private val teamcityProperties: TeamcityProperties,
-    private val jiraRestClient: JiraRestClient?,
+    private val jiraSearchClient: JiraIssueSearchClient?,
     private val archiveReadinessProperties: ArchiveReadinessProperties,
-    private val vcsFacadeClient: VcsFacadeClient,
+    private val vcsFacadeClient: VcsFacadeClient?,
     // Allows tests to inject a mock without needing to create a real TCP connection.
     // Production callers leave this null; Spring injects only the beans/properties above.
     private val teamcityClientOverride: TeamcityClient? = null,
@@ -153,9 +153,10 @@ class LivenessProbe(
     // live server and are treated the same way here — RepositoryChecker's own message-matching
     // heuristic already establishes this exact string as recognized, not fragile guesswork.
     @Suppress("TooGenericExceptionCaught", "SwallowedException")
-    private fun probeVcs(): Boolean =
-        try {
-            vcsFacadeClient.getRepository(VCS_LIVENESS_SENTINEL_URL)
+    private fun probeVcs(): Boolean {
+        val client = vcsFacadeClient ?: return false
+        return try {
+            client.getRepository(VCS_LIVENESS_SENTINEL_URL)
             true
         } catch (e: NotFoundException) {
             true
@@ -167,13 +168,14 @@ class LivenessProbe(
                 false
             }
         }
+    }
 
     // TooGenericExceptionCaught: same fail-closed rationale as probeTeamcity above.
     @Suppress("TooGenericExceptionCaught")
     private fun probeJiraIssues(): Boolean {
-        val client = jiraRestClient ?: return false
+        val client = jiraSearchClient ?: return false
         return try {
-            client.sessionClient.getCurrentSession().claim()
+            client.checkSession()
             true
         } catch (e: Exception) {
             log.warn("Jira issue-search liveness probe failed: ${e.message}")

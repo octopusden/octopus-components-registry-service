@@ -105,6 +105,19 @@ interface ComponentRepository :
      */
     fun findByComponentGroupId(groupId: UUID): List<ComponentEntity>
 
+    /**
+     * (componentKey, vcsPath) pairs for every VCS entry on every non-archived component other
+     * than [excludeComponentId]. One join query, replacing the component x configuration x
+     * VCS-entry traversal SharingHelper used to run per call — canonicalization stays in-memory
+     * on the caller side since VcsUrlCanonicalizer has no SQL equivalent.
+     */
+    @Query(
+        "SELECT c.componentKey AS componentKey, v.vcsPath AS vcsPath " +
+            "FROM ComponentEntity c JOIN c.configurations cfg JOIN cfg.vcsEntries v " +
+            "WHERE c.archived = false AND c.id <> :excludeComponentId",
+    )
+    fun findNonArchivedComponentVcsPaths(excludeComponentId: UUID): List<ComponentVcsPathRow>
+
     // --- Edit-ownership projections (ADR-004 Phase 2) ---
     // These power `PermissionEvaluator.canEditComponent`, which runs inside a
     // Spring Security @PreAuthorize interceptor — i.e. OUTSIDE any open Hibernate
@@ -210,4 +223,10 @@ interface NameCountRow {
 interface DisplayNamePairRow {
     val componentKey: String
     val displayName: String
+}
+
+/** Projection for [ComponentRepository.findNonArchivedComponentVcsPaths]. */
+interface ComponentVcsPathRow {
+    val componentKey: String
+    val vcsPath: String
 }

@@ -7,14 +7,12 @@ import org.mockito.kotlin.mock
 import org.mockito.kotlin.never
 import org.mockito.kotlin.verify
 import org.mockito.kotlin.whenever
-import org.octopusden.octopus.components.registry.server.entity.ComponentConfigurationEntity
 import org.octopusden.octopus.components.registry.server.entity.ComponentEntity
 import org.octopusden.octopus.components.registry.server.entity.TeamcityProjectEntity
-import org.octopusden.octopus.components.registry.server.entity.VcsSettingsEntryEntity
 import org.octopusden.octopus.components.registry.server.entity.VersionLineEntity
 import org.octopusden.octopus.components.registry.server.repository.ComponentConfigurationRepository
 import org.octopusden.octopus.components.registry.server.repository.ComponentRepository
-import org.octopusden.octopus.components.registry.server.repository.VcsSettingsEntryRepository
+import org.octopusden.octopus.components.registry.server.repository.ComponentVcsPathRow
 import org.octopusden.octopus.components.registry.server.repository.VersionLineRepository
 import org.octopusden.octopus.components.registry.server.util.VcsUrlCanonicalizer
 import java.util.UUID
@@ -22,9 +20,13 @@ import java.util.UUID
 class SharingHelperTest {
     private val versionLineRepo = mock<VersionLineRepository>()
     private val componentRepo = mock<ComponentRepository>()
-    private val vcsRepo = mock<VcsSettingsEntryRepository>()
     private val configRepo = mock<ComponentConfigurationRepository>()
-    private val helper = SharingHelper(versionLineRepo, componentRepo, vcsRepo, configRepo)
+    private val helper = SharingHelper(versionLineRepo, componentRepo, configRepo)
+
+    private data class VcsPathRow(
+        override val componentKey: String,
+        override val vcsPath: String,
+    ) : ComponentVcsPathRow
 
     private fun liveComponent(
         name: String,
@@ -38,10 +40,11 @@ class SharingHelperTest {
 
     @Test
     fun `sharedWithForRepo returns empty when no other component uses the repo`() {
-        whenever(componentRepo.findAll()).thenReturn(emptyList())
+        val excludeId = UUID.randomUUID()
+        whenever(componentRepo.findNonArchivedComponentVcsPaths(excludeId)).thenReturn(emptyList())
         val result = helper.sharedWithForRepo(
             VcsUrlCanonicalizer.canonicalize("ssh://git.example.com/only-repo.git"),
-            UUID.randomUUID(),
+            excludeId,
         )
         assertThat(result).isEmpty()
     }
@@ -53,22 +56,32 @@ class SharingHelperTest {
         // sharing component records the repo via SCP-style shorthand, the checked component's
         // own URL (below, fed into canonicalize()) uses an explicit "ssh://" scheme with
         // userinfo — the same repository, two different textual forms.
-        val sharingId = UUID.randomUUID()
-        val sharingComp = liveComponent("sharing-comp", sharingId)
-        val cfg = ComponentConfigurationEntity(id = UUID.randomUUID(), component = sharingComp, rowType = "BASE")
-        val vcsEntry = VcsSettingsEntryEntity(
-            id = UUID.randomUUID(),
-            componentConfiguration = cfg,
-            name = "main",
-            vcsPath = "git@git.example.com:owner/repo.git",
+        val excludeId = UUID.randomUUID()
+        whenever(componentRepo.findNonArchivedComponentVcsPaths(excludeId)).thenReturn(
+            listOf(VcsPathRow(componentKey = "sharing-comp", vcsPath = "git@git.example.com:owner/repo.git")),
         )
-        whenever(componentRepo.findAll()).thenReturn(listOf(sharingComp))
-        whenever(configRepo.findByComponentId(sharingId)).thenReturn(listOf(cfg))
-        whenever(vcsRepo.findByComponentConfigurationId(cfg.id!!)).thenReturn(listOf(vcsEntry))
 
         val result = helper.sharedWithForRepo(
             VcsUrlCanonicalizer.canonicalize("ssh://git@git.example.com/owner/repo.git"),
-            UUID.randomUUID(),
+            excludeId,
+        )
+
+        assertThat(result).containsExactly("sharing-comp")
+    }
+
+    @Test
+    fun `sharedWithForRepo deduplicates a component matching through more than one VCS entry`() {
+        val excludeId = UUID.randomUUID()
+        whenever(componentRepo.findNonArchivedComponentVcsPaths(excludeId)).thenReturn(
+            listOf(
+                VcsPathRow(componentKey = "sharing-comp", vcsPath = "ssh://git.example.com/repo.git"),
+                VcsPathRow(componentKey = "sharing-comp", vcsPath = "ssh://git.example.com/repo.git"),
+            ),
+        )
+
+        val result = helper.sharedWithForRepo(
+            VcsUrlCanonicalizer.canonicalize("ssh://git.example.com/repo.git"),
+            excludeId,
         )
 
         assertThat(result).containsExactly("sharing-comp")

@@ -8,11 +8,9 @@ class ArchiveReadinessProperties(
     val retiredJiraProjectCategories: Set<String> = emptySet(),
     @NestedConfigurationProperty
     val jira: JiraConnectionProperties = JiraConnectionProperties(),
-    // VcsFacadeClient (the vcs-facade client bean) is now constructed lazily — see
-    // VcsFacadeClientConfig / LivenessProbe's class kdoc — so a blank baseUrl here is safe: no
-    // Feign target is built until something actually invokes the client, mirroring the
-    // Jira/TeamCity baseUrl defaults below and giving VCS the same "blank = unconfigured, no
-    // entries" off-switch they already have.
+    // VcsFacadeClientConfig produces no VcsFacadeClient bean at all when this is blank (see its
+    // kdoc / LivenessProbe's class kdoc), mirroring the Jira/TeamCity baseUrl defaults below and
+    // giving VCS the same "blank = unconfigured, no entries" off-switch they already have.
     @NestedConfigurationProperty
     val vcsFacade: VcsFacadeConnectionProperties = VcsFacadeConnectionProperties(),
 ) {

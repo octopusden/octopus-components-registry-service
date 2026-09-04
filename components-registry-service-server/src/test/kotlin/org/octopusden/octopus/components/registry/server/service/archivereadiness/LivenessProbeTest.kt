@@ -1,18 +1,16 @@
 package org.octopusden.octopus.components.registry.server.service.archivereadiness
 
-import com.atlassian.jira.rest.client.api.JiraRestClient
-import com.atlassian.jira.rest.client.api.SessionRestClient
-import com.atlassian.jira.rest.client.api.domain.Session
-import io.atlassian.util.concurrent.Promise
 import org.assertj.core.api.Assertions.assertThat
 import org.junit.jupiter.api.Test
 import org.mockito.kotlin.any
+import org.mockito.kotlin.doNothing
 import org.mockito.kotlin.mock
 import org.mockito.kotlin.never
 import org.mockito.kotlin.times
 import org.mockito.kotlin.verify
 import org.mockito.kotlin.whenever
 import org.octopusden.octopus.components.registry.server.config.ArchiveReadinessProperties
+import org.octopusden.octopus.components.registry.server.jira.JiraIssueSearchClient
 import org.octopusden.octopus.components.registry.server.teamcity.TeamcityProperties
 import org.octopusden.octopus.infrastructure.teamcity.client.TeamcityClient
 import org.octopusden.octopus.infrastructure.teamcity.client.dto.TeamcityServer
@@ -21,31 +19,28 @@ import org.octopusden.octopus.vcsfacade.client.common.exception.NotFoundExceptio
 
 class LivenessProbeTest {
     private val teamcityClient = mock<TeamcityClient>()
-    private val jiraRestClient = mock<JiraRestClient>()
+    private val jiraSearchClient = mock<JiraIssueSearchClient>()
     private val vcsFacadeClient = mock<VcsFacadeClient>()
 
     private fun probe(
         teamcityBaseUrl: String = "http://tc.example.com",
         jiraBaseUrl: String = "http://jira.example.com",
-        jiraClient: JiraRestClient? = jiraRestClient,
+        jiraClient: JiraIssueSearchClient? = jiraSearchClient,
         vcsBaseUrl: String = "http://vcs-facade.example.com",
+        vcsClient: VcsFacadeClient? = vcsFacadeClient,
     ) = LivenessProbe(
         teamcityProperties = TeamcityProperties(baseUrl = teamcityBaseUrl),
-        jiraRestClient = jiraClient,
+        jiraSearchClient = jiraClient,
         archiveReadinessProperties = ArchiveReadinessProperties(
             jira = ArchiveReadinessProperties.JiraConnectionProperties(baseUrl = jiraBaseUrl),
             vcsFacade = ArchiveReadinessProperties.VcsFacadeConnectionProperties(baseUrl = vcsBaseUrl),
         ),
-        vcsFacadeClient = vcsFacadeClient,
+        vcsFacadeClient = vcsClient,
         teamcityClientOverride = teamcityClient,
     )
 
     private fun stubJiraSessionSucceeds() {
-        val sessionClient = mock<SessionRestClient>()
-        val promise = mock<Promise<Session>>()
-        whenever(jiraRestClient.sessionClient).thenReturn(sessionClient)
-        whenever(sessionClient.getCurrentSession()).thenReturn(promise)
-        whenever(promise.claim()).thenReturn(mock<Session>())
+        doNothing().whenever(jiraSearchClient).checkSession()
     }
 
     @Test
@@ -59,15 +54,11 @@ class LivenessProbeTest {
     @Test
     fun `configured Jira issue-search connection is probed exactly once`() {
         whenever(teamcityClient.getServer()).thenReturn(TeamcityServer("2024.03"))
-        val sessionClient = mock<SessionRestClient>()
-        val promise = mock<Promise<Session>>()
-        whenever(jiraRestClient.sessionClient).thenReturn(sessionClient)
-        whenever(sessionClient.getCurrentSession()).thenReturn(promise)
-        whenever(promise.claim()).thenReturn(mock<Session>())
+        stubJiraSessionSucceeds()
 
         probe().probe()
 
-        verify(sessionClient, times(1)).getCurrentSession()
+        verify(jiraSearchClient, times(1)).checkSession()
     }
 
     @Test
@@ -101,9 +92,7 @@ class LivenessProbeTest {
     @Test
     fun `configured Jira issue-search whose call throws reports live false, not an exception out of probe`() {
         whenever(teamcityClient.getServer()).thenReturn(TeamcityServer("2024.03"))
-        val sessionClient = mock<SessionRestClient>()
-        whenever(jiraRestClient.sessionClient).thenReturn(sessionClient)
-        whenever(sessionClient.getCurrentSession()).thenThrow(RuntimeException("401 unauthorized"))
+        whenever(jiraSearchClient.checkSession()).thenThrow(RuntimeException("401 unauthorized"))
 
         val snapshot = probe().probe()
 
@@ -165,6 +154,17 @@ class LivenessProbeTest {
         val snapshot = probe().probe()
         assertThat(snapshot.vcsConfigured).isTrue()
         assertThat(snapshot.vcsLive).isTrue()
+    }
+
+    @Test
+    fun `VCS bean absent (no bean produced for a blank base url) reports live false without throwing`() {
+        // VcsFacadeClientConfig produces no bean at all when the base url is blank, so
+        // LivenessProbe receives a null VcsFacadeClient — this must not NPE.
+        whenever(teamcityClient.getServer()).thenReturn(TeamcityServer("2024.03"))
+        stubJiraSessionSucceeds()
+        val snapshot = probe(vcsClient = null).probe()
+        assertThat(snapshot.vcsLive).isFalse()
+        verify(vcsFacadeClient, never()).getRepository(any())
     }
 
     @Test

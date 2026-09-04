@@ -1,11 +1,11 @@
 package org.octopusden.octopus.components.registry.server.service.archivereadiness
 
-import com.atlassian.jira.rest.client.api.JiraRestClient
-import com.atlassian.jira.rest.client.api.domain.Issue
 import org.octopusden.octopus.components.registry.server.config.ConditionalOnDatabaseEnabled
 import org.octopusden.octopus.components.registry.server.dto.v4.JiraIssueRef
 import org.octopusden.octopus.components.registry.server.dto.v4.Outcome
 import org.octopusden.octopus.components.registry.server.dto.v4.ReasonKind
+import org.octopusden.octopus.components.registry.server.jira.JiraIssueSearchClient
+import org.octopusden.octopus.components.registry.server.jira.JiraSearchIssue
 import org.slf4j.LoggerFactory
 import org.springframework.stereotype.Service
 import java.util.UUID
@@ -21,7 +21,7 @@ private const val MAX_PAGES = 200
 @ConditionalOnDatabaseEnabled
 @Service
 class JiraIssuesChecker(
-    private val jiraRestClient: JiraRestClient?,
+    private val jiraSearchClient: JiraIssueSearchClient?,
     private val pairResolver: JiraEffectivePairResolver,
 ) {
     private val log = LoggerFactory.getLogger(JiraIssuesChecker::class.java)
@@ -34,7 +34,7 @@ class JiraIssuesChecker(
         prefix: String?,
         componentId: UUID,
     ): CheckResult {
-        if (jiraRestClient == null) {
+        if (jiraSearchClient == null) {
             log.info("JIRA_ISSUES: skipped for {}:{} — Jira issue search not configured", projectKey, prefix)
             return CheckResult(
                 Outcome.UNKNOWN,
@@ -57,42 +57,52 @@ class JiraIssuesChecker(
         // fixVersion is a VERSION field: JQL's `~` (CONTAINS) is text-only and Jira rejects it
         // here, so prefix/version matching happens client-side below instead.
         val jql = "project = \"$projectKey\" AND statusCategory != Done"
-        fun matches(issue: Issue): Boolean {
-            val fixVersionNames = issue.fixVersions?.mapNotNull { it.name } ?: emptyList()
-            return when {
-                // Client-side prefix match — replaces the invalid JQL "fixVersion ~ prefix*" clause.
-                prefix != null -> fixVersionNames.any { it.startsWith(prefix) }
-                // Sole claimant on the project: nothing excuses any open issue here, so every
-                // issue counts regardless of its fixVersions.
-                wholeProjectScope -> true
-                // Shares the project key with another (prefixed) pair: only bare-version-
-                // pattern issues belong to this null-prefix pair; the rest belong to the sibling.
-                else -> fixVersionNames.any { BARE_VERSION.containsMatchIn(it) }
-            }
+        return searchOpenIssues(jiraSearchClient, jql, projectKey) { issue ->
+            matchesScope(issue, prefix, wholeProjectScope)
         }
+    }
 
+    private fun matchesScope(
+        issue: JiraSearchIssue,
+        prefix: String?,
+        wholeProjectScope: Boolean,
+    ): Boolean {
+        val fixVersionNames = issue.fields.fixVersions.mapNotNull { it.name }
+        return when {
+            // Client-side prefix match — replaces the invalid JQL "fixVersion ~ prefix*" clause.
+            prefix != null -> fixVersionNames.any { it.startsWith(prefix) }
+            // Sole claimant on the project: nothing excuses any open issue here, so every
+            // issue counts regardless of its fixVersions.
+            wholeProjectScope -> true
+            // Shares the project key with another (prefixed) pair: only bare-version-
+            // pattern issues belong to this null-prefix pair; the rest belong to the sibling.
+            else -> fixVersionNames.any { BARE_VERSION.containsMatchIn(it) }
+        }
+    }
+
+    @Suppress("TooGenericExceptionCaught")
+    private fun searchOpenIssues(
+        client: JiraIssueSearchClient,
+        jql: String,
+        projectKey: String,
+        matches: (JiraSearchIssue) -> Boolean,
+    ): CheckResult {
         return try {
             var startAt = 0
             var page = 0
             while (page < MAX_PAGES) {
-                // A null `fields` set (confirmed via bytecode: searchJqlImplGet skips the "fields"
-                // query param entirely when this is null, exactly like the client's own
-                // searchJql(String)-only overload does) leaves Jira's normal default field set in
-                // place, rather than an explicit allowlist this check would otherwise have to keep
-                // in lockstep with jira-rest-java-client-core's own unconditional parsing
-                // requirements — omitting even one of those (as "issuetype", then "created" here
-                // did in production) throws a raw JSONException for every issue on the page, not
-                // just the field itself.
-                val results = jiraRestClient.searchClient
-                    .searchJql(jql, PAGE_SIZE, startAt, null)
-                    .claim()
-                val issues = results.issues.toList()
-                val matching = issues.filter(::matches)
+                // No explicit "fields" query param is sent — see JiraIssueSearchClient's kdoc —
+                // leaving Jira's normal default field set in place rather than an explicit
+                // allowlist this check would otherwise have to keep in lockstep with Jira's own
+                // required fields (an incomplete allowlist broke in production before).
+                val results = client.searchJql(jql, startAt, PAGE_SIZE)
+                val issues = results.issues
+                val matching = issues.filter(matches)
                 if (matching.isNotEmpty()) {
                     // A match found on any page is trustworthy evidence on its own — more open
                     // issues on later pages would only reinforce NOT_COMPLETED, so this can return
                     // without reading the remaining pages.
-                    val openIssues = matching.map { JiraIssueRef(it.key, it.summary ?: "") }
+                    val openIssues = matching.map { JiraIssueRef(it.key, it.fields.summary ?: "") }
                     return CheckResult(Outcome.NOT_COMPLETED, openIssues = openIssues)
                 }
                 startAt += issues.size

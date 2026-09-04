@@ -3,7 +3,6 @@ package org.octopusden.octopus.components.registry.server.service.archivereadine
 import org.octopusden.octopus.components.registry.server.config.ConditionalOnDatabaseEnabled
 import org.octopusden.octopus.components.registry.server.repository.ComponentConfigurationRepository
 import org.octopusden.octopus.components.registry.server.repository.ComponentRepository
-import org.octopusden.octopus.components.registry.server.repository.VcsSettingsEntryRepository
 import org.octopusden.octopus.components.registry.server.repository.VersionLineRepository
 import org.octopusden.octopus.components.registry.server.util.JiraRowView
 import org.octopusden.octopus.components.registry.server.util.VcsUrlCanonicalizer
@@ -18,7 +17,6 @@ import java.util.UUID
 class SharingHelper(
     private val versionLineRepository: VersionLineRepository,
     private val componentRepository: ComponentRepository,
-    private val vcsSettingsEntryRepository: VcsSettingsEntryRepository,
     private val componentConfigurationRepository: ComponentConfigurationRepository,
 ) {
     fun sharedWithForRepo(
@@ -26,14 +24,10 @@ class SharingHelper(
         excludeComponentId: UUID,
     ): List<String> =
         componentRepository
-            .findAll()
-            .filter { !it.archived && it.id != excludeComponentId }
-            .filter { comp ->
-                componentConfigurationRepository
-                    .findByComponentId(comp.id!!)
-                    .flatMap { cfg -> vcsSettingsEntryRepository.findByComponentConfigurationId(cfg.id!!) }
-                    .any { entry -> VcsUrlCanonicalizer.canonicalize(entry.vcsPath) == canonicalUrl }
-            }.map { it.componentKey }
+            .findNonArchivedComponentVcsPaths(excludeComponentId)
+            .filter { VcsUrlCanonicalizer.canonicalize(it.vcsPath) == canonicalUrl }
+            .map { it.componentKey }
+            .distinct()
 
     fun sharedWithForTcProject(
         projectId: String,

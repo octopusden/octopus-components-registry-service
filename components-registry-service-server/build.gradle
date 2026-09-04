@@ -55,36 +55,14 @@ dependencies {
     // vcs-facade client — getRepository(sshUrl) + nullable Repository.archived
     implementation("org.octopusden.octopus.vcsfacade:client:${project.properties['vcsfacade.version']}")
 
-    // Atlassian REST Java client — for Jira issue search (JIRA_ISSUES entries)
-    implementation("com.atlassian.jira:jira-rest-java-client-api:${project.properties['atlassian-jira-rest-client.version']}")
-    implementation("com.atlassian.jira:jira-rest-java-client-core:${project.properties['atlassian-jira-rest-client.version']}") {
-        // jira-rest-java-client-core's POM declares org.glassfish.jersey.* (Jersey 2 client),
-        // but the actual runtime path we use — AsynchronousJiraRestClientFactory, backed by
-        // com.atlassian.httpclient:atlassian-httpclient-library (Apache HttpAsyncClient) — never
-        // references a single Jersey class (verified via javap against the jar's bytecode). It's
-        // unused dead weight in the POM, but Spring Boot's dependency-management BOM pins any
-        // org.glassfish.jersey.core:jersey-client on the classpath to 3.1.x (Jakarta), which puts
-        // org.glassfish.jersey.client.JerseyClient on the runtime classpath. Spring Cloud Netflix's
-        // DiscoveryClientOptionalArgsConfiguration gates its RestTemplate-based
-        // TransportClientFactories bean on @ConditionalOnMissingClass("org.glassfish.jersey.client.JerseyClient")
-        // (see spring-cloud-netflix-eureka-client), so that class's mere presence silently disables
-        // Eureka's fallback transport — and since Jersey 1 (com.sun.jersey) isn't on the classpath
-        // either, no TransportClientFactories bean gets created at all, failing eurekaClient startup.
-        exclude group: 'org.glassfish.jersey.core', module: 'jersey-client'
-        exclude group: 'org.glassfish.jersey.media', module: 'jersey-media-json-jettison'
-    }
-    // jersey-client (excluded above) was the sole transitive source of a jakarta.ws.rs.ext.
-    // RuntimeDelegate provider: AsynchronousJiraRestClient's constructor calls
-    // jakarta.ws.rs.core.UriBuilder.fromUri(...), which looks one up via
-    // ServiceLoader/META-INF-services at runtime and throws ClassNotFoundException with none
-    // registered — jakarta.ws.rs-api (already on the classpath via Eureka/Spring Boot's BOM) is
-    // the interface only, no implementation. jersey-common carries the provider
-    // (RuntimeDelegateImpl) without jersey-client's org.glassfish.jersey.client.JerseyClient —
-    // the class Eureka's auto-config actually checks for — so adding it back doesn't reintroduce
-    // that conflict. Version is left unpinned so Spring Boot's BOM keeps it aligned with the
-    // jersey-client version it already forces elsewhere on the classpath.
-    runtimeOnly("org.glassfish.jersey.core:jersey-common")
-    implementation("io.atlassian.fugue:fugue:${project.properties['atlassian-fugue.version']}")
+    // Jira issue search (JIRA_ISSUES entries) uses Spring's own RestClient against Jira's REST
+    // API directly (org.octopusden.octopus.components.registry.server.jira.JiraIssueSearchClient)
+    // — no dedicated dependency needed beyond spring-boot-starter-web, already declared above.
+    // A prior version of this depended on com.atlassian.jira:jira-rest-java-client-api/-core for
+    // the same two GET operations, which pulled a transitive Jersey 2 client onto the classpath
+    // purely for that — repeatedly conflicting with Spring Cloud Netflix Eureka's own Jersey-
+    // presence detection and jakarta.ws.rs.ext.RuntimeDelegate resolution. Replacing it removes
+    // that dependency and its workarounds entirely.
 
     // Octopus jira-client — for getProject(key).projectCategory (JIRA_PROJECT entries)
     implementation("org.octopusden.octopus.octopus-external-systems-clients:jira-client:${project.properties['octopus-external-systems-clients.version']}")
