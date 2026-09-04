@@ -12,9 +12,6 @@ import java.util.UUID
 
 private val BARE_VERSION = Regex("^\\d")
 private const val PAGE_SIZE = 50
-
-// Safety backstop against a runaway fetch if Jira's `total` field were ever wrong/unstable
-// (not a realistic per-project open-issue count) — not a design limit on project size.
 private const val MAX_PAGES = 200
 
 // Depends transitively on JPA repos via JiraEffectivePairResolver — drop in no-db mode too.
@@ -91,28 +88,19 @@ class JiraIssuesChecker(
             var startAt = 0
             var page = 0
             while (page < MAX_PAGES) {
-                // No explicit "fields" query param is sent — see JiraIssueSearchClient's kdoc —
-                // leaving Jira's normal default field set in place rather than an explicit
-                // allowlist this check would otherwise have to keep in lockstep with Jira's own
-                // required fields (an incomplete allowlist broke in production before).
                 val results = client.searchJql(jql, startAt, PAGE_SIZE)
                 val issues = results.issues
                 val matching = issues.filter(matches)
                 if (matching.isNotEmpty()) {
-                    // A match found on any page is trustworthy evidence on its own — more open
-                    // issues on later pages would only reinforce NOT_COMPLETED, so this can return
-                    // without reading the remaining pages.
                     val openIssues = matching.map { JiraIssueRef(it.key, it.fields.summary ?: "") }
                     return CheckResult(Outcome.NOT_COMPLETED, openIssues = openIssues)
                 }
                 startAt += issues.size
                 page++
-                // Exhausted: every open issue on the project has now been read and none matched.
                 if (issues.isEmpty() || startAt >= results.total) {
                     return CheckResult(Outcome.COMPLETED)
                 }
             }
-            // Backstop tripped — see MAX_PAGES kdoc. Not a trustworthy COMPLETED: unread issues remain.
             log.warn(
                 "JIRA_ISSUES: {} has more open issues than the {} pages ({} each) this check will read — cannot confirm none are in scope",
                 projectKey,

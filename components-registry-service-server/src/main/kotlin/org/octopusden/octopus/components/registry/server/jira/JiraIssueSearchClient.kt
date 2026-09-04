@@ -3,21 +3,6 @@ package org.octopusden.octopus.components.registry.server.jira
 import com.fasterxml.jackson.annotation.JsonIgnoreProperties
 import org.springframework.web.client.RestClient
 
-/**
- * Minimal Jira REST client for archive-readiness's two needs: paging through an open-issue JQL
- * search ([searchJql]) and a lightweight authenticated call proving the configured credential is
- * live ([checkSession]).
- *
- * Built on Spring's own [RestClient] against Jira's REST API directly, rather than
- * `jira-rest-java-client`, which pulled a Jersey 2 client onto the classpath purely for these two
- * GET operations and repeatedly conflicted with Spring Cloud Netflix Eureka's own Jersey-presence
- * detection and `jakarta.ws.rs.ext.RuntimeDelegate` resolution (see build.gradle history).
- *
- * No explicit `fields` query parameter is ever sent — Jira's own default field set already
- * includes everything [JiraSearchIssueFields] reads (`summary`, `fixVersions`), and an incomplete
- * explicit allowlist broke in production before (a field `jira-rest-java-client-core`'s own parser
- * required unconditionally, "issuetype" then "created", was missing from it).
- */
 class JiraIssueSearchClient(
     private val restClient: RestClient,
 ) {
@@ -39,7 +24,6 @@ class JiraIssueSearchClient(
             .body(JiraSearchResponse::class.java)
             ?: JiraSearchResponse()
 
-    /** Throws on any non-2xx response or connection failure — used only to prove liveness. */
     fun checkSession() {
         restClient
             .get()

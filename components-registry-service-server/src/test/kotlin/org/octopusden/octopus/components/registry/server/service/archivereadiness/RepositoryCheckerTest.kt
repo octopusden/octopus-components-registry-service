@@ -63,9 +63,6 @@ class RepositoryCheckerTest {
 
     @Test
     fun `absent repository (NotFoundException) yields UNKNOWN, not COMPLETED — cannot confirm absence vs inaccessible`() {
-        // A hosting platform may answer 404 for a private, inaccessible repository the same way
-        // it does for one that genuinely no longer exists (design.md decision 11/12) — trusting
-        // this as confirmed absence would let a permission problem silently pass this check.
         whenever(vcsFacadeClient.getRepository(target.targetId))
             .thenThrow(NotFoundException("Repository not found"))
         val result = checker.check(target)

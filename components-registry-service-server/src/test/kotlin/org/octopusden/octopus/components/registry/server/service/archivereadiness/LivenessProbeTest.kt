@@ -158,8 +158,6 @@ class LivenessProbeTest {
 
     @Test
     fun `VCS bean absent (no bean produced for a blank base url) reports live false without throwing`() {
-        // VcsFacadeClientConfig produces no bean at all when the base url is blank, so
-        // LivenessProbe receives a null VcsFacadeClient — this must not NPE.
         whenever(teamcityClient.getServer()).thenReturn(TeamcityServer("2024.03"))
         stubJiraSessionSucceeds()
         val snapshot = probe(vcsClient = null).probe()

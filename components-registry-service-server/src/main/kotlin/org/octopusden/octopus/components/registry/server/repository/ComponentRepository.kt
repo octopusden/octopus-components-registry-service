@@ -105,12 +105,6 @@ interface ComponentRepository :
      */
     fun findByComponentGroupId(groupId: UUID): List<ComponentEntity>
 
-    /**
-     * (componentKey, vcsPath) pairs for every VCS entry on every non-archived component other
-     * than [excludeComponentId]. One join query, replacing the component x configuration x
-     * VCS-entry traversal SharingHelper used to run per call — canonicalization stays in-memory
-     * on the caller side since VcsUrlCanonicalizer has no SQL equivalent.
-     */
     @Query(
         "SELECT c.componentKey AS componentKey, v.vcsPath AS vcsPath " +
             "FROM ComponentEntity c JOIN c.configurations cfg JOIN cfg.vcsEntries v " +
@@ -225,7 +219,6 @@ interface DisplayNamePairRow {
     val displayName: String
 }
 
-/** Projection for [ComponentRepository.findNonArchivedComponentVcsPaths]. */
 interface ComponentVcsPathRow {
     val componentKey: String
     val vcsPath: String

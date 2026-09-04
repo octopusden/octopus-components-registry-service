@@ -20,12 +20,7 @@ class RepositoryChecker(
 ) : TargetChecker {
     private val log = LoggerFactory.getLogger(RepositoryChecker::class.java)
 
-    // NotFoundException is deliberately NOT treated as "repository confirmed absent" — some VCS
-    // providers return 404 for a private/inaccessible repository the same way they do for one
-    // that genuinely no longer exists, and vcs-facade's client interface exposes no way to tell
-    // those apart (no distinct error code, no separate permission-check call). Trusting a bare
-    // 404 as proof of absence would let a permission or credential problem silently pass this
-    // check. The plain Exception catch below is likewise deliberate: this check must fail closed
+    // The plain Exception catch below is deliberate: this check must fail closed
     // to UNKNOWN on ANY failure from the VCS client, not just specific exception types — an
     // unanticipated exception type from a third-party client is itself evidence the system
     // couldn't be consulted reliably.

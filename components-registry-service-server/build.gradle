@@ -55,15 +55,6 @@ dependencies {
     // vcs-facade client — getRepository(sshUrl) + nullable Repository.archived
     implementation("org.octopusden.octopus.vcsfacade:client:${project.properties['vcsfacade.version']}")
 
-    // Jira issue search (JIRA_ISSUES entries) uses Spring's own RestClient against Jira's REST
-    // API directly (org.octopusden.octopus.components.registry.server.jira.JiraIssueSearchClient)
-    // — no dedicated dependency needed beyond spring-boot-starter-web, already declared above.
-    // A prior version of this depended on com.atlassian.jira:jira-rest-java-client-api/-core for
-    // the same two GET operations, which pulled a transitive Jersey 2 client onto the classpath
-    // purely for that — repeatedly conflicting with Spring Cloud Netflix Eureka's own Jersey-
-    // presence detection and jakarta.ws.rs.ext.RuntimeDelegate resolution. Replacing it removes
-    // that dependency and its workarounds entirely.
-
     // Octopus jira-client — for getProject(key).projectCategory (JIRA_PROJECT entries)
     implementation("org.octopusden.octopus.octopus-external-systems-clients:jira-client:${project.properties['octopus-external-systems-clients.version']}")
 

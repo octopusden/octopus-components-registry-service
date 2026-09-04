@@ -27,8 +27,6 @@ class JiraIssuesCheckerTest {
         whenever(pairResolver.hasNullPrefixConflict(any())).thenReturn(false)
     }
 
-    // Mirrors JiraIssuesChecker's own private PAGE_SIZE — kept in lockstep manually since the
-    // production constant is private to that file.
     private val pageSize = 50
 
     private fun issue(
@@ -41,13 +39,6 @@ class JiraIssuesCheckerTest {
         whenever(jiraSearchClient.searchJql(any(), any(), any())).thenReturn(JiraSearchResponse(issues.size, issues))
     }
 
-    /**
-     * Answers [JiraIssueSearchClient.searchJql] per-call based on the requested `startAt`,
-     * simulating a Jira project with [total] open issues where every page is full except possibly
-     * the last. A single shared non-matching issue is reused across every page to avoid building
-     * one object per issue when [total] is large (the MAX_PAGES backstop test needs thousands).
-     * A page containing [matchOnPage] (0-indexed) gets one matching issue as its first element.
-     */
     private fun mockPagedSearch(
         total: Int,
         matchOnPage: Int? = null,
@@ -145,9 +136,6 @@ class JiraIssuesCheckerTest {
 
     @Test
     fun `a truncated first page with no match on it reads the next page instead of stopping at UNKNOWN`() {
-        // Jira reports more open issues (80) than a single page (50) holds, none matching on
-        // page 1 — the fix for the pagination bug: the checker must read page 2 (the remaining
-        // 30) rather than giving up with UNKNOWN after only the first page.
         mockPagedSearch(total = 80)
         val outcome = checker.checkPair("PROJ", "1.", UUID.randomUUID())
         assertThat(outcome.outcome).isEqualTo(Outcome.COMPLETED)
@@ -157,8 +145,6 @@ class JiraIssuesCheckerTest {
 
     @Test
     fun `a match on a later page yields NOT_COMPLETED without reading further pages`() {
-        // A match on page 2 (of 3 possible pages, total=120) is trustworthy evidence on its own —
-        // more open issues on page 3 would only reinforce NOT_COMPLETED, so it must not be read.
         mockPagedSearch(total = 120, matchOnPage = 1)
         val outcome = checker.checkPair("PROJ", "1.", UUID.randomUUID())
         assertThat(outcome.outcome).isEqualTo(Outcome.NOT_COMPLETED)
@@ -168,9 +154,6 @@ class JiraIssuesCheckerTest {
 
     @Test
     fun `a project with more open issues than the page backstop will read yields UNKNOWN, not a false COMPLETED`() {
-        // A project so large the checker would never finish paging through it (or a Jira whose
-        // `total` field is unstable/wrong) must fail closed rather than loop forever or claim
-        // COMPLETED without having read every issue.
         mockPagedSearch(total = Int.MAX_VALUE)
         val outcome = checker.checkPair("PROJ", "1.", UUID.randomUUID())
         assertThat(outcome.outcome).isEqualTo(Outcome.UNKNOWN)

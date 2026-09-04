@@ -42,8 +42,7 @@ import org.springframework.stereotype.Service
  *   unconfigured, no entries" convention TeamCity/Jira already use (see
  *   [ArchiveReadinessProperties] and
  *   [org.octopusden.octopus.components.registry.server.config.VcsFacadeClientConfig], which
- *   produces no bean at all on a blank base URL — mirroring the nullable Jira client beans —
- *   rather than a real client `probeVcs` would otherwise have to guard against constructing).
+ *   produces no bean at all on a blank base URL).
  * - Jira project-read (octopus): the octopus `JiraClient` interface's only read is
  *   `getProject(projectKey)`, which necessarily needs a project key — there is no
  *   project-independent call. Same fallback as VCS: reported live whenever configured, with
