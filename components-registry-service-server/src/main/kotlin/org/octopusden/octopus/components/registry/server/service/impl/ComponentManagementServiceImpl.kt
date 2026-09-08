@@ -3883,7 +3883,9 @@ class ComponentManagementServiceImpl(
         // begin with a digit or an underscore (`[A-Z_0-9]+`), and a key may not.
         val startsWithLetter = key.isNotEmpty() && key[0] in 'a'..'z'
         require(startsWithLetter && tail != null && COMPONENT_KEY_TAIL_PATTERN.matches(tail)) {
-            "name '$key' must match '${COMPONENT_KEY_PATTERN.pattern}', " +
+            // Field-prefixed like the uniqueness check above, so the Portal renders the
+            // message inline on the Component Key (`name`) field with the field name stripped.
+            "name: '$key' must match '${COMPONENT_KEY_PATTERN.pattern}', " +
                 "or be the lowercased clientCode followed by end-of-name or '-' and the same tail " +
                 "(underscores are allowed only inside that prefix)"
         }

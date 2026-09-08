@@ -433,6 +433,21 @@ class CheapFieldFormatValidationTest {
     }
 
     @Test
+    @DisplayName("SYS-095: the rejection message is colon-prefixed, like the sibling uniqueness check")
+    fun create_rejects_underscore_withColonPrefixedMessage() {
+        val ex =
+            assertThrows(IllegalArgumentException::class.java) {
+                service.createComponent(minimalCreate(name = "ab_cd-payments"))
+            }
+        // The Portal renders the part after "name: " inline on the Component Key field;
+        // without the colon the leading word is eaten by the fallback heuristic.
+        assertTrue(
+            ex.message!!.startsWith("name: "),
+            "message must be colon-prefixed; got: '${ex.message}'",
+        )
+    }
+
+    @Test
     @DisplayName("SYS-095: CREATE accepts an underscore inside the client-code prefix")
     fun create_accepts_underscore_insideClientCodePrefix() {
         assertDoesNotThrow {
