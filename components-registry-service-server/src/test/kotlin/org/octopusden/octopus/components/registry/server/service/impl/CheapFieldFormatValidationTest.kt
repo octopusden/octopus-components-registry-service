@@ -425,7 +425,7 @@ class CheapFieldFormatValidationTest {
     // ---------------------------------------------------------------------
 
     @Test
-    @DisplayName("CREATE rejects an underscore in the key when the component has no clientCode")
+    @DisplayName("SYS-095: CREATE rejects an underscore in the key when the component has no clientCode")
     fun create_rejects_underscore_withoutClientCode() {
         assertFieldPrefixed("name") {
             service.createComponent(minimalCreate(name = "ab_cd-payments"))
@@ -433,7 +433,7 @@ class CheapFieldFormatValidationTest {
     }
 
     @Test
-    @DisplayName("CREATE accepts an underscore inside the client-code prefix")
+    @DisplayName("SYS-095: CREATE accepts an underscore inside the client-code prefix")
     fun create_accepts_underscore_insideClientCodePrefix() {
         assertDoesNotThrow {
             service.createComponent(minimalCreate(name = "ab_cd-payments", clientCode = "AB_CD"))
@@ -441,7 +441,7 @@ class CheapFieldFormatValidationTest {
     }
 
     @Test
-    @DisplayName("CREATE accepts the bare client-code prefix as the whole key")
+    @DisplayName("SYS-095: CREATE accepts the bare client-code prefix as the whole key")
     fun create_accepts_bareClientCodePrefix() {
         assertDoesNotThrow {
             service.createComponent(minimalCreate(name = "ab_cd", clientCode = "AB_CD"))
@@ -449,7 +449,7 @@ class CheapFieldFormatValidationTest {
     }
 
     @Test
-    @DisplayName("CREATE rejects an underscore when the clientCode has none")
+    @DisplayName("SYS-095: CREATE rejects an underscore when the clientCode has none")
     fun create_rejects_underscore_whenClientCodeHasNone() {
         assertFieldPrefixed("name") {
             service.createComponent(minimalCreate(name = "ab_cd-payments", clientCode = "ABCD"))
@@ -457,7 +457,7 @@ class CheapFieldFormatValidationTest {
     }
 
     @Test
-    @DisplayName("CREATE rejects a client-code match that does not lead the key")
+    @DisplayName("SYS-095: CREATE rejects a client-code match that does not lead the key")
     fun create_rejects_clientCodePrefix_notLeading() {
         assertFieldPrefixed("name") {
             service.createComponent(minimalCreate(name = "payments-ab_cd", clientCode = "AB_CD"))
@@ -465,7 +465,7 @@ class CheapFieldFormatValidationTest {
     }
 
     @Test
-    @DisplayName("CREATE rejects an uppercase key even when it matches the clientCode")
+    @DisplayName("SYS-095: CREATE rejects an uppercase key even when it matches the clientCode")
     fun create_rejects_uppercaseKey() {
         assertFieldPrefixed("name") {
             service.createComponent(minimalCreate(name = "AB_CD-payments", clientCode = "AB_CD"))
@@ -473,7 +473,7 @@ class CheapFieldFormatValidationTest {
     }
 
     @Test
-    @DisplayName("CREATE accepts a plain kebab key with no clientCode")
+    @DisplayName("SYS-095: CREATE accepts a plain kebab key with no clientCode")
     fun create_accepts_plainKebabKey() {
         assertDoesNotThrow {
             service.createComponent(minimalCreate(name = "plain-component"))
@@ -481,7 +481,7 @@ class CheapFieldFormatValidationTest {
     }
 
     @Test
-    @DisplayName("CREATE rejects an underscore key when clientCode is hidden — the code would not persist")
+    @DisplayName("SYS-095: CREATE rejects an underscore key when clientCode is hidden — the code would not persist")
     fun create_rejects_underscore_whenClientCodeHidden() {
         doReturn(true).`when`(fieldConfigService).isHidden("component.clientCode")
         assertFieldPrefixed("name") {
@@ -490,7 +490,7 @@ class CheapFieldFormatValidationTest {
     }
 
     @Test
-    @DisplayName("CREATE rejects a digit-leading key even when the clientCode leads with that digit")
+    @DisplayName("SYS-095: CREATE rejects a digit-leading key even when the clientCode leads with that digit")
     fun create_rejects_digitLeadingKey() {
         assertFieldPrefixed("name") {
             service.createComponent(minimalCreate(name = "123abc-payments", clientCode = "123ABC"))
@@ -498,7 +498,7 @@ class CheapFieldFormatValidationTest {
     }
 
     @Test
-    @DisplayName("CREATE rejects a bare all-digit clientCode as the whole key")
+    @DisplayName("SYS-095: CREATE rejects a bare all-digit clientCode as the whole key")
     fun create_rejects_bareDigitClientCodeKey() {
         assertFieldPrefixed("name") {
             service.createComponent(minimalCreate(name = "123", clientCode = "123"))
@@ -506,7 +506,7 @@ class CheapFieldFormatValidationTest {
     }
 
     @Test
-    @DisplayName("CREATE rejects a key that is nothing but an underscore clientCode")
+    @DisplayName("SYS-095: CREATE rejects a key that is nothing but an underscore clientCode")
     fun create_rejects_underscoreOnlyKey() {
         assertFieldPrefixed("name") {
             service.createComponent(minimalCreate(name = "_", clientCode = "_"))
@@ -514,7 +514,7 @@ class CheapFieldFormatValidationTest {
     }
 
     @Test
-    @DisplayName("RENAME accepts an underscore key backed by the stored clientCode")
+    @DisplayName("SYS-095: RENAME accepts an underscore key backed by the stored clientCode")
     fun rename_accepts_underscore_backedByStoredClientCode() {
         existing.clientCode = "AB_CD"
         assertDoesNotThrow {
@@ -523,7 +523,7 @@ class CheapFieldFormatValidationTest {
     }
 
     @Test
-    @DisplayName("RENAME accepts an underscore key when the stored clientCode is populated but hidden")
+    @DisplayName("SYS-095: RENAME accepts an underscore key when the stored clientCode is populated but hidden")
     fun rename_accepts_underscore_whenStoredClientCodeHidden() {
         existing.clientCode = "AB_CD"
         doReturn(true).`when`(fieldConfigService).isHidden("component.clientCode")
@@ -533,7 +533,7 @@ class CheapFieldFormatValidationTest {
     }
 
     @Test
-    @DisplayName("RENAME rejects an underscore key on a component with no clientCode")
+    @DisplayName("SYS-095: RENAME rejects an underscore key on a component with no clientCode")
     fun rename_rejects_underscore_withoutClientCode() {
         assertFieldPrefixed("name") {
             service.updateComponent(existingId, minimalUpdate(name = "ab_cd-payments"))
@@ -541,7 +541,7 @@ class CheapFieldFormatValidationTest {
     }
 
     @Test
-    @DisplayName("PATCH that does not change the key never re-validates a legacy key")
+    @DisplayName("SYS-095: PATCH that does not change the key never re-validates a legacy key")
     fun patch_doesNotRevalidate_legacyKey() {
         existing.componentKey = "Legacy.Key_1"
         assertDoesNotThrow {
