@@ -3160,7 +3160,9 @@ write any key. This requirement puts the rule on the server, where it belongs.
   always backed by a `clientCode` stored on that same component.**
 - **Enforcement surface is create + rename only.** The check runs on
   `createComponent` (the new key) and on the update path when `isRename` is true (the
-  new key). An existing key is never re-validated: 214 of 997 production components
+  new key). On both paths it runs **after** the field-config editability gate, so a
+  caller who may not edit the name sees that (422) rather than a value-400 about the
+  key's shape. An existing key is never re-validated: 214 of 997 production components
   (160 with uppercase, 54 with a dot) do not satisfy the rule and must keep saving.
 - The DSL import path writes through `componentRepository.save(...)` and does not go
   through `createComponent`, so imported legacy keys are unaffected by design.

@@ -559,10 +559,20 @@ class ComponentManagementServiceImpl(
             }
         }
         val isRename = normalizedNewKey != null && normalizedNewKey != oldKey
+
+        // CRS-B: reject an attempt to CHANGE a field the caller may not edit BEFORE any
+        // mutation (change-based; unchanged echo is tolerated). Reads the pristine BASE
+        // row for jira/build aspect currents, so it must run ahead of the patch appliers.
+        enforceEditabilityOnUpdate(entity, request)
+
         if (isRename) {
-            // SYS-095: validated against the clientCode this request leaves persisted — the
-            // supplied one when the field is editable, the stored one when it is hidden (a
-            // hidden clientCode is ignored by the write site below, but it is really there).
+            // SYS-095, placed AFTER the editability gate on purpose: a caller who may not edit
+            // the name must see that (422), not a value-400 about the key's shape — same
+            // ordering rule the create path documents.
+            //
+            // Validated against the clientCode this request leaves persisted: the supplied one
+            // when the field is editable, the stored one when it is hidden (a hidden clientCode
+            // is ignored by the write site below, but it is really there).
             val effectiveClientCode =
                 if (fieldConfigService.isHidden("component.clientCode")) {
                     entity.clientCode
@@ -571,11 +581,6 @@ class ComponentManagementServiceImpl(
                 }
             validateComponentKey(normalizedNewKey!!, effectiveClientCode)
         }
-
-        // CRS-B: reject an attempt to CHANGE a field the caller may not edit BEFORE any
-        // mutation (change-based; unchanged echo is tolerated). Reads the pristine BASE
-        // row for jira/build aspect currents, so it must run ahead of the patch appliers.
-        enforceEditabilityOnUpdate(entity, request)
 
         // Hidden productType is stripped at its write site → don't 4xx on its value here.
         request.productType?.let { if (!fieldConfigService.isHidden("component.productType")) validateProductType(it) }
