@@ -470,7 +470,7 @@ class V4WriteValidationTest {
     @DisplayName("SYS-040: CREATE with labels=[\"A \"] persists trimmed \"A\" (write-side trim)")
     fun `SYS-040 create with trailing-space label persists trimmed`() {
         val suffix = uniqueSuffix()
-        val name = "labels_trim_create_$suffix"
+        val name = "labels-trim-create-$suffix"
         val labelRaw = "lblcreate_$suffix" // canonical
         val labelWithSpace = "$labelRaw " // sent by caller
         val body =
@@ -498,7 +498,7 @@ class V4WriteValidationTest {
     @Test
     @DisplayName("SYS-040: CREATE with labels=[\" \"] (single blank) returns 400")
     fun `SYS-040 create with single blank label returns 400`() {
-        val name = "labels_blankonly_create_${uniqueSuffix()}"
+        val name = "labels-blankonly-create-${uniqueSuffix()}"
         val body = """{"name":"$name","labels":[" "]}"""
         postCreate(body).andExpect(status().isBadRequest)
     }
@@ -507,7 +507,7 @@ class V4WriteValidationTest {
     @DisplayName("SYS-040: CREATE with labels=[\"A\",\"A\",\" A \"] persists single \"A\" (dedupe after trim)")
     fun `SYS-040 create dedupes labels after trim`() {
         val suffix = uniqueSuffix()
-        val name = "labels_dedupe_create_$suffix"
+        val name = "labels-dedupe-create-$suffix"
         val label = "lbldedupe_$suffix"
         val body =
             """{"name":"$name","componentOwner":"owner1","labels":["$label","$label"," $label "],""" +
@@ -530,7 +530,7 @@ class V4WriteValidationTest {
     @DisplayName("SYS-040: PATCH with labels=[\"A \"] persists trimmed \"A\" (write-side trim on update)")
     fun `SYS-040 patch with trailing-space label persists trimmed`() {
         val suffix = uniqueSuffix()
-        val name = "labels_trim_patch_$suffix"
+        val name = "labels-trim-patch-$suffix"
         val labelRaw = "lblpatch_$suffix"
         val labelWithSpace = "$labelRaw "
 

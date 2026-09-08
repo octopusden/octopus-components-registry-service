@@ -132,7 +132,7 @@ class ListComponentsSystemFilterTest {
 
     private fun uniqueSysCode(prefix: String) = "${prefix}_${UUID.randomUUID().toString().take(6)}"
 
-    private fun uniqueName(prefix: String) = "${prefix}_${UUID.randomUUID().toString().take(8)}"
+    private fun uniqueName(prefix: String) = "${prefix.lowercase().replace('_', '-')}-${UUID.randomUUID().toString().take(8)}"
 
     private fun createComponentWithSystem(
         name: String,

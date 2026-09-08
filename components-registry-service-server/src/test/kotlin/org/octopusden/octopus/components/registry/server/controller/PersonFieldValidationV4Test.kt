@@ -113,7 +113,7 @@ class PersonFieldValidationV4Test {
     @DisplayName("flag off: blank componentOwner ⇒ 400 with field-named errorMessage, no employee call")
     fun `flag off blank owner rejected`() {
         `when`(employeeDirectory.isEnabled()).thenReturn(false)
-        val name = "pf_owner_blank_${uniqueSuffix()}"
+        val name = "pf-owner-blank-${uniqueSuffix()}"
         val body =
             """{"name":"$name","componentOwner":"   ",""" +
                 """"baseConfiguration":{"build":{"buildSystem":"MAVEN"}}}"""
@@ -127,7 +127,7 @@ class PersonFieldValidationV4Test {
     @DisplayName("flag off: missing RM/SC under explicit && external ⇒ 400 (releaseManager)")
     fun `flag off missing rm under gate rejected`() {
         `when`(employeeDirectory.isEnabled()).thenReturn(false)
-        val name = "pf_rm_missing_${uniqueSuffix()}"
+        val name = "pf-rm-missing-${uniqueSuffix()}"
         val body =
             """{"name":"$name","componentOwner":"owner1",""" +
                 """"distributionExplicit":true,"distributionExternal":true,""" +
@@ -141,7 +141,7 @@ class PersonFieldValidationV4Test {
     @DisplayName("flag off: per-element \"alice,bob\" fails ^\\w+\$ under the gate")
     fun `flag off csv element rejected`() {
         `when`(employeeDirectory.isEnabled()).thenReturn(false)
-        val name = "pf_csv_${uniqueSuffix()}"
+        val name = "pf-csv-${uniqueSuffix()}"
         val body =
             """{"name":"$name","componentOwner":"owner1",""" +
                 """"distributionExplicit":true,"distributionExternal":true,""" +
@@ -204,7 +204,7 @@ class PersonFieldValidationV4Test {
     fun `flag on archived component skips active check`() {
         `when`(employeeDirectory.isEnabled()).thenReturn(true)
         `when`(employeeDirectory.isActive(anyString())).thenReturn(ActiveStatus.INACTIVE)
-        val name = "pf_archived_${uniqueSuffix()}"
+        val name = "pf-archived-${uniqueSuffix()}"
         val body =
             """{"name":"$name","componentOwner":"inactive_owner","archived":true,""" +
                 """"baseConfiguration":{"build":{"buildSystem":"MAVEN"}}}"""
@@ -221,7 +221,7 @@ class PersonFieldValidationV4Test {
         `when`(employeeDirectory.isEnabled()).thenReturn(true)
         `when`(employeeDirectory.isActive(anyString())).thenReturn(ActiveStatus.ACTIVE)
         // Seed a component with the gate OFF, with RM but no SC.
-        val name = "pf_gateflip_${uniqueSuffix()}"
+        val name = "pf-gateflip-${uniqueSuffix()}"
         val seedBody =
             """{"name":"$name","componentOwner":"owner1","releaseManager":["rm1"],""" +
                 """"baseConfiguration":{"build":{"buildSystem":"MAVEN"}}}"""
@@ -245,7 +245,7 @@ class PersonFieldValidationV4Test {
     fun `patch unrelated does not recheck`() {
         `when`(employeeDirectory.isEnabled()).thenReturn(true)
         `when`(employeeDirectory.isActive(anyString())).thenReturn(ActiveStatus.ACTIVE)
-        val name = "pf_grandfather_${uniqueSuffix()}"
+        val name = "pf-grandfather-${uniqueSuffix()}"
         val seed =
             postCreate(validBody(name))
                 .andExpect(status().isCreated)

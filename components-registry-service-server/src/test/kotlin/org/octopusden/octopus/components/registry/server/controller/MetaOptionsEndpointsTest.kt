@@ -263,7 +263,7 @@ class MetaOptionsEndpointsTest {
         val realLabel = uniqueLabel("realfblbl")
         val blankCode = "   "
         val realComponentName = "meta_labels_blank_real_${UUID.randomUUID().toString().take(6)}"
-        val anchorComponentName = "meta_labels_blank_anchor_${UUID.randomUUID().toString().take(6)}"
+        val anchorComponentName = "meta-labels-blank-anchor-${UUID.randomUUID().toString().take(6)}"
 
         // Real labelled component (controller path — write validation OK).
         createComponentWithLabels(realComponentName, setOf(realLabel))
