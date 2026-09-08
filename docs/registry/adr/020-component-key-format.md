@@ -25,11 +25,15 @@ legal only inside that prefix. The prefix relaxes the charset, not the letter st
 `clientCode` may begin with a digit or an underscore, a key may not. The rule is enforced **only when a key is chosen**: on
 create, and on rename. An existing key is never re-validated.
 
-"Effective `clientCode`" is the value that is or stays persisted, not the value on the
-wire: post-`stripIfHidden` on create, the stored value on rename. That keeps the
-invariant *an underscore in a key is always backed by a `clientCode` stored on that
-component* — including for a field-config-hidden code, which is really there even
-though nobody can see it.
+"Effective `clientCode`" is the value this request leaves persisted, not the raw value on
+the wire: post-`stripIfHidden` on create; on rename, the `clientCode` the same PATCH
+supplies when that field is editable, and the stored one when it is hidden (a hidden
+value is ignored by the write site, but it is really there).
+
+So at the moment a key is chosen, an underscore in it is always backed by a `clientCode`
+that the component will carry. The guarantee is scoped to that moment on purpose: a later
+PATCH may change or clear the `clientCode` without re-checking the key, so the backing can
+lapse afterwards (see Consequences).
 
 ## Consequences
 

@@ -3154,10 +3154,13 @@ write any key. This requirement puts the rule on the server, where it belongs.
   component, not the value on the wire:
   - on **create**, the post-`stripIfHidden` value — a `clientCode` supplied while
     `component.clientCode` is hidden by field-config is dropped, so it grants nothing;
-  - on **rename**, the stored `clientCode` — a hidden-but-populated value still grants
-    the underscore, because it is really there.
-  This keeps one invariant permanently true: **an underscore in a component key is
-  always backed by a `clientCode` stored on that same component.**
+  - on **rename**, the `clientCode` the same PATCH supplies when that field is editable,
+    and the stored one when it is hidden — a hidden-but-populated value still grants the
+    underscore, because it is really there.
+  So **at the moment a key is chosen, an underscore in it is always backed by a
+  `clientCode` the component will carry.** The guarantee is deliberately scoped to that
+  moment: a later `clientCode` change is not re-checked (see below), so the backing can
+  lapse afterwards.
 - **Enforcement surface is create + rename only.** The check runs on
   `createComponent` (the new key) and on the update path when `isRename` is true (the
   new key). On both paths it runs **after** the field-config editability gate, so a
@@ -3193,7 +3196,7 @@ write any key. This requirement puts the rule on the server, where it belongs.
     existing key is `Legacy.Key_1` → 200 (no re-validation).
 
 **Test method:** `CheapFieldFormatValidationTest` — the create *and* rename cases live
-there (14 cases covering the acceptance list above). Both checks are pure `require(...)`
+there (15 cases covering the acceptance list above). Both checks are pure `require(...)`
 guards that run before any repository write, so the existing mocked-repository unit
 harness reaches them; no `dbTest` integration test is needed. Fixtures use synthetic
 client codes only.
