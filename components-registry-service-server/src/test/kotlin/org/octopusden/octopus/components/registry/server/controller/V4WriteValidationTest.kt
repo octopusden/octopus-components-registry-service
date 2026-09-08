@@ -566,7 +566,7 @@ class V4WriteValidationTest {
     @DisplayName("SYS-040: PATCH with labels=[\" \"] (single blank) returns 400")
     fun `SYS-040 patch with single blank label returns 400`() {
         val suffix = uniqueSuffix()
-        val seedBody = validSeedBody("labels_blankonly_patch_$suffix")
+        val seedBody = validSeedBody("labels-blankonly-patch-$suffix")
         val seedResponse =
             postCreate(seedBody)
                 .andExpect(status().isCreated)

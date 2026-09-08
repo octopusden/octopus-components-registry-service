@@ -322,7 +322,7 @@ class ListComponentsLabelsFilterTest {
                 .response.contentAsString
         val fullJson = objectMapper.readTree(fullBody)
         val returnedNames = fullJson["content"].map { it["name"].asText() }
-        val seededNames = returnedNames.filter { it.endsWith("_$suffix") }
+        val seededNames = returnedNames.filter { it.endsWith("-$suffix") }
         assert(seededNames == listOf(first, second, third)) {
             "expected components returned sorted by componentKey ASC ($first, $second, $third); got $seededNames"
         }
