@@ -271,9 +271,9 @@ class ListComponentsLabelsFilterTest {
         // does not influence the leading aaa/bbb/ccc ordering.
         val labelA = uniqueName("pgnlbla")
         val suffix = UUID.randomUUID().toString().take(6)
-        val first = "pgn_aaa_$suffix"
-        val second = "pgn_bbb_$suffix"
-        val third = "pgn_ccc_$suffix"
+        val first = "pgn-aaa-$suffix"
+        val second = "pgn-bbb-$suffix"
+        val third = "pgn-ccc-$suffix"
         // Seed in reverse lexicographic order so a regression where sort
         // silently fails (e.g., returning insertion order) is visibly wrong
         // in the asserted content[].name array.

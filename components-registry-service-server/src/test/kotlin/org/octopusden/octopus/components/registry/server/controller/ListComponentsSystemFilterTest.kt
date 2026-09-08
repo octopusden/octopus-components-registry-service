@@ -349,9 +349,9 @@ class ListComponentsSystemFilterTest {
         val sysA = uniqueSysCode("pgnsysa")
         val sysB = uniqueSysCode("pgnsysb")
         val suffix = UUID.randomUUID().toString().take(6)
-        val first = "syspg_aaa_$suffix"
-        val second = "syspg_bbb_$suffix"
-        val third = "syspg_ccc_$suffix"
+        val first = "syspg-aaa-$suffix"
+        val second = "syspg-bbb-$suffix"
+        val third = "syspg-ccc-$suffix"
         // Seed in reverse insertion order so a sort regression is visible.
         createComponentWithSystem(third, sysB)
         createComponentWithSystem(second, sysA)

@@ -398,9 +398,9 @@ class ListComponentsOwnerFilterTest {
         val alice = uniqueName("sys043pg_alice")
         val bob = uniqueName("sys043pg_bob")
         val suffix = UUID.randomUUID().toString().take(6)
-        val first = "ownpg_aaa_$suffix"
-        val second = "ownpg_bbb_$suffix"
-        val third = "ownpg_ccc_$suffix"
+        val first = "ownpg-aaa-$suffix"
+        val second = "ownpg-bbb-$suffix"
+        val third = "ownpg-ccc-$suffix"
         // Reverse insertion order so a sort regression is visibly wrong.
         createComponent(third, bob)
         createComponent(second, alice)

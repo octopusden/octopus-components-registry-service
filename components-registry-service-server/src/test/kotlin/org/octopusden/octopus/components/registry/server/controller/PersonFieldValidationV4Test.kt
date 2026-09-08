@@ -156,7 +156,7 @@ class PersonFieldValidationV4Test {
     @DisplayName("flag off: valid component (gate off) ⇒ 2xx, no employee call (fail-open / disabled)")
     fun `flag off valid passes`() {
         `when`(employeeDirectory.isEnabled()).thenReturn(false)
-        postCreate(validBody("pf_valid_off_${uniqueSuffix()}"))
+        postCreate(validBody("pf-valid-off-${uniqueSuffix()}"))
             .andExpect(status().isCreated)
         verify(employeeDirectory, never()).isActive(anyString())
     }
@@ -168,7 +168,7 @@ class PersonFieldValidationV4Test {
     fun `flag on active owner passes`() {
         `when`(employeeDirectory.isEnabled()).thenReturn(true)
         `when`(employeeDirectory.isActive(anyString())).thenReturn(ActiveStatus.ACTIVE)
-        postCreate(validBody("pf_active_${uniqueSuffix()}")).andExpect(status().isCreated)
+        postCreate(validBody("pf-active-${uniqueSuffix()}")).andExpect(status().isCreated)
     }
 
     @Test
@@ -176,7 +176,7 @@ class PersonFieldValidationV4Test {
     fun `flag on inactive owner rejected`() {
         `when`(employeeDirectory.isEnabled()).thenReturn(true)
         `when`(employeeDirectory.isActive(anyString())).thenReturn(ActiveStatus.INACTIVE)
-        postCreate(validBody("pf_inactive_${uniqueSuffix()}"))
+        postCreate(validBody("pf-inactive-${uniqueSuffix()}"))
             .andExpect(status().isBadRequest)
             .andExpect(jsonPath("$.errorMessage").value(org.hamcrest.Matchers.startsWith("componentOwner")))
     }
@@ -186,7 +186,7 @@ class PersonFieldValidationV4Test {
     fun `flag on unknown owner rejected`() {
         `when`(employeeDirectory.isEnabled()).thenReturn(true)
         `when`(employeeDirectory.isActive(anyString())).thenReturn(ActiveStatus.UNKNOWN)
-        postCreate(validBody("pf_unknown_${uniqueSuffix()}"))
+        postCreate(validBody("pf-unknown-${uniqueSuffix()}"))
             .andExpect(status().isBadRequest)
             .andExpect(jsonPath("$.errorMessage").value(org.hamcrest.Matchers.startsWith("componentOwner")))
     }
@@ -196,7 +196,7 @@ class PersonFieldValidationV4Test {
     fun `flag on transport error allowed`() {
         `when`(employeeDirectory.isEnabled()).thenReturn(true)
         `when`(employeeDirectory.isActive(anyString())).thenReturn(ActiveStatus.UNAVAILABLE)
-        postCreate(validBody("pf_unavailable_${uniqueSuffix()}")).andExpect(status().isCreated)
+        postCreate(validBody("pf-unavailable-${uniqueSuffix()}")).andExpect(status().isCreated)
     }
 
     @Test

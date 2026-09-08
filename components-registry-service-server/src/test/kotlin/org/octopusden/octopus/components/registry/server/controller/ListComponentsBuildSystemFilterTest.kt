@@ -378,9 +378,9 @@ class ListComponentsBuildSystemFilterTest {
         // order so a regression where sort silently fails (e.g., insertion
         // order leaks through) is visibly wrong in the assertion.
         val suffix = UUID.randomUUID().toString().take(6)
-        val first = "bspg_aaa_$suffix"
-        val second = "bspg_bbb_$suffix"
-        val third = "bspg_ccc_$suffix"
+        val first = "bspg-aaa-$suffix"
+        val second = "bspg-bbb-$suffix"
+        val third = "bspg-ccc-$suffix"
         createComponentWithBuildSystem(third, "GRADLE")
         createComponentWithBuildSystem(second, "MAVEN")
         createComponentWithBuildSystem(first, "GRADLE")
