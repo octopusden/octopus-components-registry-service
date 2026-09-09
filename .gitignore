@@ -28,3 +28,6 @@ BOOT-INF/
 # documented recipe calls them by path — an ignored helper leaves the doc pointing at a file nobody
 # else has.
 !scripts/quality-baseline/*.sh
+# The merge-gate spec check and its suite. Ignored, these vanish from the
+# commit silently and the workflow fails on a missing file.
+!.github/scripts/*.sh
