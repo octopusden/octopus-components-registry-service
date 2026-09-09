@@ -22,8 +22,14 @@ import org.springframework.stereotype.Service
  * TeamCity and Jira issue-search each have a real lightweight "is this connection alive" call.
  * VCS has no such call, so it probes via `getRepository` against a sentinel URL that can never be
  * real: both a [NotFoundException] and "no configured VCS service for this URL" count as a live
- * answer. Jira project-read has no probe call at all and is reported live whenever configured,
- * deferring outage detection to [JiraProjectChecker]'s own per-target checks.
+ * answer. The octopus `JiraClient` interface (Jira project-read) has no project-independent call
+ * either — every method needs a project/issue/sprint key — so it cannot be probed directly; since
+ * [JiraClientConfig][org.octopusden.octopus.components.registry.server.config.JiraClientConfig]
+ * builds both Jira clients from the exact same `archive-readiness.jira.*` base URL/credentials,
+ * the issue-search probe's result is reused for `jiraProjectLive` too, rather than reporting it
+ * live purely because it is configured. This stops being a valid stand-in the day the two ever
+ * gain independently-configurable credentials (decision 17) — outage detection for
+ * project-read-specific failures still falls back to [JiraProjectChecker]'s own per-target checks.
  */
 data class LivenessSnapshot(
     val vcsConfigured: Boolean,
@@ -74,6 +80,10 @@ class LivenessProbe(
         if (!teamcityConfigured) log.info("TeamCity check disabled: teamcity.base-url is blank")
         if (!jiraIssuesConfigured) log.info("Jira issue-search check disabled: archive-readiness.jira.base-url is blank")
 
+        // Probed once and reused for jiraProjectLive below — see class kdoc for why this is a
+        // valid stand-in today (both Jira clients share one base URL/credential) rather than a
+        // shortcut.
+        val jiraIssuesLive = jiraIssuesConfigured && probeJiraIssues()
         val snapshot =
             LivenessSnapshot(
                 vcsConfigured = vcsConfigured,
@@ -81,9 +91,9 @@ class LivenessProbe(
                 teamcityConfigured = teamcityConfigured,
                 teamcityLive = teamcityConfigured && probeTeamcity(),
                 jiraIssuesConfigured = jiraIssuesConfigured,
-                jiraIssuesLive = jiraIssuesConfigured && probeJiraIssues(),
+                jiraIssuesLive = jiraIssuesLive,
                 jiraProjectConfigured = jiraProjectConfigured,
-                jiraProjectLive = jiraProjectConfigured,
+                jiraProjectLive = jiraProjectConfigured && jiraIssuesLive,
             )
         log.info(
             "Archive-readiness liveness snapshot: vcs(configured={}, live={}) teamcity(configured={}, live={}) " +

@@ -166,11 +166,23 @@ class LivenessProbeTest {
     }
 
     @Test
-    fun `Jira project-read has no per-project-independent probe call - live follows configured`() {
+    fun `Jira project-read has no probe call of its own - live follows the issue-search probe result`() {
         whenever(teamcityClient.getServer()).thenReturn(TeamcityServer("2024.03"))
         stubJiraSessionSucceeds()
         val snapshot = probe().probe()
         assertThat(snapshot.jiraProjectConfigured).isTrue()
         assertThat(snapshot.jiraProjectLive).isTrue()
+    }
+
+    @Test
+    fun `Jira project-read reports live false when the shared issue-search probe fails`() {
+        // Both Jira clients are built from the same base URL/credentials (JiraClientConfig), so a
+        // failed issue-search probe means the project-read connection is not trustworthy either —
+        // it must not be reported live purely because it is configured.
+        whenever(teamcityClient.getServer()).thenReturn(TeamcityServer("2024.03"))
+        whenever(jiraSearchClient.checkSession()).thenThrow(RuntimeException("401 unauthorized"))
+        val snapshot = probe().probe()
+        assertThat(snapshot.jiraProjectConfigured).isTrue()
+        assertThat(snapshot.jiraProjectLive).isFalse()
     }
 }
