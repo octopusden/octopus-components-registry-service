@@ -101,7 +101,7 @@ class StrictContractTest {
         System.setProperty("COMPONENTS_REGISTRY_SERVICE_TEST_DATA_DIR", testResourcesPath.toString())
     }
 
-    private fun unique(prefix: String) = "${prefix}_${UUID.randomUUID().toString().take(8)}"
+    private fun unique(prefix: String) = "${prefix.lowercase().replace('_', '-')}-${UUID.randomUUID().toString().take(8)}"
 
     private fun postCreate(body: String) =
         mvc.perform(

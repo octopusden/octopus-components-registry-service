@@ -64,7 +64,7 @@ class MultiValuePeopleV4Test {
         System.setProperty("COMPONENTS_REGISTRY_SERVICE_TEST_DATA_DIR", testResourcesPath.toString())
     }
 
-    private fun uniqueName(prefix: String) = "${prefix}_${UUID.randomUUID().toString().take(8)}"
+    private fun uniqueName(prefix: String) = "${prefix.lowercase().replace('_', '-')}-${UUID.randomUUID().toString().take(8)}"
 
     private fun create(
         name: String,
