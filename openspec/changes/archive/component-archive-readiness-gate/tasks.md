@@ -110,15 +110,6 @@ Why this exists: `UNKNOWN` blocks and there is no override, so a target whose st
 - [ ] 4b.12 Failing test: a `COMPLETED` or `NOT_COMPLETED` entry carries no classification
 - [ ] 4b.8 Implement the per-system probe, the unconfigured-system omission, and the remedy classification, with the issue tracker's two connections as independent units throughout
 
-## 4c. Responsibility
-
-- [ ] 4c.1 Add `responsibility` to the entry DTO as `COMPONENT_OWNER | F1_TEAM | null` — a discrete value, not prose in `reason`, so a caller can group and filter by it
-- [ ] 4c.2 Failing test: a `NOT_COMPLETED` open-issues entry names `COMPONENT_OWNER` — only the component's own people can judge whether an issue may be closed
-- [ ] 4c.3 Failing test: a `NOT_COMPLETED` repository, TeamCity or issue-tracker-project entry names `F1_TEAM`
-- [ ] 4c.4 Failing test: any `UNKNOWN` entry names `F1_TEAM`, whatever its kind or `reasonKind` — unavailable systems, unresolvable URLs and absent configuration are all the platform team's
-- [ ] 4c.5 Failing test: a `COMPLETED` entry names nobody
-- [ ] 4c.6 Implement, keyed on target kind rather than on the outcome's details
-
 ## 5. Assembler and verdict
 
 - [ ] 5.1 Failing test: every target the component has produces exactly one entry
@@ -136,7 +127,6 @@ Why this exists: `UNKNOWN` blocks and there is no override, so a target whose st
 - [ ] 5.8 Failing test: `sharedWith` carries component names, and `reason` is not the carrier of that information
 - [ ] 5.8a Failing test: `openIssues` is populated only on `JIRA_ISSUES`, and `sharedWith` is empty on every `JIRA_ISSUES` entry
 - [ ] 5.8b Failing test: an entry that passes because its target is absent reports empty `sharedWith`, even when the registry separately lists another live component referencing that same target — absence, not sharing, decided the outcome
-- [ ] 5.9 Failing test: `targetUrl` is null rather than a fabricated link when one cannot be built
 - [ ] 5.10 Failing test: assembling readiness mutates nothing
 - [ ] 5.11 Implement the assembler
 

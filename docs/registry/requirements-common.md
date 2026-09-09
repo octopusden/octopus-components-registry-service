@@ -87,6 +87,7 @@
 | SYS-092 | The admin dashboard read APIs (`GET /admin/teamcity-validations` + `.../summary`) join stored findings back to their owning component(s) via `version_line`, de-duplicate a component reachable through more than one version line to the same project, and count DISTINCT components (not raw finding rows) per type/status; both endpoints are IMPORT_DATA-gated                                                                                                                                                                                                                                                                                                                                                                                                                                                                      | High | unit + integration-test | ✅ Tested |
 | SYS-093 | `component-validation` module: `JAVA_HOME_NOT_FROM_ENV` is WARNING when a build step resolves a Java version whose java-home (`target.jdk.home`, or a java-resolving command-line token) does not reference `%env.JAVA_HOME%` at any point in its recursive parameter-reference chain — i.e. it points at a specific JDK directly instead of the agent's configured default; OK when every resolved java-home goes through `%env.JAVA_HOME%`, NOT_APPLICABLE when nothing Java was inspectable                                                                                                                                                                                                                                                                                                                                            | High | unit-test | ✅ Tested |
 | SYS-094 | `GET /service/status` exposes `configRevision` — an opaque composite cache-actuality token `"[gitRevision].[maxId].[count]"` built from the VCS revision plus the max-id and row-count aggregates of the non-`git-history` `audit_log` rows, so a consumer can detect DB-side config changes while `versionControlRevision` is frozen; `null` without the database layer (no-db / Git-based installs) | Medium | integration-test + context-load test | ✅ Tested |
+| SYS-095 | `GET /components/{idOrName}/archive-readiness` — read-only pre-flight for the archive/delete flow, gated by the same authorization as `deleteComponent` (`ACCESS_COMPONENTS` + `canDeleteComponent`); resolves by id or name identically to `getComponent`; returns one entry per external target (VCS repository, TeamCity project, Jira open issues, Jira project) with outcome `COMPLETED`/`NOT_COMPLETED`/`UNKNOWN`, a reason for the latter two, and a `reasonKind` classifying what an `UNKNOWN` entry needs; `ready` is false iff any entry is `NOT_COMPLETED` or `UNKNOWN` | High | unit + integration-test | ✅ Tested |
 
 ---
 
@@ -3116,3 +3117,68 @@ adding or removing a component leaves them identical.
 `changeStats advances maxId on delete-then-reinsert while count holds`;
 plus `NoDbModeContextTest.SYS-047 status reports defaultSource git and zero db components in no-db mode`
 for the null case (criterion 6).
+
+### SYS-095: `GET /components/{idOrName}/archive-readiness` — archive/delete pre-flight check
+
+**Priority:** High
+**Test layer:** unit + integration-test
+**Status:** ✅ Tested
+
+**Motivation:**
+Archiving or deleting a component while it still has open Jira issues, a non-archived
+repository, a non-archived TeamCity project, or a Jira project outside the retired
+categories silently orphans that work. Callers need a single read-only check that
+answers "is this component actually done with everything it touches?" before they act,
+rather than each caller re-deriving the answer per external system.
+
+**Description:**
+- `GET /rest/api/4/components/{idOrName}/archive-readiness` resolves `idOrName` exactly
+  like `getComponent` (UUID or component key), and is gated by the same authorization as
+  `deleteComponent` (`ACCESS_COMPONENTS` + `canDeleteComponent`) since it exists solely to
+  gate that action.
+- The response is `{ready: Boolean, entries: [...]}`. One entry exists per external
+  target the component uses: its VCS repository, its TeamCity project(s), and — per
+  effective Jira `(project key, version prefix)` pair — one `JIRA_ISSUES` entry (open
+  issues in scope) and one `JIRA_PROJECT` entry (retired-category check). A target the
+  registry does not record for the component produces no entry, and an unconfigured
+  external system contributes no entries at all — neither ever blocks `ready`.
+- Each entry carries `outcome` (`COMPLETED` / `NOT_COMPLETED` / `UNKNOWN`), a `reason`
+  (populated for `NOT_COMPLETED` and `UNKNOWN`, `null` on `COMPLETED`), a `reasonKind`
+  classifying what an `UNKNOWN` entry needs (`SYSTEM_UNAVAILABLE` / `REGISTRY_DATA` /
+  `NOT_CONFIGURED`), `sharedWith` (other live components still using the same target),
+  and `openIssues` (`JIRA_ISSUES` only).
+- `ready` is CRS's own verdict — `false` iff at least one entry is `NOT_COMPLETED` or
+  `UNKNOWN` — so callers gate on `ready` rather than deriving one from `entries`
+  themselves; an outcome value a caller does not recognise can never unblock archiving.
+- A TeamCity project the system reports absent (deleted rather than archived) is
+  `COMPLETED` once TeamCity's own connection is proved live. A VCS repository reported
+  absent (`NotFoundException`) is deliberately `UNKNOWN`, not `COMPLETED`, even when VCS
+  is proved live: some hosting platforms return 404 for a private/inaccessible repository
+  the same way they do for one that no longer exists, and this check cannot confirm which
+  one it is.
+- Every external connection (VCS, TeamCity, Jira issue-search, Jira project-read) is
+  probed for liveness once per call, not once per target; a failed probe makes every
+  target of that system `UNKNOWN` under one shared reason instead of one failure per
+  target.
+
+**Acceptance criteria:**
+1. A component with no external targets at all returns `ready = true` and an empty
+   `entries` list.
+2. `idOrName` resolves by UUID and by component key identically to `getComponent`; an
+   unresolvable identifier returns 404.
+3. A caller without `ACCESS_COMPONENTS` + `canDeleteComponent` is rejected (403).
+4. `ready` is `false` iff at least one entry is `NOT_COMPLETED` or `UNKNOWN`; all-`COMPLETED`
+   entries (or no entries) is `ready = true`.
+5. A `NOT_COMPLETED` or `UNKNOWN` entry always carries a non-null `reason`; `COMPLETED`
+   never does.
+6. An absent VCS repository is `UNKNOWN`; an absent TeamCity project is `COMPLETED`
+   (given its own connection is proved live either way).
+7. The endpoint never writes to the registry or to any external system — repeated calls,
+   and calls interleaved with the actual archive/delete/update operations, never change
+   their outcome.
+
+**Test method:** `ArchiveReadinessControllerTest` (endpoint resolution, authorization,
+response shape), `ArchiveReadinessNoRegressionTest` (read-only — no write side effects),
+`ArchiveReadinessAssemblerTest` (entry assembly and verdict), `RepositoryCheckerTest`,
+`TeamcityCheckerTest`, `JiraIssuesCheckerTest`, `JiraProjectCheckerTest`, `LivenessProbeTest`,
+`SharingHelperTest`.

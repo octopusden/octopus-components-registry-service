@@ -38,11 +38,9 @@ GET rest/api/4/components/{idOrName}/archive-readiness
     {
       "targetKind": "JIRA_ISSUES" | "JIRA_PROJECT" | "TEAMCITY_PROJECT" | "REPOSITORY",
       "targetId":   "<project key[:version prefix] | project key | TC project id | repository url>",
-      "targetUrl":  "<deep link>" | null,
       "outcome":    "COMPLETED" | "NOT_COMPLETED" | "UNKNOWN",
       "reason":     "<why it failed or could not be read>" | null,
       "reasonKind": "SYSTEM_UNAVAILABLE" | "REGISTRY_DATA" | "NOT_CONFIGURED" | null,
-      "responsibility": "COMPONENT_OWNER" | "F1_TEAM" | null,
       "sharedWith": ["<component name>", ...],
       "openIssues": [ { "key": "...", "summary": "..." }, ... ]
     }
@@ -54,7 +52,7 @@ GET rest/api/4/components/{idOrName}/archive-readiness
 
 Without it a caller can only offer one remedy for all three, and offering "try again later" for a registry-data problem is advice that can never succeed — the same misdirection decisions 2 and 14 exist to prevent.
 
-`openIssues` is populated only on `JIRA_ISSUES` entries, and `sharedWith` is always empty there. `targetUrl` is nullable so a caller renders identity as text rather than a broken link. `ready` is CRS's verdict; callers gate on it rather than deriving one, so that an outcome value a caller does not recognise can never unblock it.
+`openIssues` is populated only on `JIRA_ISSUES` entries, and `sharedWith` is always empty there. `ready` is CRS's verdict; callers gate on it rather than deriving one, so that an outcome value a caller does not recognise can never unblock it.
 
 The number of `JIRA_ISSUES` and `JIRA_PROJECT` entries is not fixed at zero-or-one-of-each. A component with version-range overrides on its Jira configuration carries one `JIRA_ISSUES` entry per effective `(project key, version prefix)` pair, and one `JIRA_PROJECT` entry per distinct project key among those pairs — see decision 15. The common case, no override, still produces exactly one of each.
 

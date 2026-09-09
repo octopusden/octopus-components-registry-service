@@ -135,7 +135,7 @@ class ArchiveReadinessNoRegressionTest {
     }
 
     @Test
-    @DisplayName("requesting readiness does not archive the component")
+    @DisplayName("SYS-095: requesting readiness does not archive the component")
     fun requestingReadinessDoesNotArchiveTheComponent() {
         val id = createComponent("noreg-readonly-${System.nanoTime()}")
         mvc
