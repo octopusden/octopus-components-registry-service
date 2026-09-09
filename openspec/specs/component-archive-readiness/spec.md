@@ -6,7 +6,7 @@ The check is read-only in both directions. It never archives anything in an exte
 
 Reading readiness is governed by `DELETE_COMPONENTS`, the same permission that governs archiving. Restoring an archived component is governed by `ARCHIVE_COMPONENTS` and is out of scope.
 
-## ADDED Requirements
+## Requirements
 
 ### Requirement: Readiness is exposed as a per-target answer plus a single verdict
 
@@ -105,7 +105,7 @@ When that fails, every target belonging to that system SHALL be `UNKNOWN` under 
 
 Establishing liveness SHALL NOT require a call specific to the component being checked, so a component with a single target is not left with nothing to corroborate against.
 
-Where a system is reached through more than one independent connection — the issue tracker's issue-search client and its project-read client are two such connections sharing one base URL — each connection SHALL be proved live on its own. A failure on one connection SHALL NOT make the other connection's entries `UNKNOWN`.
+Where a system is reached through more than one connection, each connection SHOULD be proved live on its own so a failure on one does not make the other's entries `UNKNOWN`. The issue tracker's issue-search client and its project-read client are such a pair, but the project-read client (the octopus `JiraClient` interface) has no call that is not scoped to a specific project, issue, or sprint — there is no call it can use to prove itself live independently. Since both clients are built from the same base URL and credentials, the issue-search probe's result SHALL stand in for the project-read connection's liveness too, until the day the two are configured with independent credentials, at which point this SHALL be revisited.
 
 #### Scenario: A dead integration is reported once, about the system
 
@@ -122,10 +122,10 @@ Where a system is reached through more than one independent connection — the i
 - **WHEN** a component has exactly one repository and the VCS system is live
 - **THEN** liveness is established without reading that repository first, and the entry carries its real outcome
 
-#### Scenario: The issue tracker's two connections are probed independently
+#### Scenario: The project-read connection's liveness follows the issue-search probe
 
-- **WHEN** the issue-search connection cannot be reached but the project-read connection can
-- **THEN** every `JIRA_ISSUES` entry is `UNKNOWN` and every `JIRA_PROJECT` entry carries its real outcome
+- **WHEN** the shared issue-search probe fails
+- **THEN** every `JIRA_ISSUES` entry and every `JIRA_PROJECT` entry is `UNKNOWN`, since the project-read client cannot be probed on its own and shares its credentials with issue-search
 
 ### Requirement: A target the system reports absent passes only when absence cannot be confused with a permission failure
 
@@ -444,44 +444,6 @@ The category SHALL be the only signal this entry reads. The retirement procedure
 
 - **WHEN** an issue is open under one of the component's effective pairs and that pair's project is retired
 - **THEN** that pair's `JIRA_ISSUES` entry is `NOT_COMPLETED`, its `JIRA_PROJECT` entry is `COMPLETED`, and `ready` is false
-
-### Requirement: An entry that owes work names who owes it
-
-Every entry that does not report `COMPLETED` SHALL name which party owns the remaining work. An entry reporting `COMPLETED` SHALL name none, because nothing is owed.
-
-The assignment SHALL follow the target kind rather than the outcome's details. Open issues belong to the component's own people — nobody else can judge whether an issue may be closed. Every other target is infrastructure the platform team administers, so archiving a repository, archiving a build project and recategorising an issue-tracker project belong to that team, as does anything unreadable: an unavailable system, an unresolvable recorded URL and an absent configuration are all theirs to resolve.
-
-This SHALL be a discrete value, not prose inside the reason, so a caller can group or filter by it without parsing text.
-
-#### Scenario: Open issues are the component's own work
-
-- **WHEN** an open-issues entry reports `NOT_COMPLETED`
-- **THEN** it names the component owner as responsible
-
-#### Scenario: A repository is the platform team's work
-
-- **WHEN** a repository entry reports `NOT_COMPLETED`
-- **THEN** it names the platform team as responsible
-
-#### Scenario: A build project is the platform team's work
-
-- **WHEN** a TeamCity project entry reports `NOT_COMPLETED`
-- **THEN** it names the platform team as responsible
-
-#### Scenario: An issue-tracker project is the platform team's work
-
-- **WHEN** an issue-tracker project entry reports `NOT_COMPLETED`
-- **THEN** it names the platform team as responsible
-
-#### Scenario: Anything unreadable is the platform team's work
-
-- **WHEN** any entry reports `UNKNOWN`, whatever its kind or classification
-- **THEN** it names the platform team as responsible
-
-#### Scenario: A completed entry owes nothing
-
-- **WHEN** an entry reports `COMPLETED`
-- **THEN** it names no responsible party
 
 ### Requirement: The check does not change how the archived flag is written
 
