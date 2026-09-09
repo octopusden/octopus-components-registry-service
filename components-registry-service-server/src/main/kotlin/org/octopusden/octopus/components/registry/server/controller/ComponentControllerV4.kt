@@ -97,6 +97,20 @@ class ComponentControllerV4(
     @PreAuthorize("@permissionEvaluator.hasPermission('ACCESS_COMPONENTS')")
     fun getDistinctOwners(): List<String> = componentRepository.findDistinctOwners()
 
+    // In-use people option lists backing the Portal's release-manager and
+    // security-champion filter dropdowns. Mirror /meta/owners in shape and
+    // intent, but source the ordered child collections (a component may carry
+    // several of each). Two separate endpoints, not one merged list: the
+    // `?releaseManager=` and `?securityChampion=` filters are separate
+    // dimensions, so a merged list would advertise dead options in both pickers.
+    @GetMapping("/meta/release-managers")
+    @PreAuthorize("@permissionEvaluator.hasPermission('ACCESS_COMPONENTS')")
+    fun getDistinctReleaseManagers(): List<String> = componentRepository.findDistinctReleaseManagers()
+
+    @GetMapping("/meta/security-champions")
+    @PreAuthorize("@permissionEvaluator.hasPermission('ACCESS_COMPONENTS')")
+    fun getDistinctSecurityChampions(): List<String> = componentRepository.findDistinctSecurityChampions()
+
     // Employee picker lookup (Stage 2). The employee-service client exposes no
     // prefix search, so this is an exact-match probe of `search`: it returns a
     // single `[{username, active}]` when the user exists, or an empty list when
