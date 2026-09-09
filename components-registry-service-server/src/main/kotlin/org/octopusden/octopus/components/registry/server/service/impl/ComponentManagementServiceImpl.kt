@@ -566,9 +566,12 @@ class ComponentManagementServiceImpl(
         enforceEditabilityOnUpdate(entity, request)
 
         if (isRename) {
-            // SYS-095, placed AFTER the editability gate on purpose: a caller who may not edit
-            // the name must see that (422), not a value-400 about the key's shape — same
-            // ordering rule the create path documents.
+            // SYS-095, placed AFTER enforceEditabilityOnUpdate on purpose. Not for `name`
+            // itself — rename authorization is the controller's @PreAuthorize
+            // (`canRenameComponent`, 403 before this method) and `name` is not a
+            // field-config-gated field. It is for the REST of the same PATCH: a request
+            // that renames and also touches a non-editable field must see that 422, not a
+            // value-400 about the key's shape.
             //
             // Validated against the clientCode this request leaves persisted: the supplied one
             // when the field is editable, the stored one when it is hidden (a hidden clientCode
