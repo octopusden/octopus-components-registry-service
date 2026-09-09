@@ -31,7 +31,7 @@ class TeamcityChecker(
                 when {
                     shared.isNotEmpty() -> CheckResult(Outcome.COMPLETED, sharedWith = shared)
                     selfArchived -> CheckResult(Outcome.COMPLETED)
-                    else -> CheckResult(Outcome.NOT_COMPLETED)
+                    else -> CheckResult(Outcome.NOT_COMPLETED, reason = "TeamCity project ${target.targetId} is not archived")
                 }
             }
         }

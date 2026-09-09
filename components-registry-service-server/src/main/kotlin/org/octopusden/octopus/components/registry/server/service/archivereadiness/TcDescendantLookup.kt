@@ -76,18 +76,29 @@ class TcDescendantLookup(
             log.info("TC descendant lookup skipped for project {} — TeamCity not configured", projectId)
             return TcDescendantResult.SystemUnavailable
         }
-        return try {
+        val rootProject = try {
             // affectedProject never reports the root project's OWN archived flag (it structurally
             // excludes the root — see the class KDoc), so we fetch the root directly, by id, to
             // learn whether it itself is archived. Same DESCENDANT_FIELDS spec, since the DTO's
             // non-nullable-field requirement applies here just as much as to the descendants query.
             val rootResponse = client().getProjectsWithLocatorAndFields(ProjectLocator(id = projectId), DESCENDANT_FIELDS)
-            val rootProject = rootResponse.projects.firstOrNull()
+            rootResponse.projects.firstOrNull()
                 ?: return TcDescendantResult.ProjectAbsent("TeamCity project $projectId does not exist")
-
+        } catch (e: FeignException.NotFound) {
+            // TC told us explicitly that this project id does not resolve — a stronger signal
+            // than "system unreachable", and the reason ProjectAbsent (not SystemUnavailable) exists.
+            log.info("TC project $projectId does not exist: ${e.message}")
+            return TcDescendantResult.ProjectAbsent("TeamCity project $projectId does not exist")
+        } catch (e: Exception) {
+            log.warn("TC root project lookup failed for project $projectId: ${e.message}")
+            return TcDescendantResult.SystemUnavailable
+        }
+        return try {
             // affectedProject locator returns ALL projects in the subtree, EXCLUDING the root itself.
             // We wrap projectId in a ProjectLocator(id = projectId) because affectedProject takes
-            // a ProjectLocator, not a raw String.
+            // a ProjectLocator, not a raw String. A 404 here does NOT mean the root is absent — we
+            // already confirmed it exists above — so it must fail closed to SystemUnavailable, not
+            // be misread as ProjectAbsent.
             val locator = ProjectLocator(affectedProject = ProjectLocator(id = projectId))
             val response = client().getProjectsWithLocatorAndFields(locator, DESCENDANT_FIELDS)
             val descendants = response.projects
@@ -96,11 +107,6 @@ class TcDescendantLookup(
             val archivedIds = descendants.filter { it.archived == true }.map { it.id }.toMutableSet()
             if (rootProject.archived == true) archivedIds += projectId
             TcDescendantResult.Found(allIds, archivedIds)
-        } catch (e: FeignException.NotFound) {
-            // TC told us explicitly that this project id does not resolve — a stronger signal
-            // than "system unreachable", and the reason ProjectAbsent (not SystemUnavailable) exists.
-            log.info("TC project $projectId does not exist: ${e.message}")
-            TcDescendantResult.ProjectAbsent("TeamCity project $projectId does not exist")
         } catch (e: Exception) {
             log.warn("TC descendant lookup failed for project $projectId: ${e.message}")
             TcDescendantResult.SystemUnavailable

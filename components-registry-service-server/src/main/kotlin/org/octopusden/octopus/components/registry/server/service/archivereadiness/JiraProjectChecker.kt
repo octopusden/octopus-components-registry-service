@@ -53,7 +53,10 @@ class JiraProjectChecker(
             when {
                 shared.isNotEmpty() -> CheckResult(Outcome.COMPLETED, sharedWith = shared)
                 retired -> CheckResult(Outcome.COMPLETED)
-                else -> CheckResult(Outcome.NOT_COMPLETED)
+                else -> CheckResult(
+                    Outcome.NOT_COMPLETED,
+                    reason = "Jira project $projectKey's category (${category ?: "none"}) is not in the retired set",
+                )
             }
         } catch (e: Exception) {
             log.warn("Jira project read failed for $projectKey: ${e.message}")

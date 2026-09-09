@@ -22,7 +22,7 @@ class JiraIssueSearchClient(
                     .build()
             }.retrieve()
             .body(JiraSearchResponse::class.java)
-            ?: JiraSearchResponse()
+            ?: error("Jira search returned no response body")
 
     fun checkSession() {
         restClient

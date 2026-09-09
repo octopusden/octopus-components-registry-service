@@ -144,12 +144,27 @@ class JiraIssuesCheckerTest {
     }
 
     @Test
-    fun `a match on a later page yields NOT_COMPLETED without reading further pages`() {
+    fun `a match on a later page still reads every remaining page to collect all matches`() {
         mockPagedSearch(total = 120, matchOnPage = 1)
         val outcome = checker.checkPair("PROJ", "1.", UUID.randomUUID())
         assertThat(outcome.outcome).isEqualTo(Outcome.NOT_COMPLETED)
         assertThat(outcome.openIssues).extracting("key").containsExactly("PROJ-MATCH")
-        verify(jiraSearchClient, times(2)).searchJql(any(), any(), any())
+        verify(jiraSearchClient, times(3)).searchJql(any(), any(), any())
+    }
+
+    @Test
+    fun `matches on more than one page are all accumulated into openIssues`() {
+        val page0Match = issue("PROJ-P0", "matching", listOf("1.1"))
+        val page1Match = issue("PROJ-P1", "matching", listOf("1.2"))
+        whenever(jiraSearchClient.searchJql(any(), any(), any())).thenAnswer { invocation ->
+            when (invocation.getArgument<Int>(1)) {
+                0 -> JiraSearchResponse(51, listOf(page0Match) + List(49) { issue("PROJ-FILLER-$it", "unrelated", listOf("2.0.0")) })
+                else -> JiraSearchResponse(51, listOf(page1Match))
+            }
+        }
+        val outcome = checker.checkPair("PROJ", "1.", UUID.randomUUID())
+        assertThat(outcome.outcome).isEqualTo(Outcome.NOT_COMPLETED)
+        assertThat(outcome.openIssues).extracting("key").containsExactlyInAnyOrder("PROJ-P0", "PROJ-P1")
     }
 
     @Test

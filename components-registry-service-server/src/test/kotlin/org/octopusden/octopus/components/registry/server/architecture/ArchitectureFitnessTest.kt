@@ -106,31 +106,13 @@ class ArchitectureFitnessTest {
     //   val serverSlicesMustBeFreeOfCycles: ArchRule =
     //       slices().matching("$BASE_PACKAGE.(*)..").should().beFreeOfCycles()
 
-    // --- Deferred (TD-021): a SharingHelper-only-caller gate for the two VersionLineRepository
-    //     sharing queries. Speculative today — SharingHelper is the only caller in the codebase
-    //     and no second consumer exists yet for this rule to actually guard against; re-add here
-    //     UNFROZEN once a real second caller appears (see TD-021):
-    //
-    //   @ArchTest
-    //   val sharingHelperIsOnlyCodeThatQueriesComponentTargetUsage: ArchRule =
-    //       FreezingArchRule.freeze(
-    //           ArchRuleDefinition
-    //               .noClasses()
-    //               .that()
-    //               .doNotBelongToAnyOf(SharingHelper::class.java)
-    //               .and()
-    //               .resideOutsideOfPackage("..test..")
-    //               .should()
-    //               .callMethod(
-    //                   VersionLineRepository::class.java,
-    //                   "findByProjectIdsWithComponent",
-    //                   Collection::class.java,
-    //               ).orShould()
-    //               .callMethod(
-    //                   VersionLineRepository::class.java,
-    //                   "findDistinctLinkedProjectIds",
-    //               ).because("SharingHelper is the single sharing computation unit (design decision 7)"),
-    //       )
+    // --- Deferred (TD-021): a sharing-computation-duplication gate. The original sketch below
+    //     was wrong when written — TeamcityValidationQueryService/TeamcityValidationService
+    //     already call these two VersionLineRepository methods directly, for the unrelated
+    //     TeamCity-validation feature, so "SharingHelper is the only caller" was never true and a
+    //     rule matching on raw callers of these general-purpose queries would fail immediately.
+    //     Do not re-add this as written; see TD-021 for what a correctly-scoped rule needs to
+    //     match on instead (duplicate sharing computation, not any use of these queries).
 
     companion object {
         const val BASE_PACKAGE = "org.octopusden.octopus.components.registry.server"

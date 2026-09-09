@@ -9,6 +9,7 @@ import org.octopusden.octopus.infrastructure.jira.JiraClient
 import org.springframework.boot.context.properties.EnableConfigurationProperties
 import org.springframework.context.annotation.Bean
 import org.springframework.context.annotation.Configuration
+import org.springframework.http.client.SimpleClientHttpRequestFactory
 import org.springframework.http.client.support.BasicAuthenticationInterceptor
 import org.springframework.web.client.RestClient
 
@@ -18,10 +19,24 @@ class JiraClientConfig {
     @Bean
     fun jiraIssueSearchClient(props: ArchiveReadinessProperties): JiraIssueSearchClient? =
         if (props.isJiraConfigured()) {
+            val requestFactory =
+                SimpleClientHttpRequestFactory().apply {
+                    setConnectTimeout(
+                        props.jira.connectTimeout
+                            .toMillis()
+                            .toInt(),
+                    )
+                    setReadTimeout(
+                        props.jira.readTimeout
+                            .toMillis()
+                            .toInt(),
+                    )
+                }
             val restClient =
                 RestClient
                     .builder()
                     .baseUrl(props.jira.baseUrl)
+                    .requestFactory(requestFactory)
                     .requestInterceptor(BasicAuthenticationInterceptor(props.jira.username, props.jira.password))
                     .build()
             JiraIssueSearchClient(restClient)

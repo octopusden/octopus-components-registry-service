@@ -14,9 +14,7 @@ import org.octopusden.octopus.components.registry.server.dto.v4.ReasonKind
 import org.octopusden.octopus.components.registry.server.dto.v4.TargetKind
 import org.octopusden.octopus.components.registry.server.entity.ComponentConfigurationEntity
 import org.octopusden.octopus.components.registry.server.entity.ComponentEntity
-import org.octopusden.octopus.components.registry.server.entity.TeamcityProjectEntity
 import org.octopusden.octopus.components.registry.server.entity.VcsSettingsEntryEntity
-import org.octopusden.octopus.components.registry.server.entity.VersionLineEntity
 import org.octopusden.octopus.components.registry.server.repository.ComponentConfigurationRepository
 import org.octopusden.octopus.components.registry.server.repository.VcsSettingsEntryRepository
 import org.octopusden.octopus.components.registry.server.repository.VersionLineRepository
@@ -61,13 +59,10 @@ class ArchiveReadinessAssemblerTest {
 
     private fun noTargets() {
         whenever(livenessProbe.probe()).thenReturn(liveSnapshot)
-        whenever(versionLineRepository.findByComponentId(componentId)).thenReturn(emptyList())
+        whenever(versionLineRepository.findDistinctTeamcityProjectIdsByComponentId(componentId)).thenReturn(emptyList())
         whenever(componentConfigurationRepository.findByComponentId(componentId)).thenReturn(emptyList())
         whenever(pairResolver.pairsFor(componentId)).thenReturn(emptySet())
     }
-
-    private fun versionLine(projectId: String): VersionLineEntity =
-        VersionLineEntity(component = component, teamcityProject = TeamcityProjectEntity(projectId = projectId))
 
     private fun configRowWithVcsEntries(vararg vcsPaths: String): ComponentConfigurationEntity {
         val row = ComponentConfigurationEntity(id = UUID.randomUUID(), component = component, rowType = "BASE")
@@ -89,7 +84,7 @@ class ArchiveReadinessAssemblerTest {
     @Test
     fun `all COMPLETED yields ready`() {
         whenever(livenessProbe.probe()).thenReturn(liveSnapshot)
-        whenever(versionLineRepository.findByComponentId(componentId)).thenReturn(listOf(versionLine("TC1")))
+        whenever(versionLineRepository.findDistinctTeamcityProjectIdsByComponentId(componentId)).thenReturn(listOf("TC1"))
         val row = configRowWithVcsEntries("ssh://git.example.com/repo.git")
         whenever(componentConfigurationRepository.findByComponentId(componentId)).thenReturn(listOf(row))
         whenever(pairResolver.pairsFor(componentId)).thenReturn(setOf("PROJ" to null))
@@ -109,7 +104,7 @@ class ArchiveReadinessAssemblerTest {
     @Test
     fun `one NOT_COMPLETED entry makes response not ready`() {
         whenever(livenessProbe.probe()).thenReturn(liveSnapshot)
-        whenever(versionLineRepository.findByComponentId(componentId)).thenReturn(listOf(versionLine("TC1")))
+        whenever(versionLineRepository.findDistinctTeamcityProjectIdsByComponentId(componentId)).thenReturn(listOf("TC1"))
         whenever(componentConfigurationRepository.findByComponentId(componentId)).thenReturn(emptyList())
         whenever(pairResolver.pairsFor(componentId)).thenReturn(emptySet())
         whenever(teamcityChecker.check(any())).thenReturn(CheckResult(Outcome.NOT_COMPLETED))
@@ -125,7 +120,7 @@ class ArchiveReadinessAssemblerTest {
     @Test
     fun `one UNKNOWN entry makes response not ready and carries the checker's reasonKind`() {
         whenever(livenessProbe.probe()).thenReturn(liveSnapshot)
-        whenever(versionLineRepository.findByComponentId(componentId)).thenReturn(listOf(versionLine("TC1")))
+        whenever(versionLineRepository.findDistinctTeamcityProjectIdsByComponentId(componentId)).thenReturn(listOf("TC1"))
         whenever(componentConfigurationRepository.findByComponentId(componentId)).thenReturn(emptyList())
         whenever(pairResolver.pairsFor(componentId)).thenReturn(emptySet())
         whenever(teamcityChecker.check(any())).thenReturn(
@@ -143,8 +138,8 @@ class ArchiveReadinessAssemblerTest {
     @Test
     fun `two version lines on the same TC project yield exactly one entry`() {
         whenever(livenessProbe.probe()).thenReturn(liveSnapshot)
-        whenever(versionLineRepository.findByComponentId(componentId)).thenReturn(
-            listOf(versionLine("TC1"), versionLine("TC1")),
+        whenever(versionLineRepository.findDistinctTeamcityProjectIdsByComponentId(componentId)).thenReturn(
+            listOf("TC1", "TC1"),
         )
         whenever(componentConfigurationRepository.findByComponentId(componentId)).thenReturn(emptyList())
         whenever(pairResolver.pairsFor(componentId)).thenReturn(emptySet())
@@ -161,7 +156,7 @@ class ArchiveReadinessAssemblerTest {
     @Test
     fun `two VCS entries canonicalizing to the same URL yield exactly one REPOSITORY entry`() {
         whenever(livenessProbe.probe()).thenReturn(liveSnapshot)
-        whenever(versionLineRepository.findByComponentId(componentId)).thenReturn(emptyList())
+        whenever(versionLineRepository.findDistinctTeamcityProjectIdsByComponentId(componentId)).thenReturn(emptyList())
         // Two distinct raw forms of the same repository: differing scheme, case, and .git suffix.
         val row = configRowWithVcsEntries("ssh://GIT.EXAMPLE.COM/Repo.GIT", "https://git.example.com/Repo")
         whenever(componentConfigurationRepository.findByComponentId(componentId)).thenReturn(listOf(row))
@@ -181,8 +176,8 @@ class ArchiveReadinessAssemblerTest {
     fun `TeamCity liveness down yields UNKNOWN, one shared reason classified SYSTEM_UNAVAILABLE`() {
         val downSnapshot = liveSnapshot.copy(teamcityConfigured = true, teamcityLive = false)
         whenever(livenessProbe.probe()).thenReturn(downSnapshot)
-        whenever(versionLineRepository.findByComponentId(componentId)).thenReturn(
-            listOf(versionLine("TC1"), versionLine("TC2")),
+        whenever(versionLineRepository.findDistinctTeamcityProjectIdsByComponentId(componentId)).thenReturn(
+            listOf("TC1", "TC2"),
         )
         whenever(componentConfigurationRepository.findByComponentId(componentId)).thenReturn(emptyList())
         whenever(pairResolver.pairsFor(componentId)).thenReturn(emptySet())
@@ -201,7 +196,7 @@ class ArchiveReadinessAssemblerTest {
     fun `VCS liveness down yields UNKNOWN entries classified SYSTEM_UNAVAILABLE`() {
         val downSnapshot = liveSnapshot.copy(vcsConfigured = true, vcsLive = false)
         whenever(livenessProbe.probe()).thenReturn(downSnapshot)
-        whenever(versionLineRepository.findByComponentId(componentId)).thenReturn(emptyList())
+        whenever(versionLineRepository.findDistinctTeamcityProjectIdsByComponentId(componentId)).thenReturn(emptyList())
         val row = configRowWithVcsEntries("ssh://git.example.com/repo.git")
         whenever(componentConfigurationRepository.findByComponentId(componentId)).thenReturn(listOf(row))
         whenever(pairResolver.pairsFor(componentId)).thenReturn(emptySet())
@@ -218,7 +213,7 @@ class ArchiveReadinessAssemblerTest {
     fun `Jira issues and project liveness down yields UNKNOWN entries classified SYSTEM_UNAVAILABLE`() {
         val downSnapshot = liveSnapshot.copy(jiraIssuesLive = false, jiraProjectLive = false)
         whenever(livenessProbe.probe()).thenReturn(downSnapshot)
-        whenever(versionLineRepository.findByComponentId(componentId)).thenReturn(emptyList())
+        whenever(versionLineRepository.findDistinctTeamcityProjectIdsByComponentId(componentId)).thenReturn(emptyList())
         whenever(componentConfigurationRepository.findByComponentId(componentId)).thenReturn(emptyList())
         whenever(pairResolver.pairsFor(componentId)).thenReturn(setOf("PROJ" to null))
 
@@ -240,7 +235,7 @@ class ArchiveReadinessAssemblerTest {
             jiraProjectLive = false,
         )
         whenever(livenessProbe.probe()).thenReturn(unconfiguredSnapshot)
-        whenever(versionLineRepository.findByComponentId(componentId)).thenReturn(emptyList())
+        whenever(versionLineRepository.findDistinctTeamcityProjectIdsByComponentId(componentId)).thenReturn(emptyList())
         whenever(componentConfigurationRepository.findByComponentId(componentId)).thenReturn(emptyList())
         whenever(pairResolver.pairsFor(componentId)).thenReturn(setOf("PROJ" to null))
 
@@ -255,7 +250,7 @@ class ArchiveReadinessAssemblerTest {
     @Test
     fun `two pairs on distinct project keys yield 4 Jira entries`() {
         whenever(livenessProbe.probe()).thenReturn(liveSnapshot)
-        whenever(versionLineRepository.findByComponentId(componentId)).thenReturn(emptyList())
+        whenever(versionLineRepository.findDistinctTeamcityProjectIdsByComponentId(componentId)).thenReturn(emptyList())
         whenever(componentConfigurationRepository.findByComponentId(componentId)).thenReturn(emptyList())
         whenever(pairResolver.pairsFor(componentId)).thenReturn(setOf("PROJ1" to null, "PROJ2" to "PREFIX"))
         whenever(jiraIssuesChecker.checkPair(any(), anyOrNull(), any())).thenReturn(CheckResult(Outcome.COMPLETED))
@@ -273,7 +268,7 @@ class ArchiveReadinessAssemblerTest {
     @Test
     fun `two pairs sharing one project key yield 3 Jira entries, JIRA_PROJECT deduped`() {
         whenever(livenessProbe.probe()).thenReturn(liveSnapshot)
-        whenever(versionLineRepository.findByComponentId(componentId)).thenReturn(emptyList())
+        whenever(versionLineRepository.findDistinctTeamcityProjectIdsByComponentId(componentId)).thenReturn(emptyList())
         whenever(componentConfigurationRepository.findByComponentId(componentId)).thenReturn(emptyList())
         whenever(pairResolver.pairsFor(componentId)).thenReturn(setOf("PROJ1" to "A", "PROJ1" to "B"))
         whenever(jiraIssuesChecker.checkPair(any(), anyOrNull(), any())).thenReturn(CheckResult(Outcome.COMPLETED))
@@ -292,7 +287,7 @@ class ArchiveReadinessAssemblerTest {
     @Test
     fun `JIRA_ISSUES entries always carry empty sharedWith even if the checker result populated it`() {
         whenever(livenessProbe.probe()).thenReturn(liveSnapshot)
-        whenever(versionLineRepository.findByComponentId(componentId)).thenReturn(emptyList())
+        whenever(versionLineRepository.findDistinctTeamcityProjectIdsByComponentId(componentId)).thenReturn(emptyList())
         whenever(componentConfigurationRepository.findByComponentId(componentId)).thenReturn(emptyList())
         whenever(pairResolver.pairsFor(componentId)).thenReturn(setOf("PROJ" to null))
         whenever(jiraIssuesChecker.checkPair("PROJ", null, componentId))

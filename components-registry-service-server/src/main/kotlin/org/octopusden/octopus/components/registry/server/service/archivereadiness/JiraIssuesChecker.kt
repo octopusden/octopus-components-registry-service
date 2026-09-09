@@ -87,19 +87,35 @@ class JiraIssuesChecker(
         return try {
             var startAt = 0
             var page = 0
+            val matching = mutableListOf<JiraSearchIssue>()
             while (page < MAX_PAGES) {
                 val results = client.searchJql(jql, startAt, PAGE_SIZE)
                 val issues = results.issues
-                val matching = issues.filter(matches)
-                if (matching.isNotEmpty()) {
-                    val openIssues = matching.map { JiraIssueRef(it.key, it.fields.summary ?: "") }
-                    return CheckResult(Outcome.NOT_COMPLETED, openIssues = openIssues)
-                }
+                matching += issues.filter(matches)
                 startAt += issues.size
                 page++
                 if (issues.isEmpty() || startAt >= results.total) {
-                    return CheckResult(Outcome.COMPLETED)
+                    return if (matching.isNotEmpty()) {
+                        CheckResult(
+                            Outcome.NOT_COMPLETED,
+                            reason = "Jira project $projectKey has ${matching.size} open issue(s) in scope",
+                            openIssues = matching.map { JiraIssueRef(it.key, it.fields.summary ?: "") },
+                        )
+                    } else {
+                        CheckResult(Outcome.COMPLETED)
+                    }
                 }
+            }
+            if (matching.isNotEmpty()) {
+                // Evidence of at least one open issue is trustworthy on its own even if the
+                // backstop cut the read short — but later, unread pages could hold more, so this
+                // list may be incomplete.
+                return CheckResult(
+                    Outcome.NOT_COMPLETED,
+                    reason = "Jira project $projectKey has open issues in scope; more may exist beyond the " +
+                        "$MAX_PAGES pages this check reads",
+                    openIssues = matching.map { JiraIssueRef(it.key, it.fields.summary ?: "") },
+                )
             }
             log.warn(
                 "JIRA_ISSUES: {} has more open issues than the {} pages ({} each) this check will read — cannot confirm none are in scope",

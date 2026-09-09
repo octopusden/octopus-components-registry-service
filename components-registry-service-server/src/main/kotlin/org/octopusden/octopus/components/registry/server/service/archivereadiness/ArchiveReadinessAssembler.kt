@@ -81,11 +81,7 @@ class ArchiveReadinessAssembler(
             log.info("TEAMCITY_PROJECT: skipped for component {} — TeamCity not configured", componentId)
             return emptyList()
         }
-        val projectIds =
-            versionLineRepository
-                .findByComponentId(componentId)
-                .map { it.teamcityProject.projectId }
-                .distinct()
+        val projectIds = versionLineRepository.findDistinctTeamcityProjectIdsByComponentId(componentId).distinct()
         if (projectIds.isEmpty()) {
             log.info("TEAMCITY_PROJECT: component {} has no version lines — nothing to check", componentId)
         }

@@ -74,7 +74,7 @@ class RepositoryChecker(
                 if (shared.isNotEmpty()) {
                     CheckResult(Outcome.COMPLETED, sharedWith = shared)
                 } else {
-                    CheckResult(Outcome.NOT_COMPLETED)
+                    CheckResult(Outcome.NOT_COMPLETED, reason = "Repository is not archived: ${target.targetId}")
                 }
             }
             null -> {
