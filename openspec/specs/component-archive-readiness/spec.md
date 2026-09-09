@@ -6,6 +6,8 @@ The check is read-only in both directions. It never archives anything in an exte
 
 Reading readiness is governed by `DELETE_COMPONENTS`, the same permission that governs archiving. Restoring an archived component is governed by `ARCHIVE_COMPONENTS` and is out of scope.
 
+The answer names **no responsible party**, deliberately. It reports the state of each target; who has to act on that state is organisational policy about how the retirement steps are divided, not registry data, and this check has no notion of people at all — no owner, no team, no caller identity. A consumer that needs to route the work owns that mapping. The Portal does, deriving it from `targetKind`: see its `component-archive-readiness` change, decision 9.
+
 ## Requirements
 
 ### Requirement: Readiness is exposed as a per-target answer plus a single verdict
