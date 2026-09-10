@@ -129,9 +129,9 @@ class GroovySlurperConfigValidatorTest extends GroovyTestCase {
         // Extension present — Windows executable / archive.
         assert GENERIC_PATTERN.matcher("generic-tools/internal-cli/windows/2.4.1/internal-cli.exe").matches()
         assert GENERIC_PATTERN.matcher("generic-tools/internal-cli/windows/2.4.2/internal-cli.exe").matches()
-        assert GENERIC_PATTERN.matcher("releases/sigma-logan/1.2.3/sigma-logan.tar.gz").matches()
+        assert GENERIC_PATTERN.matcher("releases/demo-tool/1.2.3/demo-tool.tar.gz").matches()
         // Longer multi-segment pathToArtifact.
-        assert GENERIC_PATTERN.matcher("releases/sigma-logan/1.2.3/dist/amd64/sigma-logan.tar.gz").matches()
+        assert GENERIC_PATTERN.matcher("releases/demo-tool/1.2.3/dist/amd64/demo-tool.tar.gz").matches()
         // Comma-joined list.
         assert GENERIC_PATTERN.matcher(
             "generic-tools/internal-cli/linux-amd64/2.4.1/internal-cli," +
