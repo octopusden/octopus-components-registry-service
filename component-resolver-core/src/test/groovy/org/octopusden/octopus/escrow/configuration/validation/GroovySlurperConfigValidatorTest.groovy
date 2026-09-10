@@ -156,6 +156,10 @@ class GroovySlurperConfigValidatorTest extends GroovyTestCase {
         assert !GENERIC_PATTERN.matcher("releases/1.0/foo.tar.gz,").matches()
         // Empty string.
         assert !GENERIC_PATTERN.matcher("").matches()
+        // Reject path traversal — dot-only segments must not pass.
+        assert !GENERIC_PATTERN.matcher("../../etc/passwd").matches()
+        assert !GENERIC_PATTERN.matcher("releases/../../../etc/passwd").matches()
+        assert !GENERIC_PATTERN.matcher(".././x/y").matches()
     }
 
     void test_SYS_094_genericValidationRejectsFullUrl() {
@@ -191,6 +195,8 @@ class GroovySlurperConfigValidatorTest extends GroovyTestCase {
         assert !GENERIC_ENTRY.matcher("releases/1.0.0/foo bar.tar.gz").matches()
         assert !GENERIC_ENTRY.matcher("releases/foo.tar.gz").matches()
         assert !GENERIC_ENTRY.matcher("").matches()
+        // Reject path traversal.
+        assert !GENERIC_ENTRY.matcher("releases/../../../etc/passwd").matches()
     }
 
 }

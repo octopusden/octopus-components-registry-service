@@ -974,13 +974,13 @@ Component-to-dictionary relationships via M:N junctions (`component_labels`, `co
 
 ---
 
-### MIG-033: Distribution split into four specialized child tables
+### MIG-033: Distribution split into five specialized child tables
 
 **Priority:** Medium
 **Test layer:** unit-test
-**Status:** ❌ Not tested
+**Status:** ✅ Partially tested (maven, file-URL, docker, generic; packages pending)
 
-DSL `distribution { GAV, docker, DEB, RPM, securityGroups }` decomposes into four child tables of `component_configurations` plus `distribution_security_groups` on `components`. Per-family `sort_order` preserves DSL CSV order within each family; mapper concatenates families canonically (Maven, then file-URL) for v1-v3 responses.
+DSL `distribution { GAV, docker, DEB, RPM, generic, securityGroups }` decomposes into five child tables of `component_configurations` plus `distribution_security_groups` on `components`. Per-family `sort_order` preserves DSL CSV order within each family; mapper concatenates families canonically (Maven, then file-URL) for v1-v3 responses. `generic` was added in V8 migration (SYS-094).
 
 **Acceptance criteria:**
 1. DSL `GAV = "g:a:ext:cls, file://url?artifactId=X"` produces 1 row in `distribution_maven_artifacts` (sort_order=0) and 1 in `distribution_file_url_artifacts` (sort_order=0).

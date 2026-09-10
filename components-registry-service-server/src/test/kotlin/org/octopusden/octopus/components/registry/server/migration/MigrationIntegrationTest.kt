@@ -1,5 +1,7 @@
 package org.octopusden.octopus.components.registry.server.migration
 
+import jakarta.persistence.EntityManager
+import jakarta.persistence.PersistenceContext
 import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.Assertions.assertFalse
 import org.junit.jupiter.api.Assertions.assertNotNull
@@ -15,6 +17,7 @@ import org.octopusden.octopus.components.registry.server.dto.v4.ComponentFilter
 import org.octopusden.octopus.components.registry.server.entity.ComponentConfigurationEntity
 import org.octopusden.octopus.components.registry.server.entity.ComponentEntity
 import org.octopusden.octopus.components.registry.server.entity.ComponentGroupEntity
+import org.octopusden.octopus.components.registry.server.entity.DistributionGenericArtifactEntity
 import org.octopusden.octopus.components.registry.server.mapper.ALL_VERSIONS
 import org.octopusden.octopus.components.registry.server.mapper.MarkerAttributes
 import org.octopusden.octopus.components.registry.server.repository.ComponentConfigurationRepository
@@ -83,6 +86,9 @@ class MigrationIntegrationTest {
 
     @Autowired
     private lateinit var componentManagementService: ComponentManagementService
+
+    @PersistenceContext
+    private lateinit var em: EntityManager
 
     init {
         val testResourcesPath =
@@ -233,6 +239,38 @@ class MigrationIntegrationTest {
         assertTrue(
             hasDocker,
             "TESTONE must have at least one docker image entry (from distribution.docker = 'test/versions-api')",
+        )
+    }
+
+    @Test
+    @Transactional
+    @DisplayName(
+        "SYS-094 / V8: MARKER row with overridden_attribute='distribution.generic' " +
+            "satisfies the V8 taxonomy constraint; generic artifact row is persisted and readable",
+    )
+    fun `SYS-094 V8 migration constraint accepts distribution generic marker`() {
+        val component = componentRepository.save(
+            ComponentEntity(componentKey = "test-sys-094-v8-generic"),
+        )
+        val marker = configurationRepository.save(
+            ComponentConfigurationEntity(
+                component = component,
+                versionRange = ALL_VERSIONS,
+                rowType = "MARKER",
+                overriddenAttribute = MarkerAttributes.DISTRIBUTION_GENERIC,
+            ),
+        )
+        em.persist(
+            DistributionGenericArtifactEntity(
+                componentConfiguration = marker,
+                path = "releases/demo-tool/1.0.0/demo-tool.tar.gz",
+                sortOrder = 0,
+            ),
+        )
+        em.flush()
+        assertEquals(
+            MarkerAttributes.DISTRIBUTION_GENERIC,
+            configurationRepository.findById(marker.id!!).orElseThrow().overriddenAttribute,
         )
     }
 

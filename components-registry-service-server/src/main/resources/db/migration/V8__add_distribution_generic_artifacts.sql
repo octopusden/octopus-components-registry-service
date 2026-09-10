@@ -7,7 +7,7 @@ CREATE TABLE distribution_generic_artifacts (
 CREATE INDEX idx_dist_generic_config ON distribution_generic_artifacts(component_configuration_id);
 
 ALTER TABLE component_configurations
-    DROP CONSTRAINT component_configurations_check;
+    DROP CONSTRAINT IF EXISTS component_configurations_check;
 
 ALTER TABLE component_configurations
     ADD CONSTRAINT component_configurations_row_type_taxonomy_check CHECK (
