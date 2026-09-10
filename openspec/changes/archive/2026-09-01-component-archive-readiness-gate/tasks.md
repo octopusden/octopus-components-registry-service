@@ -173,4 +173,4 @@ Why this exists: `UNKNOWN` blocks and there is no override, so a target whose st
 - [ ] 8.14 Manual: with the VCS integration unconfigured, no repository entries appear and archiving is offered
 - [ ] 8.15 Manual: confirm on the live tracker that a genuinely retired project's category reads exactly `X Archive`, and that the deployed configuration carries that value — the whole project entry rests on that string being right
 - [ ] 8.16 Manual: a project that was recategorised but whose schemes were never switched still reports `COMPLETED`, and confirm with the operator that this limit is understood — the entry attests the marker, not the procedure
-- [x] 8.17 Update `docs/registry/functional-spec.md` and the relevant numbered requirements with the gate — done as part of this reconciliation: `functional-spec.md` §10, `requirements-common.md` SYS-095
+- [x] 8.17 Update `docs/registry/functional-spec.md` and the relevant numbered requirements with the gate — done as part of this reconciliation: `functional-spec.md` §10, `requirements-common.md` SYS-096

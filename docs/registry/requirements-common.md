@@ -87,7 +87,8 @@
 | SYS-092 | The admin dashboard read APIs (`GET /admin/teamcity-validations` + `.../summary`) join stored findings back to their owning component(s) via `version_line`, de-duplicate a component reachable through more than one version line to the same project, and count DISTINCT components (not raw finding rows) per type/status; both endpoints are IMPORT_DATA-gated                                                                                                                                                                                                                                                                                                                                                                                                                                                                      | High | unit + integration-test | ✅ Tested |
 | SYS-093 | `component-validation` module: `JAVA_HOME_NOT_FROM_ENV` is WARNING when a build step resolves a Java version whose java-home (`target.jdk.home`, or a java-resolving command-line token) does not reference `%env.JAVA_HOME%` at any point in its recursive parameter-reference chain — i.e. it points at a specific JDK directly instead of the agent's configured default; OK when every resolved java-home goes through `%env.JAVA_HOME%`, NOT_APPLICABLE when nothing Java was inspectable                                                                                                                                                                                                                                                                                                                                            | High | unit-test | ✅ Tested |
 | SYS-094 | `GET /service/status` exposes `configRevision` — an opaque composite cache-actuality token `"[gitRevision].[maxId].[count]"` built from the VCS revision plus the max-id and row-count aggregates of the non-`git-history` `audit_log` rows, so a consumer can detect DB-side config changes while `versionControlRevision` is frozen; `null` without the database layer (no-db / Git-based installs) | Medium | integration-test + context-load test | ✅ Tested |
-| SYS-095 | `GET /components/{idOrName}/archive-readiness` — read-only pre-flight for the archive/delete flow, gated by the same authorization as `deleteComponent` (`ACCESS_COMPONENTS` + `canDeleteComponent`); resolves by id or name identically to `getComponent`; returns one entry per external target (VCS repository, TeamCity project, Jira open issues, Jira project) with outcome `COMPLETED`/`NOT_COMPLETED`/`UNKNOWN`, a reason for the latter two, and a `reasonKind` classifying what an `UNKNOWN` entry needs; `ready` is false iff any entry is `NOT_COMPLETED` or `UNKNOWN` | High | unit + integration-test | ✅ Tested |
+| SYS-095 | Component-key format is enforced on **create and rename only**: `[a-z][a-z0-9-]*`, or the lowercased effective `clientCode` (its underscores included) as a **leading** prefix followed by end-of-key or `-` plus the same kebab tail; `_` is legal nowhere else, and a component whose effective `clientCode` is absent/blank may carry none. Existing keys are never re-validated (legacy uppercase / dotted / underscored keys keep saving) and the DSL import path is unaffected | High | unit-test | ✅ Tested |
+| SYS-096 | `GET /components/{idOrName}/archive-readiness` — read-only pre-flight for the archive/delete flow, gated by the same authorization as `deleteComponent` (`ACCESS_COMPONENTS` + `canDeleteComponent`); resolves by id or name identically to `getComponent`; returns one entry per external target (VCS repository, TeamCity project, Jira open issues, Jira project) with outcome `COMPLETED`/`NOT_COMPLETED`/`UNKNOWN`, a reason for the latter two, and a `reasonKind` classifying what an `UNKNOWN` entry needs; `ready` is false iff any entry is `NOT_COMPLETED` or `UNKNOWN` | High | unit + integration-test | ✅ Tested |
 
 ---
 
@@ -3118,7 +3119,93 @@ adding or removing a component leaves them identical.
 plus `NoDbModeContextTest.SYS-047 status reports defaultSource git and zero db components in no-db mode`
 for the null case (criterion 6).
 
-### SYS-095: `GET /components/{idOrName}/archive-readiness` — archive/delete pre-flight check
+### SYS-095: Component-key format — `_` only inside the client-code prefix
+
+**Priority:** High
+**Test layer:** unit-test
+**Status:** ✅ Tested
+
+**Motivation:**
+New components follow a strict lowercase-kebab key convention, but client-specific
+components are conventionally keyed by their client code, and a `clientCode` matches
+`[A-Z_0-9]+` — so it may legitimately contain `_`. Of the 42 existing components that
+have both an underscore in the key and a `clientCode`, **all 42** are shaped
+`lower(clientCode) + "-" + tail`, with no underscore anywhere after that prefix. The
+convention already exists in the data; what was missing is a rule that permits exactly
+it and nothing more.
+
+CRS never validated key characters at all (only `clientCode` had a format rule), so the
+strict convention lived solely in the Portal's create form and any API client could
+write any key. This requirement puts the rule on the server, where it belongs.
+
+**Description:**
+- A key is valid when either:
+  1. it matches `^[a-z][a-z0-9-]*$` (plain kebab, no underscore); or
+  2. the component's **effective** `clientCode` is non-blank, the key starts with a
+     lowercase letter, and the key is `lower(clientCode)` followed by either end-of-key
+     or `-` plus `[a-z0-9-]*`.
+- The prefix relaxes the **charset**, never the letter start. A `clientCode` matches
+  `[A-Z_0-9]+`, so it may begin with a digit or an underscore; a key may not, and
+  `123abc-payments` (clientCode `123ABC`) or a bare `_` is rejected on both counts.
+- Consequences of (2) being prefix-anchored: `_` may appear only inside that leading
+  prefix. A `clientCode` with no `_` therefore grants no `_` anywhere — it only permits
+  a key that starts with the code. Uppercase in the key stays rejected in both cases:
+  the comparison lowercases the `clientCode`, it does not accept an uppercase key.
+- **Effective** `clientCode` means the value that is (or stays) persisted on the
+  component, not the value on the wire:
+  - on **create**, the post-`stripIfHidden` value — a `clientCode` supplied while
+    `component.clientCode` is hidden by field-config is dropped, so it grants nothing;
+  - on **rename**, the `clientCode` the same PATCH supplies when that field is editable,
+    and the stored one when it is hidden — a hidden-but-populated value still grants the
+    underscore, because it is really there.
+  So **at the moment a key is chosen, an underscore in it is always backed by a
+  `clientCode` the component will carry.** The guarantee is deliberately scoped to that
+  moment: a later `clientCode` change is not re-checked (see below), so the backing can
+  lapse afterwards.
+- **Enforcement surface is create + rename only.** The check runs on
+  `createComponent` (the new key) and on the update path when `isRename` is true (the
+  new key). On both paths it runs **after** the field-config editability gate — not for
+  `name` itself (renames are authorized by the controller's `canRenameComponent`
+  `@PreAuthorize`, a 403 before the service is entered, and `name` carries no
+  field-config editability), but for the rest of the same request: a PATCH that renames
+  and also touches a non-editable field must see that 422 rather than a value-400 about
+  the key's shape. An existing key is never re-validated: 214 of 997 production components
+  (160 with uppercase, 54 with a dot) do not satisfy the rule and must keep saving.
+- The DSL import path writes through `componentRepository.save(...)` and does not go
+  through `createComponent`, so imported legacy keys are unaffected by design.
+- Changing or clearing a `clientCode` after the fact is explicitly **out of scope** — it
+  does not re-validate the key and cannot fail. Tracked separately as the
+  "change client code" feature.
+
+**Acceptance:**
+1. `POST /components` with key `ab_cd-payments` and `clientCode` `AB_CD` → 201.
+2. `POST /components` with key `ab_cd-payments` and no `clientCode` → 400.
+3. `POST /components` with key `ab_cd-payments` and `clientCode` `ABCD` (no `_`) → 400.
+4. `POST /components` with key `payments-ab_cd` and `clientCode` `AB_CD` → 400 (the
+   prefix must lead).
+5. `POST /components` with key `ab_cd` and `clientCode` `AB_CD` → 201 (bare prefix).
+6. `POST /components` with key `AB_CD-payments` and `clientCode` `AB_CD` → 400
+   (uppercase key).
+7. `POST /components` with key `plain-component` and no `clientCode` → 201.
+7a. `POST /components` with key `123abc-payments` and `clientCode` `123ABC` → 400 (a key
+    must start with a lowercase letter even when the prefix matches).
+7b. `POST /components` with key `_` and `clientCode` `_` → 400 (same reason).
+8. `POST /components` with key `ab_cd-payments` + `clientCode` `AB_CD` while
+   `component.clientCode` is hidden by field-config → 400 (the code would not persist).
+9. `PATCH /components/{id}` renaming to `ab_cd-payments` on a component whose stored
+   `clientCode` is `AB_CD` → 200, including when the field is hidden.
+10. `PATCH /components/{id}` renaming to `ab_cd-payments` on a component with no stored
+    `clientCode` → 400.
+11. `PATCH /components/{id}` that does **not** change the key on a component whose
+    existing key is `Legacy.Key_1` → 200 (no re-validation).
+
+**Test method:** `CheapFieldFormatValidationTest` — the create *and* rename cases live
+there (15 cases covering the acceptance list above). Both checks are pure `require(...)`
+guards that run before any repository write, so the existing mocked-repository unit
+harness reaches them; no `dbTest` integration test is needed. Fixtures use synthetic
+client codes only.
+
+### SYS-096: `GET /components/{idOrName}/archive-readiness` — archive/delete pre-flight check
 
 **Priority:** High
 **Test layer:** unit + integration-test

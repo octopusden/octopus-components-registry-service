@@ -76,7 +76,7 @@ class ArchiveReadinessControllerTest {
     }
 
     @Test
-    @DisplayName("SYS-095: endpoint returns 200 with ready and entries for a component with no external targets")
+    @DisplayName("SYS-096: endpoint returns 200 with ready and entries for a component with no external targets")
     fun endpointReturns200WithReadyAndEntriesForComponentWithNoExternalTargets() {
         val id = createSimpleComponent("arc-test-${System.nanoTime()}")
         mvc
@@ -87,7 +87,7 @@ class ArchiveReadinessControllerTest {
     }
 
     @Test
-    @DisplayName("SYS-095: endpoint resolves by component name")
+    @DisplayName("SYS-096: endpoint resolves by component name")
     fun endpointResolvesByComponentName() {
         val name = "arc-byname-${System.nanoTime()}"
         createSimpleComponent(name)
@@ -97,7 +97,7 @@ class ArchiveReadinessControllerTest {
     }
 
     @Test
-    @DisplayName("SYS-095: unknown component yields 404")
+    @DisplayName("SYS-096: unknown component yields 404")
     fun unknownComponentYields404() {
         mvc
             .perform(get("/rest/api/4/components/does-not-exist-ever/archive-readiness").with(adminJwt()))
@@ -105,7 +105,7 @@ class ArchiveReadinessControllerTest {
     }
 
     @Test
-    @DisplayName("SYS-095: caller without DELETE_COMPONENTS is rejected")
+    @DisplayName("SYS-096: caller without DELETE_COMPONENTS is rejected")
     fun callerWithoutDeleteComponentsIsRejected() {
         val id = createSimpleComponent("arc-perm-${System.nanoTime()}")
         // viewerJwt has ACCESS_COMPONENTS but not DELETE_COMPONENTS
@@ -119,7 +119,7 @@ class ArchiveReadinessControllerTest {
     // NOT orElseThrow, specifically so a UUID that parses but does not match any real component
     // id falls through to the findByComponentKey lookup below it instead of throwing early.
     @Test
-    @DisplayName("SYS-095: resolving by a component name that happens to be a valid UUID string still works")
+    @DisplayName("SYS-096: resolving by a component name that happens to be a valid UUID string still works")
     fun endpointResolvesByUuidShapedName() {
         val uuidShapedName = UUID.randomUUID().toString()
         createSimpleComponent(uuidShapedName)
