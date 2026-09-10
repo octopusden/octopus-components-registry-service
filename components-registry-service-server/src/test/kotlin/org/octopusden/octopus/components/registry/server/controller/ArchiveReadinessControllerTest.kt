@@ -121,7 +121,9 @@ class ArchiveReadinessControllerTest {
     @Test
     @DisplayName("SYS-096: resolving by a component name that happens to be a valid UUID string still works")
     fun endpointResolvesByUuidShapedName() {
-        val uuidShapedName = UUID.randomUUID().toString()
+        // SYS-095: a key must start with a lowercase letter, so pin the leading hex digit to
+        // a letter. The value still parses as a UUID, which is all this test needs.
+        val uuidShapedName = "a" + UUID.randomUUID().toString().substring(1)
         createSimpleComponent(uuidShapedName)
         mvc
             .perform(get("/rest/api/4/components/$uuidShapedName/archive-readiness").with(adminJwt()))
