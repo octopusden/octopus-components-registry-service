@@ -264,6 +264,9 @@ class ComponentManagementServiceImpl(
         request.clientCode?.let {
             if (!fieldConfigService.isHidden("component.clientCode")) validateClientCode(it)
         }
+        // SYS-095: the key's legal charset depends on the clientCode that will actually be
+        // persisted — a value supplied for a hidden field is stripped below, so it grants nothing.
+        validateComponentKey(normalizedKey, stripIfHidden("component.clientCode", request.clientCode))
         request.copyright?.let {
             if (!fieldConfigService.isHidden("component.copyright")) validateCopyright(it)
         }
@@ -564,6 +567,26 @@ class ComponentManagementServiceImpl(
         // mutation (change-based; unchanged echo is tolerated). Reads the pristine BASE
         // row for jira/build aspect currents, so it must run ahead of the patch appliers.
         enforceEditabilityOnUpdate(entity, request)
+
+        if (isRename) {
+            // SYS-095, placed AFTER enforceEditabilityOnUpdate on purpose. Not for `name`
+            // itself — rename authorization is the controller's @PreAuthorize
+            // (`canRenameComponent`, 403 before this method) and `name` is not a
+            // field-config-gated field. It is for the REST of the same PATCH: a request
+            // that renames and also touches a non-editable field must see that 422, not a
+            // value-400 about the key's shape.
+            //
+            // Validated against the clientCode this request leaves persisted: the supplied one
+            // when the field is editable, the stored one when it is hidden (a hidden clientCode
+            // is ignored by the write site below, but it is really there).
+            val effectiveClientCode =
+                if (fieldConfigService.isHidden("component.clientCode")) {
+                    entity.clientCode
+                } else {
+                    request.clientCode ?: entity.clientCode
+                }
+            validateComponentKey(normalizedNewKey!!, effectiveClientCode)
+        }
 
         // Hidden productType is stripped at its write site → don't 4xx on its value here.
         request.productType?.let { if (!fieldConfigService.isHidden("component.productType")) validateProductType(it) }
@@ -3885,6 +3908,33 @@ class ComponentManagementServiceImpl(
     }
 
     /**
+     * SYS-095 / ADR-020: a component key is plain kebab, or the lowercased [clientCode]
+     * as a leading prefix followed by the end of the key or `-` plus a kebab tail. An
+     * underscore is legal only inside that prefix, so a component with no clientCode may
+     * carry none. A key must start with a lowercase letter either way — the prefix
+     * relaxes the charset, not the letter start. [clientCode] is the effective
+     * (persisted) value, never the raw request.
+     */
+    private fun validateComponentKey(
+        key: String,
+        clientCode: String?,
+    ) {
+        if (COMPONENT_KEY_PATTERN.matches(key)) return
+        val prefix = clientCode?.trim()?.lowercase()?.takeIf { it.isNotEmpty() && key.startsWith(it) }
+        val tail = prefix?.let { key.substring(it.length) }
+        // The prefix branch relaxes the charset, never the letter start: a clientCode may
+        // begin with a digit or an underscore (`[A-Z_0-9]+`), and a key may not.
+        val startsWithLetter = key.isNotEmpty() && key[0] in 'a'..'z'
+        require(startsWithLetter && tail != null && COMPONENT_KEY_TAIL_PATTERN.matches(tail)) {
+            // Field-prefixed like the uniqueness check above, so the Portal renders the
+            // message inline on the Component Key (`name`) field with the field name stripped.
+            "name: '$key' must match '${COMPONENT_KEY_PATTERN.pattern}', " +
+                "or be the lowercased clientCode followed by end-of-name or '-' and the same tail " +
+                "(underscores are allowed only inside that prefix)"
+        }
+    }
+
+    /**
      * `copyright` must name a file in the configured copyright directory (audit
      * #21; old `EscrowConfigValidator.validateCopyright`). The supported list is
      * the same source the old validator used: the regular files under
@@ -4503,6 +4553,14 @@ class ComponentManagementServiceImpl(
 
         // Same shape as the old EscrowConfigValidator.CLIENT_CODE_PATTERN.
         private val CLIENT_CODE_PATTERN = Regex("[A-Z_0-9]+")
+
+        private const val ROW_TYPE_BASE = "BASE"
+        private const val ATTR_JAVA_VERSION = "build.javaVersion"
+        private const val ATTR_MAVEN_VERSION = "build.mavenVersion"
+
+        // SYS-095: strict kebab for a plain key, and the tail permitted after a client-code prefix.
+        private val COMPONENT_KEY_PATTERN = Regex("[a-z][a-z0-9-]*")
+        private val COMPONENT_KEY_TAIL_PATTERN = Regex("(-[a-z0-9-]*)?")
 
         private const val ROW_TYPE_BASE = "BASE"
         private const val ATTR_JAVA_VERSION = "build.javaVersion"
