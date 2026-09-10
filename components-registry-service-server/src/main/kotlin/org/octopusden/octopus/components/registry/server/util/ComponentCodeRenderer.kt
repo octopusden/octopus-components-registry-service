@@ -601,7 +601,7 @@ class ComponentCodeRenderer(
         }
         genericArtifacts.sortedBy { it.sortOrder }.forEach { g ->
             cb.open("generic")
-            cb.str("url", g.url)
+            cb.str("path", g.path)
             cb.close()
         }
         if (securityGroups.isNotEmpty()) {
@@ -790,7 +790,7 @@ class ComponentCodeRenderer(
         }
         generic?.genericArtifacts?.sortedBy { it.sortOrder }?.forEach { g ->
             cb.open("generic")
-            cb.str("url", g.url)
+            cb.str("path", g.path)
             cb.close()
         }
         cb.close()

@@ -6,6 +6,7 @@ import org.octopusden.releng.versions.VersionNames
 import static org.octopusden.octopus.escrow.configuration.validation.GroovySlurperConfigValidator.DEB_PATTERN
 import static org.octopusden.octopus.escrow.configuration.validation.GroovySlurperConfigValidator.DOCKER_PATTERN_V2
 import static org.octopusden.octopus.escrow.configuration.validation.GroovySlurperConfigValidator.GAV_PATTERN
+import static org.octopusden.octopus.escrow.configuration.validation.GroovySlurperConfigValidator.GENERIC_ENTRY
 import static org.octopusden.octopus.escrow.configuration.validation.GroovySlurperConfigValidator.GENERIC_PATTERN
 import static org.octopusden.octopus.escrow.configuration.validation.GroovySlurperConfigValidator.RPM_PATTERN
 import static org.octopusden.octopus.escrow.configuration.validation.GroovySlurperConfigValidator.SUPPORTED_ATTRIBUTES
@@ -112,7 +113,7 @@ class GroovySlurperConfigValidatorTest extends GroovyTestCase {
         assert SUPPORTED_ATTRIBUTES.contains('artifactId')
     }
 
-    void testGenericAttributeAccepted() {
+    void test_SYS_094_genericAttributeAccepted() {
         def verNames = new VersionNames("serviceCBranch", "serviceC", "minorC")
         def config = new ConfigSlurper().parse("generic = 'releases/foo/\${version}/foo.tar.gz'")
         def validator = new GroovySlurperConfigValidator(verNames)
@@ -120,7 +121,7 @@ class GroovySlurperConfigValidatorTest extends GroovyTestCase {
         assert !validator.hasErrors()
     }
 
-    void testGenericPattern() {
+    void test_SYS_094_genericPattern() {
         // Minimal shape: <pathToArtifact>/<componentVersion>/<artifactName>[.<ext>].
         assert GENERIC_PATTERN.matcher("releases/1.0.0/foo.tar.gz").matches()
         // Extension is optional — Linux executables carry no `.ext`.
@@ -157,7 +158,7 @@ class GroovySlurperConfigValidatorTest extends GroovyTestCase {
         assert !GENERIC_PATTERN.matcher("").matches()
     }
 
-    void testGenericValidationRejectsFullUrl() {
+    void test_SYS_094_genericValidationRejectsFullUrl() {
         def verNames = new VersionNames("serviceCBranch", "serviceC", "minorC")
         def config = new ConfigSlurper().parse("generic = 'https://example.com/releases/foo/\${version}/foo.tar.gz'")
         def validator = new GroovySlurperConfigValidator(verNames)
@@ -165,12 +166,31 @@ class GroovySlurperConfigValidatorTest extends GroovyTestCase {
         assert validator.hasErrors()
     }
 
-    void testUnknownDistributionAttributeStillFails() {
+    void test_SYS_094_unknownDistributionAttributeStillFails() {
         def verNames = new VersionNames("serviceCBranch", "serviceC", "minorC")
         def config = new ConfigSlurper().parse("unknownField = 'value'")
         def validator = new GroovySlurperConfigValidator(verNames)
         validator.validateDistributionSection(config, verNames, "testModule", "testConfig")
         assert validator.hasErrors()
+    }
+
+    void test_SYS_094_genericEntryPattern() {
+        // Accepts the same shape as one CSV entry inside GENERIC_PATTERN.
+        assert GENERIC_ENTRY.matcher("releases/1.0.0/foo.tar.gz").matches()
+        assert GENERIC_ENTRY.matcher("generic-tools/internal-cli/2.4.1/internal-cli").matches()
+        assert GENERIC_ENTRY.matcher("generic-tools/internal-cli/windows/2.4.1/internal-cli.exe").matches()
+
+        // Rejects a comma — CSV is not allowed in a single write-side row.
+        assert !GENERIC_ENTRY.matcher(
+            "releases/1.0.0/a.tar.gz,releases/1.0.0/b.tar.gz"
+        ).matches()
+
+        // Same charset/segment rules as GENERIC_PATTERN.
+        assert !GENERIC_ENTRY.matcher("http://example.com/releases/1.0.0/foo.tar.gz").matches()
+        assert !GENERIC_ENTRY.matcher("/releases/1.0.0/foo.tar.gz").matches()
+        assert !GENERIC_ENTRY.matcher("releases/1.0.0/foo bar.tar.gz").matches()
+        assert !GENERIC_ENTRY.matcher("releases/foo.tar.gz").matches()
+        assert !GENERIC_ENTRY.matcher("").matches()
     }
 
 }

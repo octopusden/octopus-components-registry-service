@@ -885,7 +885,7 @@ class EscrowConfigurationLoaderTest extends GroovyTestCase {
     }
 
     @Test
-    void testGenericDistributionRoundTrip() {
+    void test_SYS_094_genericDistributionRoundTrip() {
         EscrowConfiguration configuration = loadConfiguration("single-module/genericDistribution.groovy")
         def cfg = configuration.escrowModules.get(TEST_MODULE).moduleConfigurations.get(0)
         assert 'releases/bcomponent/${version}/bcomponent.tar.gz' == cfg.distribution.generic()
@@ -896,7 +896,7 @@ class EscrowConfigurationLoaderTest extends GroovyTestCase {
     }
 
     @Test
-    void testDistributionWithoutGenericStaysNull() {
+    void test_SYS_094_distributionWithoutGenericStaysNull() {
         EscrowConfiguration configuration = loadConfiguration("single-module/simpleConfig.groovy")
         def cfg = configuration.escrowModules.get(TEST_MODULE).moduleConfigurations.get(0)
         assert null == cfg.distribution.generic()

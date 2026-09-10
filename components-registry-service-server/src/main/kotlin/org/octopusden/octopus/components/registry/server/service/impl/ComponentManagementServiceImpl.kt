@@ -106,6 +106,7 @@ import org.octopusden.octopus.components.registry.server.util.MavenVersionCompar
 import org.octopusden.octopus.components.registry.server.util.VersionRangePartition
 import org.octopusden.octopus.components.registry.server.util.computeEffectiveJiraPairs
 import org.octopusden.octopus.escrow.config.ConfigHelper
+import org.octopusden.octopus.escrow.configuration.validation.GroovySlurperConfigValidator
 import org.octopusden.releng.versions.NumericVersionFactory
 import org.octopusden.releng.versions.VersionRangeFactory
 import org.springframework.context.ApplicationEventPublisher
@@ -2771,16 +2772,26 @@ class ComponentManagementServiceImpl(
         config: ComponentConfigurationEntity,
         generics: List<GenericArtifactRequest>,
     ) {
-        generics.forEach { require(it.url.isNotBlank()) { "url is not specified for a genericArtifact" } }
+        generics.forEach { validateGenericArtifactPath(it.path) }
         config.genericArtifacts.clear()
         generics.forEachIndexed { index, req ->
             config.genericArtifacts.add(
                 DistributionGenericArtifactEntity(
                     componentConfiguration = config,
-                    url = req.url,
+                    path = req.path,
                     sortOrder = index,
                 ),
             )
+        }
+    }
+
+    private fun validateGenericArtifactPath(path: String) {
+        require(path.isNotBlank()) { "path is not specified for a genericArtifact" }
+        require(GroovySlurperConfigValidator.GENERIC_ENTRY.matcher(path).matches()) {
+            "genericArtifact path '$path' does not match the required shape " +
+                "'<segment>/<segment>/<segment>[/…]' where each segment is [A-Za-z0-9._-] " +
+                "(commas, URL schemes, whitespace and leading slashes are not allowed — " +
+                "one path per request row)"
         }
     }
 
@@ -3200,8 +3211,8 @@ class ComponentManagementServiceImpl(
      *
      *  - **explicit-external ≥1 distribution coordinate** (#6): when
      *    `distributionExplicit && distributionExternal`, at least one of GAV
-     *    (maven artifact), docker image, or DEB/RPM package must be defined on
-     *    some configuration row.
+     *    (maven artifact), docker image, DEB/RPM package, or generic artifact
+     *    (SYS-094) must be defined on some configuration row.
      *  - **groupId supported prefix** (#10): every maven `groupPattern` element
      *    must start with one of the env-configured `supportedGroupIds`.
      *  - **archived ≠ explicit-external** (#28): an archived component cannot be
@@ -3228,7 +3239,7 @@ class ComponentManagementServiceImpl(
             }
             require(hasAnyDistributionCoordinate(entity)) {
                 "distribution: an explicit+external component must define at least one " +
-                    "distribution coordinate (maven GAV, docker image, or package) " +
+                    "distribution coordinate (maven GAV, docker image, package, or generic artifact) " +
                     "(component '${entity.componentKey}')"
             }
         }
@@ -4386,7 +4397,7 @@ class ComponentManagementServiceImpl(
                 },
             "genericArtifacts" to
                 base?.genericArtifacts.orEmpty().sortedBy { it.sortOrder }.map {
-                    mapOf("url" to it.url)
+                    mapOf("path" to it.path)
                 },
             "buildToolBeans" to
                 base?.buildToolBeans.orEmpty().sortedBy { it.sortOrder }.map {

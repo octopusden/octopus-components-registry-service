@@ -129,11 +129,11 @@ class ComponentCodeRendererTest {
 
     private fun generic(
         cfg: ComponentConfigurationEntity,
-        url: String,
+        path: String,
         order: Int = 0,
     ) = DistributionGenericArtifactEntity(
         componentConfiguration = cfg,
-        url = url,
+        path = path,
         sortOrder = order,
     )
 
@@ -478,29 +478,29 @@ class ComponentCodeRendererTest {
     }
 
     @Test
-    @DisplayName("FULL: distribution generic child renders inside distribution block")
-    fun fullDistributionGeneric() {
+    @DisplayName("SYS-094: FULL — distribution generic child renders inside distribution block")
+    fun `SYS-094 full distribution generic child renders inside distribution block`() {
         val c = component()
         val b = base(c) { buildSystem = "MAVEN" }
-        b.genericArtifacts.add(generic(b, url = "releases/foo/1.0.0/foo.tar.gz"))
+        b.genericArtifacts.add(generic(b, path = "releases/foo/1.0.0/foo.tar.gz"))
 
         val out = renderer.renderFull(c)
         assertTrue(out.contains("distribution {"), out)
         assertTrue(out.contains("generic {"), out)
-        assertTrue(out.contains("url = \"releases/foo/1.0.0/foo.tar.gz\""), out)
+        assertTrue(out.contains("path = \"releases/foo/1.0.0/foo.tar.gz\""), out)
     }
 
     @Test
-    @DisplayName("FULL: per-range distribution.generic marker renders a generic block only in the range")
-    fun fullPerRangeGenericMarker() {
+    @DisplayName("SYS-094: FULL — per-range distribution.generic marker renders a generic block only in the range")
+    fun `SYS-094 full per-range distribution generic marker`() {
         val c = component()
         val b = base(c) { buildSystem = "MAVEN" }
-        b.genericArtifacts.add(generic(b, url = "releases/foo/1.0.0/foo.tar.gz"))
+        b.genericArtifacts.add(generic(b, path = "releases/foo/1.0.0/foo.tar.gz"))
         val m = marker(c, "[2,)", MarkerAttributes.DISTRIBUTION_GENERIC) {}
-        m.genericArtifacts.add(generic(m, url = "releases/foo/2.0.0/foo.tar.gz"))
+        m.genericArtifacts.add(generic(m, path = "releases/foo/2.0.0/foo.tar.gz"))
 
         val out = renderer.renderFull(c)
-        assertTrue(out.contains("url = \"releases/foo/1.0.0/foo.tar.gz\""), out)
+        assertTrue(out.contains("path = \"releases/foo/1.0.0/foo.tar.gz\""), out)
         val rangeBlock = out.substringAfter("\"[2,)\" {")
         assertTrue(rangeBlock.contains("generic {"), rangeBlock)
         assertTrue(rangeBlock.contains("releases/foo/2.0.0/foo.tar.gz"), rangeBlock)

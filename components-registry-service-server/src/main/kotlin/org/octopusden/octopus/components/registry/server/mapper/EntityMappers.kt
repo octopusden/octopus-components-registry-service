@@ -1241,7 +1241,7 @@ private fun composeDockerCsv(images: List<DistributionDockerImageEntity>): Strin
 }
 
 private fun composeGenericCsv(generic: List<DistributionGenericArtifactEntity>): String? {
-    val csv = generic.sortedBy { it.sortOrder }.joinToString(",") { it.url }
+    val csv = generic.sortedBy { it.sortOrder }.joinToString(",") { it.path }
     return csv.ifEmpty { null }
 }
 

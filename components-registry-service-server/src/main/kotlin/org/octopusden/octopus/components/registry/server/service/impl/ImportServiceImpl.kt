@@ -2129,12 +2129,12 @@ class ImportServiceImpl(
     ) {
         val genericCsv = dist?.generic() ?: return
         var sortOrder = 0
-        for (url in splitCsv(genericCsv)) {
-            if (url.isBlank()) continue
+        for (path in splitCsv(genericCsv)) {
+            if (path.isBlank()) continue
             row.genericArtifacts.add(
                 DistributionGenericArtifactEntity(
                     componentConfiguration = row,
-                    url = url,
+                    path = path,
                     sortOrder = sortOrder++,
                 ),
             )

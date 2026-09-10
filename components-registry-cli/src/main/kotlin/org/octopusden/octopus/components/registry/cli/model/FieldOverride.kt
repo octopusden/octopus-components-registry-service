@@ -74,11 +74,11 @@ data class PackageItem(
 )
 
 /**
- * Mirror of v4.json `GenericArtifactRequest` (used inside [MarkerChildrenPayload]). `url` required.
+ * Mirror of v4.json `GenericArtifactRequest` (used inside [MarkerChildrenPayload]). `path` required.
  */
 @Serializable
 data class GenericArtifactItem(
-    val url: String,
+    val path: String,
 )
 
 /**

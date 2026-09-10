@@ -169,7 +169,7 @@ data class PackageResponse(
 
 data class GenericArtifactResponse(
     val id: UUID,
-    val url: String,
+    val path: String,
     val sortOrder: Int,
 )
 
@@ -304,7 +304,7 @@ data class PackageRequest(
 )
 
 data class GenericArtifactRequest(
-    val url: String,
+    val path: String,
 )
 
 /**

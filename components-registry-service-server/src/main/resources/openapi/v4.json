@@ -1686,12 +1686,12 @@
       },
       "GenericArtifactRequest" : {
         "properties" : {
-          "url" : {
+          "path" : {
             "type" : "string"
           }
         },
         "required" : [
-          "url"
+          "path"
         ],
         "type" : "object"
       },
@@ -1701,18 +1701,18 @@
             "format" : "uuid",
             "type" : "string"
           },
+          "path" : {
+            "type" : "string"
+          },
           "sortOrder" : {
             "format" : "int32",
             "type" : "integer"
-          },
-          "url" : {
-            "type" : "string"
           }
         },
         "required" : [
           "id",
-          "sortOrder",
-          "url"
+          "path",
+          "sortOrder"
         ],
         "type" : "object"
       },

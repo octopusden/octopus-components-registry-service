@@ -46,6 +46,7 @@ class GroovySlurperConfigValidator {
 
     private static final String GENERIC_SEGMENT_PATTERN = "[A-Za-z0-9._\\-]+"
     private static final String GENERIC_ENTRY_PATTERN = "($GENERIC_SEGMENT_PATTERN/){2,}$GENERIC_SEGMENT_PATTERN"
+    public static final Pattern GENERIC_ENTRY = Pattern.compile("^$GENERIC_ENTRY_PATTERN\$")
     public static final Pattern GENERIC_PATTERN = Pattern.compile("^($GENERIC_ENTRY_PATTERN)(,($GENERIC_ENTRY_PATTERN))*\$")
 
     public static final List<String> SUPPORTED_ATTRIBUTES = ['buildSystem', VCS_URL, REPOSITORY_TYPE, 'groupId', 'artifactId',

@@ -402,13 +402,13 @@ class DistributionEntityMapperTest {
     // -----------------------------------------------------------------------
 
     @Test
-    @DisplayName("BASE row: generic artifact fields round-trip to GenericArtifactResponse")
-    fun baseRow_genericArtifact_fieldsRoundTrip() {
+    @DisplayName("SYS-094: BASE row — generic artifact fields round-trip to GenericArtifactResponse")
+    fun `SYS-094 base row generic artifact fields round-trip`() {
         val cfg = baseConfig()
         val generic = DistributionGenericArtifactEntity(
             id = UUID.randomUUID(),
             componentConfiguration = cfg,
-            url = "releases/foo/1.0.0/foo.tar.gz",
+            path = "releases/foo/1.0.0/foo.tar.gz",
             sortOrder = 0,
         )
         cfg.genericArtifacts.add(generic)
@@ -417,26 +417,26 @@ class DistributionEntityMapperTest {
         assertEquals(1, cr.genericArtifacts.size)
         val g = cr.genericArtifacts[0]
         assertEquals(generic.id, g.id)
-        assertEquals("releases/foo/1.0.0/foo.tar.gz", g.url)
+        assertEquals("releases/foo/1.0.0/foo.tar.gz", g.path)
         assertEquals(0, g.sortOrder)
     }
 
     @Test
-    @DisplayName("MARKER distribution.generic: genericArtifacts surfaced; maven, fileUrl, docker, packages empty")
-    fun markerRow_distributionGeneric_onlyGenericSurfaced() {
+    @DisplayName("SYS-094: MARKER distribution.generic — genericArtifacts surfaced; maven, fileUrl, docker, packages empty")
+    fun `SYS-094 marker distribution generic only generic surfaced`() {
         val cfg = markerConfig(MarkerAttributes.DISTRIBUTION_GENERIC)
         cfg.genericArtifacts.add(
             DistributionGenericArtifactEntity(
                 id = UUID.randomUUID(),
                 componentConfiguration = cfg,
-                url = "releases/only-generic/1.0.0/only-generic.tar.gz",
+                path = "releases/only-generic/1.0.0/only-generic.tar.gz",
                 sortOrder = 0,
             ),
         )
 
         val cr = cfg.toConfigurationResponse()
         assertEquals(1, cr.genericArtifacts.size)
-        assertEquals("releases/only-generic/1.0.0/only-generic.tar.gz", cr.genericArtifacts[0].url)
+        assertEquals("releases/only-generic/1.0.0/only-generic.tar.gz", cr.genericArtifacts[0].path)
         assertTrue(cr.mavenArtifacts.isEmpty())
         assertTrue(cr.fileUrlArtifacts.isEmpty())
         assertTrue(cr.dockerImages.isEmpty())
@@ -444,14 +444,14 @@ class DistributionEntityMapperTest {
     }
 
     @Test
-    @DisplayName("generic artifacts sortOrder preserved (sorted ascending)")
-    fun genericArtifacts_sortOrderPreserved() {
+    @DisplayName("SYS-094: generic artifacts sortOrder preserved (sorted ascending)")
+    fun `SYS-094 generic artifacts sort order preserved`() {
         val cfg = baseConfig()
         cfg.genericArtifacts.add(
             DistributionGenericArtifactEntity(
                 id = UUID.randomUUID(),
                 componentConfiguration = cfg,
-                url = "releases/foo/2.0.0/foo.tar.gz",
+                path = "releases/foo/2.0.0/foo.tar.gz",
                 sortOrder = 2,
             ),
         )
@@ -459,15 +459,15 @@ class DistributionEntityMapperTest {
             DistributionGenericArtifactEntity(
                 id = UUID.randomUUID(),
                 componentConfiguration = cfg,
-                url = "releases/foo/1.0.0/foo.tar.gz",
+                path = "releases/foo/1.0.0/foo.tar.gz",
                 sortOrder = 1,
             ),
         )
 
-        val urls = cfg.toConfigurationResponse().genericArtifacts.map { it.url }
+        val paths = cfg.toConfigurationResponse().genericArtifacts.map { it.path }
         assertEquals(
             listOf("releases/foo/1.0.0/foo.tar.gz", "releases/foo/2.0.0/foo.tar.gz"),
-            urls,
+            paths,
         )
     }
 
@@ -487,7 +487,7 @@ class DistributionEntityMapperTest {
             DistributionGenericArtifactEntity(
                 id = UUID.randomUUID(),
                 componentConfiguration = cfg,
-                url = "releases/should-not/1.0.0/appear.tar.gz",
+                path = "releases/should-not/1.0.0/appear.tar.gz",
                 sortOrder = 0,
             ),
         )

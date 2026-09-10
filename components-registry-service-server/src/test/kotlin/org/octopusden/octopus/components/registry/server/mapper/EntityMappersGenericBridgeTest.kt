@@ -21,19 +21,19 @@ class EntityMappersGenericBridgeTest {
 
     private fun generic(
         parent: ComponentConfigurationEntity,
-        url: String,
+        path: String,
         sortOrder: Int,
     ): DistributionGenericArtifactEntity =
         DistributionGenericArtifactEntity(
             id = UUID.randomUUID(),
             componentConfiguration = parent,
-            url = url,
+            path = path,
             sortOrder = sortOrder,
         )
 
     @Test
-    @DisplayName("empty generic list → Distribution.generic() is null")
-    fun empty_genericIsNull() {
+    @DisplayName("SYS-094: empty generic list → Distribution.generic() is null")
+    fun `SYS-094 empty generic list yields null`() {
         val d = buildDistribution(
             explicit = true,
             external = true,
@@ -48,8 +48,8 @@ class EntityMappersGenericBridgeTest {
     }
 
     @Test
-    @DisplayName("single generic URL → Distribution.generic() equals that URL")
-    fun single_urlPassesThrough() {
+    @DisplayName("SYS-094: single generic path → Distribution.generic() equals that path")
+    fun `SYS-094 single generic path passes through`() {
         val parent = cfg()
         val d = buildDistribution(
             explicit = null,
@@ -67,8 +67,8 @@ class EntityMappersGenericBridgeTest {
     }
 
     @Test
-    @DisplayName("many generic URLs → Distribution.generic() is comma-joined in sortOrder")
-    fun many_commaJoined_inSortOrder() {
+    @DisplayName("SYS-094: many generic paths → Distribution.generic() is comma-joined in sortOrder")
+    fun `SYS-094 many generic paths comma joined in sort order`() {
         val parent = cfg()
         val d = buildDistribution(
             explicit = null,
@@ -90,8 +90,8 @@ class EntityMappersGenericBridgeTest {
     }
 
     @Test
-    @DisplayName("generic-only distribution with no explicit/external flags → non-null Distribution surfaces the URL")
-    fun genericOnly_producesNonNullDistribution() {
+    @DisplayName("SYS-094: generic-only distribution with no explicit/external flags → non-null Distribution surfaces the URL")
+    fun `SYS-094 generic-only distribution produces non-null result`() {
         val parent = cfg()
         val d = buildDistribution(
             explicit = null,

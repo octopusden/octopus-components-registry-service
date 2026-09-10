@@ -19,8 +19,8 @@ class DistributionGenericArtifactEntity(
     @ManyToOne(fetch = FetchType.LAZY, optional = false)
     @JoinColumn(name = "component_configuration_id", nullable = false)
     var componentConfiguration: ComponentConfigurationEntity,
-    @Column(name = "url", columnDefinition = "TEXT", nullable = false)
-    var url: String = "",
+    @Column(name = "path", columnDefinition = "TEXT", nullable = false)
+    var path: String = "",
     @Column(name = "sort_order", nullable = false)
     var sortOrder: Int = 0,
 )

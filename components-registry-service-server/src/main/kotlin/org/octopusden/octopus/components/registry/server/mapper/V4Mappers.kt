@@ -37,6 +37,7 @@ import org.octopusden.octopus.components.registry.server.entity.ComponentArtifac
 import org.octopusden.octopus.components.registry.server.entity.ComponentBuildToolBeanEntity
 import org.octopusden.octopus.components.registry.server.entity.ComponentConfigurationEntity
 import org.octopusden.octopus.components.registry.server.entity.ComponentEntity
+import org.octopusden.octopus.components.registry.server.entity.DistributionGenericArtifactEntity
 import org.octopusden.octopus.components.registry.server.service.rms.ComponentBuildRanges
 import org.octopusden.octopus.components.registry.server.service.rms.RegisteredBuildParametersMapper
 
@@ -385,7 +386,7 @@ private fun ComponentConfigurationEntity.toMarkerChildrenPayload(): MarkerChildr
             MarkerChildrenPayload(
                 genericArtifacts =
                     genericArtifacts.sortedBy { it.sortOrder }.map { e ->
-                        GenericArtifactRequest(url = e.url)
+                        GenericArtifactRequest(path = e.path)
                     },
             )
 
@@ -444,10 +445,10 @@ private fun org.octopusden.octopus.components.registry.server.entity.Distributio
         sortOrder = this.sortOrder,
     )
 
-private fun org.octopusden.octopus.components.registry.server.entity.DistributionGenericArtifactEntity.toResponse(): GenericArtifactResponse =
+private fun DistributionGenericArtifactEntity.toResponse(): GenericArtifactResponse =
     GenericArtifactResponse(
         id = this.id!!,
-        url = this.url,
+        path = this.path,
         sortOrder = this.sortOrder,
     )
 

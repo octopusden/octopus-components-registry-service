@@ -1,7 +1,7 @@
 CREATE TABLE distribution_generic_artifacts (
     id                          UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     component_configuration_id  UUID NOT NULL REFERENCES component_configurations(id) ON DELETE CASCADE,
-    url                         TEXT NOT NULL,
+    path                        TEXT NOT NULL,
     sort_order                  INT  NOT NULL DEFAULT 0
 );
 CREATE INDEX idx_dist_generic_config ON distribution_generic_artifacts(component_configuration_id);
