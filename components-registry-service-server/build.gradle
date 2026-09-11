@@ -52,6 +52,12 @@ dependencies {
     implementation("org.springdoc:springdoc-openapi-starter-webmvc-ui:${project.properties["openapi.version"]}")
     implementation "org.octopusden.octopus.octopus-external-systems-clients:teamcity-client:${project.properties['octopus-external-systems-clients.version']}"
 
+    // vcs-facade client — getRepository(sshUrl) + nullable Repository.archived
+    implementation("org.octopusden.octopus.vcsfacade:client:${project.properties['vcsfacade.version']}")
+
+    // Octopus jira-client — for getProject(key).projectCategory (JIRA_PROJECT entries)
+    implementation("org.octopusden.octopus.octopus-external-systems-clients:jira-client:${project.properties['octopus-external-systems-clients.version']}")
+
     implementation("org.eclipse.jgit:org.eclipse.jgit:5.13.0.202109080827-r")
 
     // Database (JPA + PostgreSQL + Flyway)
@@ -77,6 +83,11 @@ dependencies {
 
     // Architecture fitness functions (see server/architecture/*ArchitectureTest)
     testImplementation "com.tngtech.archunit:archunit-junit5:${project['archunit.version']}"
+
+    // Kotlin-idiomatic Mockito DSL (mock<T>() / whenever / any) — used by the
+    // archive-readiness-gate unit tests (SharingHelper, TcDescendantLookup).
+    // Compatible with mockito-core 5.x already on the classpath via spring-boot-starter-test.
+    testImplementation "org.mockito.kotlin:mockito-kotlin:5.4.0"
 }
 
 // HHH-18551 (array-type leak → OOM). Spring Boot 3.2.x recommends hibernate-core

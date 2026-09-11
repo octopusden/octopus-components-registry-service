@@ -105,6 +105,13 @@ interface ComponentRepository :
      */
     fun findByComponentGroupId(groupId: UUID): List<ComponentEntity>
 
+    @Query(
+        "SELECT c.componentKey AS componentKey, v.vcsPath AS vcsPath " +
+            "FROM ComponentEntity c JOIN c.configurations cfg JOIN cfg.vcsEntries v " +
+            "WHERE c.archived = false AND c.id <> :excludeComponentId",
+    )
+    fun findNonArchivedComponentVcsPaths(excludeComponentId: UUID): List<ComponentVcsPathRow>
+
     // --- Edit-ownership projections (ADR-004 Phase 2) ---
     // These power `PermissionEvaluator.canEditComponent`, which runs inside a
     // Spring Security @PreAuthorize interceptor — i.e. OUTSIDE any open Hibernate
@@ -210,4 +217,9 @@ interface NameCountRow {
 interface DisplayNamePairRow {
     val componentKey: String
     val displayName: String
+}
+
+interface ComponentVcsPathRow {
+    val componentKey: String
+    val vcsPath: String
 }
