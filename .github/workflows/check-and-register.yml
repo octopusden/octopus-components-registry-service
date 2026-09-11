@@ -6,6 +6,9 @@ on:
     types:
       - completed
 
+permissions:
+  contents: read
+
 jobs:
   build:
     uses: octopusden/octopus-base/.github/workflows/common-check-and-register-release.yml@v3.0.0

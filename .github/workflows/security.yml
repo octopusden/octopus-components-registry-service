@@ -10,6 +10,10 @@ on:
   workflow_call:
   workflow_dispatch:
 
+permissions:
+  contents: read
+  security-events: write
+
 jobs:
   security:
     uses: octopusden/octopus-base/.github/workflows/common-java-gradle-security-reports.yml@v3.0.0
