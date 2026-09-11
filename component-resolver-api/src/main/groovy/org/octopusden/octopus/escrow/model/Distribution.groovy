@@ -28,15 +28,19 @@ class Distribution {
     private final String docker
 
     @JsonProperty
+    private final String generic
+
+    @JsonProperty
     private SecurityGroups securityGroups
 
-    Distribution(boolean explicit, boolean external, String GAV, String DEB, String RPM, String docker, SecurityGroups securityGroups) {
+    Distribution(boolean explicit, boolean external, String GAV, String DEB, String RPM, String docker, String generic, SecurityGroups securityGroups) {
         this.explicit = explicit
         this.external = external
         this.GAV = GAV
         this.DEB = DEB
         this.RPM = RPM
         this.docker = docker
+        this.generic = generic
         this.securityGroups = securityGroups
     }
 
@@ -64,6 +68,10 @@ class Distribution {
         return RPM
     }
 
+    String generic() {
+        return generic
+    }
+
     SecurityGroups getSecurityGroups() {
         return securityGroups
     }
@@ -77,6 +85,7 @@ class Distribution {
                 ", DEB='" + (DEB ?: "N/A") + '\'' +
                 ", RPM='" + (RPM ?: "N/A") + '\'' +
                 ", docker='" + (docker ?: "N/A") + '\'' +
+                ", generic='" + (generic ?: "N/A") + '\'' +
                 ", securityGroups='" + securityGroups + '\'' +
                 '}'
     }

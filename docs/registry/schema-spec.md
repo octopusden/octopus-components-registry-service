@@ -346,9 +346,9 @@ SINGLE-VCS is "1 entry with `name = NULL`"; MULTI-VCS is "N entries with names".
 - else `vcs_settings_entries` count = 0 → `null` (no VCS)
 - else → `GIT` (or other repository_type from entries[0])
 
-#### Distribution split (4 specialized tables)
+#### Distribution split (5 specialized tables)
 
-DSL `distribution { GAV = "...", docker = "...", DEB = "...", RPM = "..." }` decomposes into four families. `sort_order` is **per-family** within a `component_configuration_id`.
+DSL `distribution { GAV = "...", docker = "...", DEB = "...", RPM = "...", generic = "..." }` decomposes into five families. `sort_order` is **per-family** within a `component_configuration_id`.
 
 | Table | Distinct columns |
 |---|---|
@@ -356,6 +356,7 @@ DSL `distribution { GAV = "...", docker = "...", DEB = "...", RPM = "..." }` dec
 | `distribution_file_url_artifacts` | `url, artifact_id, classifier` |
 | `distribution_docker_images` | `image_name, flavor` (flavor = OW build variant, NOT a Docker registry tag) |
 | `distribution_packages` | `package_type ∈ {DEB, RPM}, package_name` |
+| `distribution_generic_artifacts` | `path` (relative path to the artifact on the generic repository) |
 
 API mapper recomposes the v1-v3 `GAV` CSV by reading Maven entries (sort_order), then file-URL entries (sort_order), concatenating canonically. `docker`, `DEB`, `RPM` are separate DSL fields; each family's order is preserved by its own `sort_order`.
 
@@ -534,12 +535,13 @@ range yields **no** `RANGE_PRESENCE` row (`supported = ALL`). See ADR-018 case m
 
 ### 6.6 Distribution parsing
 
-`distribution { GAV = "csv1,csv2", docker = "img1,img2:flavor", DEB = "p1,p2", RPM = "p" }`:
+`distribution { GAV = "csv1,csv2", docker = "img1,img2:flavor", DEB = "p1,p2", RPM = "p", generic = "rel/1.0/a.tar.gz" }`:
 - Split `GAV` CSV; for each entry:
   - Starts with `file://`/`http(s)://` → `distribution_file_url_artifacts` row (parse query string for `artifactId`, `classifier`); per-family sort_order counter.
   - Else parse `group:artifact[:ext[:classifier]]` → `distribution_maven_artifacts` row; per-family sort_order counter.
 - Split `docker` CSV; parse `image[:flavor]` (split on last `:`; flavor is the OW build variant, not a Docker registry tag); warn if flavor matches a version pattern.
 - Split `DEB`, `RPM` CSV; one `distribution_packages` row per entry.
+- Split `generic` CSV; one `distribution_generic_artifacts` row per entry (`path` = relative path to the artifact on the generic repository).
 
 ### 6.7 Tools and required tools
 

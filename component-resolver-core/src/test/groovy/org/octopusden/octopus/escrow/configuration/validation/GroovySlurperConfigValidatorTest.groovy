@@ -6,6 +6,8 @@ import org.octopusden.releng.versions.VersionNames
 import static org.octopusden.octopus.escrow.configuration.validation.GroovySlurperConfigValidator.DEB_PATTERN
 import static org.octopusden.octopus.escrow.configuration.validation.GroovySlurperConfigValidator.DOCKER_PATTERN_V2
 import static org.octopusden.octopus.escrow.configuration.validation.GroovySlurperConfigValidator.GAV_PATTERN
+import static org.octopusden.octopus.escrow.configuration.validation.GroovySlurperConfigValidator.GENERIC_ENTRY
+import static org.octopusden.octopus.escrow.configuration.validation.GroovySlurperConfigValidator.GENERIC_PATTERN
 import static org.octopusden.octopus.escrow.configuration.validation.GroovySlurperConfigValidator.RPM_PATTERN
 import static org.octopusden.octopus.escrow.configuration.validation.GroovySlurperConfigValidator.SUPPORTED_ATTRIBUTES
 
@@ -109,6 +111,92 @@ class GroovySlurperConfigValidatorTest extends GroovyTestCase {
         assert SUPPORTED_ATTRIBUTES.contains('buildSystem')
         assert SUPPORTED_ATTRIBUTES.contains('groupId')
         assert SUPPORTED_ATTRIBUTES.contains('artifactId')
+    }
+
+    void test_SYS_094_genericAttributeAccepted() {
+        def verNames = new VersionNames("serviceCBranch", "serviceC", "minorC")
+        def config = new ConfigSlurper().parse("generic = 'releases/foo/\${version}/foo.tar.gz'")
+        def validator = new GroovySlurperConfigValidator(verNames)
+        validator.validateDistributionSection(config, verNames, "testModule", "testConfig")
+        assert !validator.hasErrors()
+    }
+
+    void test_SYS_094_genericPattern() {
+        // Minimal shape: <pathToArtifact>/<componentVersion>/<artifactName>[.<ext>].
+        assert GENERIC_PATTERN.matcher("releases/1.0.0/foo.tar.gz").matches()
+        // Extension is optional — Linux executables carry no `.ext`.
+        assert GENERIC_PATTERN.matcher("generic-tools/internal-cli/linux-amd64/2.4.1/internal-cli").matches()
+        assert GENERIC_PATTERN.matcher("generic-tools/internal-cli/linux-amd64/2.4.2/internal-cli").matches()
+        // Extension present — Windows executable / archive.
+        assert GENERIC_PATTERN.matcher("generic-tools/internal-cli/windows/2.4.1/internal-cli.exe").matches()
+        assert GENERIC_PATTERN.matcher("generic-tools/internal-cli/windows/2.4.2/internal-cli.exe").matches()
+        assert GENERIC_PATTERN.matcher("releases/demo-tool/1.2.3/demo-tool.tar.gz").matches()
+        // Longer multi-segment pathToArtifact.
+        assert GENERIC_PATTERN.matcher("releases/demo-tool/1.2.3/dist/amd64/demo-tool.tar.gz").matches()
+        // Comma-joined list.
+        assert GENERIC_PATTERN.matcher(
+            "generic-tools/internal-cli/linux-amd64/2.4.1/internal-cli," +
+                "generic-tools/internal-cli/windows/2.4.1/internal-cli.exe"
+        ).matches()
+        // baseUrl is external — reject anything that looks like a full URL.
+        assert !GENERIC_PATTERN.matcher("http://example.com/releases/1.0/foo.tar.gz").matches()
+        assert !GENERIC_PATTERN.matcher("https://example.com/releases/1.0/foo.tar.gz").matches()
+        assert !GENERIC_PATTERN.matcher("file:///opt/foo.tar.gz").matches()
+        // Reject leading slash (path is relative to baseUrl).
+        assert !GENERIC_PATTERN.matcher("/releases/1.0/foo.tar.gz").matches()
+        // Reject query / fragment — they are consumer's business, not the coordinate.
+        assert !GENERIC_PATTERN.matcher("releases/1.0/foo.tar.gz?checksum=abc").matches()
+        assert !GENERIC_PATTERN.matcher("releases/1.0/foo.tar.gz#sha256").matches()
+        // Too few segments (need at least pathToArtifact + componentVersion + artifactName).
+        assert !GENERIC_PATTERN.matcher("foo.tar.gz").matches()
+        assert !GENERIC_PATTERN.matcher("releases/foo.tar.gz").matches()
+        // Whitespace inside a segment.
+        assert !GENERIC_PATTERN.matcher("releases/1.0/foo bar.tar.gz").matches()
+        // Trailing comma → empty element.
+        assert !GENERIC_PATTERN.matcher("releases/1.0/foo.tar.gz,").matches()
+        // Empty string.
+        assert !GENERIC_PATTERN.matcher("").matches()
+        // Reject path traversal — dot-only segments must not pass.
+        assert !GENERIC_PATTERN.matcher("../../etc/passwd").matches()
+        assert !GENERIC_PATTERN.matcher("releases/../../../etc/passwd").matches()
+        assert !GENERIC_PATTERN.matcher(".././x/y").matches()
+    }
+
+    void test_SYS_094_genericValidationRejectsFullUrl() {
+        def verNames = new VersionNames("serviceCBranch", "serviceC", "minorC")
+        def config = new ConfigSlurper().parse("generic = 'https://example.com/releases/foo/\${version}/foo.tar.gz'")
+        def validator = new GroovySlurperConfigValidator(verNames)
+        validator.validateDistributionSection(config, verNames, "testModule", "testConfig")
+        assert validator.hasErrors()
+    }
+
+    void test_SYS_094_unknownDistributionAttributeStillFails() {
+        def verNames = new VersionNames("serviceCBranch", "serviceC", "minorC")
+        def config = new ConfigSlurper().parse("unknownField = 'value'")
+        def validator = new GroovySlurperConfigValidator(verNames)
+        validator.validateDistributionSection(config, verNames, "testModule", "testConfig")
+        assert validator.hasErrors()
+    }
+
+    void test_SYS_094_genericEntryPattern() {
+        // Accepts the same shape as one CSV entry inside GENERIC_PATTERN.
+        assert GENERIC_ENTRY.matcher("releases/1.0.0/foo.tar.gz").matches()
+        assert GENERIC_ENTRY.matcher("generic-tools/internal-cli/2.4.1/internal-cli").matches()
+        assert GENERIC_ENTRY.matcher("generic-tools/internal-cli/windows/2.4.1/internal-cli.exe").matches()
+
+        // Rejects a comma — CSV is not allowed in a single write-side row.
+        assert !GENERIC_ENTRY.matcher(
+            "releases/1.0.0/a.tar.gz,releases/1.0.0/b.tar.gz"
+        ).matches()
+
+        // Same charset/segment rules as GENERIC_PATTERN.
+        assert !GENERIC_ENTRY.matcher("http://example.com/releases/1.0.0/foo.tar.gz").matches()
+        assert !GENERIC_ENTRY.matcher("/releases/1.0.0/foo.tar.gz").matches()
+        assert !GENERIC_ENTRY.matcher("releases/1.0.0/foo bar.tar.gz").matches()
+        assert !GENERIC_ENTRY.matcher("releases/foo.tar.gz").matches()
+        assert !GENERIC_ENTRY.matcher("").matches()
+        // Reject path traversal.
+        assert !GENERIC_ENTRY.matcher("releases/../../../etc/passwd").matches()
     }
 
 }

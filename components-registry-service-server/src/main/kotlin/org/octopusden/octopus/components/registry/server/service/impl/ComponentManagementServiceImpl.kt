@@ -21,6 +21,7 @@ import org.octopusden.octopus.components.registry.server.dto.v4.FieldOverrideRes
 import org.octopusden.octopus.components.registry.server.dto.v4.FieldOverrideUpdateRequest
 import org.octopusden.octopus.components.registry.server.dto.v4.FieldOverrideUpsertRequest
 import org.octopusden.octopus.components.registry.server.dto.v4.FileUrlArtifactRequest
+import org.octopusden.octopus.components.registry.server.dto.v4.GenericArtifactRequest
 import org.octopusden.octopus.components.registry.server.dto.v4.MarkerChildrenPayload
 import org.octopusden.octopus.components.registry.server.dto.v4.MavenArtifactRequest
 import org.octopusden.octopus.components.registry.server.dto.v4.PackageRequest
@@ -42,6 +43,7 @@ import org.octopusden.octopus.components.registry.server.entity.ComponentSecurit
 import org.octopusden.octopus.components.registry.server.entity.ComponentSystemEntity
 import org.octopusden.octopus.components.registry.server.entity.DistributionDockerImageEntity
 import org.octopusden.octopus.components.registry.server.entity.DistributionFileUrlArtifactEntity
+import org.octopusden.octopus.components.registry.server.entity.DistributionGenericArtifactEntity
 import org.octopusden.octopus.components.registry.server.entity.DistributionMavenArtifactEntity
 import org.octopusden.octopus.components.registry.server.entity.DistributionPackageEntity
 import org.octopusden.octopus.components.registry.server.entity.DistributionSecurityGroupEntity
@@ -104,6 +106,7 @@ import org.octopusden.octopus.components.registry.server.util.MavenVersionCompar
 import org.octopusden.octopus.components.registry.server.util.VersionRangePartition
 import org.octopusden.octopus.components.registry.server.util.computeEffectiveJiraPairs
 import org.octopusden.octopus.escrow.config.ConfigHelper
+import org.octopusden.octopus.escrow.configuration.validation.GroovySlurperConfigValidator
 import org.octopusden.releng.versions.NumericVersionFactory
 import org.octopusden.releng.versions.VersionRangeFactory
 import org.springframework.context.ApplicationEventPublisher
@@ -2579,6 +2582,7 @@ class ComponentManagementServiceImpl(
         request.fileUrlArtifacts?.let { replaceFileUrlArtifacts(config, it) }
         request.dockerImages?.let { replaceDockerImages(config, it) }
         request.packages?.let { replacePackages(config, it) }
+        request.genericArtifacts?.let { replaceGenericArtifacts(config, it) }
         request.buildToolBeans?.let {
             validateBuildToolBeans(it)
             replaceBuildToolBeans(config, it)
@@ -2677,6 +2681,7 @@ class ComponentManagementServiceImpl(
         patch.fileUrlArtifacts?.let { replaceFileUrlArtifacts(config, it) }
         patch.dockerImages?.let { replaceDockerImages(config, it) }
         patch.packages?.let { replacePackages(config, it) }
+        patch.genericArtifacts?.let { replaceGenericArtifacts(config, it) }
         patch.buildToolBeans?.let {
             validateBuildToolBeans(it)
             replaceBuildToolBeans(config, it)
@@ -2786,6 +2791,33 @@ class ComponentManagementServiceImpl(
         }
     }
 
+    private fun replaceGenericArtifacts(
+        config: ComponentConfigurationEntity,
+        generics: List<GenericArtifactRequest>,
+    ) {
+        generics.forEach { validateGenericArtifactPath(it.path) }
+        config.genericArtifacts.clear()
+        generics.forEachIndexed { index, req ->
+            config.genericArtifacts.add(
+                DistributionGenericArtifactEntity(
+                    componentConfiguration = config,
+                    path = req.path,
+                    sortOrder = index,
+                ),
+            )
+        }
+    }
+
+    private fun validateGenericArtifactPath(path: String) {
+        require(path.isNotBlank()) { "path is not specified for a genericArtifact" }
+        require(GroovySlurperConfigValidator.GENERIC_ENTRY.matcher(path).matches()) {
+            "genericArtifact path '$path' does not match the required shape " +
+                "'<segment>/<segment>/<segment>[/…]' where each segment is [A-Za-z0-9._-] " +
+                "(commas, URL schemes, whitespace and leading slashes are not allowed — " +
+                "one path per request row)"
+        }
+    }
+
     private fun replaceBuildToolBeans(
         config: ComponentConfigurationEntity,
         beans: List<BuildToolBeanRequest>,
@@ -2870,6 +2902,11 @@ class ComponentManagementServiceImpl(
                 replacePackages(row, payload.packages)
                 null
             }
+            MarkerAttributes.DISTRIBUTION_GENERIC -> {
+                requireNotNull(payload.genericArtifacts) { "Marker '$markerName' requires genericArtifacts payload" }
+                replaceGenericArtifacts(row, payload.genericArtifacts)
+                null
+            }
             MarkerAttributes.BUILD_REQUIRED_TOOLS -> {
                 requireNotNull(payload.requiredTools) { "Marker '$markerName' requires requiredTools payload" }
                 payload.requiredTools
@@ -2901,6 +2938,7 @@ class ComponentManagementServiceImpl(
                 if (payload.fileUrlArtifacts != null) add("fileUrlArtifacts")
                 if (payload.dockerImages != null) add("dockerImages")
                 if (payload.packages != null) add("packages")
+                if (payload.genericArtifacts != null) add("genericArtifacts")
                 if (payload.requiredTools != null) add("requiredTools")
                 if (payload.buildToolBeans != null) add("buildToolBeans")
             }
@@ -2911,6 +2949,7 @@ class ComponentManagementServiceImpl(
                 MarkerAttributes.DISTRIBUTION_FILE_URL -> "fileUrlArtifacts"
                 MarkerAttributes.DISTRIBUTION_DOCKER -> "dockerImages"
                 MarkerAttributes.DISTRIBUTION_PACKAGES -> "packages"
+                MarkerAttributes.DISTRIBUTION_GENERIC -> "genericArtifacts"
                 MarkerAttributes.BUILD_REQUIRED_TOOLS -> "requiredTools"
                 MarkerAttributes.BUILD_TOOLS -> "buildToolBeans"
                 else -> error("Unknown marker '$markerName' — caller did not validate")
@@ -3195,8 +3234,8 @@ class ComponentManagementServiceImpl(
      *
      *  - **explicit-external ≥1 distribution coordinate** (#6): when
      *    `distributionExplicit && distributionExternal`, at least one of GAV
-     *    (maven artifact), docker image, or DEB/RPM package must be defined on
-     *    some configuration row.
+     *    (maven artifact), docker image, DEB/RPM package, or generic artifact
+     *    (SYS-094) must be defined on some configuration row.
      *  - **groupId supported prefix** (#10): every maven `groupPattern` element
      *    must start with one of the env-configured `supportedGroupIds`.
      *  - **archived ≠ explicit-external** (#28): an archived component cannot be
@@ -3223,7 +3262,7 @@ class ComponentManagementServiceImpl(
             }
             require(hasAnyDistributionCoordinate(entity)) {
                 "distribution: an explicit+external component must define at least one " +
-                    "distribution coordinate (maven GAV, docker image, or package) " +
+                    "distribution coordinate (maven GAV, docker image, package, or generic artifact) " +
                     "(component '${entity.componentKey}')"
             }
         }
@@ -3268,7 +3307,8 @@ class ComponentManagementServiceImpl(
         entity.configurations.any { cfg ->
             cfg.mavenArtifacts.isNotEmpty() ||
                 cfg.dockerImages.isNotEmpty() ||
-                cfg.packages.isNotEmpty()
+                cfg.packages.isNotEmpty() ||
+                cfg.genericArtifacts.isNotEmpty()
         }
 
     /**
@@ -4405,6 +4445,10 @@ class ComponentManagementServiceImpl(
                         "packageName" to it.packageName,
                     )
                 },
+            "genericArtifacts" to
+                base?.genericArtifacts.orEmpty().sortedBy { it.sortOrder }.map {
+                    mapOf("path" to it.path)
+                },
             "buildToolBeans" to
                 base?.buildToolBeans.orEmpty().sortedBy { it.sortOrder }.map {
                     mapOf(
@@ -4510,12 +4554,12 @@ class ComponentManagementServiceImpl(
         // Same shape as the old EscrowConfigValidator.CLIENT_CODE_PATTERN.
         private val CLIENT_CODE_PATTERN = Regex("[A-Z_0-9]+")
 
-        // SYS-095: strict kebab for a plain key, and the tail permitted after a client-code prefix.
-        private val COMPONENT_KEY_PATTERN = Regex("[a-z][a-z0-9-]*")
-        private val COMPONENT_KEY_TAIL_PATTERN = Regex("(-[a-z0-9-]*)?")
-
         private const val ROW_TYPE_BASE = "BASE"
         private const val ATTR_JAVA_VERSION = "build.javaVersion"
         private const val ATTR_MAVEN_VERSION = "build.mavenVersion"
+
+        // SYS-095: strict kebab for a plain key, and the tail permitted after a client-code prefix.
+        private val COMPONENT_KEY_PATTERN = Regex("[a-z][a-z0-9-]*")
+        private val COMPONENT_KEY_TAIL_PATTERN = Regex("(-[a-z0-9-]*)?")
     }
 }

@@ -172,6 +172,9 @@ class ComponentConfigurationEntity(
     @OneToMany(mappedBy = "componentConfiguration", cascade = [CascadeType.ALL], orphanRemoval = true, fetch = FetchType.LAZY)
     @BatchSize(size = BATCH_FETCH_SIZE)
     var packages: MutableList<DistributionPackageEntity> = mutableListOf(),
+    @OneToMany(mappedBy = "componentConfiguration", cascade = [CascadeType.ALL], orphanRemoval = true, fetch = FetchType.LAZY)
+    @BatchSize(size = BATCH_FETCH_SIZE)
+    var genericArtifacts: MutableList<DistributionGenericArtifactEntity> = mutableListOf(),
     @OneToMany(mappedBy = "componentConfiguration", fetch = FetchType.LAZY)
     @BatchSize(size = BATCH_FETCH_SIZE)
     var requiredToolJunctions: MutableList<ComponentRequiredToolEntity> = mutableListOf(),

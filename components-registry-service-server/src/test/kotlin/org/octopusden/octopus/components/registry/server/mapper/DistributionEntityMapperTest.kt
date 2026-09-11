@@ -10,6 +10,7 @@ import org.octopusden.octopus.components.registry.server.entity.ComponentConfigu
 import org.octopusden.octopus.components.registry.server.entity.ComponentEntity
 import org.octopusden.octopus.components.registry.server.entity.DistributionDockerImageEntity
 import org.octopusden.octopus.components.registry.server.entity.DistributionFileUrlArtifactEntity
+import org.octopusden.octopus.components.registry.server.entity.DistributionGenericArtifactEntity
 import org.octopusden.octopus.components.registry.server.entity.DistributionMavenArtifactEntity
 import org.octopusden.octopus.components.registry.server.entity.DistributionPackageEntity
 import org.octopusden.octopus.components.registry.server.entity.VcsSettingsEntryEntity
@@ -397,6 +398,106 @@ class DistributionEntityMapperTest {
     }
 
     // -----------------------------------------------------------------------
+    // Generic artifacts (HTTP URLs)
+    // -----------------------------------------------------------------------
+
+    @Test
+    @DisplayName("SYS-094: BASE row — generic artifact fields round-trip to GenericArtifactResponse")
+    fun `SYS-094 base row generic artifact fields round-trip`() {
+        val cfg = baseConfig()
+        val generic = DistributionGenericArtifactEntity(
+            id = UUID.randomUUID(),
+            componentConfiguration = cfg,
+            path = "releases/foo/1.0.0/foo.tar.gz",
+            sortOrder = 0,
+        )
+        cfg.genericArtifacts.add(generic)
+
+        val cr = cfg.toConfigurationResponse()
+        assertEquals(1, cr.genericArtifacts.size)
+        val g = cr.genericArtifacts[0]
+        assertEquals(generic.id, g.id)
+        assertEquals("releases/foo/1.0.0/foo.tar.gz", g.path)
+        assertEquals(0, g.sortOrder)
+    }
+
+    @Test
+    @DisplayName("SYS-094: MARKER distribution.generic — genericArtifacts surfaced; maven, fileUrl, docker, packages empty")
+    fun `SYS-094 marker distribution generic only generic surfaced`() {
+        val cfg = markerConfig(MarkerAttributes.DISTRIBUTION_GENERIC)
+        cfg.genericArtifacts.add(
+            DistributionGenericArtifactEntity(
+                id = UUID.randomUUID(),
+                componentConfiguration = cfg,
+                path = "releases/only-generic/1.0.0/only-generic.tar.gz",
+                sortOrder = 0,
+            ),
+        )
+
+        val cr = cfg.toConfigurationResponse()
+        assertEquals(1, cr.genericArtifacts.size)
+        assertEquals("releases/only-generic/1.0.0/only-generic.tar.gz", cr.genericArtifacts[0].path)
+        assertTrue(cr.mavenArtifacts.isEmpty())
+        assertTrue(cr.fileUrlArtifacts.isEmpty())
+        assertTrue(cr.dockerImages.isEmpty())
+        assertTrue(cr.packages.isEmpty())
+    }
+
+    @Test
+    @DisplayName("SYS-094: generic artifacts sortOrder preserved (sorted ascending)")
+    fun `SYS-094 generic artifacts sort order preserved`() {
+        val cfg = baseConfig()
+        cfg.genericArtifacts.add(
+            DistributionGenericArtifactEntity(
+                id = UUID.randomUUID(),
+                componentConfiguration = cfg,
+                path = "releases/foo/2.0.0/foo.tar.gz",
+                sortOrder = 2,
+            ),
+        )
+        cfg.genericArtifacts.add(
+            DistributionGenericArtifactEntity(
+                id = UUID.randomUUID(),
+                componentConfiguration = cfg,
+                path = "releases/foo/1.0.0/foo.tar.gz",
+                sortOrder = 1,
+            ),
+        )
+
+        val paths = cfg.toConfigurationResponse().genericArtifacts.map { it.path }
+        assertEquals(
+            listOf("releases/foo/1.0.0/foo.tar.gz", "releases/foo/2.0.0/foo.tar.gz"),
+            paths,
+        )
+    }
+
+    @Test
+    @DisplayName("MARKER distribution.docker: genericArtifacts empty even if entity has generic children")
+    fun markerRow_distributionDocker_genericArtifactsEmpty() {
+        val cfg = markerConfig(MarkerAttributes.DISTRIBUTION_DOCKER)
+        cfg.dockerImages.add(
+            DistributionDockerImageEntity(
+                id = UUID.randomUUID(),
+                componentConfiguration = cfg,
+                imageName = "myapp",
+                sortOrder = 0,
+            ),
+        )
+        cfg.genericArtifacts.add(
+            DistributionGenericArtifactEntity(
+                id = UUID.randomUUID(),
+                componentConfiguration = cfg,
+                path = "releases/should-not/1.0.0/appear.tar.gz",
+                sortOrder = 0,
+            ),
+        )
+
+        val cr = cfg.toConfigurationResponse()
+        assertEquals(1, cr.dockerImages.size)
+        assertTrue(cr.genericArtifacts.isEmpty())
+    }
+
+    // -----------------------------------------------------------------------
     // MARKER isolation: wrong-family MARKER suppresses all other child families
     // -----------------------------------------------------------------------
 
@@ -431,5 +532,6 @@ class DistributionEntityMapperTest {
         assertTrue(cr.fileUrlArtifacts.isEmpty())
         assertTrue(cr.dockerImages.isEmpty())
         assertTrue(cr.packages.isEmpty())
+        assertTrue(cr.genericArtifacts.isEmpty())
     }
 }

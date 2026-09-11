@@ -392,6 +392,7 @@ class ConfigSyncServiceTest {
                     DEB = "deb"
                     RPM = "rpm"
                     docker = "img"
+                    generic = "generic"
                     securityGroups = AdminConfigProperties.Distribution.SecurityGroups().apply { read = "Prod" }
                 }
                 vcs = AdminConfigProperties.Vcs().apply {
@@ -464,6 +465,7 @@ class ConfigSyncServiceTest {
                     "DEB" to "deb",
                     "RPM" to "rpm",
                     "docker" to "img",
+                    "generic" to "generic",
                     "securityGroups" to mapOf("read" to "Prod"),
                 ),
                 "vcs" to mapOf(
