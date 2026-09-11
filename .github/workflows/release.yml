@@ -6,9 +6,7 @@ on:
 
 jobs:
   build:
-    # TODO placeholder — replace with the octopus-base tag that carries
-    # github-packages-publications once it is released.
-    uses: octopusden/octopus-base/.github/workflows/common-java-gradle-release.yml@vX.Y.Z
+    uses: octopusden/octopus-base/.github/workflows/common-java-gradle-release.yml@v3.0.0
     permissions:
       contents: write
       packages: write
