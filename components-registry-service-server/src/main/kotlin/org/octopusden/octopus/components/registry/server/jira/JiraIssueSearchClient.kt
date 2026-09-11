@@ -3,6 +3,9 @@ package org.octopusden.octopus.components.registry.server.jira
 import com.fasterxml.jackson.annotation.JsonIgnoreProperties
 import org.springframework.web.client.RestClient
 
+// NOTE: consider replacing this local client with a shared one — either a search method added to
+// octopus-external-systems-clients:jira-client, or octopus-jira-api-plugin as the single point of
+// Jira access. Raised in review; unchanged for now.
 class JiraIssueSearchClient(
     private val restClient: RestClient,
 ) {
