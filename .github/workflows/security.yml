@@ -10,9 +10,13 @@ on:
   workflow_call:
   workflow_dispatch:
 
+permissions:
+  contents: read
+  security-events: write
+
 jobs:
   security:
-    uses: octopusden/octopus-base/.github/workflows/common-java-gradle-security-reports.yml@v2.7.1
+    uses: octopusden/octopus-base/.github/workflows/common-java-gradle-security-reports.yml@v3.0.0
     with:
       java-version: '21'
       enable-codeql: true
