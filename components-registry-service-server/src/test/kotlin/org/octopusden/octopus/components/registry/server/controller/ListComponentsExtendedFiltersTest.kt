@@ -90,7 +90,7 @@ class ListComponentsExtendedFiltersTest {
             .thenReturn(RMSBuildParametersReport(null, null, null, emptyMap(), emptySet()))
     }
 
-    private fun uniqueName(prefix: String) = "${prefix}_${UUID.randomUUID().toString().take(8)}"
+    private fun uniqueName(prefix: String) = "${prefix.lowercase().replace('_', '-')}-${UUID.randomUUID().toString().take(8)}"
 
     /** POST a component from a raw JSON body; returns its id. Expects 201. */
     private fun create(bodyJson: String): String {
