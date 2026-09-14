@@ -5,6 +5,7 @@ import org.octopusden.octopus.components.registry.api.enums.EscrowGenerationMode
 import org.octopusden.octopus.components.registry.core.exceptions.NotFoundException
 import org.octopusden.octopus.components.registry.server.config.ComponentsRegistryProperties
 import org.octopusden.octopus.components.registry.server.config.ConditionalOnDatabaseEnabled
+import org.octopusden.octopus.components.registry.server.dto.v4.ArchiveReadinessResponse
 import org.octopusden.octopus.components.registry.server.dto.v4.ComponentCreateRequest
 import org.octopusden.octopus.components.registry.server.dto.v4.ComponentDetailResponse
 import org.octopusden.octopus.components.registry.server.dto.v4.ComponentEditorsResponse
@@ -26,6 +27,7 @@ import org.octopusden.octopus.components.registry.server.repository.LabelReposit
 import org.octopusden.octopus.components.registry.server.repository.SystemRepository
 import org.octopusden.octopus.components.registry.server.security.PermissionEvaluator
 import org.octopusden.octopus.components.registry.server.service.ComponentManagementService
+import org.octopusden.octopus.components.registry.server.service.archivereadiness.ArchiveReadinessService
 import org.octopusden.octopus.components.registry.server.service.impl.EmployeeDirectoryService
 import org.octopusden.octopus.escrow.BuildSystem
 import org.octopusden.octopus.escrow.RepositoryType
@@ -77,6 +79,7 @@ class ComponentControllerV4(
     private val employeeDirectory: EmployeeDirectoryService,
     private val permissionEvaluator: PermissionEvaluator,
     private val properties: ComponentsRegistryProperties,
+    private val archiveReadinessService: ArchiveReadinessService,
 ) {
     private val log = LoggerFactory.getLogger(ComponentControllerV4::class.java)
 
@@ -354,14 +357,15 @@ class ComponentControllerV4(
         return withCanEdit(componentManagementService.getComponentByName(idOrName))
     }
 
+    // `{id}` (bound to `idOrName`) for the same reason as [getComponent] — keeps the component
+    // identifier path variable consistently named `id` across all item-level paths.
+
     /**
      * Render the component as a Groovy-style "as-code" definition (text/plain).
      * Without `version` → the FULL view (all version ranges); with `version` →
      * the view RESOLVED/merged for that concrete version. The component is
      * resolved by UUID or name, identical to [getComponent].
      */
-    // `{id}` (bound to `idOrName`) for the same reason as [getComponent] — keeps the component
-    // identifier path variable consistently named `id` across all item-level paths.
     @GetMapping("/{id}/as-code", produces = [TEXT_PLAIN_UTF8])
     @PreAuthorize("@permissionEvaluator.hasPermission('ACCESS_COMPONENTS')")
     fun getComponentAsCode(
@@ -492,6 +496,19 @@ class ComponentControllerV4(
     fun getSupportedVersions(
         @PathVariable id: UUID,
     ): SupportedVersionsResponse = componentManagementService.getSupportedVersions(id)
+
+    // Read-only pre-flight for the archive/delete flow (archive-readiness gate):
+    // resolves by UUID or name identically to [getComponent], and requires the exact same
+    // authorization as [deleteComponent] (`ACCESS_COMPONENTS` + `canDeleteComponent`) since this
+    // endpoint exists solely to gate that action.
+    @GetMapping("/{id}/archive-readiness")
+    @PreAuthorize(
+        "@permissionEvaluator.hasPermission('ACCESS_COMPONENTS') " +
+            "and @permissionEvaluator.canDeleteComponent(#idOrName)",
+    )
+    fun getArchiveReadiness(
+        @PathVariable("id") idOrName: String,
+    ): ArchiveReadinessResponse = archiveReadinessService.getReadiness(idOrName)
 
     // Supported-versions (coverage) editing is a per-component edit, gated by the same
     // component-level ownership check as the scalar PATCH / field overrides.

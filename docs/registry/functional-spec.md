@@ -401,3 +401,12 @@ These endpoints serve cross-cutting needs (Portal footer, current-user display) 
 - **Auth**: Authenticated. Returns 401 if no JWT.
 - **Output**: `User` from `octopus-cloud-commons` — `{ username, roles, groups }`.
 - **Contract**: `SYS-034` in [requirements-common.md](requirements-common.md).
+
+## 10. Archive Readiness Check
+
+- **Endpoint**: `GET /rest/api/4/components/{idOrName}/archive-readiness` — read-only pre-flight for the archive/delete flow.
+- **Auth**: `ACCESS_COMPONENTS` + `canDeleteComponent(idOrName)`, the same gate as `deleteComponent`.
+- **Output**: `{ ready: Boolean, entries: [{ targetKind, targetId, outcome, reason, reasonKind, sharedWith, openIssues }] }` — one entry per external target the component uses (its VCS repository, TeamCity project(s), and per effective Jira `(project key, version prefix)` pair, one `JIRA_ISSUES` and one `JIRA_PROJECT` entry). `outcome` is `COMPLETED` / `NOT_COMPLETED` / `UNKNOWN`; `ready` is false iff any entry is `NOT_COMPLETED` or `UNKNOWN`.
+- **Absence semantics**: a TeamCity project the system reports absent is `COMPLETED` (genuinely gone). A VCS repository reported absent is `UNKNOWN`, not `COMPLETED` — some hosting platforms 404 a private/inaccessible repository the same way they 404 a deleted one, and this check cannot tell which.
+- **Read-only**: never writes to the registry or to any external system; the existing archive/delete/update write paths are unchanged and never consult it.
+- **Contract**: `SYS-096` in [requirements-common.md](requirements-common.md); full behavior in [openspec/specs/component-archive-readiness/spec.md](../../openspec/specs/component-archive-readiness/spec.md).

@@ -22,4 +22,7 @@ interface VersionLineRepository : JpaRepository<VersionLineEntity, UUID> {
      */
     @Query("SELECT DISTINCT vl.teamcityProject.projectId FROM VersionLineEntity vl")
     fun findDistinctLinkedProjectIds(): List<String>
+
+    @Query("SELECT DISTINCT vl.teamcityProject.projectId FROM VersionLineEntity vl WHERE vl.component.id = :componentId")
+    fun findDistinctTeamcityProjectIdsByComponentId(componentId: UUID): List<String>
 }
