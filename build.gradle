@@ -89,7 +89,13 @@ octopusQuality {
     // modules where unit coverage is not meaningful). Their static analysis (incl. detekt/ktlint)
     // still runs and is gated via each module's baseline.
     excludeProjects('components-registry-automation', 'components-registry-compat-test', 'test-common', 'components-registry-cli')
-    java { failOnViolation = true }
+    // `errorProne` runs ErrorProne on every module whose Java sources reach javac; only its
+    // on-by-default ERROR checks are active, and `failOnViolation` governs whether they fail
+    // the compile.
+    java {
+        failOnViolation = true
+        errorProne = true
+    }
     kotlin { failOnViolation = true }
     coverage {
         // Disable built-in qualityCoverage aggregate wiring: the plugin registers
