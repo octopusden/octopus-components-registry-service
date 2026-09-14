@@ -1,0 +1,34 @@
+# Rehearses a release without publishing anything.
+#
+# dry-run skips every step that leaves the runner — the GitHub Packages publish, the Sonatype
+# and Portal publishes, the ghcr.io push, the tag,
+# the GitHub Release and the release-log entry.
+#
+# Central preflight and the publication guard both run, plus the routing check for the
+# publication this branch sends to GitHub Packages. None of the three is reachable from a
+# pull-request check: they execute only during a release, and v3.0.0 rewrote the guard.
+#
+# workflow_dispatch only surfaces workflows present on the default branch, so this file has to
+# reach main before it can be run.
+name: Release Smoke
+
+on: workflow_dispatch
+
+permissions:
+  contents: read
+
+jobs:
+  smoke:
+    name: release/smoke
+    # Inputs mirror release.yml with dry-run added, and the commit and version taken from this
+    # run rather than a repository_dispatch payload.
+    uses: octopusden/octopus-base/.github/workflows/common-java-gradle-release.yml@v3.0.0
+    with:
+      flow-type: hybrid
+      java-version: '21'
+      commit-hash: ${{ github.sha }}
+      build-version: 0.0.0-smoke-${{ github.run_number }}
+      docker-image: components-registry-service
+      github-packages-publications: ":components-registry-automation:mavenJava"
+      dry-run: true
+    secrets: inherit

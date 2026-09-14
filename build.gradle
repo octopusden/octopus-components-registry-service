@@ -38,7 +38,8 @@ plugins {
 //
 // components-registry-automation IS listed even though it is tooling: its TeamCity metarunner
 // resolves `<group>:components-registry-automation:<version>:jar:all` from a Maven repo at build
-// time (see components-registry-automation/metarunners/).
+// time (see components-registry-automation/metarunners/). This list gates publication CREATION,
+// so it stays here — the publication now goes to GitHub Packages rather than Central.
 // Allowlist PROJECT PATHS, not names. A Set of names collapses two modules that share a
 // simple name, and the root project's name is a repository-level string rather than a module
 // name, so it cannot sit here meaningfully. `as Set` is load-bearing: in Groovy a Set is never
