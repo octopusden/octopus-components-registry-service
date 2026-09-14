@@ -166,6 +166,7 @@ class ComponentRegistryResolverImpl(
                     versionRange.find { it.distribution != null }?.distribution?.DEB(),
                     versionRange.find { it.distribution != null }?.distribution?.RPM(),
                     versionRange.find { it.distribution != null }?.distribution?.docker(),
+                    versionRange.find { it.distribution != null }?.distribution?.generic(),
                     versionRange.find { it.distribution != null }?.distribution?.securityGroups
                         ?: SecurityGroups(null),
                 )

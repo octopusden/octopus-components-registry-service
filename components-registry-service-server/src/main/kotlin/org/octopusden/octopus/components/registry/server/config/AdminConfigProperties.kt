@@ -150,6 +150,7 @@ class AdminConfigProperties {
         var DEB: String? = null
         var RPM: String? = null
         var docker: String? = null
+        var generic: String? = null
         var securityGroups: SecurityGroups? = null
 
         class SecurityGroups {

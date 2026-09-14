@@ -172,6 +172,7 @@ class EscrowConfigurationLoader {
                 distribution.DEB(),
                 distribution.RPM(),
                 docker,
+                distribution.generic(),
                 new SecurityGroups(distribution.securityGroups?.read)
         )
 
@@ -1029,9 +1030,10 @@ class EscrowConfigurationLoader {
         def GAV = distributionConfigObject.getOrDefault("GAV", defaultDistribution?.GAV()) as String
         def DEB = distributionConfigObject.getOrDefault("DEB", defaultDistribution?.DEB()) as String
         def RPM = distributionConfigObject.getOrDefault("RPM", defaultDistribution?.RPM()) as String
-        def securityGroup = loadSecurityGroups(distributionConfigObject, defaultDistribution?.securityGroups)
         def docker = distributionConfigObject.getOrDefault("docker", defaultDistribution?.docker()) as String
-        return new Distribution(explicit, external, GAV, DEB, RPM, docker, securityGroup)
+        def generic = distributionConfigObject.getOrDefault("generic", defaultDistribution?.generic()) as String
+        def securityGroup = loadSecurityGroups(distributionConfigObject, defaultDistribution?.securityGroups)
+        return new Distribution(explicit, external, GAV, DEB, RPM, docker, generic, securityGroup)
     }
 
     @TypeChecked(TypeCheckingMode.SKIP)
