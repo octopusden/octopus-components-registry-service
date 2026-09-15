@@ -94,6 +94,16 @@ class JiraDisplayNameFallbackTest {
     }
 
     @Test
+    @DisplayName("a blank jira.displayName falls back too — the v4 write path does not normalize it")
+    fun `blank jira display name falls back`() {
+        // Unlike display_name, jira_display_name is stored verbatim by the v4 create/PATCH paths,
+        // so "" reaches the mapper. A plain `?:` would short-circuit and hand the downstream
+        // plugin a blank name — the very fallback this resolution exists to avoid.
+        makeComponent("comp-blank", displayName = "Component Blank", jiraDisplayName = "   ")
+        assertEquals("Component Blank", jiraDisplayNameOf("comp-blank"))
+    }
+
+    @Test
     @DisplayName("neither name set → stays null (the plugin keeps falling back to the project name)")
     fun `both unset stays null`() {
         makeComponent("comp-three", displayName = null, jiraDisplayName = null)
