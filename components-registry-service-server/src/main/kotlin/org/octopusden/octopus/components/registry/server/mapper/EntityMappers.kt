@@ -1266,7 +1266,11 @@ private fun buildJiraComponent(
 
     return JiraComponent(
         projectKey,
-        component.jiraDisplayName,
+        // Effective display name, Jira surface: prefer the Jira-specific name, fall back to
+        // the general one. Both columns are normalized to null-or-non-blank on write, so a
+        // plain `?:` is safe. Stays null when neither is set — the downstream plugin then
+        // falls back to the Jira project name. See docs/registry/adr/021.
+        component.jiraDisplayName ?: component.displayName,
         format,
         info,
         merged.jiraTechnical ?: false,

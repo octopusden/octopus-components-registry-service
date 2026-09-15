@@ -193,7 +193,7 @@
     "versionRange": "(,0),[0,)",
     "component": {
       "projectKey": "TEST_COMPONENT2",
-      "displayName": null,
+      "displayName": "TEST_COMPONENT2_WITH_EXTERNAL_REGISTRY_NOT_EXISTS",
       "componentVersionFormat": {
         "majorVersionFormat": "$major02.$minorC.$serviceC",
         "releaseVersionFormat": "$major02.$minor02.$service02.$fix02",
@@ -308,7 +308,7 @@
     "versionRange": "(,0),[0,)",
     "component": {
       "projectKey": "TEST_COMPONENT2",
-      "displayName": null,
+      "displayName": "TEST_COMPONENT2",
       "componentVersionFormat": {
         "majorVersionFormat": "$major02.$minorC.$serviceC",
         "releaseVersionFormat": "$major02.$minor02.$service02.$fix02",
@@ -382,7 +382,7 @@
     "versionRange": "(,0),[0,)",
     "component": {
       "projectKey": "TEST_COMPONENT2",
-      "displayName": null,
+      "displayName": "TEST_COMPONENT2_WITH_EXTERNAL_REGISTRY",
       "componentVersionFormat": {
         "majorVersionFormat": "$major02.$minorC.$serviceC",
         "releaseVersionFormat": "$major02.$minor02.$service02.$fix02",
@@ -523,7 +523,7 @@
           "type": "MERCURIAL",
           "tag": "$module-$version",
           "branch": "v2",
-          "hotfixBranch" : "hotfix/$major.$minor.$service"
+          "hotfixBranch": "hotfix/$major.$minor.$service"
         }
       ],
       "externalRegistry": null
@@ -534,7 +534,7 @@
     "versionRange": "[1.0.107,)",
     "component": {
       "projectKey": "TC3",
-      "displayName": null,
+      "displayName": "3-D Secure",
       "componentVersionFormat": {
         "majorVersionFormat": "$major.$minor",
         "releaseVersionFormat": "$major.$minor.$service-$fix",
@@ -1283,7 +1283,7 @@
     "versionRange": "(,1.0.107)",
     "component": {
       "projectKey": "TC3",
-      "displayName": null,
+      "displayName": "3-D Secure",
       "componentVersionFormat": {
         "majorVersionFormat": "$major.$minor",
         "releaseVersionFormat": "$major.$minor.$service",
@@ -1621,7 +1621,7 @@
     "versionRange": "[1.0,1.3)",
     "component": {
       "projectKey": "DOCV",
-      "displayName": null,
+      "displayName": "Test Component with Doc and Versions",
       "componentVersionFormat": {
         "majorVersionFormat": "$major.$minor",
         "releaseVersionFormat": "$major.$minor.$service",
@@ -1655,7 +1655,7 @@
     "versionRange": "[1.3,)",
     "component": {
       "projectKey": "DOCV",
-      "displayName": null,
+      "displayName": "Test Component with Doc and Versions",
       "componentVersionFormat": {
         "majorVersionFormat": "$major.$minor",
         "releaseVersionFormat": "$major.$minor.$service",
@@ -1677,7 +1677,7 @@
           "vfiler1-default#group"
         ]
       },
-        "docker": "test-doc-versions"
+      "docker": "test-doc-versions"
     },
     "vcsSettings": {
       "versionControlSystemRoots": [],
@@ -1689,7 +1689,7 @@
     "versionRange": "(,0),[0,)",
     "component": {
       "projectKey": "DOC",
-      "displayName": null,
+      "displayName": "Test Component with Doc",
       "componentVersionFormat": {
         "majorVersionFormat": "$major.$minor",
         "releaseVersionFormat": "$major.$minor.$service",
