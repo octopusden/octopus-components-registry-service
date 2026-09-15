@@ -213,6 +213,20 @@ Rules:
 4. System verifier checks requirements with status ✅ Tested
 5. All requirement content must be written in English
 
+These five rules are enforced by review, not by CI. Whether a change needs a
+requirement, and whether the requirement that was written is the right one, is a
+judgement no diff can make: a feature and a bug fix touch the same files, and a
+path-based check cannot tell whether the document a PR happened to touch has
+anything to do with the code it changed.
+
+One narrower rule is mechanical, so CI does hold it: the `changelog/v4` job
+fails a PR that changes the committed v4 contract
+(`components-registry-service-server/src/main/resources/openapi/v4.json`)
+without updating [`api-changelog.md`](docs/registry/api-changelog.md) — the
+instruction that changelog already gives under "How to update". It is the one
+thing a diff answers exactly: the generated contract the Portal binds to moved,
+so the document consumers read has to say what moved.
+
 ### Test-to-Requirement Traceability
 
 Every test method that covers a numbered requirement (MIG-xxx, SYS-xxx) MUST:
