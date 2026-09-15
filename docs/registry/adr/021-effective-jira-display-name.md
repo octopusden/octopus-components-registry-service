@@ -19,7 +19,8 @@ header, and when it is blank falls back to the **Jira project name**, which ever
 in that project shares.
 
 `jira { displayName }` is opt-in and most configs never set it, so most components rendered
-a shared project name instead of the name they already had. Registry data (998 components):
+a shared project name instead of the name they already had. Counts below are a **QA snapshot**
+(998 components, 2026-09); prod carries a few more and the exact figures will differ:
 
 | | count |
 |---|---|

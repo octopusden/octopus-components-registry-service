@@ -21,10 +21,14 @@ The compat-test exercises **API contracts**:
 - **Jira display name** (`ADR-021`, 2026-09) — `JiraComponent.displayName` resolves
   `jiraDisplayName ?: displayName` instead of `jiraDisplayName` alone, so the 518 components that
   declare only a `componentDisplayName` now render their own name where the baseline rendered
-  `null`. Surfaces: `.../jira-component`, the `component.displayName` embedded in
-  `projects/{p}/versions/{v}`, `components/{c}` and both `jira-component-version-ranges` endpoints,
-  plus `DetailedComponentVersion.component` (which already read `displayName ?: componentName` and
-  therefore follows the same rule, flipping from the key to the label for those components).
+  `null` (518 of 998 in the QA snapshot this was sized against; the prod figure will differ
+  slightly). Surfaces carrying the embedded `component.displayName`: `.../versions/{v}/jira-component`,
+  `projects/{p}/versions/{v}`, `components/{c}/versions/{v}` (the `DetailedComponent` endpoint, which
+  carries it under `jiraComponentVersion.`) and both `jira-component-version-ranges` endpoints. Note
+  `components/{c}` is **not** among them — `ComponentV2` has no jira block. Plus
+  `DetailedComponentVersion.component` on `.../detailed-version` and the batch `detailed-versions`
+  (it already read `displayName ?: componentName`, so it follows the same rule and flips from the key
+  to the label for those components).
   Suppressed via the `ADR-021` entries in `known-deltas-db.json`. **`known-deltas-git.json` stays
   empty**: the fallback is applied only on the DB resolver path, so a no-migration git-mode
   candidate is still byte-identical to the baseline and the deploy-without-migration invariant is
