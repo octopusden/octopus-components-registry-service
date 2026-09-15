@@ -18,6 +18,19 @@ The compat-test exercises **API contracts**:
 - `PUT /rest/api/2/components-registry/service/updateCache` — **phase-aware** contract: returns **200** + the Git-refresh duration (ms) while any component is still served from Git (migration-status `git > 0`), and **410 Gone** only once fully migrated to the DB (`git == 0`). A fully-migrated db-mode candidate returns 410 → suppressed via `known-deltas-db.json`; a git-mode (no-migration) candidate returns 200 and matches baseline → no delta. See "Per-mode known-deltas" below.
 - `GET /components` list / `GET /components/{c}` detail / `GET /components/{c}/distribution` (v1/v2/v3) — the **component-level** `Component.distribution` and `escrow` fields report the **OPEN-UPPER (newest) block's** values (ADR-018 base-row amendment, 2026-07), not the top-level/oldest block's. Confirmed intentional by the domain owner 2026-07-01 over all 11 affected components; suppressed via the "ADR-018 base-row amendment" `known-deltas-db.json` entries until this release becomes the baseline. Per-VERSION endpoints are byte-identical (unaffected). The standalone `{c}/distribution` endpoint is deprecated (zero recorded prod traffic).
 
+- **Jira display name** (`ADR-021`, 2026-09) — `JiraComponent.displayName` resolves
+  `jiraDisplayName ?: displayName` instead of `jiraDisplayName` alone, so the 518 components that
+  declare only a `componentDisplayName` now render their own name where the baseline rendered
+  `null`. Surfaces: `.../jira-component`, the `component.displayName` embedded in
+  `projects/{p}/versions/{v}`, `components/{c}` and both `jira-component-version-ranges` endpoints,
+  plus `DetailedComponentVersion.component` (which already read `displayName ?: componentName` and
+  therefore follows the same rule, flipping from the key to the label for those components).
+  Suppressed via the `ADR-021` entries in `known-deltas-db.json`. **`known-deltas-git.json` stays
+  empty**: the fallback is applied only on the DB resolver path, so a no-migration git-mode
+  candidate is still byte-identical to the baseline and the deploy-without-migration invariant is
+  untouched. The legacy `$.name` and every write-back surface are excluded from the rule by design
+  — see the ADR — so this delta does not spread beyond the Jira-facing payloads.
+
 **Operational metadata endpoints are explicitly excluded** from the compat surface:
 
 - `GET /rest/api/2/components-registry/service/status` — read **only** by

@@ -126,6 +126,55 @@
       "jsonPathPattern": "^\\$\\.distribution\\.(docker|GAV)$",
       "reason": "ADR-018 base-row amendment (2026-07): trace-replay raw requests carry LITERAL component-detail paths (the prod-trace replayer does not parameterize), and real component keys must not be committed to this public repo — so this entry matches the path SHAPE (a v1/v2 component-detail request) instead of naming components. Same cause and same field scope (distribution.docker/GAV keys only) as the parameterized GET /rest/api/1/components/{component} STRUCTURAL_DIFF entry; the affected component keys are visible in the internal compat reports (build 4099; 2026-07-05 full re-sweep, crs-compat-baseline v3-full-20260705).",
       "regressionTest": "MigrationIntegrationTest.MIG-036 (ADR-018): TEST_COMPONENT3 base carries the OPEN-UPPER [1.0.107,) release format; the OLDER (,1.0.107) block carries the value-layer overrides (base = newest value)"
+    },
+    {
+      "endpointPattern": "^GET /rest/api/2/components/[^/]+/versions/[^/]+/jira-component$",
+      "category": "VALUE_DIFF",
+      "jsonPathPattern": "^\\$\\.displayName$",
+      "reason": "ADR-021 effective Jira display name (2026-09): JiraComponent.displayName now resolves `jiraDisplayName ?: displayName` instead of jiraDisplayName alone, so a component that declares only a componentDisplayName renders its own name where the 2.0.87 baseline rendered null (and the downstream plugin fell through to the shared Jira project name). Affects the 518 components in that shape. Intentional; the legacy $.name and every write-back surface are explicitly excluded from the rule (see the ADR), so this delta is confined to the Jira-facing payloads. Raw layer, per-component jira-component payload.",
+      "regressionTest": "JiraDisplayNameFallbackTest.falls back to component display name"
+    },
+    {
+      "endpointPattern": "^GET /rest/api/2/(projects/[^/]+/versions/[^/]+|components/[^/]+)$",
+      "category": "VALUE_DIFF",
+      "jsonPathPattern": "\\.component\\.displayName$",
+      "reason": "ADR-021 effective Jira display name (2026-09): JiraComponent.displayName now resolves `jiraDisplayName ?: displayName` instead of jiraDisplayName alone, so a component that declares only a componentDisplayName renders its own name where the 2.0.87 baseline rendered null (and the downstream plugin fell through to the shared Jira project name). Affects the 518 components in that shape. Intentional; the legacy $.name and every write-back surface are explicitly excluded from the rule (see the ADR), so this delta is confined to the Jira-facing payloads. Raw layer, the JiraComponentVersion embedded in project-version and component-detail payloads.",
+      "regressionTest": "JiraDisplayNameFallbackTest.falls back to component display name"
+    },
+    {
+      "endpointPattern": "^GET /rest/api/2/(projects/[^/]+|common)/jira-component-version-ranges$",
+      "category": "VALUE_DIFF",
+      "jsonPathPattern": "^\\$\\[\\d+\\]\\.component\\.displayName$",
+      "reason": "ADR-021 effective Jira display name (2026-09): JiraComponent.displayName now resolves `jiraDisplayName ?: displayName` instead of jiraDisplayName alone, so a component that declares only a componentDisplayName renders its own name where the 2.0.87 baseline rendered null (and the downstream plugin fell through to the shared Jira project name). Affects the 518 components in that shape. Intentional; the legacy $.name and every write-back surface are explicitly excluded from the rule (see the ADR), so this delta is confined to the Jira-facing payloads. Raw layer, the Set-shaped version-range endpoints (one element per range).",
+      "regressionTest": "JiraDisplayNameFallbackTest.falls back to component display name"
+    },
+    {
+      "endpointPattern": "^(GET|POST) /rest/api/2/components/[^/]+/(versions/[^/]+/detailed-version|detailed-versions)$",
+      "category": "VALUE_DIFF",
+      "jsonPathPattern": "\\.component$",
+      "reason": "ADR-021 effective Jira display name (2026-09): JiraComponent.displayName now resolves `jiraDisplayName ?: displayName` instead of jiraDisplayName alone, so a component that declares only a componentDisplayName renders its own name where the 2.0.87 baseline rendered null (and the downstream plugin fell through to the shared Jira project name). Affects the 518 components in that shape. Intentional; the legacy $.name and every write-back surface are explicitly excluded from the rule (see the ADR), so this delta is confined to the Jira-facing payloads. DetailedComponentVersion.component already read `displayName ?: componentName`, so it follows the same rule and flips from the component key to the display name for these components. No consumer in any repository reads this field.",
+      "regressionTest": "JiraDisplayNameRuleBoundaryTest.detailed component version carries the resolved display name"
+    },
+    {
+      "endpointPattern": "^GET /rest/api/2/components/[^/]+/versions/[^/]+/jira-component$",
+      "category": "VALUE_DIFF",
+      "messagePattern": "field/property 'displayName' differ",
+      "reason": "ADR-021 effective Jira display name (2026-09): JiraComponent.displayName now resolves `jiraDisplayName ?: displayName` instead of jiraDisplayName alone, so a component that declares only a componentDisplayName renders its own name where the 2.0.87 baseline rendered null (and the downstream plugin fell through to the shared Jira project name). Affects the 518 components in that shape. Intentional; the legacy $.name and every write-back surface are explicitly excluded from the rule (see the ADR), so this delta is confined to the Jira-facing payloads. Typed layer of the jira-component entry above.",
+      "regressionTest": "JiraDisplayNameFallbackTest.falls back to component display name"
+    },
+    {
+      "endpointPattern": "^GET /rest/api/2/((projects/[^/]+(/versions/[^/]+)?|common)(/jira-component-version-ranges)?|components/[^/]+)$",
+      "category": "VALUE_DIFF",
+      "messagePattern": "field/property '.*component\\.displayName' differ",
+      "reason": "ADR-021 effective Jira display name (2026-09): JiraComponent.displayName now resolves `jiraDisplayName ?: displayName` instead of jiraDisplayName alone, so a component that declares only a componentDisplayName renders its own name where the 2.0.87 baseline rendered null (and the downstream plugin fell through to the shared Jira project name). Affects the 518 components in that shape. Intentional; the legacy $.name and every write-back surface are explicitly excluded from the rule (see the ADR), so this delta is confined to the Jira-facing payloads. Typed layer for the embedded JiraComponent. Blast radius: a typed record is one whole AssertJ comparison, so this also swallows co-occurring diffs on the same component's jira payload while it is active.",
+      "regressionTest": "JiraDisplayNameFallbackTest.falls back to component display name"
+    },
+    {
+      "endpointPattern": "^(GET|POST) /rest/api/2/components/[^/]+/(versions/[^/]+/detailed-version|detailed-versions)$",
+      "category": "VALUE_DIFF",
+      "messagePattern": "field/property 'component' differ",
+      "reason": "ADR-021 effective Jira display name (2026-09): JiraComponent.displayName now resolves `jiraDisplayName ?: displayName` instead of jiraDisplayName alone, so a component that declares only a componentDisplayName renders its own name where the 2.0.87 baseline rendered null (and the downstream plugin fell through to the shared Jira project name). Affects the 518 components in that shape. Intentional; the legacy $.name and every write-back surface are explicitly excluded from the rule (see the ADR), so this delta is confined to the Jira-facing payloads. Typed layer of the DetailedComponentVersion.component entry above.",
+      "regressionTest": "JiraDisplayNameRuleBoundaryTest.detailed component version carries the resolved display name"
     }
   ]
 }
