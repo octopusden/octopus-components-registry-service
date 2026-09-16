@@ -22,10 +22,13 @@ class Adr021RangeRecoveryTest {
         displayName: String? = null,
         projectKey: String = "PRJ",
         versionRange: String = "(,)",
+        vcsUrl: String = "ssh://repo",
     ) = """
         {"componentName":"$componentName","versionRange":"$versionRange",
          "component":{"projectKey":"$projectKey","displayName":${displayName?.let { "\"$it\"" } ?: "null"},
-                      "componentVersionFormat":{"majorVersionFormat":"fmt"}}}
+                      "componentVersionFormat":{"majorVersionFormat":"fmt"}},
+         "distribution":{"explicit":false,"external":false},
+         "vcsSettings":{"versionControlSystemRoots":[{"vcsPath":"$vcsUrl"}]}}
         """.trimIndent()
 
     private fun arrayOf(vararg elements: String) = mapper.readTree("[${elements.joinToString(",")}]")
@@ -133,6 +136,31 @@ class Adr021RangeRecoveryTest {
     fun nonArrayIsNotApplicable() {
         assertThat(Adr021RangeRecovery.analyse(mapper.readTree("""{"a":1}"""), mapper.readTree("""{"a":2}""")))
             .isEqualTo(Adr021RangeRecovery.Verdict.NotApplicable)
+    }
+
+    @Test
+    @DisplayName("REJECT: the refusal names WHICH field breaks the twin — vcsSettings here")
+    fun refusalNamesTheDivergingField() {
+        val verdict =
+            Adr021RangeRecovery.analyse(
+                baseline = arrayOf(element("comp-c")),
+                candidate = arrayOf(element("comp-c"), element("comp-a", "Component A", vcsUrl = "ssh://other")),
+            )
+        val reason = (verdict as Adr021RangeRecovery.Verdict.Rejected).reason
+        assertThat(reason).contains("no baseline twin", "differs in vcsSettings", "componentName=comp-c")
+        assertThat(reason).doesNotContain("differs in component+")
+    }
+
+    @Test
+    @DisplayName("REJECT: when nothing shares the versionRange, the refusal says exactly that")
+    fun refusalReportsNoSharedRange() {
+        val verdict =
+            Adr021RangeRecovery.analyse(
+                baseline = arrayOf(element("comp-c")),
+                candidate = arrayOf(element("comp-c"), element("comp-a", "Component A", versionRange = "[9.0,)")),
+            )
+        assertThat((verdict as Adr021RangeRecovery.Verdict.Rejected).reason)
+            .contains("no baseline element shares its versionRange")
     }
 
     // ----- Wiring: the raw layer carries the verdict, and only the marker is suppressible -----

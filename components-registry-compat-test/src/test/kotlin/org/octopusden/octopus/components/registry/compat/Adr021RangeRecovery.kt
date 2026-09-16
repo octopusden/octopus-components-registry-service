@@ -106,6 +106,48 @@ object Adr021RangeRecovery {
         return Verdict.Confirmed(extras.map { keyOf(it) }.toSet())
     }
 
+    /**
+     * Why the twin search failed. A bare "no twin" is as undiagnosable as the bare size mismatch was:
+     * the collapse needs `versionRange`, `component` (modulo `displayName`), `distribution` AND
+     * `vcsSettings` to be identical, and knowing WHICH of them diverges is the difference between a
+     * one-line fix and another full compat run. Reports the closest baseline element by that measure.
+     */
+    private fun nearestMiss(
+        extra: JsonNode,
+        baseline: JsonNode,
+    ): String {
+        val parts = listOf("component", "distribution", "vcsSettings")
+        val sameRange = baseline.filter { it.path("versionRange").asText() == extra.path("versionRange").asText() }
+        if (sameRange.isEmpty()) return "no baseline element shares its versionRange"
+        val best =
+            sameRange.maxByOrNull { candidateTwin ->
+                parts.count { field -> fieldMatches(field, candidateTwin, extra) }
+            }!!
+        val differing = parts.filterNot { fieldMatches(it, best, extra) }
+        val nameOfBest = best.path("componentName").asText()
+        return "${sameRange.size} baseline element(s) share the versionRange; the closest differs in " +
+            "${differing.joinToString("+")} (its componentName=$nameOfBest, " +
+            "displayName=${displayNameOf(best) ?: "<absent>"})"
+    }
+
+    /** Field-level equality, with `component` compared without its `displayName`. */
+    private fun fieldMatches(
+        field: String,
+        left: JsonNode,
+        right: JsonNode,
+    ): Boolean =
+        if (field == "component") {
+            componentWithoutName(left) == componentWithoutName(right)
+        } else {
+            left.path(field) == right.path(field)
+        }
+
+    private fun componentWithoutName(element: JsonNode): String {
+        val copy = element.path("component").deepCopy<JsonNode>()
+        (copy as? ObjectNode)?.remove("displayName")
+        return copy.toString()
+    }
+
     /** The per-element half of [analyse]: `null` when this addition is a confirmed TD-022 recovery. */
     private fun reject(
         extra: JsonNode,
@@ -127,7 +169,8 @@ object Adr021RangeRecovery {
                     isBlankName(displayNameOf(it))
             }
         return if (twin == null) {
-            "no baseline twin for ${keyOf(extra)} — the element was not collapsing under TD-022"
+            "no baseline twin for ${keyOf(extra)} — the element was not collapsing under TD-022" +
+                " (${nearestMiss(extra, baseline)})"
         } else {
             null
         }
