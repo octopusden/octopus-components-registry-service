@@ -1266,16 +1266,8 @@ private fun buildJiraComponent(
 
     return JiraComponent(
         projectKey,
-        // Effective display name, Jira surface: prefer the Jira-specific name, fall back to
-        // the general one. Stays null when neither is set — the downstream plugin then falls
-        // back to the Jira project name. See docs/registry/adr/021.
-        //
-        // `isNotBlank`, not a plain `?:`: `display_name` is normalized to null-or-non-blank on
-        // write, but `jira_display_name` is NOT — the v4 create and PATCH paths store it
-        // verbatim (unlike `vcsExternalRegistry`, which runs through `clearBlankScalar`), so a
-        // component saved with an empty Jira display name holds "". A plain `?:` would
-        // short-circuit on that "" and hand the plugin a blank name, i.e. exactly the
-        // project-name fallback this resolution exists to avoid.
+        // Effective display name (ADR-021). isNotBlank, not a plain `?:`: jira_display_name is
+        // NOT normalized on the v4 write paths, so "" reaches here and would short-circuit.
         component.jiraDisplayName?.takeIf { it.isNotBlank() } ?: component.displayName,
         format,
         info,
