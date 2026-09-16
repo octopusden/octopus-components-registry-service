@@ -107,8 +107,17 @@ implemented** (see Consequences):
   HTTP consumer treating it as an identifier would break silently; that risk is accepted here
   and recorded rather than paid for by threading the raw column through the mapper.
 - **The compat gate reports intentional deltas** on `component.displayName` for the affected
-  components in db-mode. Recorded in `known-deltas-db.json`; `known-deltas-git.json` stays
-  empty, so the no-op invariant is untouched.
+  components in db-mode. The typed layer is handled by a field comparator rather than a
+  known-delta entry — with `ignoringCollectionOrder` the Set-shaped endpoints report
+  `Top level actual and expected objects differ` over the whole collection, which no per-field
+  pattern can match and which would suppress every collection difference if matched wholesale.
+  The comparator forgives exactly `null -> non-blank name` and is **gated to db-mode**: a
+  git-routed candidate gets no allowance, or a wrongly-gained name there would produce zero
+  diffs and the empty `known-deltas-git.json` could not catch it. The raw layer keeps its
+  `STRUCTURAL_DIFF` entries, and `DetailedComponentVersion.component` — a string-to-string
+  change the comparator deliberately ignores — keeps explicit entries on both the
+  `detailed-version` endpoints and the nested `detailedComponentVersion.component` path of the
+  version endpoint.
 - **The v4 contract does not change** — no v4 controller exposes the Jira DTOs, and
   `/rest/api/4/versions/preview` renders from a synthetic placeholder component. No
   `api-changelog` entry, no OpenAPI regeneration.

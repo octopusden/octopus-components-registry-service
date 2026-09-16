@@ -1,6 +1,7 @@
 package org.octopusden.octopus.components.registry.compat
 
 import org.assertj.core.api.Assertions.assertThat
+import org.junit.jupiter.api.AfterEach
 import org.junit.jupiter.api.BeforeEach
 import org.junit.jupiter.api.DisplayName
 import org.junit.jupiter.api.Tag
@@ -64,6 +65,12 @@ class Adr021DisplayNameCompatTest {
     @BeforeEach
     fun clearCollector() {
         DiffCollector.clear()
+        Adr021DisplayName.gitMode = false
+    }
+
+    @AfterEach
+    fun restoreMode() {
+        Adr021DisplayName.gitMode = CompatConfig.load().gitMode
     }
 
     @Test
@@ -131,4 +138,38 @@ class Adr021DisplayNameCompatTest {
         )
         assertThat(DiffCollector.snapshot()).isEmpty()
     }
+
+    @Test
+    @DisplayName("NEGATIVE (git-mode): the allowance does NOT apply — the no-op invariant stays strict")
+    fun gitModeGetsNoAllowance() {
+        // ADR-021 changes the DB resolver only. A git-routed candidate must stay byte-identical to
+        // the baseline, and the empty known-deltas-git.json cannot catch a wrongly-gained name,
+        // because a suppressed diff is never recorded in the first place.
+        Adr021DisplayName.gitMode = true
+
+        compare(setOf(range("comp-a", null)), setOf(range("comp-a", "Unexpected Name")))
+
+        assertThat(DiffCollector.snapshot()).hasSize(1)
+    }
+
+    @Test
+    @DisplayName("detailedComponentVersion.component is NOT covered by the comparator — it needs its known-delta entry")
+    fun detailedComponentFieldIsNotSuppressedByTheComparator() {
+        // The key -> label flip on this field is a string->string change, which the displayName
+        // comparator deliberately does not touch. It is suppressed by an explicit known-delta entry
+        // instead; this pins that the comparator alone leaves it visible, so removing that entry
+        // cannot go unnoticed again.
+        Comparators.compareDto(
+            endpoint = "GET /rest/api/2/components/{c}/versions/{v}",
+            pathParams = mapOf("c" to "comp-a", "v" to "1.0"),
+            baseline = DetailedShape("comp-a"),
+            candidate = DetailedShape("Component A"),
+        )
+        assertThat(DiffCollector.snapshot()).hasSize(1)
+    }
+
+    /** Minimal stand-in for the `detailedComponentVersion` nesting of `DetailedComponent`. */
+    data class DetailedShape(
+        val component: String,
+    )
 }
