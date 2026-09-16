@@ -1,5 +1,6 @@
 package org.octopusden.octopus.components.registry.compat
 
+import com.fasterxml.jackson.databind.JsonNode
 import org.assertj.core.api.RecursiveComparisonAssert
 import java.time.Instant
 
@@ -279,7 +280,95 @@ object Comparators {
             return
         }
         val comparableCandidate = withoutConfirmedRecoveries(endpoint, baseline, candidate)
+        if (isJiraRangesEndpoint(endpoint) && baseline is Collection<*> && comparableCandidate is Collection<*>) {
+            compareRangeElements(endpoint, pathParams, queryParams, baseline, comparableCandidate)
+            return
+        }
         runCatching {
+            buildAssertion(endpoint, baseline).isEqualTo(comparableCandidate)
+        }.onFailure { ex ->
+            DiffCollector.record(
+                DiffRecord(
+                    ts = Instant.now().toString(),
+                    endpoint = endpoint,
+                    pathParams = pathParams,
+                    queryParams = queryParams,
+                    category = DiffClassifier.VALUE_DIFF,
+                    layer = "typed",
+                    message = ex.message,
+                ),
+            )
+        }
+    }
+
+    /**
+     * Compares the `jira-component-version-ranges` collection ELEMENT BY ELEMENT, paired on
+     * `(componentName, versionRange)`, instead of handing the whole collection to
+     * `ignoringCollectionOrder`.
+     *
+     * Order-insensitive comparison of a collection costs a pairwise search, and here every trial pair
+     * is a deep recursive comparison through three custom field comparators. At the live size (1372
+     * elements, 518 carrying the ADR-021 name transition) that ran for over an hour of CPU and the
+     * build was killed by its execution timeout. It had never surfaced before because a size mismatch
+     * used to fail the comparison before the pairing began — removing the confirmed TD-022 recoveries
+     * made the sizes match, and the pairing finally ran.
+     *
+     * Pairing on a key makes it linear, and the diff gets better rather than worse: one record per
+     * diverging element, naming it, instead of a single record dumping every element in the response.
+     * `ignoringCollectionOrder` still applies WITHIN an element, so nested list order stays
+     * insignificant. A key appearing a different number of times on the two sides is itself recorded.
+     */
+    private fun compareRangeElements(
+        endpoint: String,
+        pathParams: Map<String, String>,
+        queryParams: Map<String, String>,
+        baseline: Collection<*>,
+        candidate: Collection<*>,
+    ) {
+        val baselineByKey = baseline.filterNotNull().groupBy { elementKey(it) }
+        val candidateByKey = candidate.filterNotNull().groupBy { elementKey(it) }
+        for (key in baselineByKey.keys + candidateByKey.keys) {
+            val left = baselineByKey[key].orEmpty().sortedBy { recoveryMapper.valueToTree<JsonNode>(it).toString() }
+            val right = candidateByKey[key].orEmpty().sortedBy { recoveryMapper.valueToTree<JsonNode>(it).toString() }
+            if (left.size != right.size) {
+                record(endpoint, pathParams, queryParams, key, "element count for this key: baseline=${left.size}, candidate=${right.size}")
+                continue
+            }
+            left.zip(right).forEach { (baselineElement, candidateElement) ->
+                runCatching { buildAssertion(endpoint, baselineElement).isEqualTo(candidateElement) }
+                    .onFailure { ex -> record(endpoint, pathParams, queryParams, key, ex.message) }
+            }
+        }
+    }
+
+    /** `componentName` + `versionRange`, the pair that names an element of this collection. */
+    private fun elementKey(element: Any): String = Adr021RangeRecovery.keyOf(recoveryMapper.valueToTree(element))
+
+    private fun record(
+        endpoint: String,
+        pathParams: Map<String, String>,
+        queryParams: Map<String, String>,
+        entityKey: String,
+        message: String?,
+    ) = DiffCollector.record(
+        DiffRecord(
+            ts = Instant.now().toString(),
+            endpoint = endpoint,
+            pathParams = pathParams,
+            queryParams = queryParams,
+            category = DiffClassifier.VALUE_DIFF,
+            layer = "typed",
+            entityKey = entityKey,
+            message = "$entityKey | $message",
+        ),
+    )
+
+    /** The recursive comparison and every per-field normaliser registered on it. */
+    private fun <T : Any> buildAssertion(
+        endpoint: String,
+        baseline: T,
+    ): RecursiveComparisonAssert<*> {
+        run {
             var assertion: RecursiveComparisonAssert<*> =
                 org.assertj.core.api.Assertions
                     .assertThat(baseline)
@@ -345,19 +434,7 @@ object Comparators {
             // (the caller passes maps already run through VersionRangeMapCanonicalizer.canonicalizeTypedRangeMap),
             // NOT by a field comparator here — a raw-JSON field equality would lose this comparison's
             // `ignoringCollectionOrder` + the gav/artifactPattern normalisers (build-4073 regression).
-            assertion.isEqualTo(comparableCandidate)
-        }.onFailure { ex ->
-            DiffCollector.record(
-                DiffRecord(
-                    ts = Instant.now().toString(),
-                    endpoint = endpoint,
-                    pathParams = pathParams,
-                    queryParams = queryParams,
-                    category = DiffClassifier.VALUE_DIFF,
-                    layer = "typed",
-                    message = ex.message,
-                ),
-            )
+            return assertion
         }
     }
 }
