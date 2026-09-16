@@ -47,6 +47,12 @@ jobs:
     steps:
       # No checkout: the file list comes from the API, so this needs neither a
       # clone nor the full history a merge-base diff would.
+      #
+      # The files endpoint, not `gh pr diff --name-only`: that serves the diff
+      # media type, which answers 406 above 300 files. A large PR would fail
+      # this job with "diff exceeded the maximum number of files" — blocking a
+      # PR that may touch no contract at all, and that no changelog edit could
+      # unblock. #428 changed 346 files, none of them the contract.
       - name: Require a changelog entry when the v4 contract changes
         env:
           GH_TOKEN: ${{ github.token }}
@@ -57,7 +63,7 @@ jobs:
           SURFACE='components-registry-service-server/src/main/resources/openapi/v4.json'
           CHANGELOG='docs/registry/api-changelog.md'
 
-          files=$(gh pr diff "$PR" -R "$REPO" --name-only)
+          files=$(gh api --paginate "repos/$REPO/pulls/$PR/files?per_page=100" --jq '.[].filename')
 
           # -x -F: whole line, no regex. Paths arrive verbatim from the API.
           if ! grep -qxF "$SURFACE" <<<"$files"; then
