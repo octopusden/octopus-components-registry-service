@@ -23,11 +23,12 @@ class Adr021RangeRecoveryTest {
         projectKey: String = "PRJ",
         versionRange: String = "(,)",
         vcsUrl: String = "ssh://repo",
+        gav: String? = null,
     ) = """
         {"componentName":"$componentName","versionRange":"$versionRange",
          "component":{"projectKey":"$projectKey","displayName":${displayName?.let { "\"$it\"" } ?: "null"},
                       "componentVersionFormat":{"majorVersionFormat":"fmt"}},
-         "distribution":{"explicit":false,"external":false},
+         "distribution":{"explicit":false,"external":false,"GAV":${gav?.let { "\"$it\"" } ?: "null"}},
          "vcsSettings":{"versionControlSystemRoots":[{"vcsPath":"$vcsUrl"}]}}
         """.trimIndent()
 
@@ -161,6 +162,35 @@ class Adr021RangeRecoveryTest {
             )
         assertThat((verdict as Adr021RangeRecovery.Verdict.Rejected).reason)
             .contains("no baseline element shares its versionRange")
+    }
+
+    @Test
+    @DisplayName("the REAL case: the twin differs only in distribution, which the old equals never compared")
+    fun twinDifferingOnlyInDistributionStillCounts() {
+        // Distribution carries Groovy @EqualsAndHashCode over private FINAL FIELDS, which that
+        // transform does not compare — so any two Distributions are equal and the pair collapsed
+        // regardless of their GAVs. Requiring them to match modelled a contract production does not
+        // run, and refused a genuine recovery.
+        val verdict =
+            Adr021RangeRecovery.analyse(
+                baseline = arrayOf(element("comp-c", gav = "g:c:1")),
+                candidate = arrayOf(element("comp-c", "Component C", gav = "g:c:1"), element("comp-a", "Component A", gav = "g:a:1")),
+            )
+        assertThat(verdict).isInstanceOf(Adr021RangeRecovery.Verdict.Confirmed::class.java)
+        assertThat((verdict as Adr021RangeRecovery.Verdict.Confirmed).notes)
+            .singleElement()
+            .satisfies({ assertThat(it).contains("carries a distribution its baseline twin did not", "comp-a") })
+    }
+
+    @Test
+    @DisplayName("REJECT: vcsSettings ARE part of the contract, so a divergence there is not a recovery")
+    fun vcsSettingsDivergenceIsStillRejected() {
+        val verdict =
+            Adr021RangeRecovery.analyse(
+                baseline = arrayOf(element("comp-c")),
+                candidate = arrayOf(element("comp-c", "Component C"), element("comp-a", "Component A", vcsUrl = "ssh://other")),
+            )
+        assertThat(verdict).isInstanceOf(Adr021RangeRecovery.Verdict.Rejected::class.java)
     }
 
     // ----- Wiring: the raw layer carries the verdict, and only the marker is suppressible -----

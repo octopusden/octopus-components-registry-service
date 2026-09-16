@@ -193,7 +193,8 @@ object Comparators {
         if (!isJiraRangesEndpoint(endpoint)) return ""
         return when (val v = Adr021RangeRecovery.analyse(baseline, candidate)) {
             is Adr021RangeRecovery.Verdict.Confirmed ->
-                " | ${Adr021RangeRecovery.CONFIRMED_MARKER} [${v.keys.size}]: ${v.keys.sorted().joinToString("; ")}"
+                " | ${Adr021RangeRecovery.CONFIRMED_MARKER} [${v.keys.size}]: ${v.keys.sorted().joinToString("; ")}" +
+                    v.notes.joinToString("") { " | NOTE: $it" }
             is Adr021RangeRecovery.Verdict.Rejected -> " | NOT A TD-022 RECOVERY: ${v.reason}"
             Adr021RangeRecovery.Verdict.NotApplicable -> ""
         }

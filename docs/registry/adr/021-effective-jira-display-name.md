@@ -131,9 +131,17 @@ implemented** (see Consequences):
   baseline never showed reappears. This is a recovery, not a regression — the candidate is a strict
   superset, nothing is lost. The compat gate does not take that on trust: `Adr021RangeRecovery`
   accepts an addition only when nothing is lost, the added `componentName` is absent from the
-  baseline, a baseline twin exists with the same `versionRange` and a byte-identical `component`
-  modulo `displayName`, and that twin's name was absent while the addition's is not. Anything else
-  keeps the mismatch active with its refusal reason attached. The raw layer suppresses one record
+  baseline, a baseline twin exists under the **real** equality contract, and that twin's name was
+  absent while the addition's is not. Anything else keeps the mismatch active with its refusal
+  reason attached.
+
+  The real contract is narrower than the element: `versionRange`, `component` modulo `displayName`,
+  and `vcsSettings`. `distribution` is excluded because `Distribution.equals` compares **nothing** —
+  Groovy's `@EqualsAndHashCode` over `private final` fields generates methods that read no field at
+  all ([TD-023](../tech-debt/023-distribution-equality-compares-nothing.md), confirmed in the
+  bytecode). Modelling a stricter contract than production runs is what made the rule refuse a
+  genuine recovery on the first attempt; the distribution divergence is now reported as a note on the
+  confirmed record rather than either hidden or treated as disqualifying. The raw layer suppresses one record
   on the confirmed marker; the typed layer removes the very same elements instead of suppressing
   its record, so a co-occurring regression still fails.
 - **The v4 contract does not change** — no v4 controller exposes the Jira DTOs, and
