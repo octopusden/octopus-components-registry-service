@@ -49,7 +49,10 @@ management:
   endpoints:
     web:
       exposure:
-        include: metrics
+        # `prometheus` is exposed so ActuatorPrometheusAccessTest exercises the security
+        # rule rather than a 404. `metrics` stays as the authenticated counterpart that
+        # same test asserts is still closed.
+        include: metrics, prometheus
     loggers:
       enabled: true
 
