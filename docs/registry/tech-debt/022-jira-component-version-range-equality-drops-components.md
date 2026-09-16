@@ -1,0 +1,62 @@
+# TD-022: `JiraComponentVersionRange` equality omits `componentName`, so components vanish from the range endpoints
+
+## Status
+
+Open. Found while implementing [ADR-021](../adr/021-effective-jira-display-name.md); **not** caused by it.
+
+## Symptom
+
+`GET /rest/api/2/common/jira-component-version-ranges` (and the per-project variant) can silently
+omit a component. Not an error, not a log line — the component is simply absent from a `Set`.
+
+Observed on the `common` test dataset: `ARCHIVED_TEST_COMPONENT_WITH_DISPLAY_NAME` declares
+`jira { projectKey = "TEST_ARCHIVED" }`, so it must contribute a range, but it appears in neither
+expected-data fixture and did not appear in the response. Both fixtures encoded the loss as if it
+were correct.
+
+## Mechanism
+
+`component-resolver-api/.../JiraComponentVersionRange.java` — **`componentName` is in neither
+`equals` nor `hashCode`**:
+
+```java
+equals():   versionRange, jiraComponent, distribution, vcsSettings
+hashCode(): versionRange, jiraComponent, distribution, vcsSettings
+```
+
+So two ranges belonging to *different components* compare equal whenever those four fields match —
+which is common for components sharing a Jira project, a version range and a distribution shape.
+`DatabaseComponentRegistryResolver.getAllJiraComponentVersionRanges` collects into a `Set`, and
+`CommonControllerV2` collapses a second time into `Set<JiraComponentVersionRangeDTO>`. Whichever
+element arrives second is discarded, and the component it belonged to disappears from the endpoint.
+
+A second, interacting defect makes the loss **non-deterministic**: `JiraComponent.equals` excludes
+`displayName` while `JiraComponent.hashCode` includes it (see the `octopus-releng-lib` fix). Two
+ranges can therefore be `equals` yet hash to different buckets, so whether the collapse happens at
+all depends on whether a display name is set.
+
+That is how ADR-021 surfaced this: giving those components a non-null Jira display name changed
+their `hashCode`, and one previously-swallowed component reappeared. The fixture was corrected to
+include it, and the mechanism is recorded here rather than in the ADR because it is a separate bug.
+
+## Why it was not fixed in that PR
+
+Adding `componentName` to the equality contract changes collection semantics for every consumer of
+`JiraComponentVersionRange` in a third repository (`component-resolver-api`), and it is unrelated to
+what that PR was about. It needs its own change with its own blast-radius review.
+
+Note that fixing only the `JiraComponent` `equals`/`hashCode` asymmetry is **not sufficient** — it
+makes the collapse deterministic rather than removing it. Both are needed.
+
+## Fix
+
+1. Add `componentName` to `JiraComponentVersionRange.equals` and `hashCode`.
+2. Land the `octopus-releng-lib` `JiraComponent.hashCode` alignment so equality and hashing agree.
+3. Re-derive both `jira-component-version-ranges` fixtures from the corrected output and diff against
+   the current ones — every entry that appears is a component the endpoints were dropping.
+4. Check whether any consumer relies on the current cross-component collapse before shipping.
+
+## Risk if left
+
+Silent, data-dependent omission from a public v2 endpoint. It is invisible to the compat gate too:
+both baseline and candidate drop the same element, so the diff is empty and the gate stays green.

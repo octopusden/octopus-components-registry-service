@@ -217,6 +217,22 @@ object Comparators {
                         java.util.function.BiPredicate<Any?, Any?> { a, b -> GavCsvComparator.compare(a, b) == 0 },
                         "^(.+\\.)?gav$",
                     )
+                    // ADR-021: the Jira display name now resolves `jiraDisplayName ?: displayName`,
+                    // so a component that only declared a componentDisplayName goes null -> name
+                    // against the baseline. Forgive EXACTLY that transition, nothing else: a name
+                    // that CHANGES (or disappears) is still a VALUE_DIFF.
+                    //
+                    // This has to be a field comparator rather than a known-delta entry. With
+                    // `ignoringCollectionOrder` the Set-shaped endpoints cannot pair elements once a
+                    // field differs, so the failure is reported as "Top level actual and expected
+                    // objects differ" over the whole collection — a message no per-field pattern can
+                    // match, and one that would suppress every collection difference if matched
+                    // wholesale. Making the pairing itself tolerant of the intended transition keeps
+                    // every other field, and every other element, strictly compared.
+                    .withEqualsForFieldsMatchingRegexes(
+                        java.util.function.BiPredicate<Any?, Any?> { a, b -> Adr021DisplayName.equal(a, b) },
+                        "^(.+\\.)?displayName$",
+                    )
             // #357: on /maven-artifacts the v1–v3 `artifactPattern` is re-rendered from the explicit
             // ownership model — separator (`,`≡`|`), dot-escaping, and ALL_EXCEPT lookahead-vs-catch-all
             // differ byte-wise but not behaviourally. Normalise ONLY here (the distribution

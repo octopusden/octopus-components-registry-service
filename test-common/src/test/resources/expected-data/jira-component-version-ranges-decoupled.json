@@ -2237,5 +2237,38 @@
       "versionControlSystemRoots": [],
       "externalRegistry": null
     }
+  },
+  {
+    "componentName": "ARCHIVED_TEST_COMPONENT_WITH_DISPLAY_NAME",
+    "versionRange": "(,0),[0,)",
+    "component": {
+      "projectKey": "TEST_ARCHIVED",
+      "displayName": "Component (archived)",
+      "componentVersionFormat": {
+        "majorVersionFormat": "$major.$minor",
+        "releaseVersionFormat": "$major.$minor.$service",
+        "buildVersionFormat": "$major.$minor.$service-$fix",
+        "lineVersionFormat": "$major",
+        "hotfixVersionFormat": "$major.$minor.$service-$fix.$build"
+      },
+      "componentInfo": {
+        "versionPrefix": "",
+        "versionFormat": "$versionPrefix-$baseVersionFormat"
+      },
+      "technical": false
+    },
+    "distribution": {
+      "explicit": false,
+      "external": true,
+      "securityGroups": {
+        "read": [
+          "vfiler1-default#group"
+        ]
+      }
+    },
+    "vcsSettings": {
+      "versionControlSystemRoots": [],
+      "externalRegistry": null
+    }
   }
 ]
