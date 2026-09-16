@@ -29,6 +29,10 @@ The compat-test exercises **API contracts**:
   `DetailedComponentVersion.component` on `.../detailed-version` and the batch `detailed-versions`
   (it already read `displayName ?: componentName`, so it follows the same rule and flips from the key
   to the label for those components).
+  On both `jira-component-version-ranges` endpoints the Set's element COUNT also rises: TD-022
+  (`JiraComponentVersionRange.equals/hashCode` omit `componentName`) collapsed components whose
+  payload was identical, and the resolved name separates them again. Accepted only when
+  `Adr021RangeRecovery` confirms the collapse story element by element — see ADR-021.
   Neutralised at **field granularity only**: raw-layer `known-deltas-db.json` entries pinned to the
   `component.displayName` JSON path, and typed-layer field comparators (`*.displayName`, plus
   `component` scoped to the detailed-version endpoints). No ADR-021 entry uses `messagePattern`, so

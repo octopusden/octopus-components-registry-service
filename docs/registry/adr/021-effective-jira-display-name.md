@@ -124,6 +124,18 @@ implemented** (see Consequences):
   typed record is one whole AssertJ comparison, so a `messagePattern` on `component` would
   also swallow any co-occurring regression in the same payload. That is pinned by a negative
   test (a version change alongside the name flip must still surface).
+- **The `jira-component-version-ranges` element count rises**, because the endpoint returns a Set
+  and `JiraComponentVersionRange.equals/hashCode` omit `componentName` (TD-022). Components whose
+  range and Jira configuration were identical collapsed into one element; `displayName = null` was
+  exactly what made them identical, so resolving the name separates them and a component that the
+  baseline never showed reappears. This is a recovery, not a regression — the candidate is a strict
+  superset, nothing is lost. The compat gate does not take that on trust: `Adr021RangeRecovery`
+  accepts an addition only when nothing is lost, the added `componentName` is absent from the
+  baseline, a baseline twin exists with the same `versionRange` and a byte-identical `component`
+  modulo `displayName`, and that twin's name was absent while the addition's is not. Anything else
+  keeps the mismatch active with its refusal reason attached. The raw layer suppresses one record
+  on the confirmed marker; the typed layer removes the very same elements instead of suppressing
+  its record, so a co-occurring regression still fails.
 - **The v4 contract does not change** — no v4 controller exposes the Jira DTOs, and
   `/rest/api/4/versions/preview` renders from a synthetic placeholder component. No
   `api-changelog` entry, no OpenAPI regeneration.

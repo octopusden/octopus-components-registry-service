@@ -210,6 +210,46 @@ class Adr021DisplayNameCompatTest {
         assertThat(DiffCollector.snapshot()).hasSize(1)
     }
 
+    @Test
+    @DisplayName("TD-022 recovery: a component that reappears is removed from the typed compare, not suppressed")
+    fun confirmedRecoveryIsRemovedFromTheTypedCompare() {
+        // Baseline collapsed comp-a into comp-c (identical payload, displayName null on both, and
+        // JiraComponentVersionRange.equals ignores componentName). Both now carry their own name.
+        compare(
+            setOf(range("comp-c", null)),
+            setOf(range("comp-c", "Component C"), range("comp-a", "Component A")),
+        )
+        assertThat(DiffCollector.snapshot()).isEmpty()
+    }
+
+    @Test
+    @DisplayName("NEGATIVE: a rename alongside a confirmed recovery still surfaces")
+    fun regressionAlongsideARecoveryStillSurfaces() {
+        // Only the recovered element is removed; everything else is compared as usual, so the rename
+        // on a DIFFERENT element still fails. (That the removal is what makes the sizes match is
+        // pinned by `confirmedRecoveryIsRemovedFromTheTypedCompare`, which goes red without it — the
+        // message cannot distinguish the two, because AssertJ dumps both collections either way.)
+        compare(
+            setOf(range("comp-c", null), range("comp-b", "Old Name")),
+            setOf(
+                range("comp-c", "Component C"),
+                range("comp-a", "Component A"),
+                range("comp-b", "New Name"),
+            ),
+        )
+        assertThat(DiffCollector.snapshot()).hasSize(1)
+    }
+
+    @Test
+    @DisplayName("NEGATIVE: an addition the recovery rule refuses is NOT removed — the compare still fails")
+    fun refusedAdditionStillFails() {
+        compare(
+            setOf(range("comp-c", null)),
+            setOf(range("comp-c", "Component C"), range("comp-a", "Component A", projectKey = "OTHER")),
+        )
+        assertThat(DiffCollector.snapshot()).hasSize(1)
+    }
+
     private fun ver(v: String) = ComponentRegistryVersion(ComponentVersionType.RELEASE, v, v)
 
     /** The REAL `/detailed-version` payload, so the field paths under test are the production ones. */

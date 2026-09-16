@@ -19,6 +19,10 @@ import java.time.Instant
  * around each case.
  */
 object Comparators {
+    /** Serialises DTO collections for [Adr021RangeRecovery], which reasons over the JSON shape. */
+    private val recoveryMapper = com.fasterxml.jackson.module.kotlin
+        .jacksonObjectMapper()
+
     /**
      * Status -> header allow-list -> JSON-shape compare. Records every
      * divergence to [DiffCollector] and returns the categories observed.
@@ -145,7 +149,7 @@ object Comparators {
                         candidateValue = sd.candidate,
                         entityKey = entityKey,
                         jsonPath = sd.path,
-                        message = "${sd.kind} at ${sd.path}" + arraySizeDetail(sd, baselineForShape, candidateForShape),
+                        message = "${sd.kind} at ${sd.path}" + arraySizeDetail(endpoint, sd, baselineForShape, candidateForShape),
                     ),
                 )
             }
@@ -162,15 +166,66 @@ object Comparators {
      * everything else keeps the bare message.
      */
     private fun arraySizeDetail(
+        endpoint: String,
         sd: JsonShape.ShapeDiff,
         baseline: com.fasterxml.jackson.databind.JsonNode?,
         candidate: com.fasterxml.jackson.databind.JsonNode?,
     ): String =
         if (sd.kind == JsonShape.ShapeDiff.Kind.ARRAY_SIZE_MISMATCH && sd.path == "$") {
-            ArraySizeDiagnostic.describe(baseline, candidate) ?: ""
+            (ArraySizeDiagnostic.describe(baseline, candidate) ?: "") + recoveryVerdict(endpoint, baseline, candidate)
         } else {
             ""
         }
+
+    /** The one endpoint family where a TD-022 recovery is possible; both layers gate on this. */
+    private fun isJiraRangesEndpoint(endpoint: String) = endpoint.contains("jira-component-version-ranges")
+
+    /**
+     * Renders the [Adr021RangeRecovery] verdict into the raw record's message. The confirmed marker is
+     * what the known-delta entry keys on — so the JSON file never has to restate the rule, and a size
+     * difference the rule refuses carries its refusal reason instead and stays an active diff.
+     */
+    private fun recoveryVerdict(
+        endpoint: String,
+        baseline: com.fasterxml.jackson.databind.JsonNode?,
+        candidate: com.fasterxml.jackson.databind.JsonNode?,
+    ): String {
+        if (!isJiraRangesEndpoint(endpoint)) return ""
+        return when (val v = Adr021RangeRecovery.analyse(baseline, candidate)) {
+            is Adr021RangeRecovery.Verdict.Confirmed ->
+                " | ${Adr021RangeRecovery.CONFIRMED_MARKER} [${v.keys.size}]: ${v.keys.sorted().joinToString("; ")}"
+            is Adr021RangeRecovery.Verdict.Rejected -> " | NOT A TD-022 RECOVERY: ${v.reason}"
+            Adr021RangeRecovery.Verdict.NotApplicable -> ""
+        }
+    }
+
+    /**
+     * Drops the elements [Adr021RangeRecovery] confirmed as TD-022 recoveries from the candidate, so the
+     * typed layer compares the same membership the baseline had and every OTHER difference still fails.
+     *
+     * Reconciles the two layers: raw suppresses one record via the confirmed marker, typed removes the
+     * very same elements — both decided by the same rule on the same keys, never by two sets of patterns
+     * that can drift apart. Returns the candidate unchanged for any verdict but `Confirmed`.
+     */
+    private fun <T : Any> withoutConfirmedRecoveries(
+        endpoint: String,
+        baseline: T,
+        candidate: T,
+    ): T {
+        if (!isJiraRangesEndpoint(endpoint)) return candidate
+        val baselineItems = baseline as? Collection<*> ?: return candidate
+        val candidateItems = candidate as? Collection<*> ?: return candidate
+        val verdict =
+            Adr021RangeRecovery.analyse(
+                recoveryMapper.valueToTree(baselineItems),
+                recoveryMapper.valueToTree(candidateItems),
+            )
+        if (verdict !is Adr021RangeRecovery.Verdict.Confirmed) return candidate
+        @Suppress("UNCHECKED_CAST")
+        return candidateItems.filterNot {
+            Adr021RangeRecovery.keyOf(recoveryMapper.valueToTree(it)) in verdict.keys
+        } as T
+    }
 
     /**
      * Typed-layer recursive DTO compare (AssertJ `usingRecursiveComparison`).
@@ -222,6 +277,7 @@ object Comparators {
             )
             return
         }
+        val comparableCandidate = withoutConfirmedRecoveries(endpoint, baseline, candidate)
         runCatching {
             var assertion: RecursiveComparisonAssert<*> =
                 org.assertj.core.api.Assertions
@@ -288,7 +344,7 @@ object Comparators {
             // (the caller passes maps already run through VersionRangeMapCanonicalizer.canonicalizeTypedRangeMap),
             // NOT by a field comparator here — a raw-JSON field equality would lose this comparison's
             // `ignoringCollectionOrder` + the gav/artifactPattern normalisers (build-4073 regression).
-            assertion.isEqualTo(candidate)
+            assertion.isEqualTo(comparableCandidate)
         }.onFailure { ex ->
             DiffCollector.record(
                 DiffRecord(

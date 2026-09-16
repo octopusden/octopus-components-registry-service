@@ -65,3 +65,11 @@ makes the collapse deterministic rather than removing it. Both are needed.
 
 Silent, data-dependent omission from a public v2 endpoint. It is invisible to the compat gate too:
 both baseline and candidate drop the same element, so the diff is empty and the gate stays green.
+
+**Partially observable since ADR-021.** `displayName = null` is what made the dropped components
+identical to their siblings, so resolving the effective name separates some of them and they
+reappear in the candidate — the gate now sees an `ARRAY_SIZE_MISMATCH` where it previously saw
+nothing. `Adr021RangeRecovery` (compat-test) confirms each such addition against the collapse
+story and names the recovered components in `summary.md`. That is a symptom becoming visible, not
+a fix: components whose siblings ALSO gained no name still collapse, and the equality contract is
+still wrong. Fixing it here remains the work described above.
