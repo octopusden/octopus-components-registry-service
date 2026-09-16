@@ -114,10 +114,16 @@ implemented** (see Consequences):
   The comparator forgives exactly `null -> non-blank name` and is **gated to db-mode**: a
   git-routed candidate gets no allowance, or a wrongly-gained name there would produce zero
   diffs and the empty `known-deltas-git.json` could not catch it. The raw layer keeps its
-  `STRUCTURAL_DIFF` entries, and `DetailedComponentVersion.component` — a string-to-string
-  change the comparator deliberately ignores — keeps explicit entries on both the
-  `detailed-version` endpoints and the nested `detailedComponentVersion.component` path of the
-  version endpoint.
+  `STRUCTURAL_DIFF` entries, each pinned to the `component.displayName` path so every other
+  field of the same element stays compared. `DetailedComponentVersion.component` is a
+  string-to-string change, so it cannot key on a null the way `displayName` does; it gets its
+  own comparator, registered per endpoint (`detailed-version` / `detailed-versions`) plus the
+  exact nested `detailedComponentVersion.component` path. Per endpoint, not globally, so a
+  field merely *named* `component` elsewhere — an object on the jira-component endpoints —
+  keeps its recursive comparison. **No record-level suppression remains for ADR-021**: one
+  typed record is one whole AssertJ comparison, so a `messagePattern` on `component` would
+  also swallow any co-occurring regression in the same payload. That is pinned by a negative
+  test (a version change alongside the name flip must still surface).
 - **The v4 contract does not change** — no v4 controller exposes the Jira DTOs, and
   `/rest/api/4/versions/preview` renders from a synthetic placeholder component. No
   `api-changelog` entry, no OpenAPI regeneration.

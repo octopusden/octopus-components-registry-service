@@ -258,6 +258,21 @@ object Comparators {
                         java.util.function.BiPredicate<Any?, Any?> { a, b -> Adr021DisplayName.detailedComponentEqual(a, b) },
                         "^detailedComponentVersion\\.component$",
                     )
+            // ADR-021, root-level shape. On the detailed-version endpoints `component` IS the display-name
+            // string (`DetailedComponentVersion.component`) and sits at `component` (GET) or
+            // `versions.<version>.component` (POST batch) — neither reachable by the exact-anchored nested
+            // rule above. Registered PER ENDPOINT rather than globally so a field merely NAMED `component`
+            // elsewhere (an object on the jira-component endpoints) keeps its recursive comparison.
+            // This replaces a record-level known-delta entry: one typed record is one whole AssertJ
+            // comparison, so a messagePattern on `component` also swallowed every co-occurring regression
+            // in the same payload.
+            if (endpoint.contains("detailed-version")) {
+                assertion =
+                    assertion.withEqualsForFieldsMatchingRegexes(
+                        java.util.function.BiPredicate<Any?, Any?> { a, b -> Adr021DisplayName.detailedComponentEqual(a, b) },
+                        "^(.+\\.)?component$",
+                    )
+            }
             // #357: on /maven-artifacts the v1–v3 `artifactPattern` is re-rendered from the explicit
             // ownership model — separator (`,`≡`|`), dot-escaping, and ALL_EXCEPT lookahead-vs-catch-all
             // differ byte-wise but not behaviourally. Normalise ONLY here (the distribution

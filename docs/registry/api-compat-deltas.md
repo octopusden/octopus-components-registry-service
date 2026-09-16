@@ -29,7 +29,11 @@ The compat-test exercises **API contracts**:
   `DetailedComponentVersion.component` on `.../detailed-version` and the batch `detailed-versions`
   (it already read `displayName ?: componentName`, so it follows the same rule and flips from the key
   to the label for those components).
-  Suppressed via the `ADR-021` entries in `known-deltas-db.json`. **`known-deltas-git.json` stays
+  Neutralised at **field granularity only**: raw-layer `known-deltas-db.json` entries pinned to the
+  `component.displayName` JSON path, and typed-layer field comparators (`*.displayName`, plus
+  `component` scoped to the detailed-version endpoints). No ADR-021 entry uses `messagePattern`, so
+  no whole typed record is suppressed and a co-occurring regression on the same payload still
+  surfaces — pinned by the negative tests in `Adr021DisplayNameCompatTest`. **`known-deltas-git.json` stays
   empty**: the fallback is applied only on the DB resolver path, so a no-migration git-mode
   candidate is still byte-identical to the baseline and the deploy-without-migration invariant is
   untouched. The legacy `$.name` and every write-back surface are excluded from the rule by design

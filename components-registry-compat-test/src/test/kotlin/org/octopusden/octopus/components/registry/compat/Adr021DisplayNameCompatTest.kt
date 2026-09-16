@@ -7,7 +7,11 @@ import org.junit.jupiter.api.DisplayName
 import org.junit.jupiter.api.Tag
 import org.junit.jupiter.api.Test
 import org.octopusden.octopus.components.registry.core.dto.ComponentInfoDTO
+import org.octopusden.octopus.components.registry.core.dto.ComponentRegistryVersion
 import org.octopusden.octopus.components.registry.core.dto.ComponentVersionFormatDTO
+import org.octopusden.octopus.components.registry.core.dto.ComponentVersionType
+import org.octopusden.octopus.components.registry.core.dto.DetailedComponentVersion
+import org.octopusden.octopus.components.registry.core.dto.DetailedComponentVersions
 import org.octopusden.octopus.components.registry.core.dto.DistributionDTO
 import org.octopusden.octopus.components.registry.core.dto.JiraComponentDTO
 import org.octopusden.octopus.components.registry.core.dto.JiraComponentVersionRangeDTO
@@ -153,12 +157,11 @@ class Adr021DisplayNameCompatTest {
     }
 
     @Test
-    @DisplayName("detailedComponentVersion.component is NOT covered by the comparator — it needs its known-delta entry")
-    fun detailedComponentFieldIsNotSuppressedByTheComparator() {
-        // The key -> label flip on this field is a string->string change, which the displayName
-        // comparator deliberately does not touch. It is suppressed by an explicit known-delta entry
-        // instead; this pins that the comparator alone leaves it visible, so removing that entry
-        // cannot go unnoticed again.
+    @DisplayName("ENDPOINT GATE: a bare `component` field outside the detailed-version family stays compared")
+    fun bareComponentFieldOutsideTheDetailedFamilyStaysCompared() {
+        // The root-level allowance is registered per endpoint. On any other endpoint a field simply
+        // named `component` is an ordinary field — a string->string change there is a real diff, and
+        // the displayName comparator deliberately does not touch it.
         Comparators.compareDto(
             endpoint = "GET /rest/api/2/components/{c}/versions/{v}",
             pathParams = mapOf("c" to "comp-a", "v" to "1.0"),
@@ -204,6 +207,87 @@ class Adr021DisplayNameCompatTest {
             baseline = DetailedComponentShape(DetailedShape("comp-a"), archived = false),
             candidate = DetailedComponentShape(DetailedShape("   "), archived = false),
         )
+        assertThat(DiffCollector.snapshot()).hasSize(1)
+    }
+
+    private fun ver(v: String) = ComponentRegistryVersion(ComponentVersionType.RELEASE, v, v)
+
+    /** The REAL `/detailed-version` payload, so the field paths under test are the production ones. */
+    private fun detailed(
+        component: String,
+        release: String = "1.0.0",
+    ) = DetailedComponentVersion(
+        component = component,
+        minorVersion = ver("1.0"),
+        lineVersion = ver("1.0"),
+        buildVersion = ver(release),
+        rcVersion = ver(release),
+        releaseVersion = ver(release),
+        hotfixVersion = null,
+    )
+
+    private fun compareDetailed(
+        baseline: Any,
+        candidate: Any,
+        endpoint: String = "GET /rest/api/2/components/{component}/versions/{version}/detailed-version",
+    ) = Comparators.compareDto(
+        endpoint = endpoint,
+        pathParams = mapOf("component" to "comp-a", "version" to "1.0"),
+        baseline = baseline,
+        candidate = candidate,
+    )
+
+    @Test
+    @DisplayName("GET /detailed-version: the key -> label flip on the ROOT `component` is neutralised")
+    fun detailedVersionRootFlipIsNeutralised() {
+        compareDetailed(detailed("comp-a"), detailed("Component A"))
+        assertThat(DiffCollector.snapshot()).isEmpty()
+    }
+
+    @Test
+    @DisplayName("NEGATIVE: a co-occurring version change on the SAME record still surfaces")
+    fun detailedVersionSiblingChangeStillSurfaces() {
+        // This is what the record-level known-delta could not do: the `component` flip and a version
+        // regression arrive in ONE AssertJ message, so a messagePattern keyed on `component` took
+        // the regression down with it.
+        compareDetailed(detailed("comp-a", release = "1.0.0"), detailed("Component A", release = "2.0.0"))
+        assertThat(DiffCollector.snapshot()).hasSize(1)
+    }
+
+    @Test
+    @DisplayName("NEGATIVE: the root `component` losing its value still surfaces")
+    fun detailedVersionBlankStillSurfaces() {
+        compareDetailed(detailed("comp-a"), detailed("   "))
+        assertThat(DiffCollector.snapshot()).hasSize(1)
+    }
+
+    @Test
+    @DisplayName("POST /detailed-versions: the flip inside the versions map is neutralised")
+    fun detailedVersionsBatchFlipIsNeutralised() {
+        compareDetailed(
+            DetailedComponentVersions(mapOf("1.0.0" to detailed("comp-a"))),
+            DetailedComponentVersions(mapOf("1.0.0" to detailed("Component A"))),
+            endpoint = "POST /rest/api/2/components/{component}/detailed-versions",
+        )
+        assertThat(DiffCollector.snapshot()).isEmpty()
+    }
+
+    @Test
+    @DisplayName("NEGATIVE: a version vanishing from the batch map still surfaces")
+    fun detailedVersionsBatchLossStillSurfaces() {
+        compareDetailed(
+            DetailedComponentVersions(mapOf("1.0.0" to detailed("comp-a"), "2.0.0" to detailed("comp-a"))),
+            DetailedComponentVersions(mapOf("1.0.0" to detailed("Component A"))),
+            endpoint = "POST /rest/api/2/components/{component}/detailed-versions",
+        )
+        assertThat(DiffCollector.snapshot()).hasSize(1)
+    }
+
+    @Test
+    @DisplayName("NEGATIVE (git-mode): /detailed-version gets no allowance either")
+    fun detailedVersionGitModeGetsNoAllowance() {
+        Adr021DisplayName.gitMode = true
+        compareDetailed(detailed("comp-a"), detailed("Component A"))
         assertThat(DiffCollector.snapshot()).hasSize(1)
     }
 
