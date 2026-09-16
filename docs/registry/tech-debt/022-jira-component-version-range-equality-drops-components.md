@@ -41,9 +41,14 @@ include it, and the mechanism is recorded here rather than in the ADR because it
 
 ## Why it was not fixed in that PR
 
-Adding `componentName` to the equality contract changes collection semantics for every consumer of
-`JiraComponentVersionRange` in a third repository (`component-resolver-api`), and it is unrelated to
-what that PR was about. It needs its own change with its own blast-radius review.
+`JiraComponentVersionRange` lives in this repository, in the `component-resolver-api` module — but
+that module is published and consumed elsewhere (escrow-generator, components-automation, the Jira
+utils client), so adding `componentName` to the equality contract changes collection semantics for
+every downstream consumer. The blast radius is cross-repo even though the edit is local, and it is
+unrelated to what the display-name PR was about, so it needs its own change and its own review.
+
+Note this is a **different repository** from the `JiraComponent` `equals`/`hashCode` fix
+(`octopus-releng-lib`): the two cannot be one pull request.
 
 Note that fixing only the `JiraComponent` `equals`/`hashCode` asymmetry is **not sufficient** — it
 makes the collapse deterministic rather than removing it. Both are needed.
