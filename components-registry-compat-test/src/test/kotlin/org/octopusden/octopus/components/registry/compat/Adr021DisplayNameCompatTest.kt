@@ -168,8 +168,53 @@ class Adr021DisplayNameCompatTest {
         assertThat(DiffCollector.snapshot()).hasSize(1)
     }
 
+    @Test
+    @DisplayName("detailedComponentVersion.component: the key -> label flip alone is neutralised")
+    fun nestedDetailedComponentFlipIsNeutralised() {
+        Comparators.compareDto(
+            endpoint = "GET /rest/api/2/components/{c}/versions/{v}",
+            pathParams = mapOf("c" to "comp-a", "v" to "1.0"),
+            baseline = DetailedComponentShape(DetailedShape("comp-a"), archived = false),
+            candidate = DetailedComponentShape(DetailedShape("Component A"), archived = false),
+        )
+        assertThat(DiffCollector.snapshot()).isEmpty()
+    }
+
+    @Test
+    @DisplayName("NEGATIVE: a co-occurring `archived` flip on the SAME record still surfaces")
+    fun coOccurringArchivedFlipStillSurfaces() {
+        // The whole point of neutralising the FIELD rather than suppressing the RECORD: one typed
+        // record is one whole AssertJ comparison, so a known-delta entry keyed on the component
+        // path would have taken this regression down with it.
+        Comparators.compareDto(
+            endpoint = "GET /rest/api/2/components/{c}/versions/{v}",
+            pathParams = mapOf("c" to "comp-a", "v" to "1.0"),
+            baseline = DetailedComponentShape(DetailedShape("comp-a"), archived = false),
+            candidate = DetailedComponentShape(DetailedShape("Component A"), archived = true),
+        )
+        assertThat(DiffCollector.snapshot()).hasSize(1)
+    }
+
+    @Test
+    @DisplayName("NEGATIVE: detailedComponentVersion.component losing its value still surfaces")
+    fun nestedDetailedComponentBlankStillSurfaces() {
+        Comparators.compareDto(
+            endpoint = "GET /rest/api/2/components/{c}/versions/{v}",
+            pathParams = mapOf("c" to "comp-a", "v" to "1.0"),
+            baseline = DetailedComponentShape(DetailedShape("comp-a"), archived = false),
+            candidate = DetailedComponentShape(DetailedShape("   "), archived = false),
+        )
+        assertThat(DiffCollector.snapshot()).hasSize(1)
+    }
+
     /** Minimal stand-in for the `detailedComponentVersion` nesting of `DetailedComponent`. */
     data class DetailedShape(
         val component: String,
+    )
+
+    /** `DetailedComponent`-shaped root: the nested payload plus a sibling field that must stay compared. */
+    data class DetailedComponentShape(
+        val detailedComponentVersion: DetailedShape,
+        val archived: Boolean,
     )
 }

@@ -44,4 +44,27 @@ object Adr021DisplayName {
         val baselineAbsent = baseline == null || (baseline is String && baseline.isBlank())
         return baselineAbsent && candidate is String && candidate.isNotBlank()
     }
+
+    /**
+     * `DetailedComponentVersion.component` already read `displayName ?: componentName`, so the same
+     * rule flips it from the component key to a label. Unlike [equal] this is a string-to-string
+     * change, and the two values alone cannot prove the relationship — so the field is neutralised
+     * rather than validated, which is the risk ADR-021 explicitly accepted for a field no consumer
+     * reads.
+     *
+     * Neutralising the FIELD is what matters here. Suppressing the diff with a known-delta entry
+     * instead would drop the whole `DiffRecord`, and one typed record is one whole AssertJ
+     * comparison — so a co-occurring regression on the same payload (`archived` flipping, say)
+     * would vanish with it. Pinned by the `archived` negative test.
+     *
+     * A candidate that LOSES the value still fails: the field is non-null by contract.
+     */
+    fun detailedComponentEqual(
+        baseline: Any?,
+        candidate: Any?,
+    ): Boolean {
+        if (baseline == candidate) return true
+        if (gitMode) return false
+        return baseline is String && candidate is String && candidate.isNotBlank()
+    }
 }

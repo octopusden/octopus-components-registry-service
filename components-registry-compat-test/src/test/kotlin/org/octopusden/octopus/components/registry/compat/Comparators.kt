@@ -233,6 +233,13 @@ object Comparators {
                         java.util.function.BiPredicate<Any?, Any?> { a, b -> Adr021DisplayName.equal(a, b) },
                         "^(.+\\.)?displayName$",
                     )
+                    // Same ADR, the other field. Scoped to the EXACT nested path so it cannot touch
+                    // `JiraComponentVersionDTO.component` (an object, on other endpoints) — replacing
+                    // equality there would stop the recursion and defeat the displayName rule above.
+                    .withEqualsForFieldsMatchingRegexes(
+                        java.util.function.BiPredicate<Any?, Any?> { a, b -> Adr021DisplayName.detailedComponentEqual(a, b) },
+                        "^detailedComponentVersion\\.component$",
+                    )
             // #357: on /maven-artifacts the v1–v3 `artifactPattern` is re-rendered from the explicit
             // ownership model — separator (`,`≡`|`), dot-escaping, and ALL_EXCEPT lookahead-vs-catch-all
             // differ byte-wise but not behaviourally. Normalise ONLY here (the distribution
