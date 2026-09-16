@@ -73,3 +73,18 @@ nothing. `Adr021RangeRecovery` (compat-test) confirms each such addition against
 story and names the recovered components in `summary.md`. That is a symptom becoming visible, not
 a fix: components whose siblings ALSO gained no name still collapse, and the equality contract is
 still wrong. Fixing it here remains the work described above.
+
+**That visibility is temporary, and depends on a library version.** The collapse comes apart only
+because `JiraComponent.hashCode` includes `displayName` while its `equals` excludes it: once the
+names differ the pair lands in different `HashSet` buckets and both survive, even though they are
+still `equals`. octopus-releng-lib **#17 repairs that contract** — merged to `main`, but **not yet
+released**: the newest tag is `v2.0.8`, which predates it, and this repository pins
+`releng-lib.version=2.0.8`.
+
+So the moment CRS bumps to a release containing #17, both sides hash identically again, the pair
+collapses on **both** sides, the `ARRAY_SIZE_MISMATCH` disappears and the ADR-021 recovery
+known-delta goes dormant (harmlessly — it only matches when the rule emits its marker). The
+components become invisible again. Anyone reading a green gate after such a bump should not conclude
+this debt was paid; it was only re-hidden. Sequence the fix here **before or with** the library bump,
+and see also [TD-023](023-distribution-equality-compares-nothing.md), which widens the blast radius
+of the same collapse.
