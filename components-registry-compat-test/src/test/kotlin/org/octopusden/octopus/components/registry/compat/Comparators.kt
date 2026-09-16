@@ -145,7 +145,7 @@ object Comparators {
                         candidateValue = sd.candidate,
                         entityKey = entityKey,
                         jsonPath = sd.path,
-                        message = "${sd.kind} at ${sd.path}",
+                        message = "${sd.kind} at ${sd.path}" + arraySizeDetail(sd, baselineForShape, candidateForShape),
                     ),
                 )
             }
@@ -153,6 +153,24 @@ object Comparators {
 
         return categories
     }
+
+    /**
+     * An `ARRAY_SIZE_MISMATCH` on its own is undiagnosable: the record carries the two counts and
+     * nothing else, and the typed record that does hold both collections is truncated at the
+     * collector's message cap. Name the elements that differ, so a recovered element can be told
+     * apart from a wrongly-added one without a bespoke run. Only for a root-level array mismatch;
+     * everything else keeps the bare message.
+     */
+    private fun arraySizeDetail(
+        sd: JsonShape.ShapeDiff,
+        baseline: com.fasterxml.jackson.databind.JsonNode?,
+        candidate: com.fasterxml.jackson.databind.JsonNode?,
+    ): String =
+        if (sd.kind == JsonShape.ShapeDiff.Kind.ARRAY_SIZE_MISMATCH && sd.path == "$") {
+            ArraySizeDiagnostic.describe(baseline, candidate) ?: ""
+        } else {
+            ""
+        }
 
     /**
      * Typed-layer recursive DTO compare (AssertJ `usingRecursiveComparison`).
