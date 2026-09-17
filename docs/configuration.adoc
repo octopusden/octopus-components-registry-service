@@ -47,7 +47,7 @@ UI's registration form can ask for more as client-side validation, not a server-
 
 == How to register or change a Component
 === Through the Web UI
-The Web UI is the normal way to register and change components. It offers the same fields described
+link:{components-registry-link}[The Web UI] is the normal way to register and change components. It offers the same fields described
 in <<Component configuration reference>>, validates them as you type, and shows the resulting
 version ranges.
 
