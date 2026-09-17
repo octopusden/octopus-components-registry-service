@@ -9,7 +9,7 @@ IMPORTANT: This page is auto-generated!
 Components Registry is a registry of all link:{glossary-component-link}[components] developed in the organization.
 It keeps basic parameters of components required for organizing automated release management and Escrow package generation.
 
-All components are registered in Components Registry that is available via link:{components-registry-link}[Components Management Portal]
+All components are registered in Components Registry that is available via link:{components-registry-portal-link}[Components Management Portal]
 
 
 Components Registry stores the following information about Components:
@@ -48,7 +48,7 @@ UI's registration form can ask for more as client-side validation, not a server-
 
 == How to register or change a Component
 === Through the Web UI
-link:{components-registry-link}[The Web UI] is the normal way to register and change components. It offers the same fields described
+link:{components-registry-portal-link}[The Web UI] is the normal way to register and change components. It offers the same fields described
 in <<Component configuration reference>>, validates them as you type, and shows the resulting
 version ranges.
 
