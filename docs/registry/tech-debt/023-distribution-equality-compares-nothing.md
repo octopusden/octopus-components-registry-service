@@ -1,4 +1,4 @@
-# TD-023: `Distribution.equals` compares nothing, so any two distributions are equal
+# TD-023: `Distribution.equals` and `Doc.equals` compare nothing, so any two instances are equal
 
 ## Status
 
@@ -64,8 +64,24 @@ the seven fields. Either is a one-line change with a wide blast radius, so it ne
 run: today's responses depend on the degenerate behaviour, and fixing it will change which elements
 survive the `Set` — the same class of change as TD-022 and best sequenced with it.
 
-`SecurityGroups` and the other Groovy model classes in the same package should be audited for the
-same shape before either is called done.
+## Audit of the sibling models (done)
+
+Every Groovy class in `escrow/model` was measured the same way — counting field and getter
+references inside the generated `equals`, with `Distribution` as the known-bad control:
+
+| class | annotated | own `equals` | field refs in `equals` | verdict |
+|---|---|---|---|---|
+| `Distribution` | yes | no | 3 (all `canEqual`/`is`) | **degenerate** |
+| `Doc` | yes | no | 3 (all `canEqual`/`is`) | **degenerate — same defect** |
+| `Tool` | yes | no | 13 | fine (its properties are not private) |
+| `Dependency` | yes | yes | 14 | fine |
+| `BuildParameters` | yes | yes | 26 | fine |
+| `VCSSettings`, `VersionControlSystemRoot` | no | yes | hand-written | fine |
+
+So the defect is **`Distribution` and `Doc`**, and only those two. Both carry `@EqualsAndHashCode`
+over `private final` fields and declare no `equals` of their own. `Doc`'s blast radius is smaller —
+it is not a term of `JiraComponentVersionRange.equals` — but it is the same bug and should be fixed
+in the same change.
 
 ## Risk if left
 
