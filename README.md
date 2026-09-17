@@ -30,6 +30,7 @@ Run `adocPublishToWiki` gradle task
 | adoc.header                              | Header. Default value: Components Registry Configuration. |               |                     |
 | adoc.glossary-component-link             | Link to Component page in glossary.                       | +             | +                   |
 | adoc.components-registry-link            | Link to Component Registry repository.                    | +             | +                   |
+| adoc.components-registry-swagger-link    | Link to Component Registry Swagger page.                  | +             | +                   |
 | adoc.release-management-automation-link  | Link to Release Management Automation page.               | +             | +                   |
 | adoc.escrow-automation-tool-link         | Link to Escrow Automation Tool page.                      | +             | +                   |
 | adoc.service-desk-link                   | Link to Service Desk portal.                              | +             | +                   |
