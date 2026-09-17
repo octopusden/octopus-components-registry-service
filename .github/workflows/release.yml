@@ -6,7 +6,7 @@ on:
 
 jobs:
   build:
-    uses: octopusden/octopus-base/.github/workflows/common-java-gradle-release.yml@v3.0.0
+    uses: octopusden/octopus-base/.github/workflows/common-java-gradle-release.yml@v3.0.2
     permissions:
       contents: write
       packages: write
@@ -20,4 +20,5 @@ jobs:
       resume-deployment-id: ${{ github.event.client_payload.resume_deployment_id }}
       docker-image: components-registry-service
       github-packages-publications: ":components-registry-automation:mavenJava"
+      github-packages-repository: octopusden/octopus-maven-packages
     secrets: inherit
