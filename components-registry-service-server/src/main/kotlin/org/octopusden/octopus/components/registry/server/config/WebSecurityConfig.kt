@@ -61,10 +61,6 @@ class WebSecurityConfig(
                         // deployed management.endpoints.web.exposure.include broadens.
                         "/actuator/health",
                         "/actuator/health/**",
-                        // RELENG-3561: idpmonitoring Prometheus scrapes this in-cluster with
-                        // no token. Counters and timers only — no config, no memory contents.
-                        // An exact path on purpose: never widen to a wildcard here, or
-                        // heapdump comes with it. ActuatorPrometheusAccessTest guards that.
                         "/actuator/prometheus",
                         // springdoc-openapi + swagger-ui: cover the group docs,
                         // YAML variant, web-jars (swagger-ui assets) — otherwise

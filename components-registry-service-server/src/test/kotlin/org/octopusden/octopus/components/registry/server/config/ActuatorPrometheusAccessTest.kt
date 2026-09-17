@@ -17,8 +17,8 @@ import org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get
 import org.springframework.test.web.servlet.result.MockMvcResultMatchers.status
 
 /**
- * RELENG-3561: `idpmonitoring` Prometheus scrapes `/actuator/prometheus` in-cluster with no
- * token, so that one endpoint must be anonymous. It exposes counters and timers only — no
+ * The monitoring Prometheus scrapes `/actuator/prometheus` in-cluster with no token, so that
+ * one endpoint must be anonymous. It exposes counters and timers only — no
  * configuration, no memory contents.
  *
  * The negative case matters as much as the positive one. [WebSecurityConfig] opens a single
@@ -44,12 +44,12 @@ import org.springframework.test.web.servlet.result.MockMvcResultMatchers.status
  * the path answers 404 once security permits it. Nothing in this repository, in service-config,
  * or in the bootstrap files sets that property — the cause was not identified. Whether the
  * deployed service registers the endpoint is therefore still open, and is answered by probing
- * production (RELENG-3506), not from here. Until it is, RELENG-3561 alone does not make this
+ * production, not from here. Until it is, opening the security rule alone does not make this
  * service scrapeable.
  *
- * Asserting "not 401" rather than "200" keeps the assertion aligned with what the ticket
- * changes — a security matcher — instead of quietly depending on metrics-export wiring that
- * this ticket does not touch.
+ * Asserting "not 401" rather than "200" keeps the assertion aligned with what this change
+ * actually does — widen a security matcher — instead of quietly depending on metrics-export
+ * wiring it does not touch.
  *
  * There is likewise no assertion on `/actuator/health`: it answers 404 under this profile,
  * which predates this change, and a 404 says nothing about a security rule since a
