@@ -9,7 +9,7 @@ IMPORTANT: This page is auto-generated!
 Components Registry is a registry of all link:{glossary-component-link}[components] developed in the organization.
 It keeps basic parameters of components required for organizing automated release management and Escrow package generation.
 
-All components are registered in Components Registry that is available via link:{components-registry-link}[Components Management Portal]
+All components are registered in the Components Registry, which is available via link:{components-registry-link}[the Components Management Portal].
 
 
 Components Registry stores the following information about Components:
