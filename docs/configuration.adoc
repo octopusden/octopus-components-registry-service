@@ -72,6 +72,7 @@ that apply to a version range (see <<Version ranges>>).
 === Component-level fields
 
 * *displayName* - display name of the component, e.g. in DMS
+* *parentComponent* - grouping components in DMS
 * *clientCode* - if the component is client specific
 * *solution* - `true` for a solution
 * *componentOwner* - username of the component's owner, without the domain part
