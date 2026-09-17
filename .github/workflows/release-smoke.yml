@@ -30,5 +30,6 @@ jobs:
       build-version: 0.0.0-smoke-${{ github.run_number }}
       docker-image: components-registry-service
       github-packages-publications: ":components-registry-automation:mavenJava"
+      github-packages-repository: octopusden/octopus-maven-packages
       dry-run: true
     secrets: inherit
