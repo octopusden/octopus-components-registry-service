@@ -12,7 +12,7 @@ permissions:
 
 jobs:
   run-build-and-deploy:
-    uses: octopusden/octopus-base/.github/workflows/common-java-gradle-build.yml@v3.0.0
+    uses: octopusden/octopus-base/.github/workflows/common-java-gradle-build.yml@v3.0.2
     with:
       flow-type: hybrid
       java-version: '21'
