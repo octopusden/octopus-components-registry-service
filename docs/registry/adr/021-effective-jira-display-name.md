@@ -131,8 +131,16 @@ implemented** (see Consequences):
   baseline never showed reappears. This is a recovery, not a regression — the candidate is a strict
   superset, nothing is lost. The compat gate does not take that on trust: `Adr021RangeRecovery`
   accepts an addition only when nothing is lost, the added `componentName` is absent from the
-  baseline, a baseline twin exists under the **real** equality contract, and that twin's name was
-  absent while the addition's is not. Anything else keeps the mismatch active with its refusal
+  baseline ranges but **present in the baseline's `/components` inventory**, a baseline twin exists
+  under the **real** equality contract, and that twin's name was absent while the addition's is not.
+
+  The inventory check is the independent evidence, and it is not optional. A twin shows that an
+  element *could* have collapsed, never that the component ever *existed*: copy the matching fields
+  off a real element, give it a name, and the collapse story fits perfectly. The component inventory
+  settles it because the collapse hides an element from this `Set` and from nothing else — a
+  recovered component is still listed by `/components`, an invented one is not. While the inventory
+  cannot be loaded the rule refuses every recovery: verification that could not be performed is not
+  verification that passed. Anything else keeps the mismatch active with its refusal
   reason attached.
 
   The real contract is narrower than the element: `versionRange`, `component` modulo `displayName`,

@@ -37,11 +37,15 @@ class Adr021RangeRecoveryTest {
     @BeforeEach
     fun dbMode() {
         Adr021DisplayName.gitMode = false
+        // Every component these cases name is a real one as far as the baseline is concerned; the
+        // tests that care about the inventory override this.
+        BaselineInventory.seed(setOf("comp-a", "comp-b", "comp-c"))
     }
 
     @AfterEach
     fun restoreMode() {
         Adr021DisplayName.gitMode = CompatConfig.load().gitMode
+        BaselineInventory.seed(null)
     }
 
     @Test
@@ -191,6 +195,50 @@ class Adr021RangeRecoveryTest {
                 candidate = arrayOf(element("comp-c", "Component C"), element("comp-a", "Component A", vcsUrl = "ssh://other")),
             )
         assertThat(verdict).isInstanceOf(Adr021RangeRecovery.Verdict.Rejected::class.java)
+    }
+
+    @Test
+    @DisplayName("REJECT: a component the baseline never had is NOT a recovery, however perfect its twin")
+    fun fabricatedComponentIsRejected() {
+        // A twin proves the element COULD have collapsed, not that it EXISTED. Copy the right fields
+        // off a real element, give it a name, and the collapse story fits perfectly — so the story
+        // alone cannot be the evidence. The baseline's own component inventory is the independent
+        // source: the collapse hides an element from THIS endpoint, never from /components.
+        BaselineInventory.seed(setOf("comp-c"))
+        val verdict =
+            Adr021RangeRecovery.analyse(
+                baseline = arrayOf(element("comp-c")),
+                candidate = arrayOf(element("comp-c", "Component C"), element("fabricated", "Fabricated")),
+            )
+        assertThat((verdict as Adr021RangeRecovery.Verdict.Rejected).reason)
+            .contains("not a component of the baseline inventory")
+    }
+
+    @Test
+    @DisplayName("REJECT: no inventory means no verification — the rule fails CLOSED")
+    fun unverifiableWithoutInventory() {
+        BaselineInventory.seed(null)
+        val verdict =
+            Adr021RangeRecovery.analyse(
+                baseline = arrayOf(element("comp-c")),
+                candidate = arrayOf(element("comp-c", "Component C"), element("comp-a", "Component A")),
+            )
+        assertThat((verdict as Adr021RangeRecovery.Verdict.Rejected).reason)
+            .contains("inventory is unavailable")
+    }
+
+    @Test
+    @DisplayName("a GAV normalisation the gate already forgives must not read as a lost baseline element")
+    fun allowedGavNormalisationDoesNotBreakPairing() {
+        // The typed layer forgives a trailing comma in the GAV CSV. Pairing on the raw JSON did not
+        // know that, so the surviving twin looked unmatched and the whole recovery was refused —
+        // leaving the size mismatch active. The two halves of one check must share the normalisation.
+        val verdict =
+            Adr021RangeRecovery.analyse(
+                baseline = arrayOf(element("comp-c", gav = "g:a:jar")),
+                candidate = arrayOf(element("comp-c", "Component C", gav = "g:a:jar,"), element("comp-a", "Component A")),
+            )
+        assertThat(verdict).isInstanceOf(Adr021RangeRecovery.Verdict.Confirmed::class.java)
     }
 
     // ----- Wiring: the raw layer carries the verdict, and only the marker is suppressible -----

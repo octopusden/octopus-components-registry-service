@@ -64,6 +64,15 @@ object Adr021RangeRecovery {
         val copy = element.deepCopy<JsonNode>()
         (copy as? ObjectNode)?.remove("componentName")
         ((copy as? ObjectNode)?.get("component") as? ObjectNode)?.remove("displayName")
+        // Apply the normalisations the COMPARISON already forgives, or pairing disagrees with it: a
+        // trailing comma in the GAV CSV is a formatting artefact of the DB resolver (see
+        // GavCsvComparator), and treating it as a difference here reported the surviving twin as a
+        // lost baseline element and refused the whole recovery.
+        ((copy as? ObjectNode)?.get("distribution") as? ObjectNode)?.let { distribution ->
+            distribution.get("GAV")?.takeIf { it.isTextual }?.let {
+                distribution.put("GAV", GavCsvComparator.normalize(it.asText()))
+            }
+        }
         return copy.toString()
     }
 
@@ -219,6 +228,20 @@ object Adr021RangeRecovery {
         }
         if (isBlankName(displayNameOf(extra))) {
             return "added element carries no display name, so ADR-021 cannot explain it: ${keyOf(extra)}"
+        }
+        // A twin shows the element COULD have collapsed, never that the component EXISTED: copy the
+        // matching fields off a real element, give it a name, and the story fits perfectly. The
+        // baseline's own component inventory is the independent evidence — the collapse hides an
+        // element from THIS Set and from nothing else, so a recovered component is still listed by
+        // /components, and an invented one is not. Unverifiable is not verified: no inventory, no
+        // suppression.
+        when (BaselineInventory.knows(name)) {
+            null ->
+                return "the baseline component inventory is unavailable, so ${keyOf(extra)} cannot be verified"
+            false ->
+                return "${keyOf(extra)} is not a component of the baseline inventory — " +
+                    "it was not recovered, it never existed"
+            else -> Unit
         }
         val twin = twinOf(extra, baseline)
         return if (twin == null) {

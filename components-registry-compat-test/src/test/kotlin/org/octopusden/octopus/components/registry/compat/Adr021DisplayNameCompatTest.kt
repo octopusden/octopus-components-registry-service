@@ -70,11 +70,16 @@ class Adr021DisplayNameCompatTest {
     fun clearCollector() {
         DiffCollector.clear()
         Adr021DisplayName.gitMode = false
+        // A TD-022 recovery is only accepted for a component the baseline inventory knows; without
+        // this the rule fails closed and nothing is removed (which is its own test, over in
+        // Adr021RangeRecoveryTest).
+        BaselineInventory.seed(setOf("comp-a", "comp-b", "comp-c"))
     }
 
     @AfterEach
     fun restoreMode() {
         Adr021DisplayName.gitMode = CompatConfig.load().gitMode
+        BaselineInventory.seed(null)
     }
 
     @Test

@@ -487,7 +487,7 @@ object GavCsvComparator : Comparator<Any?> {
      * NOT collapsed — they would indicate a different bug shape and must
      * surface for diagnosis.
      */
-    private fun normalize(s: String): String {
+    fun normalize(s: String): String {
         val trimmed = s.trimEnd()
         return if (trimmed.endsWith(',')) trimmed.dropLast(1).trimEnd() else trimmed
     }
