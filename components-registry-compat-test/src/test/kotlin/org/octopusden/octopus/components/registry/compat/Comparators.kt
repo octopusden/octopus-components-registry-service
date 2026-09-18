@@ -1,5 +1,6 @@
 package org.octopusden.octopus.components.registry.compat
 
+import com.fasterxml.jackson.databind.JsonNode
 import org.assertj.core.api.RecursiveComparisonAssert
 import java.time.Instant
 
@@ -19,6 +20,10 @@ import java.time.Instant
  * around each case.
  */
 object Comparators {
+    /** Serialises DTO collections for [Adr021RangeRecovery], which reasons over the JSON shape. */
+    private val recoveryMapper = com.fasterxml.jackson.module.kotlin
+        .jacksonObjectMapper()
+
     /**
      * Status -> header allow-list -> JSON-shape compare. Records every
      * divergence to [DiffCollector] and returns the categories observed.
@@ -145,13 +150,83 @@ object Comparators {
                         candidateValue = sd.candidate,
                         entityKey = entityKey,
                         jsonPath = sd.path,
-                        message = "${sd.kind} at ${sd.path}",
+                        message = "${sd.kind} at ${sd.path}" + arraySizeDetail(endpoint, sd, baselineForShape, candidateForShape),
                     ),
                 )
             }
         }
 
         return categories
+    }
+
+    /**
+     * An `ARRAY_SIZE_MISMATCH` on its own is undiagnosable: the record carries the two counts and
+     * nothing else, and the typed record that does hold both collections is truncated at the
+     * collector's message cap. Name the elements that differ, so a recovered element can be told
+     * apart from a wrongly-added one without a bespoke run. Only for a root-level array mismatch;
+     * everything else keeps the bare message.
+     */
+    private fun arraySizeDetail(
+        endpoint: String,
+        sd: JsonShape.ShapeDiff,
+        baseline: com.fasterxml.jackson.databind.JsonNode?,
+        candidate: com.fasterxml.jackson.databind.JsonNode?,
+    ): String =
+        if (sd.kind == JsonShape.ShapeDiff.Kind.ARRAY_SIZE_MISMATCH && sd.path == "$") {
+            (ArraySizeDiagnostic.describe(baseline, candidate) ?: "") + recoveryVerdict(endpoint, baseline, candidate)
+        } else {
+            ""
+        }
+
+    /** The one endpoint family where a TD-022 recovery is possible; both layers gate on this. */
+    private fun isJiraRangesEndpoint(endpoint: String) = endpoint.contains("jira-component-version-ranges")
+
+    /**
+     * Renders the [Adr021RangeRecovery] verdict into the raw record's message. The confirmed marker is
+     * what the known-delta entry keys on — so the JSON file never has to restate the rule, and a size
+     * difference the rule refuses carries its refusal reason instead and stays an active diff.
+     */
+    private fun recoveryVerdict(
+        endpoint: String,
+        baseline: com.fasterxml.jackson.databind.JsonNode?,
+        candidate: com.fasterxml.jackson.databind.JsonNode?,
+    ): String {
+        if (!isJiraRangesEndpoint(endpoint)) return ""
+        return when (val v = Adr021RangeRecovery.analyse(baseline, candidate)) {
+            is Adr021RangeRecovery.Verdict.Confirmed ->
+                " | ${Adr021RangeRecovery.CONFIRMED_MARKER} [${v.keys.size}]: ${v.keys.sorted().joinToString("; ")}" +
+                    v.notes.joinToString("") { " | NOTE: $it" }
+            is Adr021RangeRecovery.Verdict.Rejected -> " | NOT A TD-022 RECOVERY: ${v.reason}"
+            Adr021RangeRecovery.Verdict.NotApplicable -> ""
+        }
+    }
+
+    /**
+     * Drops the elements [Adr021RangeRecovery] confirmed as TD-022 recoveries from the candidate, so the
+     * typed layer compares the same membership the baseline had and every OTHER difference still fails.
+     *
+     * Reconciles the two layers: raw suppresses one record via the confirmed marker, typed removes the
+     * very same elements — both decided by the same rule on the same keys, never by two sets of patterns
+     * that can drift apart. Returns the candidate unchanged for any verdict but `Confirmed`.
+     */
+    private fun <T : Any> withoutConfirmedRecoveries(
+        endpoint: String,
+        baseline: T,
+        candidate: T,
+    ): T {
+        if (!isJiraRangesEndpoint(endpoint)) return candidate
+        val baselineItems = baseline as? Collection<*> ?: return candidate
+        val candidateItems = candidate as? Collection<*> ?: return candidate
+        val verdict =
+            Adr021RangeRecovery.analyse(
+                recoveryMapper.valueToTree(baselineItems),
+                recoveryMapper.valueToTree(candidateItems),
+            )
+        if (verdict !is Adr021RangeRecovery.Verdict.Confirmed) return candidate
+        @Suppress("UNCHECKED_CAST")
+        return candidateItems.filterNot {
+            Adr021RangeRecovery.keyOf(recoveryMapper.valueToTree(it)) in verdict.keys
+        } as T
     }
 
     /**
@@ -204,7 +279,96 @@ object Comparators {
             )
             return
         }
+        val comparableCandidate = withoutConfirmedRecoveries(endpoint, baseline, candidate)
+        if (isJiraRangesEndpoint(endpoint) && baseline is Collection<*> && comparableCandidate is Collection<*>) {
+            compareRangeElements(endpoint, pathParams, queryParams, baseline, comparableCandidate)
+            return
+        }
         runCatching {
+            buildAssertion(endpoint, baseline).isEqualTo(comparableCandidate)
+        }.onFailure { ex ->
+            DiffCollector.record(
+                DiffRecord(
+                    ts = Instant.now().toString(),
+                    endpoint = endpoint,
+                    pathParams = pathParams,
+                    queryParams = queryParams,
+                    category = DiffClassifier.VALUE_DIFF,
+                    layer = "typed",
+                    message = ex.message,
+                ),
+            )
+        }
+    }
+
+    /**
+     * Compares the `jira-component-version-ranges` collection ELEMENT BY ELEMENT, paired on
+     * `(componentName, versionRange)`, instead of handing the whole collection to
+     * `ignoringCollectionOrder`.
+     *
+     * Order-insensitive comparison of a collection costs a pairwise search, and here every trial pair
+     * is a deep recursive comparison through three custom field comparators. At the live size (1372
+     * elements, 518 carrying the ADR-021 name transition) that ran for over an hour of CPU and the
+     * build was killed by its execution timeout. It had never surfaced before because a size mismatch
+     * used to fail the comparison before the pairing began — removing the confirmed TD-022 recoveries
+     * made the sizes match, and the pairing finally ran.
+     *
+     * Pairing on a key makes it linear, and the diff gets better rather than worse: one record per
+     * diverging element, naming it, instead of a single record dumping every element in the response.
+     * `ignoringCollectionOrder` still applies WITHIN an element, so nested list order stays
+     * insignificant. A key appearing a different number of times on the two sides is itself recorded.
+     */
+    private fun compareRangeElements(
+        endpoint: String,
+        pathParams: Map<String, String>,
+        queryParams: Map<String, String>,
+        baseline: Collection<*>,
+        candidate: Collection<*>,
+    ) {
+        val baselineByKey = baseline.filterNotNull().groupBy { elementKey(it) }
+        val candidateByKey = candidate.filterNotNull().groupBy { elementKey(it) }
+        for (key in baselineByKey.keys + candidateByKey.keys) {
+            val left = baselineByKey[key].orEmpty().sortedBy { recoveryMapper.valueToTree<JsonNode>(it).toString() }
+            val right = candidateByKey[key].orEmpty().sortedBy { recoveryMapper.valueToTree<JsonNode>(it).toString() }
+            if (left.size != right.size) {
+                record(endpoint, pathParams, queryParams, key, "element count for this key: baseline=${left.size}, candidate=${right.size}")
+                continue
+            }
+            left.zip(right).forEach { (baselineElement, candidateElement) ->
+                runCatching { buildAssertion(endpoint, baselineElement).isEqualTo(candidateElement) }
+                    .onFailure { ex -> record(endpoint, pathParams, queryParams, key, ex.message) }
+            }
+        }
+    }
+
+    /** `componentName` + `versionRange`, the pair that names an element of this collection. */
+    private fun elementKey(element: Any): String = Adr021RangeRecovery.keyOf(recoveryMapper.valueToTree(element))
+
+    private fun record(
+        endpoint: String,
+        pathParams: Map<String, String>,
+        queryParams: Map<String, String>,
+        entityKey: String,
+        message: String?,
+    ) = DiffCollector.record(
+        DiffRecord(
+            ts = Instant.now().toString(),
+            endpoint = endpoint,
+            pathParams = pathParams,
+            queryParams = queryParams,
+            category = DiffClassifier.VALUE_DIFF,
+            layer = "typed",
+            entityKey = entityKey,
+            message = "$entityKey | $message",
+        ),
+    )
+
+    /** The recursive comparison and every per-field normaliser registered on it. */
+    private fun <T : Any> buildAssertion(
+        endpoint: String,
+        baseline: T,
+    ): RecursiveComparisonAssert<*> {
+        run {
             var assertion: RecursiveComparisonAssert<*> =
                 org.assertj.core.api.Assertions
                     .assertThat(baseline)
@@ -217,6 +381,44 @@ object Comparators {
                         java.util.function.BiPredicate<Any?, Any?> { a, b -> GavCsvComparator.compare(a, b) == 0 },
                         "^(.+\\.)?gav$",
                     )
+                    // ADR-021: the Jira display name now resolves `jiraDisplayName ?: displayName`,
+                    // so a component that only declared a componentDisplayName goes null -> name
+                    // against the baseline. Forgive EXACTLY that transition, nothing else: a name
+                    // that CHANGES (or disappears) is still a VALUE_DIFF.
+                    //
+                    // This has to be a field comparator rather than a known-delta entry. With
+                    // `ignoringCollectionOrder` the Set-shaped endpoints cannot pair elements once a
+                    // field differs, so the failure is reported as "Top level actual and expected
+                    // objects differ" over the whole collection — a message no per-field pattern can
+                    // match, and one that would suppress every collection difference if matched
+                    // wholesale. Making the pairing itself tolerant of the intended transition keeps
+                    // every other field, and every other element, strictly compared.
+                    .withEqualsForFieldsMatchingRegexes(
+                        java.util.function.BiPredicate<Any?, Any?> { a, b -> Adr021DisplayName.equal(a, b) },
+                        "^(.+\\.)?displayName$",
+                    )
+                    // Same ADR, the other field. Scoped to the EXACT nested path so it cannot touch
+                    // `JiraComponentVersionDTO.component` (an object, on other endpoints) — replacing
+                    // equality there would stop the recursion and defeat the displayName rule above.
+                    .withEqualsForFieldsMatchingRegexes(
+                        java.util.function.BiPredicate<Any?, Any?> { a, b -> Adr021DisplayName.detailedComponentEqual(a, b) },
+                        "^detailedComponentVersion\\.component$",
+                    )
+            // ADR-021, root-level shape. On the detailed-version endpoints `component` IS the display-name
+            // string (`DetailedComponentVersion.component`) and sits at `component` (GET) or
+            // `versions.<version>.component` (POST batch) — neither reachable by the exact-anchored nested
+            // rule above. Registered PER ENDPOINT rather than globally so a field merely NAMED `component`
+            // elsewhere (an object on the jira-component endpoints) keeps its recursive comparison.
+            // This replaces a record-level known-delta entry: one typed record is one whole AssertJ
+            // comparison, so a messagePattern on `component` also swallowed every co-occurring regression
+            // in the same payload.
+            if (endpoint.contains("detailed-version")) {
+                assertion =
+                    assertion.withEqualsForFieldsMatchingRegexes(
+                        java.util.function.BiPredicate<Any?, Any?> { a, b -> Adr021DisplayName.detailedComponentEqual(a, b) },
+                        "^(.+\\.)?component$",
+                    )
+            }
             // #357: on /maven-artifacts the v1–v3 `artifactPattern` is re-rendered from the explicit
             // ownership model — separator (`,`≡`|`), dot-escaping, and ALL_EXCEPT lookahead-vs-catch-all
             // differ byte-wise but not behaviourally. Normalise ONLY here (the distribution
@@ -232,19 +434,7 @@ object Comparators {
             // (the caller passes maps already run through VersionRangeMapCanonicalizer.canonicalizeTypedRangeMap),
             // NOT by a field comparator here — a raw-JSON field equality would lose this comparison's
             // `ignoringCollectionOrder` + the gav/artifactPattern normalisers (build-4073 regression).
-            assertion.isEqualTo(candidate)
-        }.onFailure { ex ->
-            DiffCollector.record(
-                DiffRecord(
-                    ts = Instant.now().toString(),
-                    endpoint = endpoint,
-                    pathParams = pathParams,
-                    queryParams = queryParams,
-                    category = DiffClassifier.VALUE_DIFF,
-                    layer = "typed",
-                    message = ex.message,
-                ),
-            )
+            return assertion
         }
     }
 }
@@ -297,7 +487,7 @@ object GavCsvComparator : Comparator<Any?> {
      * NOT collapsed — they would indicate a different bug shape and must
      * surface for diagnosis.
      */
-    private fun normalize(s: String): String {
+    fun normalize(s: String): String {
         val trimmed = s.trimEnd()
         return if (trimmed.endsWith(',')) trimmed.dropLast(1).trimEnd() else trimmed
     }

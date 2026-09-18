@@ -121,6 +121,13 @@ These format checks are skipped for a field whose admin field-config visibility 
   component, where the requiredness check then rejects it). The import stores the DSL value verbatim
   and fails fast on duplicate non-null names (see schema-spec). The Portal uses the component key as
   the stable identity, so the display label is optional except under the explicit+external gate.
+- `jiraDisplayName` is independent of `displayName` and stays opt-in, but it is no longer the
+  **only** source of the name rendered on Jira surfaces. At read time the Jira surfaces resolve
+  `jiraDisplayName ?: displayName` (see [ADR-021](adr/021-effective-jira-display-name.md)), so a
+  component with only a `componentDisplayName` renders that instead of falling through to the
+  bare Jira project name. Resolution is a **rendering** concern: the legacy `$.name` and every
+  write-back surface (V4 detail/summary, the Jira editor field, as-code export) keep exposing
+  the stored columns unchanged, so nothing is ever persisted from the fallback.
 - Legacy hotfix version-format relationship checks are not enforced on v4 writes.
   Hotfix formats are inherited/read-only in the Portal, while permissive storage
   preserves imported configurations and resolver compatibility.
