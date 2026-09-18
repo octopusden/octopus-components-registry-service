@@ -69,5 +69,6 @@ class EqualityContractTest extends GroovyTestCase {
 
     void testIdenticalDocsStayEqual() {
         assert new Doc("component-one", "1.0") == new Doc("component-one", "1.0")
+        assert new Doc("component-one", "1.0").hashCode() == new Doc("component-one", "1.0").hashCode()
     }
 }

@@ -88,6 +88,26 @@ over `private final` fields and declare no `equals` of their own. `Doc`'s blast 
 it is not a term of `JiraComponentVersionRange.equals` — but it is the same bug and should be fixed
 in the same change.
 
+## Left alone: securityGroups is null in some producers and empty in others
+
+Repairing `Distribution.equals` made one latent inconsistency comparable for the first time. Four
+producers disagree on how "no security groups" is spelled:
+
+| producer | value |
+|---|---|
+| `EntityMappers` (DB path) | `null` |
+| `EscrowConfigurationLoader.parseSecurityGroupsSection` | `SecurityGroups(read)` when the block exists, `null` when absent |
+| `EscrowConfigurationLoader.calculateDistribution` | re-wraps as `SecurityGroups(read)` when docker is set |
+| `DatabaseComponentRegistryResolver.getComponentsDistributionByJiraProject` | `?: SecurityGroups(null)` |
+
+Both spellings map to the same DTO, so they are semantically identical, and the repaired `equals` now
+tells them apart. No site compares a `Distribution` from one producer against one from another — the
+DB ranges all come from `toEscrowModule`, the Git ranges all from the loader, and the routing union
+is disjoint by component name — so there is no failure scenario today. It is a trap for whoever next
+compares distributions across those paths. Normalising in the constructor would close it, and is
+deliberately not done here: it changes a wire-visible shape (`@JsonInclude(NON_NULL)` drops the field
+when null) and belongs to its own change.
+
 ## Risk if left
 
 Silent, data-dependent equality that is wrong in the permissive direction. Nothing fails; entries
