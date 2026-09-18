@@ -127,6 +127,7 @@ data class MarkerChildrenPayload(
     val fileUrlArtifacts: List<FileUrlArtifactRequest>? = null,
     val dockerImages: List<DockerImageRequest>? = null,
     val packages: List<PackageRequest>? = null,
+    val genericArtifacts: List<GenericArtifactRequest>? = null,
     val requiredTools: List<String>? = null,
     val buildToolBeans: List<BuildToolBeanRequest>? = null,
 )

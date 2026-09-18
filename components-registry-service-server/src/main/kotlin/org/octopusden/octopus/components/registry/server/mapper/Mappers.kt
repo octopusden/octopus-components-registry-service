@@ -58,6 +58,7 @@ fun Distribution.toDTO() =
         RPM(),
         SecurityGroupsDTO(securityGroups?.read?.split(",")?.toList() ?: emptyList()),
         docker(),
+        generic(),
     )
 
 fun VCSSettings.toDTO(): VCSSettingsDTO {
