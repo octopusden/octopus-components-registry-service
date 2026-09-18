@@ -1266,7 +1266,9 @@ private fun buildJiraComponent(
 
     return JiraComponent(
         projectKey,
-        component.jiraDisplayName,
+        // Effective display name (ADR-021). isNotBlank, not a plain `?:`: jira_display_name is
+        // NOT normalized on the v4 write paths, so "" reaches here and would short-circuit.
+        component.jiraDisplayName?.takeIf { it.isNotBlank() } ?: component.displayName,
         format,
         info,
         merged.jiraTechnical ?: false,
