@@ -38,7 +38,7 @@ class EqualityContractTest extends GroovyTestCase {
     }
 
     /** TD-022: the component name is what the endpoint is keyed by; it cannot be outside equality. */
-    void testDifferentComponentsAreNotEqual() {
+    void "test RES-026 ranges of two different components are not equal"() {
         def first = range("COMPONENT_ONE", "g:a:jar")
         def second = range("COMPONENT_TWO", "g:a:jar")
 
@@ -47,27 +47,27 @@ class EqualityContractTest extends GroovyTestCase {
     }
 
     /** The same component twice is still one element: strict enough to distinguish, not to deduplicate. */
-    void testSameComponentStillDeduplicates() {
+    void "test RES-026 the same component twice is still one element"() {
         assert ([range("COMPONENT_ONE", "g:a:jar"), range("COMPONENT_ONE", "g:a:jar")] as Set).size() == 1
     }
 
     /** TD-023: @EqualsAndHashCode over private fields compares properties, and a private field is not one. */
-    void testDistributionsWithDifferentArtifactsAreNotEqual() {
+    void "test RES-026 distributions differing in their artifacts are not equal"() {
         assert distribution("g:a:jar") != distribution("g:other:jar")
     }
 
-    void testIdenticalDistributionsStayEqual() {
+    void "test RES-026 identical distributions stay equal"() {
         assert distribution("g:a:jar") == distribution("g:a:jar")
         assert distribution("g:a:jar").hashCode() == distribution("g:a:jar").hashCode()
     }
 
     /** TD-023, the same shape in `Doc`: a smaller blast radius, an identical contract. */
-    void testDocsForDifferentComponentsAreNotEqual() {
+    void "test RES-026 docs of different components are not equal"() {
         assert new Doc("component-one", "1.0") != new Doc("component-two", "1.0")
         assert new Doc("component-one", "1.0") != new Doc("component-one", "2.0")
     }
 
-    void testIdenticalDocsStayEqual() {
+    void "test RES-026 identical docs stay equal"() {
         assert new Doc("component-one", "1.0") == new Doc("component-one", "1.0")
         assert new Doc("component-one", "1.0").hashCode() == new Doc("component-one", "1.0").hashCode()
     }

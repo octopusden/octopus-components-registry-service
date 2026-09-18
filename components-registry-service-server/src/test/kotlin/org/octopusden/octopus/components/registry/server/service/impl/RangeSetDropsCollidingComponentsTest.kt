@@ -69,8 +69,8 @@ class RangeSetDropsCollidingComponentsTest {
     }
 
     @Test
-    @DisplayName("two components identical but for their key both survive the Set")
-    fun collidingComponentsBothSurvive() {
+    @DisplayName("RES-026: two components identical but for their key both survive the Set")
+    fun `RES-026 colliding components both survive`() {
         val components = listOf(component("comp-one"), component("comp-two"))
         `when`(componentRepository.findAll()).thenReturn(components)
 
@@ -81,8 +81,8 @@ class RangeSetDropsCollidingComponentsTest {
     }
 
     @Test
-    @DisplayName("the same component is still collected once — deduplication is not defeated")
-    fun oneComponentStaysOneElement() {
+    @DisplayName("RES-026: the same component is still collected once — deduplication is not defeated")
+    fun `RES-026 one component stays one element`() {
         val comp = component("comp-one")
         `when`(componentRepository.findAll()).thenReturn(listOf(comp))
 
