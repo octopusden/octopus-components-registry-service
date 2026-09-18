@@ -22,11 +22,12 @@ import com.fasterxml.jackson.databind.node.ObjectNode
  *  3. A baseline **twin** exists: same `versionRange`, a DIFFERENT `componentName`, and a
  *     byte-identical `component` once `displayName` is set aside. That twin IS the element the
  *     addition was collapsing into.
- *  4. The twin's `displayName` is absent/blank and the addition's is non-blank — i.e. the
- *     un-collapse is caused by the name appearing, which is ADR-021 and nothing else.
+ *  4. The twin and the addition agree on a `displayName` the OLD contract could collapse on:
+ *     either both blank, or both the same non-blank text, or the twin blank and the addition named.
+ *     The first two are the repaired contract itself; only the third is ADR-021.
  *
  * Any other size difference — a loss, a duplicate of a visible component, an addition with no twin,
- * an addition whose twin already had a name — is [Verdict.Rejected] and stays an active diff.
+ * an addition whose twin carried a DIFFERENT name — is [Verdict.Rejected] and stays an active diff.
  *
  * Elements are keyed WITHOUT `displayName` so the 518 components whose name merely appears still
  * pair with their baseline selves; their value change is a separate, separately-suppressed record.
@@ -50,6 +51,19 @@ object Adr021RangeRecovery {
             val reason: String,
         ) : Verdict
     }
+
+    /**
+     * Why a pair that used to be one element is now two. The old `hashCode` included `displayName`
+     * while the old `equals` excluded it, so what actually collapsed a pair was an EQUAL name —
+     * blank or not. That is the repaired contract's own effect, shared by both resolvers. Only the
+     * asymmetric case, where a name appears where there was none, is ADR-021 and DB-only.
+     */
+    private enum class Cause { CONTRACT, ADR_021 }
+
+    private data class Twin(
+        val element: JsonNode,
+        val cause: Cause,
+    )
 
     /** `componentName` + `versionRange` — stable enough to name an element in a message. */
     fun keyOf(element: JsonNode): String =
@@ -185,19 +199,38 @@ object Adr021RangeRecovery {
         return copy.toString()
     }
 
-    /** The baseline element this addition was collapsing into, under the real equality contract. */
+    /**
+     * The baseline element this addition was collapsing into, under the real equality contract, and
+     * what separated the two. A twin whose name differs from the addition's is NOT one: the old
+     * `hashCode` read `displayName`, so those two hashed apart and never shared an element.
+     */
     private fun twinOf(
         extra: JsonNode,
         baseline: JsonNode,
-    ): JsonNode? {
+    ): Twin? {
         val identity = collapseIdentityOf(extra)
         val name = extra.path("componentName").asText()
-        return baseline.firstOrNull {
-            collapseIdentityOf(it) == identity &&
-                it.path("componentName").asText() != name &&
-                isBlankName(displayNameOf(it))
-        }
+        val extraDisplayName = displayNameOf(extra)
+        return baseline
+            .asSequence()
+            .filter { collapseIdentityOf(it) == identity && it.path("componentName").asText() != name }
+            .mapNotNull { twin ->
+                val twinDisplayName = displayNameOf(twin)
+                when {
+                    sameName(twinDisplayName, extraDisplayName) -> Twin(twin, Cause.CONTRACT)
+                    isBlankName(twinDisplayName) -> Twin(twin, Cause.ADR_021)
+                    else -> null
+                }
+                // A nameless twin and a same-named one can both sit in the baseline — the old hash
+                // told them apart. The same-named one is the true collapse partner, so prefer it.
+            }.minByOrNull { it.cause.ordinal }
     }
+
+    /** Equal as the old `hashCode` saw them: two blanks are the same bucket as two identical texts. */
+    private fun sameName(
+        left: String?,
+        right: String?,
+    ) = if (isBlankName(left)) isBlankName(right) else left == right
 
     /** What the old contract could not see: a recovered element whose distribution differs from its twin's. */
     private fun blindSpots(
@@ -206,9 +239,9 @@ object Adr021RangeRecovery {
     ): List<String> =
         extras.mapNotNull { extra ->
             val twin = twinOf(extra, baseline)
-            if (twin != null && twin.path("distribution") != extra.path("distribution")) {
+            if (twin != null && twin.element.path("distribution") != extra.path("distribution")) {
                 "${keyOf(extra)} carries a distribution its baseline twin did not " +
-                    "(twin componentName=${twin.path("componentName").asText()}) — the old contract was blind to it"
+                    "(twin componentName=${twin.element.path("componentName").asText()}) — the old contract was blind to it"
             } else {
                 null
             }
@@ -224,19 +257,6 @@ object Adr021RangeRecovery {
         if (name in baselineNames) {
             return "added element duplicates a component already present in the baseline: ${keyOf(extra)}"
         }
-        // Two causes can un-collapse an element, and they are told apart by the added element's name.
-        //
-        //  - It HAS one: ADR-021 resolved it, the hash changed, the pair separated. That happens on
-        //    the DB resolver only, so a name appearing in git-mode is not a recovery — it is a change
-        //    that should not have happened, and the gate must keep saying so.
-        //  - It has NONE: the name cannot be the cause. What separated the pair is the repaired
-        //    equality contract (TD-022/TD-023), which lives in the shared resolver-api and therefore
-        //    applies to BOTH resolvers. Refusing it in git-mode would be refusing the fix's own effect.
-        //
-        // The evidence below is the same either way; only this branch differs.
-        if (!isBlankName(displayNameOf(extra)) && Adr021DisplayName.gitMode) {
-            return "${keyOf(extra)} gained a display name in git-mode, where ADR-021 does not apply"
-        }
         // A twin shows the element COULD have collapsed, never that the component EXISTED: copy the
         // matching fields off a real element, give it a name, and the story fits perfectly. The
         // baseline's own component inventory is the independent evidence — the collapse hides an
@@ -251,10 +271,17 @@ object Adr021RangeRecovery {
                     "it was not recovered, it never existed"
             else -> Unit
         }
-        val twin = twinOf(extra, baseline)
-        return if (twin == null) {
-            "no baseline twin for ${keyOf(extra)} — the element was not collapsing under TD-022" +
-                " (${nearestMiss(extra, baseline)})"
+        val twin =
+            twinOf(extra, baseline)
+                ?: return "no baseline twin for ${keyOf(extra)} — the element was not collapsing under TD-022" +
+                    " (${nearestMiss(extra, baseline)})"
+        // Which of the two causes separated the pair decides where the recovery is allowed. The
+        // repaired equality contract lives in the shared resolver-api, so it applies to BOTH
+        // resolvers and refusing it in git-mode would refuse the fix's own effect. ADR-021 resolves a
+        // name on the DB resolver alone, so a name appearing in git-mode is not a recovery — it is a
+        // change that should not have happened, and the gate must keep saying so.
+        return if (twin.cause == Cause.ADR_021 && Adr021DisplayName.gitMode) {
+            "${keyOf(extra)} separated from a nameless twin by a display name, in git-mode where ADR-021 does not apply"
         } else {
             null
         }
