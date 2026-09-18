@@ -2,7 +2,11 @@
 
 ## Status
 
-Open. Found while implementing [ADR-021](../adr/021-effective-jira-display-name.md); **not** caused by it.
+**Fixed** — `componentName` is now part of `JiraComponentVersionRange.equals` and `hashCode`.
+Found while implementing [ADR-021](../adr/021-effective-jira-display-name.md); not caused by it.
+Fixed together with [TD-023](023-distribution-equality-compares-nothing.md), because both decide the
+same `Set`. Measured on the QA dataset before the fix: **6 components** were being dropped, two of
+which ADR-021 had already recovered by changing their hash.
 
 ## Symptom
 

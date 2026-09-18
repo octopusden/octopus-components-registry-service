@@ -2,8 +2,13 @@
 
 ## Status
 
-Open. Found while implementing [ADR-021](../adr/021-effective-jira-display-name.md); **not** caused
-by it. Amplifies [TD-022](022-jira-component-version-range-equality-drops-components.md).
+**Fixed** — both classes now carry `@EqualsAndHashCode(includeFields = true, excludes = ['metaClass'])`.
+Found while implementing [ADR-021](../adr/021-effective-jira-display-name.md); not caused by it.
+Amplified [TD-022](022-jira-component-version-range-equality-drops-components.md), and was fixed with it.
+
+`metaClass` has to be excluded by hand: `includeFields` also picks up that synthetic per-instance
+Groovy field, and without the exclusion two identical objects never compare equal — which is how the
+first attempt at this fix failed its own regression test.
 
 ## Symptom
 
