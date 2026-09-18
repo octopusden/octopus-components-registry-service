@@ -20,12 +20,12 @@ import java.util.concurrent.TimeUnit
 
 /**
  * `getAllJiraComponentVersionRanges` collects into a `Set`, so the equality contract of its element
- * decides which components the two `jira-component-version-ranges` endpoints show. TD-022 left
- * `componentName` out of that contract and TD-023 made the distribution term vacuous, so components
- * sharing a Jira project, a version range and a VCS root were dropped — silently, with no error and
- * no log line.
+ * decides which components the two `jira-component-version-ranges` endpoints show. `componentName`
+ * and the distribution both have to be live terms of that contract: without them, components sharing
+ * a Jira project, a version range and a VCS root collapse into one, and the loss is silent — no
+ * error, no log line. See TD-022 and TD-023.
  *
- * This is the seam where that mattered. The model-level contract tests live in
+ * This is the endpoint seam. The model-level contract tests live in
  * `component-resolver-api`; this one pins the behaviour a consumer of the endpoint actually sees.
  */
 @Timeout(30, unit = TimeUnit.SECONDS)

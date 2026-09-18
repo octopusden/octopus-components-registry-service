@@ -14,9 +14,9 @@ import org.octopusden.releng.versions.VersionNames
  * The equality contracts these models are collected under.
  *
  * `getAllJiraComponentVersionRanges` collects into a `Set`, so whatever `equals` and `hashCode` say
- * here decides which components a public endpoint shows. Two defects made that decision wrong in the
- * permissive direction, and the failure mode is silence: no error, no log line, the component is
- * simply absent. See TD-022 and TD-023.
+ * here decides which components a public endpoint shows. An over-permissive contract fails silently:
+ * no error, no log line, the component is simply absent. Each case below pins one term of that
+ * contract. See TD-022 and TD-023.
  */
 @TypeChecked
 class EqualityContractTest extends GroovyTestCase {
@@ -46,7 +46,7 @@ class EqualityContractTest extends GroovyTestCase {
         assert ([first, second] as Set).size() == 2
     }
 
-    /** The same component twice is still one element — the fix must not defeat deduplication. */
+    /** The same component twice is still one element: strict enough to distinguish, not to deduplicate. */
     void testSameComponentStillDeduplicates() {
         assert ([range("COMPONENT_ONE", "g:a:jar"), range("COMPONENT_ONE", "g:a:jar")] as Set).size() == 1
     }
@@ -61,7 +61,7 @@ class EqualityContractTest extends GroovyTestCase {
         assert distribution("g:a:jar").hashCode() == distribution("g:a:jar").hashCode()
     }
 
-    /** TD-023, second offender: same shape, smaller blast radius. */
+    /** TD-023, the same shape in `Doc`: a smaller blast radius, an identical contract. */
     void testDocsForDifferentComponentsAreNotEqual() {
         assert new Doc("component-one", "1.0") != new Doc("component-two", "1.0")
         assert new Doc("component-one", "1.0") != new Doc("component-one", "2.0")

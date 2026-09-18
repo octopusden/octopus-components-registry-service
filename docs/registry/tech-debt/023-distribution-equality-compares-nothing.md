@@ -7,8 +7,7 @@ Found while implementing [ADR-021](../adr/021-effective-jira-display-name.md); n
 Amplified [TD-022](022-jira-component-version-range-equality-drops-components.md), and was fixed with it.
 
 `metaClass` has to be excluded by hand: `includeFields` also picks up that synthetic per-instance
-Groovy field, and without the exclusion two identical objects never compare equal — which is how the
-first attempt at this fix failed its own regression test.
+Groovy field, and without the exclusion two identical objects never compare equal.
 
 ## Symptom
 
