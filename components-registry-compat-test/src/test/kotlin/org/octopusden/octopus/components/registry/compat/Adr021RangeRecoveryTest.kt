@@ -257,6 +257,35 @@ class Adr021RangeRecoveryTest {
     }
 
     @Test
+    @DisplayName("contract-caused recovery: twins sharing one non-blank name collapsed on that very name")
+    fun sharedNameRecoveryIsConfirmed() {
+        // The old `hashCode` INCLUDED `displayName`, so an equal name is what put the pair in one
+        // bucket; `equals` excluded it, so the pair then compared equal. Two named components that
+        // share a name collapse exactly as two nameless ones do, and only the repaired
+        // `componentName` term separates them. The name is unchanged, so ADR-021 explains nothing.
+        val verdict =
+            Adr021RangeRecovery.analyse(
+                baseline = arrayOf(element("comp-c", "Shared Name")),
+                candidate = arrayOf(element("comp-c", "Shared Name"), element("comp-a", "Shared Name")),
+            )
+        assertThat(verdict).isInstanceOf(Adr021RangeRecovery.Verdict.Confirmed::class.java)
+        assertThat((verdict as Adr021RangeRecovery.Verdict.Confirmed).keys)
+            .containsExactly("componentName=comp-a, versionRange=(,)")
+    }
+
+    @Test
+    @DisplayName("a shared-name recovery is allowed in GIT-mode too — no name changed there either")
+    fun sharedNameRecoveryIsAllowedInGitMode() {
+        Adr021DisplayName.gitMode = true
+        val verdict =
+            Adr021RangeRecovery.analyse(
+                baseline = arrayOf(element("comp-c", "Shared Name")),
+                candidate = arrayOf(element("comp-c", "Shared Name"), element("comp-a", "Shared Name")),
+            )
+        assertThat(verdict).isInstanceOf(Adr021RangeRecovery.Verdict.Confirmed::class.java)
+    }
+
+    @Test
     @DisplayName("REJECT (git-mode): a NAME-caused recovery still gets no allowance there")
     fun nameCausedRecoveryStaysRefusedInGitMode() {
         // ADR-021 applies to the DB resolver only. A name appearing in git-mode is not a recovery,
