@@ -113,7 +113,9 @@ implemented** (see Consequences):
   pattern can match and which would suppress every collection difference if matched wholesale.
   The comparator forgives exactly `null -> non-blank name` and is **gated to db-mode**: a
   git-routed candidate gets no allowance, or a wrongly-gained name there would produce zero
-  diffs and the empty `known-deltas-git.json` could not catch it. The raw layer keeps its
+  diffs. (`known-deltas-git.json` was empty then; TD-022/TD-023 later added one rule-keyed entry
+  there, because repairing the equality contract lives in the shared resolver-api and changes both
+  paths — see that file's comment. The git-mode refusal of a NAME-caused recovery still stands.) The raw layer keeps its
   `STRUCTURAL_DIFF` entries, each pinned to the `component.displayName` path so every other
   field of the same element stays compared. `DetailedComponentVersion.component` is a
   string-to-string change, so it cannot key on a null the way `displayName` does; it gets its

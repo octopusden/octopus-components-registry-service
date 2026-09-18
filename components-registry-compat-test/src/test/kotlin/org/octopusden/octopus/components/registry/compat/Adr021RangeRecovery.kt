@@ -123,8 +123,6 @@ object Adr021RangeRecovery {
     ): Verdict {
         val base = baseline?.takeIf { it.isArray } ?: return Verdict.NotApplicable
         val cand = candidate?.takeIf { it.isArray } ?: return Verdict.NotApplicable
-        // ADR-021 changes the DB resolver only; a git-routed candidate must stay byte-identical.
-        if (Adr021DisplayName.gitMode) return Verdict.Rejected("git-mode candidate gets no recovery allowance")
 
         val baselineCounts = base.groupingBy { pairingKeyOf(it) }.eachCount()
         val candidateCounts = cand.groupingBy { pairingKeyOf(it) }.eachCount()
@@ -226,8 +224,18 @@ object Adr021RangeRecovery {
         if (name in baselineNames) {
             return "added element duplicates a component already present in the baseline: ${keyOf(extra)}"
         }
-        if (isBlankName(displayNameOf(extra))) {
-            return "added element carries no display name, so ADR-021 cannot explain it: ${keyOf(extra)}"
+        // Two causes can un-collapse an element, and they are told apart by the added element's name.
+        //
+        //  - It HAS one: ADR-021 resolved it, the hash changed, the pair separated. That happens on
+        //    the DB resolver only, so a name appearing in git-mode is not a recovery — it is a change
+        //    that should not have happened, and the gate must keep saying so.
+        //  - It has NONE: the name cannot be the cause. What separated the pair is the repaired
+        //    equality contract (TD-022/TD-023), which lives in the shared resolver-api and therefore
+        //    applies to BOTH resolvers. Refusing it in git-mode would be refusing the fix's own effect.
+        //
+        // The evidence below is the same either way; only this branch differs.
+        if (!isBlankName(displayNameOf(extra)) && Adr021DisplayName.gitMode) {
+            return "${keyOf(extra)} gained a display name in git-mode, where ADR-021 does not apply"
         }
         // A twin shows the element COULD have collapsed, never that the component EXISTED: copy the
         // matching fields off a real element, give it a name, and the story fits perfectly. The
