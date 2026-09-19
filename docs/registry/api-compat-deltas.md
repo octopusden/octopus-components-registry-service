@@ -38,7 +38,7 @@ The compat-test exercises **API contracts**:
   `component` scoped to the detailed-version endpoints). No ADR-021 entry uses `messagePattern`, so
   no whole typed record is suppressed and a co-occurring regression on the same payload still
   surfaces — pinned by the negative tests in `Adr021DisplayNameCompatTest`. **`known-deltas-git.json` stays
-  empty**: the fallback is applied only on the DB resolver path, so a no-migration git-mode
+  empty for ADR-021**: the fallback is applied only on the DB resolver path, so a no-migration git-mode
   candidate is still byte-identical to the baseline and the deploy-without-migration invariant is
   untouched. The legacy `$.name` and every write-back surface are excluded from the rule by design
   — see the ADR — so this delta does not spread beyond the Jira-facing payloads.

@@ -107,17 +107,6 @@ class Adr021RangeRecoveryTest {
     }
 
     @Test
-    @DisplayName("REJECT: an addition carrying no display name at all")
-    fun namelessAdditionIsRejected() {
-        val verdict =
-            Adr021RangeRecovery.analyse(
-                baseline = arrayOf(element("comp-c")),
-                candidate = arrayOf(element("comp-c"), element("comp-a")),
-            )
-        assertThat((verdict as Adr021RangeRecovery.Verdict.Rejected).reason).contains("no display name")
-    }
-
-    @Test
     @DisplayName("REJECT (git-mode): the no-migration candidate gets no allowance")
     fun gitModeIsRejected() {
         Adr021DisplayName.gitMode = true
@@ -239,6 +228,75 @@ class Adr021RangeRecoveryTest {
                 candidate = arrayOf(element("comp-c", "Component C", gav = "g:a:jar,"), element("comp-a", "Component A")),
             )
         assertThat(verdict).isInstanceOf(Adr021RangeRecovery.Verdict.Confirmed::class.java)
+    }
+
+    @Test
+    @DisplayName("contract-caused recovery: BOTH sides nameless, so the equality fix is the only explanation")
+    fun namelessRecoveryFromTheContractFixIsConfirmed() {
+        // TD-022/TD-023 repaired the equality contract itself, which is shared by both resolvers. A
+        // component that collapsed with a nameless twin reappears with no name of its own — ADR-021
+        // cannot explain it, and does not need to.
+        val verdict =
+            Adr021RangeRecovery.analyse(
+                baseline = arrayOf(element("comp-c")),
+                candidate = arrayOf(element("comp-c"), element("comp-a")),
+            )
+        assertThat(verdict).isInstanceOf(Adr021RangeRecovery.Verdict.Confirmed::class.java)
+    }
+
+    @Test
+    @DisplayName("contract-caused recovery is allowed in GIT-mode too — the contract is shared")
+    fun namelessRecoveryIsAllowedInGitMode() {
+        Adr021DisplayName.gitMode = true
+        val verdict =
+            Adr021RangeRecovery.analyse(
+                baseline = arrayOf(element("comp-c")),
+                candidate = arrayOf(element("comp-c"), element("comp-a")),
+            )
+        assertThat(verdict).isInstanceOf(Adr021RangeRecovery.Verdict.Confirmed::class.java)
+    }
+
+    @Test
+    @DisplayName("contract-caused recovery: twins sharing one non-blank name collapsed on that very name")
+    fun sharedNameRecoveryIsConfirmed() {
+        // The old `hashCode` INCLUDED `displayName`, so an equal name is what put the pair in one
+        // bucket; `equals` excluded it, so the pair then compared equal. Two named components that
+        // share a name collapse exactly as two nameless ones do, and only the repaired
+        // `componentName` term separates them. The name is unchanged, so ADR-021 explains nothing.
+        val verdict =
+            Adr021RangeRecovery.analyse(
+                baseline = arrayOf(element("comp-c", "Shared Name")),
+                candidate = arrayOf(element("comp-c", "Shared Name"), element("comp-a", "Shared Name")),
+            )
+        assertThat(verdict).isInstanceOf(Adr021RangeRecovery.Verdict.Confirmed::class.java)
+        assertThat((verdict as Adr021RangeRecovery.Verdict.Confirmed).keys)
+            .containsExactly("componentName=comp-a, versionRange=(,)")
+    }
+
+    @Test
+    @DisplayName("a shared-name recovery is allowed in GIT-mode too — no name changed there either")
+    fun sharedNameRecoveryIsAllowedInGitMode() {
+        Adr021DisplayName.gitMode = true
+        val verdict =
+            Adr021RangeRecovery.analyse(
+                baseline = arrayOf(element("comp-c", "Shared Name")),
+                candidate = arrayOf(element("comp-c", "Shared Name"), element("comp-a", "Shared Name")),
+            )
+        assertThat(verdict).isInstanceOf(Adr021RangeRecovery.Verdict.Confirmed::class.java)
+    }
+
+    @Test
+    @DisplayName("REJECT (git-mode): a NAME-caused recovery still gets no allowance there")
+    fun nameCausedRecoveryStaysRefusedInGitMode() {
+        // ADR-021 applies to the DB resolver only. A name appearing in git-mode is not a recovery,
+        // it is a change that should not have happened.
+        Adr021DisplayName.gitMode = true
+        val verdict =
+            Adr021RangeRecovery.analyse(
+                baseline = arrayOf(element("comp-c")),
+                candidate = arrayOf(element("comp-c", "Component C"), element("comp-a", "Component A")),
+            )
+        assertThat((verdict as Adr021RangeRecovery.Verdict.Rejected).reason).contains("git-mode")
     }
 
     // ----- Wiring: the raw layer carries the verdict, and only the marker is suppressible -----
