@@ -202,9 +202,9 @@ class MetaOptionsEndpointsTest {
         val b = uniqueLabel("beta")
         val g = uniqueLabel("gamma")
 
-        createComponentWithLabels("meta_labels_one_${UUID.randomUUID().toString().take(6)}", setOf(b, a))
-        createComponentWithLabels("meta_labels_two_${UUID.randomUUID().toString().take(6)}", setOf(g, a))
-        createComponentWithLabels("meta_labels_three_${UUID.randomUUID().toString().take(6)}", setOf(b))
+        createComponentWithLabels("meta-labels-one-${UUID.randomUUID().toString().take(6)}", setOf(b, a))
+        createComponentWithLabels("meta-labels-two-${UUID.randomUUID().toString().take(6)}", setOf(g, a))
+        createComponentWithLabels("meta-labels-three-${UUID.randomUUID().toString().take(6)}", setOf(b))
 
         val body =
             mvc
@@ -262,8 +262,8 @@ class MetaOptionsEndpointsTest {
 
         val realLabel = uniqueLabel("realfblbl")
         val blankCode = "   "
-        val realComponentName = "meta_labels_blank_real_${UUID.randomUUID().toString().take(6)}"
-        val anchorComponentName = "meta_labels_blank_anchor_${UUID.randomUUID().toString().take(6)}"
+        val realComponentName = "meta-labels-blank-real-${UUID.randomUUID().toString().take(6)}"
+        val anchorComponentName = "meta-labels-blank-anchor-${UUID.randomUUID().toString().take(6)}"
 
         // Real labelled component (controller path — write validation OK).
         createComponentWithLabels(realComponentName, setOf(realLabel))
@@ -365,11 +365,11 @@ class MetaOptionsEndpointsTest {
         val b = uniqueSystemCode("betasys")
         val g = uniqueSystemCode("gammasys")
 
-        createComponentWithSystem("meta_systems_one_${UUID.randomUUID().toString().take(6)}", b)
-        createComponentWithSystem("meta_systems_two_${UUID.randomUUID().toString().take(6)}", a)
-        createComponentWithSystem("meta_systems_three_${UUID.randomUUID().toString().take(6)}", g)
+        createComponentWithSystem("meta-systems-one-${UUID.randomUUID().toString().take(6)}", b)
+        createComponentWithSystem("meta-systems-two-${UUID.randomUUID().toString().take(6)}", a)
+        createComponentWithSystem("meta-systems-three-${UUID.randomUUID().toString().take(6)}", g)
         // Duplicate `b` on a separate component to exercise DISTINCT.
-        createComponentWithSystem("meta_systems_four_${UUID.randomUUID().toString().take(6)}", b)
+        createComponentWithSystem("meta-systems-four-${UUID.randomUUID().toString().take(6)}", b)
 
         val body =
             mvc

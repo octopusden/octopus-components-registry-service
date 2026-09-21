@@ -59,6 +59,14 @@ abstract class CompatibilityTestBase {
                 override fun getApiUrl(): String = candidateUrl
             },
         )
+        // Independent evidence for Adr021RangeRecovery: the component keys the BASELINE reports.
+        // Loaded once per process, from the endpoint the TD-022 collapse cannot touch. A failure
+        // here leaves it unloaded, and the rule then refuses every recovery rather than guessing.
+        BaselineInventory.ensureLoaded {
+            runCatching { BaselineInventory.idsFrom(baselineRaw.get("/rest/api/2/components").json) }
+                .onFailure { log.warn("Baseline component inventory unavailable; TD-022 recoveries will not be accepted", it) }
+                .getOrNull()
+        }
     }
 
     /**

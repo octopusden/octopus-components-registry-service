@@ -74,7 +74,7 @@ class V4ClearSemanticsTest {
         System.setProperty("COMPONENTS_REGISTRY_SERVICE_TEST_DATA_DIR", testResourcesPath.toString())
     }
 
-    private fun unique(prefix: String) = "${prefix}_${UUID.randomUUID().toString().take(8)}"
+    private fun unique(prefix: String) = "${prefix.lowercase().replace('_', '-')}-${UUID.randomUUID().toString().take(8)}"
 
     // A unique jira project key so the (projectKey, versionPrefix) uniqueness rule
     // never collides with a sibling test or fixture data.

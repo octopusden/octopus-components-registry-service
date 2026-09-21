@@ -32,9 +32,69 @@ jobs:
       enable-dependency-check: false
     secrets: inherit
 
+  # A change to the committed v4 contract must carry a consumer-facing changelog
+  # entry. This is the rule api-changelog.md already states ("How to update"),
+  # made non-optional.
+  #
+  # Deliberately narrow. Whether a behaviour change needs a numbered requirement
+  # is a judgement a diff cannot make, and stays with review (AGENTS.md
+  # § Technical Requirements Tracking). This checks the one thing a diff answers
+  # exactly: the generated contract moved, so the consumers' changelog must say
+  # what moved. OpenApiV4SpecTest already covers the other direction — a v4
+  # source change whose committed spec was never regenerated.
+  api-changelog:
+    name: changelog/v4
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      pull-requests: read
+    steps:
+      # No checkout: the file list comes from the API, so this needs neither a
+      # clone nor the full history a merge-base diff would.
+      #
+      # The files endpoint, not `gh pr diff --name-only`: that serves the diff
+      # media type, which answers 406 above 300 files. A large PR would fail
+      # this job with "diff exceeded the maximum number of files" — blocking a
+      # PR that may touch no contract at all, and that no changelog edit could
+      # unblock. #428 changed 346 files, none of them the contract.
+      - name: Require a changelog entry when the v4 contract changes
+        env:
+          GH_TOKEN: ${{ github.token }}
+          PR: ${{ github.event.pull_request.number }}
+          REPO: ${{ github.repository }}
+        run: |
+          set -euo pipefail
+          SURFACE='components-registry-service-server/src/main/resources/openapi/v4.json'
+          CHANGELOG='docs/registry/api-changelog.md'
+
+          files=$(gh api --paginate "repos/$REPO/pulls/$PR/files?per_page=100" --jq '.[].filename')
+
+          # -x -F: whole line, no regex. Paths arrive verbatim from the API.
+          if ! grep -qxF "$SURFACE" <<<"$files"; then
+            echo "v4 contract unchanged — nothing to check."
+            exit 0
+          fi
+          if grep -qxF "$CHANGELOG" <<<"$files"; then
+            echo "ok — v4 contract change carries a changelog entry."
+            exit 0
+          fi
+
+          # The annotation has to be one line to render as one; the detail goes
+          # to the log above it.
+          cat >&2 <<MSG
+          The v4 contract is what the Portal binds to, so a change to it needs a
+          dated entry under "Unreleased" in $CHANGELOG saying what consumers see
+          differently — a new field, endpoint, enum value, rename or removal.
+
+          If the regenerated spec carries no consumer-visible change, say that in
+          one line rather than committing a silent contract move.
+          MSG
+          echo "::error::$SURFACE changed but $CHANGELOG did not."
+          exit 1
+
   gate-merge:
     name: gate/merge
-    needs: [ build, quality, security ]
+    needs: [ build, quality, security, api-changelog ]
     if: always()
     runs-on: ubuntu-latest
     steps:

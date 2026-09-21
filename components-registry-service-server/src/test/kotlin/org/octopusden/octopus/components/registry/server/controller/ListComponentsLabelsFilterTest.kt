@@ -65,7 +65,7 @@ class ListComponentsLabelsFilterTest {
         System.setProperty("COMPONENTS_REGISTRY_SERVICE_TEST_DATA_DIR", testResourcesPath.toString())
     }
 
-    private fun uniqueName(prefix: String) = "${prefix}_${UUID.randomUUID().toString().take(8)}"
+    private fun uniqueName(prefix: String) = "${prefix.lowercase().replace('_', '-')}-${UUID.randomUUID().toString().take(8)}"
 
     private fun createComponentWithLabels(
         name: String,
@@ -271,9 +271,9 @@ class ListComponentsLabelsFilterTest {
         // does not influence the leading aaa/bbb/ccc ordering.
         val labelA = uniqueName("pgnlbla")
         val suffix = UUID.randomUUID().toString().take(6)
-        val first = "pgn_aaa_$suffix"
-        val second = "pgn_bbb_$suffix"
-        val third = "pgn_ccc_$suffix"
+        val first = "pgn-aaa-$suffix"
+        val second = "pgn-bbb-$suffix"
+        val third = "pgn-ccc-$suffix"
         // Seed in reverse lexicographic order so a regression where sort
         // silently fails (e.g., returning insertion order) is visibly wrong
         // in the asserted content[].name array.
@@ -322,7 +322,7 @@ class ListComponentsLabelsFilterTest {
                 .response.contentAsString
         val fullJson = objectMapper.readTree(fullBody)
         val returnedNames = fullJson["content"].map { it["name"].asText() }
-        val seededNames = returnedNames.filter { it.endsWith("_$suffix") }
+        val seededNames = returnedNames.filter { it.endsWith("-$suffix") }
         assert(seededNames == listOf(first, second, third)) {
             "expected components returned sorted by componentKey ASC ($first, $second, $third); got $seededNames"
         }

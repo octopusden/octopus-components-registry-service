@@ -72,7 +72,7 @@ class ComponentSectionAuditTest {
     @Test
     @DisplayName("SYS-053: PATCH of build.mavenVersion writes an UPDATE audit row with a field-level diff")
     fun `SYS-053 build scalar PATCH writes an UPDATE audit row with field-level diff`() {
-        val id = createComponent("sys053b_${UUID.randomUUID().toString().take(8)}", mavenVersion = "3.8")
+        val id = createComponent("sys053b-${UUID.randomUUID().toString().take(8)}", mavenVersion = "3.8")
         assertEquals(0, updateRowCount(id), "expected no UPDATE rows right after create, got ${historyActions(id)}")
 
         patchComponent(id, """{"baseConfiguration":{"build":{"mavenVersion":"3.9"}}}""")
@@ -86,7 +86,7 @@ class ComponentSectionAuditTest {
     @Test
     @DisplayName("SYS-053: PATCH of jira.projectKey writes an UPDATE audit row")
     fun `SYS-053 jira scalar PATCH writes an UPDATE audit row`() {
-        val id = createComponent("sys053j_${UUID.randomUUID().toString().take(8)}")
+        val id = createComponent("sys053j-${UUID.randomUUID().toString().take(8)}")
 
         patchComponent(id, """{"baseConfiguration":{"jira":{"projectKey":"PRJX"}}}""")
 
@@ -97,7 +97,7 @@ class ComponentSectionAuditTest {
     @Test
     @DisplayName("SYS-053: PATCH of vcsEntries (section child collection) writes an UPDATE audit row")
     fun `SYS-053 vcsEntries PATCH writes an UPDATE audit row`() {
-        val id = createComponent("sys053v_${UUID.randomUUID().toString().take(8)}")
+        val id = createComponent("sys053v-${UUID.randomUUID().toString().take(8)}")
 
         patchComponent(id, vcsPayload)
 
@@ -108,7 +108,7 @@ class ComponentSectionAuditTest {
     @Test
     @DisplayName("SYS-053: PATCH of requiredTools (repo-synced junction collection) audits once; identical re-send is a no-op")
     fun `SYS-053 requiredTools PATCH writes an UPDATE audit row and identical re-send does not`() {
-        val id = createComponent("sys053t_${UUID.randomUUID().toString().take(8)}")
+        val id = createComponent("sys053t-${UUID.randomUUID().toString().take(8)}")
         val payload = """{"baseConfiguration":{"requiredTools":["BuildEnv","Oracle"]}}"""
 
         patchComponent(id, payload)
@@ -124,7 +124,7 @@ class ComponentSectionAuditTest {
     @Test
     @DisplayName("SYS-053: PATCH of securityGroups (content-sorted component collection) audits once; identical re-send is a no-op")
     fun `SYS-053 securityGroups PATCH writes an UPDATE audit row and identical re-send does not`() {
-        val id = createComponent("sys053s_${UUID.randomUUID().toString().take(8)}")
+        val id = createComponent("sys053s-${UUID.randomUUID().toString().take(8)}")
         val payload = """{"securityGroups":[{"groupType":"read","groupName":"vcs-e2e-group"}]}"""
 
         patchComponent(id, payload)
@@ -140,7 +140,7 @@ class ComponentSectionAuditTest {
     @Test
     @DisplayName("SYS-053: a no-op section PATCH (same scalar, identical collection) writes no audit row — SYS-048 holds")
     fun `SYS-053 no-op section PATCH writes no audit row`() {
-        val id = createComponent("sys053n_${UUID.randomUUID().toString().take(8)}", mavenVersion = "3.9")
+        val id = createComponent("sys053n-${UUID.randomUUID().toString().take(8)}", mavenVersion = "3.9")
         patchComponent(id, vcsPayload)
         val afterRealChange = updateRowCount(id)
 

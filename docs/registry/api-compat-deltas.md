@@ -18,6 +18,31 @@ The compat-test exercises **API contracts**:
 - `PUT /rest/api/2/components-registry/service/updateCache` — **phase-aware** contract: returns **200** + the Git-refresh duration (ms) while any component is still served from Git (migration-status `git > 0`), and **410 Gone** only once fully migrated to the DB (`git == 0`). A fully-migrated db-mode candidate returns 410 → suppressed via `known-deltas-db.json`; a git-mode (no-migration) candidate returns 200 and matches baseline → no delta. See "Per-mode known-deltas" below.
 - `GET /components` list / `GET /components/{c}` detail / `GET /components/{c}/distribution` (v1/v2/v3) — the **component-level** `Component.distribution` and `escrow` fields report the **OPEN-UPPER (newest) block's** values (ADR-018 base-row amendment, 2026-07), not the top-level/oldest block's. Confirmed intentional by the domain owner 2026-07-01 over all 11 affected components; suppressed via the "ADR-018 base-row amendment" `known-deltas-db.json` entries until this release becomes the baseline. Per-VERSION endpoints are byte-identical (unaffected). The standalone `{c}/distribution` endpoint is deprecated (zero recorded prod traffic).
 
+- **Jira display name** (`ADR-021`, 2026-09) — `JiraComponent.displayName` resolves
+  `jiraDisplayName ?: displayName` instead of `jiraDisplayName` alone, so the 518 components that
+  declare only a `componentDisplayName` now render their own name where the baseline rendered
+  `null` (518 of 998 in the QA snapshot this was sized against; the prod figure will differ
+  slightly). Surfaces carrying the embedded `component.displayName`: `.../versions/{v}/jira-component`,
+  `projects/{p}/versions/{v}`, `components/{c}/versions/{v}` (the `DetailedComponent` endpoint, which
+  carries it under `jiraComponentVersion.`) and both `jira-component-version-ranges` endpoints. Note
+  `components/{c}` is **not** among them — `ComponentV2` has no jira block. Plus
+  `DetailedComponentVersion.component` on `.../detailed-version` and the batch `detailed-versions`
+  (it already read `displayName ?: componentName`, so it follows the same rule and flips from the key
+  to the label for those components).
+  On both `jira-component-version-ranges` endpoints the Set's element COUNT also rises: TD-022
+  (`JiraComponentVersionRange.equals/hashCode` omit `componentName`) collapsed components whose
+  payload was identical, and the resolved name separates them again. Accepted only when
+  `Adr021RangeRecovery` confirms the collapse story element by element — see ADR-021.
+  Neutralised at **field granularity only**: raw-layer `known-deltas-db.json` entries pinned to the
+  `component.displayName` JSON path, and typed-layer field comparators (`*.displayName`, plus
+  `component` scoped to the detailed-version endpoints). No ADR-021 entry uses `messagePattern`, so
+  no whole typed record is suppressed and a co-occurring regression on the same payload still
+  surfaces — pinned by the negative tests in `Adr021DisplayNameCompatTest`. **`known-deltas-git.json` stays
+  empty**: the fallback is applied only on the DB resolver path, so a no-migration git-mode
+  candidate is still byte-identical to the baseline and the deploy-without-migration invariant is
+  untouched. The legacy `$.name` and every write-back surface are excluded from the rule by design
+  — see the ADR — so this delta does not spread beyond the Jira-facing payloads.
+
 **Operational metadata endpoints are explicitly excluded** from the compat surface:
 
 - `GET /rest/api/2/components-registry/service/status` — read **only** by

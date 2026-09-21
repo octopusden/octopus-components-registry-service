@@ -58,7 +58,7 @@ class ListComponentsPeopleFilterTest {
         System.setProperty("COMPONENTS_REGISTRY_SERVICE_TEST_DATA_DIR", testResourcesPath.toString())
     }
 
-    private fun uniqueName(prefix: String) = "${prefix}_${UUID.randomUUID().toString().take(8)}"
+    private fun uniqueName(prefix: String) = "${prefix.lowercase().replace('_', '-')}-${UUID.randomUUID().toString().take(8)}"
 
     private fun createComponent(
         name: String,
@@ -197,7 +197,11 @@ class ListComponentsPeopleFilterTest {
                 .perform(
                     get("/rest/api/4/components")
                         .with(viewerJwt())
-                        .param("search", "sys056sum_")
+                        // Marker matches the kebab keys the fixtures now build. The old "sys056sum_"
+                        // still matched them, but only because `search` becomes a SQL LIKE
+                        // pattern where "_" is a single-character wildcard — an accident, not
+                        // an assertion.
+                        .param("search", "sys056sum-")
                         .param("size", "200"),
                 ).andExpect(status().isOk)
                 .andReturn()

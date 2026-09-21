@@ -121,6 +121,13 @@ These format checks are skipped for a field whose admin field-config visibility 
   component, where the requiredness check then rejects it). The import stores the DSL value verbatim
   and fails fast on duplicate non-null names (see schema-spec). The Portal uses the component key as
   the stable identity, so the display label is optional except under the explicit+external gate.
+- `jiraDisplayName` is independent of `displayName` and stays opt-in, but it is no longer the
+  **only** source of the name rendered on Jira surfaces. At read time the Jira surfaces resolve
+  `jiraDisplayName ?: displayName` (see [ADR-021](adr/021-effective-jira-display-name.md)), so a
+  component with only a `componentDisplayName` renders that instead of falling through to the
+  bare Jira project name. Resolution is a **rendering** concern: the legacy `$.name` and every
+  write-back surface (V4 detail/summary, the Jira editor field, as-code export) keep exposing
+  the stored columns unchanged, so nothing is ever persisted from the fallback.
 - Legacy hotfix version-format relationship checks are not enforced on v4 writes.
   Hotfix formats are inherited/read-only in the Portal, while permissive storage
   preserves imported configurations and resolver compatibility.
@@ -401,3 +408,12 @@ These endpoints serve cross-cutting needs (Portal footer, current-user display) 
 - **Auth**: Authenticated. Returns 401 if no JWT.
 - **Output**: `User` from `octopus-cloud-commons` — `{ username, roles, groups }`.
 - **Contract**: `SYS-034` in [requirements-common.md](requirements-common.md).
+
+## 10. Archive Readiness Check
+
+- **Endpoint**: `GET /rest/api/4/components/{idOrName}/archive-readiness` — read-only pre-flight for the archive/delete flow.
+- **Auth**: `ACCESS_COMPONENTS` + `canDeleteComponent(idOrName)`, the same gate as `deleteComponent`.
+- **Output**: `{ ready: Boolean, entries: [{ targetKind, targetId, outcome, reason, reasonKind, sharedWith, openIssues }] }` — one entry per external target the component uses (its VCS repository, TeamCity project(s), and per effective Jira `(project key, version prefix)` pair, one `JIRA_ISSUES` and one `JIRA_PROJECT` entry). `outcome` is `COMPLETED` / `NOT_COMPLETED` / `UNKNOWN`; `ready` is false iff any entry is `NOT_COMPLETED` or `UNKNOWN`.
+- **Absence semantics**: a TeamCity project the system reports absent is `COMPLETED` (genuinely gone). A VCS repository reported absent is `UNKNOWN`, not `COMPLETED` — some hosting platforms 404 a private/inaccessible repository the same way they 404 a deleted one, and this check cannot tell which.
+- **Read-only**: never writes to the registry or to any external system; the existing archive/delete/update write paths are unchanged and never consult it.
+- **Contract**: `SYS-096` in [requirements-common.md](requirements-common.md); full behavior in [openspec/specs/component-archive-readiness/spec.md](../../openspec/specs/component-archive-readiness/spec.md).

@@ -51,7 +51,7 @@ class ListComponentsBuildSystemFilterTest {
         System.setProperty("COMPONENTS_REGISTRY_SERVICE_TEST_DATA_DIR", testResourcesPath.toString())
     }
 
-    private fun uniqueName(prefix: String) = "${prefix}_${UUID.randomUUID().toString().take(8)}"
+    private fun uniqueName(prefix: String) = "${prefix.lowercase().replace('_', '-')}-${UUID.randomUUID().toString().take(8)}"
 
     private fun createComponentWithBuildSystem(
         name: String,
@@ -378,9 +378,9 @@ class ListComponentsBuildSystemFilterTest {
         // order so a regression where sort silently fails (e.g., insertion
         // order leaks through) is visibly wrong in the assertion.
         val suffix = UUID.randomUUID().toString().take(6)
-        val first = "bspg_aaa_$suffix"
-        val second = "bspg_bbb_$suffix"
-        val third = "bspg_ccc_$suffix"
+        val first = "bspg-aaa-$suffix"
+        val second = "bspg-bbb-$suffix"
+        val third = "bspg-ccc-$suffix"
         createComponentWithBuildSystem(third, "GRADLE")
         createComponentWithBuildSystem(second, "MAVEN")
         createComponentWithBuildSystem(first, "GRADLE")
@@ -426,7 +426,7 @@ class ListComponentsBuildSystemFilterTest {
                 .andReturn()
                 .response.contentAsString
         val returnedNames = objectMapper.readTree(fullBody)["content"].map { it["name"].asText() }
-        val seededNames = returnedNames.filter { it.endsWith("_$suffix") }
+        val seededNames = returnedNames.filter { it.endsWith("-$suffix") }
         assert(seededNames == listOf(first, second, third)) {
             "expected components returned sorted by componentKey ASC ($first, $second, $third); got $seededNames"
         }

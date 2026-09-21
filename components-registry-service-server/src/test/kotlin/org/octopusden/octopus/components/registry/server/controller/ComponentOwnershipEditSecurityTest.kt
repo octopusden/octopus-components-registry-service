@@ -87,7 +87,7 @@ class ComponentOwnershipEditSecurityTest {
         whenMock(employeeServiceClient.getManager(anyString())).thenReturn(ManagerDTO(null))
     }
 
-    private fun uniqueName(prefix: String) = "${prefix}_${UUID.randomUUID().toString().take(8)}"
+    private fun uniqueName(prefix: String) = "${prefix.lowercase().replace('_', '-')}-${UUID.randomUUID().toString().take(8)}"
 
     /** Create a component (admin by default — create is gated on raw CREATE_COMPONENTS, not ownership). */
     private fun create(
