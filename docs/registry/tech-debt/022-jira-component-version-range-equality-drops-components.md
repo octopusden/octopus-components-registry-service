@@ -2,7 +2,11 @@
 
 ## Status
 
-Open. Found while implementing [ADR-021](../adr/021-effective-jira-display-name.md); **not** caused by it.
+**Fixed** — `componentName` is now part of `JiraComponentVersionRange.equals` and `hashCode`.
+Found while implementing [ADR-021](../adr/021-effective-jira-display-name.md); not caused by it.
+Fixed together with [TD-023](023-distribution-equality-compares-nothing.md), because both decide the
+same `Set`. Measured on the QA dataset before the fix: **6 components** were being dropped, two of
+which ADR-021 had already recovered by changing their hash.
 
 ## Symptom
 
@@ -60,6 +64,22 @@ makes the collapse deterministic rather than removing it. Both are needed.
 3. Re-derive both `jira-component-version-ranges` fixtures from the corrected output and diff against
    the current ones — every entry that appears is a component the endpoints were dropping.
 4. Check whether any consumer relies on the current cross-component collapse before shipping.
+
+## The deploy-without-migration invariant
+
+`known-deltas-git.json` was intentionally empty, encoding "deploying the new version without
+migrating changes nothing". This fix is the first change that legitimately breaks that: the equality
+contract lives in the shared `component-resolver-api`, so the Git resolver stops dropping components
+too, and a no-migration candidate returns *more* elements than the baseline.
+
+The invariant now reads: **a no-op except for the components the old equality contract was silently
+dropping.** The one entry added to that file is keyed on the marker `Adr021RangeRecovery` emits, not
+on component names, and in git-mode the rule additionally requires the added element to carry **no**
+display name — so the repaired contract is the only thing that can explain it, and a name appearing
+on the Git path is still refused. Anything else in that file remains a real regression.
+
+Worth stating plainly: after this fix the two resolvers return the same element count. They had been
+diverging, and the divergence was masked by both of them dropping components, in different places.
 
 ## Risk if left
 

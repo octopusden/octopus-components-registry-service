@@ -2,8 +2,12 @@
 
 ## Status
 
-Open. Found while implementing [ADR-021](../adr/021-effective-jira-display-name.md); **not** caused
-by it. Amplifies [TD-022](022-jira-component-version-range-equality-drops-components.md).
+**Fixed** — both classes now carry `@EqualsAndHashCode(includeFields = true, excludes = ['metaClass'])`.
+Found while implementing [ADR-021](../adr/021-effective-jira-display-name.md); not caused by it.
+Amplified [TD-022](022-jira-component-version-range-equality-drops-components.md), and was fixed with it.
+
+`metaClass` has to be excluded by hand: `includeFields` also picks up that synthetic per-instance
+Groovy field, and without the exclusion two identical objects never compare equal.
 
 ## Symptom
 
@@ -82,6 +86,26 @@ So the defect is **`Distribution` and `Doc`**, and only those two. Both carry `@
 over `private final` fields and declare no `equals` of their own. `Doc`'s blast radius is smaller —
 it is not a term of `JiraComponentVersionRange.equals` — but it is the same bug and should be fixed
 in the same change.
+
+## Left alone: securityGroups is null in some producers and empty in others
+
+Repairing `Distribution.equals` made one latent inconsistency comparable for the first time. Four
+producers disagree on how "no security groups" is spelled:
+
+| producer | value |
+|---|---|
+| `EntityMappers` (DB path) | `null` |
+| `EscrowConfigurationLoader.parseSecurityGroupsSection` | `SecurityGroups(read)` when the block exists, `null` when absent |
+| `EscrowConfigurationLoader.calculateDistribution` | re-wraps as `SecurityGroups(read)` when docker is set |
+| `DatabaseComponentRegistryResolver.getComponentsDistributionByJiraProject` | `?: SecurityGroups(null)` |
+
+Both spellings map to the same DTO, so they are semantically identical, and the repaired `equals` now
+tells them apart. No site compares a `Distribution` from one producer against one from another — the
+DB ranges all come from `toEscrowModule`, the Git ranges all from the loader, and the routing union
+is disjoint by component name — so there is no failure scenario today. It is a trap for whoever next
+compares distributions across those paths. Normalising in the constructor would close it, and is
+deliberately not done here: it changes a wire-visible shape (`@JsonInclude(NON_NULL)` drops the field
+when null) and belongs to its own change.
 
 ## Risk if left
 
