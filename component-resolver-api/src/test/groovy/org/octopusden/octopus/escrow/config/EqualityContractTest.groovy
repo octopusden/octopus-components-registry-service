@@ -24,8 +24,8 @@ class EqualityContractTest extends GroovyTestCase {
     private static final VersionNames VERSION_NAMES = new VersionNames("serviceCBranch", "serviceC", "minorC")
     private static final JiraComponentVersionRangeFactory FACTORY = new JiraComponentVersionRangeFactory(VERSION_NAMES)
 
-    private static JiraComponent jiraComponent() {
-        new JiraComponent("TEST_PRJ", null, ComponentConfigParserTest.COMPONENT_VERSION_FORMAT_1,
+    private static JiraComponent jiraComponent(String displayName = null) {
+        new JiraComponent("TEST_PRJ", displayName, ComponentConfigParserTest.COMPONENT_VERSION_FORMAT_1,
                 new ComponentInfo("MyPrefix", '$versionPrefix-$baseVersionFormat'), true, false)
     }
 
@@ -33,8 +33,8 @@ class EqualityContractTest extends GroovyTestCase {
         new Distribution(true, true, gav, null, null, null, new SecurityGroups(null))
     }
 
-    private static JiraComponentVersionRange range(String componentName, String gav) {
-        FACTORY.create(componentName, "1.1", jiraComponent(), distribution(gav), VCSSettings.createEmpty())
+    private static JiraComponentVersionRange range(String componentName, String gav, String displayName = null) {
+        FACTORY.create(componentName, "1.1", jiraComponent(displayName), distribution(gav), VCSSettings.createEmpty())
     }
 
     /** TD-022: the component name is what the endpoint is keyed by; it cannot be outside equality. */
@@ -43,6 +43,20 @@ class EqualityContractTest extends GroovyTestCase {
         def second = range("COMPONENT_TWO", "g:a:jar")
 
         assert first != second
+        assert ([first, second] as Set).size() == 2
+    }
+
+    /**
+     * `JiraComponent.equals` never compared `displayName`, so the name carries no identity of its own
+     * — `componentName` is the whole of what separates these two. Written with DIFFERING display
+     * names because that is the one input whose hashing the library changed.
+     */
+    void "test RES-026 differing display names do not separate, and do not need to"() {
+        def first = range("COMPONENT_ONE", "g:a:jar", "Component One")
+        def second = range("COMPONENT_TWO", "g:a:jar", "Component Two")
+
+        assert first != second
+        assert first.hashCode() != second.hashCode()
         assert ([first, second] as Set).size() == 2
     }
 
