@@ -12,7 +12,7 @@ permissions:
 
 jobs:
   sonar:
-    uses: octopusden/octopus-base/.github/workflows/common-java-gradle-sonar.yml@add-sonarcloud-workflows
+    uses: octopusden/octopus-base/.github/workflows/common-java-gradle-sonar.yml@v3.1.0
     with:
       java-version: '21'
       quality-gate-wait: true
