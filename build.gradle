@@ -11,6 +11,7 @@ plugins {
     id 'io.github.gradle-nexus.publish-plugin'
     id 'org.octopusden.octopus-release-management'
     id 'org.octopusden.octopus-quality'
+    id 'org.sonarqube'
     id 'jacoco'
     id 'org.springframework.boot'                 apply false
     id 'org.jetbrains.kotlin.jvm'                 apply false
