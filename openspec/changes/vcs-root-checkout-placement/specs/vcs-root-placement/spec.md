@@ -26,22 +26,33 @@ field that is empty.
 
 ### Requirement: Placement validation
 
-The registry SHALL reject a v4 write, with a field-prefixed validation error, when for any
-configuration row: it has more than one entry and an entry lacks `checkoutDirectory`; a
-`checkoutDirectory` is not a single directory name, is `.` or `..`, repeats another entry's
-`checkoutDirectory` or is reserved; a `sourcePath` is absolute or has an empty, `.` or `..`
-segment; or two entries share repository and `sourcePath`.
+The registry SHALL reject a v4 write that replaces VCS entries of any configuration row, base or
+per-range, with a 400 whose `errorMessage` starts with `vcsEntries[<i>].<field>: `, when the row:
+has more than one entry and an entry lacks `checkoutDirectory`; has a `checkoutDirectory` that does
+not match `^[A-Za-z0-9_][A-Za-z0-9._-]*$`, repeats another entry's `checkoutDirectory` or is
+`report-templates` or `sonar-config`; has a `sourcePath` with a segment that is empty, `.`, `..`
+or does not match `^[A-Za-z0-9._-]+$` (which excludes absolute paths); or has two entries with the
+same repository and `sourcePath`.
 
 #### Scenario: Multi-entry row without placement
-- **WHEN** a write leaves a row with two entries and one has no `checkoutDirectory`
-- **THEN** the write fails with 400 naming `vcsEntries[<i>].checkoutDirectory`
+- **WHEN** a write leaves a row with two entries and the second has no `checkoutDirectory`
+- **THEN** the write fails with 400 and `errorMessage` starting `vcsEntries[1].checkoutDirectory: `
+
+#### Scenario: Per-range row validated too
+- **WHEN** a field-override write sets a VCS marker row to two entries, one without
+  `checkoutDirectory`
+- **THEN** the write fails with 400 naming that entry's `checkoutDirectory`
+
+#### Scenario: Leading dot
+- **WHEN** a write sets `checkoutDirectory` to `.hidden`
+- **THEN** the write fails with 400 naming that field
 
 #### Scenario: Nested checkout directory
 - **WHEN** a write sets `checkoutDirectory` to `a/b`
 - **THEN** the write fails with 400 naming that field
 
 #### Scenario: Escaping source path
-- **WHEN** a write sets `sourcePath` to `../other`
+- **WHEN** a write sets `sourcePath` to `../other`, `/abs` or `a b`
 - **THEN** the write fails with 400 naming that field
 
 #### Scenario: Reserved name
@@ -56,8 +67,8 @@ segment; or two entries share repository and `sourcePath`.
 ### Requirement: Derived name
 
 The registry SHALL ignore `name` in v4 requests and SHALL store as `name` the entry's
-`checkoutDirectory` when set; otherwise the existing name of a row's single entry, or the
-repository slug for a new entry.
+`checkoutDirectory` when set; otherwise the stored name of the row's only entry when the row had
+exactly one entry before the write; otherwise `main`.
 
 #### Scenario: Name equals checkout directory
 - **WHEN** an entry is saved with `checkoutDirectory: "core"` and `name: "other"`
@@ -67,15 +78,25 @@ repository slug for a new entry.
 - **WHEN** a single-entry row named `main` is saved without `checkoutDirectory`
 - **THEN** the name stays `main`
 
+#### Scenario: Single entry re-pointed to another repository
+- **WHEN** a single-entry row named `main` is saved with a different repository and no
+  `checkoutDirectory`
+- **THEN** the name stays `main`
+
+#### Scenario: Two entries reduced to one
+- **WHEN** a row with entries `alpha` and `beta` is saved with one entry and no `checkoutDirectory`
+- **THEN** the name is `main`
+
 #### Scenario: New unplaced entry
-- **WHEN** a new single entry with repository `ssh://git@example.test/proj/repo-a.git` is saved
-  without `checkoutDirectory`
-- **THEN** its name is `repo-a`
+- **WHEN** a component is created with one entry without `checkoutDirectory`
+- **THEN** its name is `main`
 
 ### Requirement: Migration of existing multi-entry rows
 
 The schema migration SHALL set `checkoutDirectory` to `name` for every entry of every configuration
-row that has more than one entry, and SHALL leave other entries without placement.
+row that has more than one entry, SHALL leave other entries without placement, and SHALL not fail
+on names that are not valid Checkout Directories. The DSL import SHALL apply the same rule to the
+rows it creates.
 
 #### Scenario: Migrated rows
 - **WHEN** the migration runs on a database with a two-entry row named `alpha`/`beta` and a
@@ -83,15 +104,31 @@ row that has more than one entry, and SHALL leave other entries without placemen
 - **THEN** the two entries have `checkoutDirectory` `alpha` and `beta`, and the single entry has
   none
 
+#### Scenario: Migrated row with unusable names
+- **WHEN** the migration runs on a two-entry row whose names are both `main`, and on one whose
+  name is `a/b`
+- **THEN** the migration succeeds and copies the names; a later unchanged v4 save of such a row
+  fails with 400 naming the offending `checkoutDirectory`
+
+#### Scenario: Imported multi-root component
+- **WHEN** the DSL import creates a row with roots `alpha` and `beta`
+- **THEN** both entries have `checkoutDirectory` equal to their names, and an unchanged v4 save of
+  the row succeeds
+
 ### Requirement: Chain-mismatch warning
 
 The registry SHALL include in the v4 component detail response to a successful write a warning that
-the TeamCity build chain must be recreated, when the write adds, removes or re-places a VCS entry
-and the component has a linked TeamCity project; `warnings` SHALL be empty otherwise.
+the TeamCity build chain must be recreated, when the request carries `vcsEntries` (base
+configuration or a VCS marker row) and the component has a linked TeamCity project; `warnings`
+SHALL be an empty list otherwise, including on GET.
 
 #### Scenario: Entry added with linked project
 - **WHEN** an entry is added to a component with a linked TeamCity project
 - **THEN** the response `warnings` contains the chain-mismatch warning
+
+#### Scenario: No linked project
+- **WHEN** VCS entries are written for a component without a linked TeamCity project
+- **THEN** the response `warnings` is empty
 
 #### Scenario: Unrelated edit
 - **WHEN** only the component's display name changes
@@ -99,10 +136,14 @@ and the component has a linked TeamCity project; `warnings` SHALL be empty other
 
 ### Requirement: Compatible v2 DTO
 
-`VersionControlSystemRootDTO` SHALL keep its six-parameter constructor and the order of its first
-six properties, with the new properties appended.
+`VersionControlSystemRootDTO` SHALL keep a six-parameter JVM constructor and the order of its
+first six properties, with the new properties appended.
 
 #### Scenario: Positional construction and destructuring
-- **WHEN** code constructs the DTO with the previous six arguments and destructures its first two
-  components
+- **WHEN** Kotlin code constructs the DTO with the previous six arguments and destructures its first
+  two components
 - **THEN** it compiles and yields `name` and `vcsPath`
+
+#### Scenario: Six-argument constructor from Groovy
+- **WHEN** Groovy code calls `new VersionControlSystemRootDTO(...)` with the previous six arguments
+- **THEN** it compiles and runs, with both new properties null

@@ -12,19 +12,21 @@ decision is recorded in the program repository (ADR-001, change
 - VCS entries gain two optional fields, `sourcePath` and `checkoutDirectory`, stored per
   configuration row (base and per-range overrides alike).
 - Validation on every v4 write that replaces VCS entries: a configuration row with more than one
-  entry requires a `checkoutDirectory` on each; `checkoutDirectory` is a single directory name, not
-  `.`/`..`, unique in the row and not reserved; `sourcePath` is relative without empty, `.` or `..`
-  segments; the pair (repository, `sourcePath`) is unique in the row.
+  entry requires a `checkoutDirectory` on each; `checkoutDirectory` is a single directory name
+  without a leading dot, unique in the row and not reserved (`report-templates`, `sonar-config`);
+  `sourcePath` is relative, with plain segments and no `.` or `..`; the pair (repository,
+  `sourcePath`) is unique in the row. Errors name the field (`vcsEntries[<i>].<field>: …`).
 - `name` becomes derived and read-only: equal to `checkoutDirectory` when set, otherwise the stored
-  name of a single entry is kept, and a new entry gets the repository slug. A `name` in a request is
-  ignored.
+  name of the row's only entry when the row had exactly one entry, otherwise `main`. A `name` in a
+  request is ignored.
 - A migration adds the two columns and sets `checkoutDirectory := name` for every entry of existing
-  rows with more than one entry.
+  rows with more than one entry; the DSL import applies the same back-fill.
 - v4 VCS entry request/response carry the fields; the component detail response gains `warnings`,
-  carrying a chain-mismatch warning when entries change on a component with a linked TeamCity
-  project.
+  carrying a chain-mismatch warning when a request carries VCS entries for a component with a
+  linked TeamCity project.
 - Legacy v2 VCS settings carry the fields (omitted when empty); `VersionControlSystemRootDTO` gets
-  them as trailing parameters with defaults, keeping the six-parameter constructor.
+  them as trailing parameters with defaults and `@JvmOverloads`, keeping the six-parameter
+  constructor.
 - Groovy DSL mode and DSL export do not carry the fields.
 
 ## Capabilities
