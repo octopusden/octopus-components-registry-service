@@ -266,6 +266,7 @@ data class JiraAspectRequest(
 )
 
 data class VcsEntryRequest(
+    // Ignored on write: the stored name is derived (secondary = checkoutDirectory, primary = previous primary's name).
     val name: String? = null,
     val vcsPath: String,
     val branch: String? = null,

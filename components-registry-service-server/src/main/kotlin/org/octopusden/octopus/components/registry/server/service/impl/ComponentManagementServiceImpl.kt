@@ -2709,11 +2709,15 @@ class ComponentManagementServiceImpl(
         entries: List<VcsEntryRequest>,
     ) {
         entries.forEach { req -> req.repositoryType?.let { validateRepositoryType(it) } }
+        // Names are derived, never taken from the request: the primary keeps the previous primary's
+        // name (vcsEntries has no @OrderBy), a secondary is named by its checkout directory.
+        val primaryName = config.vcsEntries.minByOrNull { it.sortOrder }?.name ?: "main"
         val replacement =
             entries.mapIndexed { index, req ->
+                val checkoutDirectory = req.checkoutDirectory?.trim()?.ifEmpty { null }
                 VcsSettingsEntryEntity(
                     componentConfiguration = config,
-                    name = req.name ?: "main",
+                    name = if (index == 0) primaryName else checkoutDirectory.orEmpty(),
                     vcsPath = req.vcsPath,
                     branch = req.branch,
                     tag = req.tag,
@@ -2721,7 +2725,7 @@ class ComponentManagementServiceImpl(
                     repositoryType = req.repositoryType,
                     sortOrder = index,
                     sourcePath = req.sourcePath?.trim()?.ifEmpty { null },
-                    checkoutDirectory = req.checkoutDirectory?.trim()?.ifEmpty { null },
+                    checkoutDirectory = checkoutDirectory,
                 )
             }
         validateVcsPlacement(replacement)
