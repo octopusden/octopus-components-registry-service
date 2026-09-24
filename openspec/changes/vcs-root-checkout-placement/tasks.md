@@ -17,4 +17,4 @@
 - [ ] 2.8 DSL export omits fields; git-vs-db known difference
 - [ ] 2.9 `api-changelog.md`, `functional-spec.md`, `schema-spec.md` updated; rollback repair
       runbook in `docs/registry/deployment/`
-- [ ] 2.10 Full local build (documented command) green
+- [ ] 2.10 Local build (documented command; `docker*`, `oc*` and `:components-registry-automation:test` excluded, coverage gap stated in the report), `dbTest` and `:integrationTest` green
