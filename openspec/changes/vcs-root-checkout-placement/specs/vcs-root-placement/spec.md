@@ -33,9 +33,10 @@ absent.
 ### Requirement: Placement validation
 
 The registry SHALL reject a v4 write that replaces VCS entries of any configuration row, base or
-per-range, with a 400 whose `errorMessage` starts with `vcsEntries[<i>].<field>: `, when the row:
+per-range, with a 400 whose `errorMessage` starts with `vcsEntries[<i>].<field>: ` (preceded by
+`fieldOverrides[<j>].` when the row is sent in a component PATCH's `fieldOverrides`), when the row:
 has more than one entry and an entry lacks `checkoutDirectory`; has a `checkoutDirectory` that does
-not match `^[A-Za-z0-9_][A-Za-z0-9._-]*$`, repeats another entry's `checkoutDirectory` or is
+not match `^[A-Za-z0-9_][A-Za-z0-9._-]*$`, repeats another entry's `checkoutDirectory` (compared case-insensitively) or is
 `report-templates` or `sonar-config`; has a `sourcePath` with a segment that is empty, `.`, `..`
 or does not match `^[A-Za-z0-9._-]+$` (which excludes absolute paths); or has two entries with the
 same repository and `sourcePath`, reported on the later entry's `sourcePath`.
@@ -69,6 +70,12 @@ same repository and `sourcePath`, reported on the later entry's `sourcePath`.
 - **WHEN** entries 0 and 2 of one row have the same repository (ignoring case for Git) and the same
   `sourcePath`
 - **THEN** the write fails with 400 and `errorMessage` starting `vcsEntries[2].sourcePath: `
+
+#### Scenario: Marker-row error in a combined PATCH
+- **WHEN** a component PATCH carries `fieldOverrides` whose second entry is a VCS marker row with
+  two entries and no Checkout Directory on its first entry
+- **THEN** the response is 400 with `errorMessage` starting
+  `fieldOverrides[1].vcsEntries[0].checkoutDirectory: `
 
 ### Requirement: Derived name
 
@@ -143,12 +150,6 @@ otherwise, including on GET. Writes of VCS marker rows (per-range overrides) SHA
 #### Scenario: Unrelated edit
 - **WHEN** only the component's display name changes
 - **THEN** the response `warnings` is empty
-
-#### Scenario: Marker-row error in a combined PATCH
-- **WHEN** a component PATCH carries `fieldOverrides` whose second entry is a VCS marker row with
-  two entries and no Checkout Directory on its first entry
-- **THEN** the response is 400 with `errorMessage` starting
-  `fieldOverrides[1].vcsEntries[0].checkoutDirectory: `
 
 #### Scenario: Marker-row write
 - **WHEN** a VCS marker row of a component with a linked TeamCity project is written, through the

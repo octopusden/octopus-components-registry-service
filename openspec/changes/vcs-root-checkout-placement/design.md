@@ -34,11 +34,12 @@ JSON, the DTO shape and the v4 write behaviour this change builds on.
   (`distribution: …`), not the `Validation failed: …` bean-validation form. The Portal extends its
   parser to accept the indexed path. The first failing
   rule is reported; `<i>` is the index in the row's list. A duplicate (repository, `sourcePath`)
-  names the later entry's `sourcePath`; a duplicate `checkoutDirectory` names the later entry's
+  names the later entry's `sourcePath`; a duplicate `checkoutDirectory` (case-insensitive) names the later entry's
   `checkoutDirectory`. A multi-row request (PATCH with `fieldOverrides`, applied row by row in
-  `applyFieldOverrideDesiredSet` → `applyMarkerChildren`) fails on the first failing row. A marker-row error is prefixed with the row's
-  index in the request's `fieldOverrides` list: `fieldOverrides[<j>].vcsEntries[<i>].<field>: …`
-  (a catch-and-rethrow around each row in `applyFieldOverrideDesiredSet`). The Portal re-sends every
+  `applyFieldOverrideDesiredSet` → `applyMarkerChildren`) fails on the first failing row. In `applyFieldOverrideDesiredSet` an
+  `IllegalArgumentException` whose message starts with `vcsEntries[` is rethrown as
+  `fieldOverrides[<j>].<message>`, `<j>` being the row's index in the request list (captured before
+  the create/update split); other row errors keep their shape. The Portal re-sends every
   override row, so without the prefix an error on an untouched migrated row could not be routed.
   The field-override endpoints (one row per request) use the unprefixed form.
 - Name derivation in `replaceVcsEntries`: `checkoutDirectory` when set; otherwise the stored name
