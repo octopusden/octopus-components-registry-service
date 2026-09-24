@@ -95,7 +95,8 @@ class ModelConfigPostProcessor {
         String vcsPath = resolveVariables(versionControlSystemRoot.vcsPath)
         String branch = resolveVariables(versionControlSystemRoot.branch)
         String hotfixBranch = resolveVariables(versionControlSystemRoot.hotfixBranch)
-        org.octopusden.octopus.escrow.model.VersionControlSystemRoot.create(versionControlSystemRoot.name, versionControlSystemRoot.repositoryType, vcsPath, tag, branch, hotfixBranch)
+        org.octopusden.octopus.escrow.model.VersionControlSystemRoot.create(versionControlSystemRoot.name, versionControlSystemRoot.repositoryType, vcsPath, tag, branch, hotfixBranch,
+                versionControlSystemRoot.sourcePath, versionControlSystemRoot.checkoutDirectory)
     }
 
     ReleaseInfo resolveVariables(ReleaseInfo releaseInfo) {

@@ -49,6 +49,8 @@ class AbstractResolver {
                     root.tag,
                     formattedBranch,
                     formattedHotfixBranch,
+                    root.sourcePath,
+                    root.checkoutDirectory,
             ))
         }
         VCSSettings vcsSettingsNew = VCSSettings.create(vcsSettings.externalRegistry, vcsRootsResolved)

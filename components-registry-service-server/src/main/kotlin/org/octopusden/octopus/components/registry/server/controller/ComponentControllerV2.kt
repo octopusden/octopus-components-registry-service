@@ -71,6 +71,8 @@ class ComponentControllerV2(
                             it.tag,
                             it.branch,
                             it.hotfixBranch,
+                            it.sourcePath,
+                            it.checkoutDirectory,
                         )
                     },
                 externalRegistry,

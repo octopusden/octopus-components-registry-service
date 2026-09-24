@@ -17,7 +17,9 @@ class VCSSettingsDeserializer {
         String branch = node.has("branch") ? node.get("branch").asText() : null;
         String hotfixBranch = node.has("hotfixBranch") ? node.get("hotfixBranch").asText() : null;
         String name = node.get("name").asText();
-        return VersionControlSystemRoot.create(name, repositoryType, vcsPath, tag, branch, hotfixBranch);
+        String sourcePath = node.has("sourcePath") ? node.get("sourcePath").asText() : null;
+        String checkoutDirectory = node.has("checkoutDirectory") ? node.get("checkoutDirectory").asText() : null;
+        return VersionControlSystemRoot.create(name, repositoryType, vcsPath, tag, branch, hotfixBranch, sourcePath, checkoutDirectory);
     }
 
     VCSSettings deserialize(JsonNode vcsSettingsNode) {

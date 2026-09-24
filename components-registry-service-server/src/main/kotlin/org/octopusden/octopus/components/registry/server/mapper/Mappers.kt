@@ -69,7 +69,16 @@ fun VCSSettings.toDTO(): VCSSettingsDTO {
 }
 
 fun VersionControlSystemRoot.toDTO(): VersionControlSystemRootDTO =
-    VersionControlSystemRootDTO(name, vcsPath, RepositoryType.valueOf(repositoryType.name), tag, branch, hotfixBranch)
+    VersionControlSystemRootDTO(
+        name,
+        vcsPath,
+        RepositoryType.valueOf(repositoryType.name),
+        tag,
+        branch,
+        hotfixBranch,
+        sourcePath,
+        checkoutDirectory,
+    )
 
 fun ComponentArtifactConfiguration.toDTO(): ComponentArtifactConfigurationDTO =
     ComponentArtifactConfigurationDTO(this.groupPattern, this.artifactPattern)

@@ -1135,6 +1135,8 @@ internal fun List<VcsSettingsEntryEntity>.toVCSSettings(externalRegistry: String
                 entry.tag,
                 entry.branch,
                 entry.hotfixBranch,
+                entry.sourcePath,
+                entry.checkoutDirectory,
             )
         }
     return VCSSettings.create(externalRegistry, roots)
