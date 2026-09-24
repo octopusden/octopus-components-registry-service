@@ -133,6 +133,8 @@ data class VcsEntryResponse(
     val hotfixBranch: String? = null,
     val repositoryType: String? = null,
     val sortOrder: Int,
+    val sourcePath: String? = null,
+    val checkoutDirectory: String? = null,
 )
 
 data class MavenArtifactResponse(
@@ -270,6 +272,8 @@ data class VcsEntryRequest(
     val tag: String? = null,
     val hotfixBranch: String? = null,
     val repositoryType: String? = null,
+    val sourcePath: String? = null,
+    val checkoutDirectory: String? = null,
 )
 
 data class MavenArtifactRequest(

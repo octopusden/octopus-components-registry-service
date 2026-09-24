@@ -3146,6 +3146,9 @@
           "branch" : {
             "type" : "string"
           },
+          "checkoutDirectory" : {
+            "type" : "string"
+          },
           "hotfixBranch" : {
             "type" : "string"
           },
@@ -3153,6 +3156,9 @@
             "type" : "string"
           },
           "repositoryType" : {
+            "type" : "string"
+          },
+          "sourcePath" : {
             "type" : "string"
           },
           "tag" : {
@@ -3172,6 +3178,9 @@
           "branch" : {
             "type" : "string"
           },
+          "checkoutDirectory" : {
+            "type" : "string"
+          },
           "hotfixBranch" : {
             "type" : "string"
           },
@@ -3188,6 +3197,9 @@
           "sortOrder" : {
             "format" : "int32",
             "type" : "integer"
+          },
+          "sourcePath" : {
+            "type" : "string"
           },
           "tag" : {
             "type" : "string"

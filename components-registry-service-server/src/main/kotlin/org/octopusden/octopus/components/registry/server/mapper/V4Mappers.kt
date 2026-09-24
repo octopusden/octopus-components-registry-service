@@ -317,6 +317,8 @@ private fun ComponentConfigurationEntity.toMarkerChildrenPayload(): MarkerChildr
                             tag = e.tag,
                             hotfixBranch = e.hotfixBranch,
                             repositoryType = e.repositoryType,
+                            sourcePath = e.sourcePath,
+                            checkoutDirectory = e.checkoutDirectory,
                         )
                     },
             )
@@ -401,6 +403,8 @@ private fun org.octopusden.octopus.components.registry.server.entity.VcsSettings
         hotfixBranch = this.hotfixBranch,
         repositoryType = this.repositoryType,
         sortOrder = this.sortOrder,
+        sourcePath = this.sourcePath,
+        checkoutDirectory = this.checkoutDirectory,
     )
 
 private fun org.octopusden.octopus.components.registry.server.entity.DistributionMavenArtifactEntity.toResponse(): MavenArtifactResponse =

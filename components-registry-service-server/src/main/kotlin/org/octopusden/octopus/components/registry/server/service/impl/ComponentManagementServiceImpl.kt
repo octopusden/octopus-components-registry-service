@@ -2705,6 +2705,8 @@ class ComponentManagementServiceImpl(
                     hotfixBranch = req.hotfixBranch,
                     repositoryType = req.repositoryType,
                     sortOrder = index,
+                    sourcePath = req.sourcePath?.trim()?.ifEmpty { null },
+                    checkoutDirectory = req.checkoutDirectory?.trim()?.ifEmpty { null },
                 ),
             )
         }
