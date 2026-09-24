@@ -37,9 +37,9 @@ per-range, with a 400 whose `errorMessage` starts with `vcsEntries[<i>].<field>:
 `fieldOverrides[<j>].` when the row is sent in a component PATCH's `fieldOverrides`), when the row:
 has a `checkoutDirectory` on its first (primary) entry, which is checked out at the checkout root,
 whatever the row's size; has a later (secondary) entry without `checkoutDirectory`; has a
-`checkoutDirectory` that does not match `^[A-Za-z0-9_][A-Za-z0-9._-]*$` or is `report-templates` or
-`sonar-config`; would get two entries with the same derived name, compared case-insensitively and
-the primary included, reported on the later entry's `checkoutDirectory`; has a `sourcePath` with a
+`checkoutDirectory` that does not match `^[A-Za-z0-9_][A-Za-z0-9._-]*$` or is `report-templates`,
+`sonar-config`, `target` or `sonar-report`; would get two entries with the same derived name,
+compared case-insensitively and the primary included, reported on the later entry's `checkoutDirectory`; has a `sourcePath` with a
 segment that is empty, `.`, `..` or does not match `^[A-Za-z0-9._-]+$` (which excludes absolute
 paths); or has two entries with the same repository and `sourcePath`, reported on the later
 entry's `sourcePath`.
@@ -81,7 +81,7 @@ entry's `sourcePath`.
 - **THEN** the write fails with 400 naming that field
 
 #### Scenario: Reserved name
-- **WHEN** a write sets a secondary entry's `checkoutDirectory` to `report-templates`
+- **WHEN** a write sets a secondary entry's `checkoutDirectory` to `report-templates` or `target`
 - **THEN** the write fails with 400 naming that field
 
 #### Scenario: Same repository and path twice
@@ -100,7 +100,8 @@ entry's `sourcePath`.
 The registry SHALL ignore `name` in v4 requests. It SHALL store as a secondary entry's `name` its
 `checkoutDirectory`, and as the primary entry's `name` the stored name of the row's previous primary
 entry (`sort_order` 0 before the write) when the row had entries before the write, otherwise
-`main`.
+`main`. Existing names therefore never change while the row keeps at least one entry; a row
+emptied by one write gets a primary named `main` at its next write.
 
 #### Scenario: Name equals checkout directory
 - **WHEN** a secondary entry is saved with `checkoutDirectory: "feature"` and `name: "other"`
@@ -132,6 +133,11 @@ entry (`sort_order` 0 before the write) when the row had entries before the writ
 - **WHEN** a row with entries `alpha` and `beta` (`checkoutDirectory` `beta`) is saved with only
   the `beta` entry and `checkoutDirectory: null`
 - **THEN** the entry's name is `alpha` and it has no `checkoutDirectory`
+
+#### Scenario: Emptied row refilled
+- **WHEN** a row with entries `alpha` and `beta` is saved with no entries, and then saved with one
+  entry
+- **THEN** the empty save succeeds, and the new entry's name is `main`
 
 #### Scenario: New unplaced entry
 - **WHEN** a component is created with one entry without `checkoutDirectory`

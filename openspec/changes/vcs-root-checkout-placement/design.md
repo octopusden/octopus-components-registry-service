@@ -26,7 +26,8 @@ JSON, the DTO shape and the v4 write behaviour this change builds on.
   - the entry at index 0 (the primary, checked out at the checkout root) has no
     `checkoutDirectory`, whatever the row's size; every entry at index > 0 has one;
   - `checkoutDirectory` matches `^[A-Za-z0-9_][A-Za-z0-9._-]*$` (one segment, no leading dot) and
-    is not `report-templates` or `sonar-config` (fixed in code; no configuration property);
+    is not `report-templates`, `sonar-config`, `target` or `sonar-report` (fixed in code; no configuration property; `target` and `sonar-report` are
+    checkout-root directories the templates write, 0 entries in production and QA);
   - the final derived names (see below) are unique in the row, compared case-insensitively, the
     primary included; the primary comes first and has no Checkout Directory, so a collision is
     always reported on the later entry's `checkoutDirectory`, e.g. a secondary `main` next to a
@@ -51,7 +52,13 @@ JSON, the DTO shape and the v4 write behaviour this change builds on.
 - Name derivation in `replaceVcsEntries`: a secondary entry's name is its `checkoutDirectory`; the
   primary's is the stored name of the row's previous `sort_order`-0 entry (read before `clear()`)
   when the row had entries before the write; otherwise `main`, today's default. No slug
-  derivation. The request `name` is ignored.
+  derivation. The request `name` is ignored. Existing names never change while the row keeps at
+  least one entry; an empty row (allowed, the Portal shows "No VCS entries") has no previous
+  primary, so the next write names its primary `main` (2→0→1 yields `main`), accepted.
+  Implementation hints: `config.vcsEntries` has no `@OrderBy` (`ComponentConfigurationEntity.kt:160-162`),
+  so read the previous primary as `vcsEntries.minByOrNull { it.sortOrder }` before `clear()`; the
+  `fieldOverrides[<j>]` index needs `desired.withIndex()` in `applyFieldOverrideDesiredSet`, whose
+  update and create loops filter `desired` (`ComponentManagementServiceImpl.kt` ~1413, ~1450).
 - Chain-mismatch warning: emitted when the request carries base-configuration `vcsEntries` and the
   component has a TeamCity project link (`component.versionLines` is not empty). No before/after
   comparison: the Portal sends the base VCS slice only when it is dirty. Marker-row writes do not

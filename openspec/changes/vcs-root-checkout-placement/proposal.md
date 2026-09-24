@@ -14,8 +14,8 @@ decision is recorded in the program repository (ADR-001, change
 - Validation on every v4 write that replaces VCS entries: the primary entry (the first) must not
   have a `checkoutDirectory`, since it is checked out at the checkout root, single-entry rows
   included; every secondary entry requires one; `checkoutDirectory` is a single directory name
-  without a leading dot and not reserved (`report-templates`, `sonar-config`); the final derived
-  names are unique in the row case-insensitively, the primary included; `sourcePath` is relative,
+  without a leading dot and not reserved (`report-templates`, `sonar-config`, `target`,
+  `sonar-report`); the final derived names are unique in the row case-insensitively, the primary included; `sourcePath` is relative,
   with plain segments and no `.` or `..`; the pair (repository, `sourcePath`) is unique in the row.
   Errors name the field (`vcsEntries[<i>].<field>: …`).
 - `name` becomes derived and read-only: a secondary entry's name is its `checkoutDirectory`; the
