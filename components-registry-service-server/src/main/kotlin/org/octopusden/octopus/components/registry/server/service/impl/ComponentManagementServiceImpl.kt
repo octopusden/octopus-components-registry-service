@@ -436,7 +436,7 @@ class ComponentManagementServiceImpl(
             changeComment = request.changeComment,
         )
 
-        return toDetail(saved)
+        return toDetail(saved).withVcsChainWarning(request.baseConfiguration?.vcsEntries != null, saved)
     }
 
     // ============================================================
@@ -962,7 +962,7 @@ class ComponentManagementServiceImpl(
             changeComment = request.changeComment,
         )
 
-        return toDetail(saved)
+        return toDetail(saved).withVcsChainWarning(request.baseConfiguration?.vcsEntries != null, saved)
     }
 
     // ============================================================
@@ -3533,6 +3533,20 @@ class ComponentManagementServiceImpl(
     }
 
     /**
+     * ONB-001: a write carrying base-configuration VCS entries on a component with a linked TeamCity
+     * project leaves its build chain out of date. No before/after diff: the Portal sends the base VCS
+     * slice only when it changed. Marker-row (per-range) writes do not warn.
+     */
+    private fun ComponentDetailResponse.withVcsChainWarning(
+        baseVcsWritten: Boolean,
+        entity: ComponentEntity,
+    ): ComponentDetailResponse {
+        if (!baseVcsWritten || entity.versionLines.isEmpty()) return this
+        log.info("VCS entries of component '{}' changed; its TeamCity build chain must be recreated", entity.componentKey)
+        return copy(warnings = listOf(VCS_CHAIN_MISMATCH_WARNING))
+    }
+
+    /**
      * Attach stored TeamCity validation findings (WARNING/ERROR only) onto each linked TeamCity
      * project in [response], in one batch query. No findings for a project means "clean" (given a
      * validation run has completed). The nullable repo default keeps direct unit-test construction
@@ -4578,6 +4592,9 @@ class ComponentManagementServiceImpl(
         // ONB-001 VCS entry placement.
         private val CHECKOUT_DIRECTORY_PATTERN = Regex("[A-Za-z0-9_][A-Za-z0-9._-]*")
         private val SOURCE_PATH_SEGMENT_PATTERN = Regex("[A-Za-z0-9._-]+")
+
+        private const val VCS_CHAIN_MISMATCH_WARNING =
+            "VCS entries changed; the TeamCity build chain no longer matches and must be recreated."
 
         // Checkout-root directories the build templates write.
         private val RESERVED_CHECKOUT_DIRECTORIES = setOf("report-templates", "sonar-config", "target", "sonar-report")

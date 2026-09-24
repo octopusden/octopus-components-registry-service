@@ -804,6 +804,12 @@
           "version" : {
             "format" : "int64",
             "type" : "integer"
+          },
+          "warnings" : {
+            "items" : {
+              "type" : "string"
+            },
+            "type" : "array"
           }
         },
         "required" : [
@@ -821,7 +827,8 @@
           "skipCommitCheck",
           "systems",
           "teamcityProjects",
-          "version"
+          "version",
+          "warnings"
         ],
         "type" : "object"
       },
