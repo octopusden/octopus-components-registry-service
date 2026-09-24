@@ -178,4 +178,30 @@ class ImportServiceImplVcsNameTest {
         val names = row.vcsEntries.map { it.name }.toSet()
         assertEquals(setOf(keyA, keyB), names, "Multi-root entities must preserve distinct names $keyA and $keyB")
     }
+
+    @Test
+    @DisplayName("ONB-001: multi-root import back-fills checkoutDirectory = name on secondary roots only; sourcePath stays null")
+    fun multiRoot_secondaryRootsGetCheckoutDirectory() {
+        val roots =
+            listOf("alpha", "beta", "gamma").map {
+                VersionControlSystemRoot.create(it, RepositoryType.GIT, "ssh://git@gitlab:project/$it.git", null, "main", null)
+            }
+        val row = baseRow()
+
+        callAttachVcsEntries(row, VCSSettings.create(roots))
+
+        assertEquals(listOf(null, "beta", "gamma"), row.vcsEntries.map { it.checkoutDirectory })
+        assertEquals(listOf(null, null, null), row.vcsEntries.map { it.sourcePath })
+    }
+
+    @Test
+    @DisplayName("ONB-001: single-root import leaves the entry unplaced")
+    fun singleRoot_noCheckoutDirectory() {
+        val root = VersionControlSystemRoot.create("core", RepositoryType.GIT, "ssh://git@gitlab:project/repo.git", null, "main", null)
+        val row = baseRow()
+
+        callAttachVcsEntries(row, VCSSettings.create(listOf(root)))
+
+        assertEquals(null, row.vcsEntries.single().checkoutDirectory)
+    }
 }
