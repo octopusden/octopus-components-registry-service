@@ -9,7 +9,8 @@ IMPORTANT: This page is auto-generated!
 Components Registry is a registry of all link:{glossary-component-link}[components] developed in the organization.
 It keeps basic parameters of components required for organizing automated release management and Escrow package generation.
 
-WARNING: All components must be registered in link:{components-registry-link}[Components Registry]!
+All components are registered in the Components Registry, which is available via link:{components-registry-portal-link}[the Components Management Portal].
+
 
 Components Registry stores the following information about Components:
 
@@ -47,21 +48,17 @@ UI's registration form can ask for more as client-side validation, not a server-
 
 == How to register or change a Component
 === Through the Web UI
-The Web UI is the normal way to register and change components. It offers the same fields described
+link:{components-registry-portal-link}[The Web UI] is the normal way to register and change components. It offers the same fields described
 in <<Component configuration reference>>, validates them as you type, and shows the resulting
 version ranges.
 
 === Through the REST API
 The REST API is the same surface the UI uses, and is the way to script bulk or repeatable changes -
 end users configuring a single component are better served by the Web UI above. The service
-publishes its own OpenAPI specification and serves an interactive Swagger UI alongside it, which is
+publishes its own OpenAPI specification and serves link:{components-registry-swagger-link}[an interactive Swagger UI] alongside it, which is
 the authoritative and always-current reference - request and response schemas, every endpoint, and
 the ability to try a call. The same specification is committed in this repository under
 `components-registry-service-server/src/main/resources/openapi/`.
-
-=== Through crsctl
-`crsctl` is a read-only command-line client for the same API, useful for scripting queries and for
-inspecting a component from a terminal. It cannot change configuration.
 
 == Viewing a component as code
 A human-readable, Groovy-style rendering of a component's definition - the reverse of the legacy

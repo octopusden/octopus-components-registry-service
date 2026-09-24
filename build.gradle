@@ -11,6 +11,7 @@ plugins {
     id 'io.github.gradle-nexus.publish-plugin'
     id 'org.octopusden.octopus-release-management'
     id 'org.octopusden.octopus-quality'
+    id 'org.sonarqube'
     id 'jacoco'
     id 'org.springframework.boot'                 apply false
     id 'org.jetbrains.kotlin.jvm'                 apply false
@@ -38,7 +39,8 @@ plugins {
 //
 // components-registry-automation IS listed even though it is tooling: its TeamCity metarunner
 // resolves `<group>:components-registry-automation:<version>:jar:all` from a Maven repo at build
-// time (see components-registry-automation/metarunners/).
+// time (see components-registry-automation/metarunners/). This list gates publication CREATION,
+// so it stays here — the publication now goes to GitHub Packages rather than Central.
 // Allowlist PROJECT PATHS, not names. A Set of names collapses two modules that share a
 // simple name, and the root project's name is a repository-level string rather than a module
 // name, so it cannot sit here meaningfully. `as Set` is load-bearing: in Groovy a Set is never
@@ -110,13 +112,13 @@ octopusQuality {
 }
 
 def adocProperties = [:]
-['header', 'glossary-component-link', 'components-registry-link', 'release-management-automation-link',
+['header', 'glossary-component-link', 'components-registry-portal-link', 'release-management-automation-link', 'components-registry-swagger-link',
  'escrow-automation-tool-link', 'service-desk-link', 'components-registry-validation-link'].each {
     (project.findProperty("adoc.$it") as String)?.with { property -> adocProperties[it] = property }
 }
 
 def checkMandatoryAdocProperties = {
-    ['glossary-component-link', 'components-registry-link', 'release-management-automation-link',
+    ['glossary-component-link', 'components-registry-portal-link', 'release-management-automation-link', 'components-registry-swagger-link',
      'escrow-automation-tool-link', 'service-desk-link', 'components-registry-validation-link'].each {
         if (adocProperties[it] == null) throw new IllegalArgumentException("`adoc.$it` property must be defined")
     }
