@@ -103,6 +103,7 @@ import org.octopusden.octopus.components.registry.server.util.MavenGavCollision
 import org.octopusden.octopus.components.registry.server.util.MavenVersionComparator
 import org.octopusden.octopus.components.registry.server.util.VersionRangePartition
 import org.octopusden.octopus.components.registry.server.util.computeEffectiveJiraPairs
+import org.octopusden.octopus.escrow.RepositoryType
 import org.octopusden.octopus.escrow.config.ConfigHelper
 import org.octopusden.releng.versions.NumericVersionFactory
 import org.octopusden.releng.versions.VersionRangeFactory
@@ -1410,7 +1411,7 @@ class ComponentManagementServiceImpl(
 
         // 2) UPDATE existing editable rows referenced by id.
         val updated = mutableListOf<Pair<ComponentConfigurationEntity, Map<String, Any?>>>()
-        desired.filter { it.id != null }.forEach { d ->
+        desired.withIndex().filter { it.value.id != null }.forEach { (j, d) ->
             val row = byId.getValue(d.id!!)
             if (isImportManaged(row)) return@forEach // preserve; ignore client echo
             // CRS-B: hidden-attribute rows are stripped — preserved as-is, incoming change ignored.
@@ -1424,7 +1425,7 @@ class ComponentManagementServiceImpl(
             // yields the editability error (403/422), not a value-400. A valid change is
             // still gated change-based by the snapshot diff below.
             gatingEditabilityOnInvalidPayload(d.overriddenAttribute) {
-                applyOverrideUpsertPayload(component, row, d, excludeOverrideId = row.id)
+                withFieldOverrideIndex(j) { applyOverrideUpsertPayload(component, row, d, excludeOverrideId = row.id) }
             }?.let { pendingTools[row] = it }
             // CRS-B: gate any actual change (value / markerChildren / range) to an
             // override on a non-editable field; an unchanged echo (combined Save
@@ -1447,7 +1448,7 @@ class ComponentManagementServiceImpl(
 
         // 3) CREATE rows without an id.
         val created = mutableListOf<ComponentConfigurationEntity>()
-        desired.filter { it.id == null }.forEach { d ->
+        desired.withIndex().filter { it.value.id == null }.forEach { (j, d) ->
             // CRS-B: hidden-attribute create is silently dropped (strip); otherwise a new
             // override is a value change on the overridden attribute — gate it.
             if (isHiddenOverrideAttribute(d.overriddenAttribute)) return@forEach
@@ -1459,7 +1460,7 @@ class ComponentManagementServiceImpl(
                     overriddenAttribute = d.overriddenAttribute,
                     rowType = "",
                 )
-            applyOverrideUpsertPayload(component, row, d, excludeOverrideId = null)?.let { pendingTools[row] = it }
+            withFieldOverrideIndex(j) { applyOverrideUpsertPayload(component, row, d, excludeOverrideId = null) }?.let { pendingTools[row] = it }
             component.configurations.add(row)
             // A new override is always an effective change — there was nothing at this
             // range/attribute before (mirrors the single-row create path).
@@ -2251,6 +2252,21 @@ class ComponentManagementServiceImpl(
             throw e
         }
 
+    /**
+     * Routes a VCS entry error of the [j]-th `fieldOverrides` element to that element: the Portal re-sends
+     * every override row, so an unprefixed `vcsEntries[<i>]` could not be told apart. Other errors keep their shape.
+     */
+    private inline fun <T> withFieldOverrideIndex(
+        j: Int,
+        applyPayload: () -> T,
+    ): T =
+        try {
+            applyPayload()
+        } catch (e: IllegalArgumentException) {
+            if (e.message?.startsWith("vcsEntries[") == true) throw IllegalArgumentException("fieldOverrides[$j].${e.message}", e)
+            throw e
+        }
+
     /** True when the override's attribute maps to a field-config `visibility: hidden`. */
     private fun isHiddenOverrideAttribute(attribute: String?): Boolean = attribute != null && fieldConfigService.isHidden(attribute)
 
@@ -2693,9 +2709,8 @@ class ComponentManagementServiceImpl(
         entries: List<VcsEntryRequest>,
     ) {
         entries.forEach { req -> req.repositoryType?.let { validateRepositoryType(it) } }
-        config.vcsEntries.clear()
-        entries.forEachIndexed { index, req ->
-            config.vcsEntries.add(
+        val replacement =
+            entries.mapIndexed { index, req ->
                 VcsSettingsEntryEntity(
                     componentConfiguration = config,
                     name = req.name ?: "main",
@@ -2707,8 +2722,48 @@ class ComponentManagementServiceImpl(
                     sortOrder = index,
                     sourcePath = req.sourcePath?.trim()?.ifEmpty { null },
                     checkoutDirectory = req.checkoutDirectory?.trim()?.ifEmpty { null },
-                ),
-            )
+                )
+            }
+        validateVcsPlacement(replacement)
+        config.vcsEntries.clear()
+        config.vcsEntries.addAll(replacement)
+    }
+
+    /**
+     * ONB-001 placement rules over a row's final VCS entries (index 0 = primary, checked out at the
+     * checkout root; later entries = secondaries, checked out under their checkout directory, which is
+     * also their name). The first failure is a 400 `vcsEntries[<i>].<field>: <reason>`.
+     */
+    private fun validateVcsPlacement(entries: List<VcsSettingsEntryEntity>) {
+        val nameOwners = HashMap<String, Int>()
+        val locationOwners = HashMap<Pair<String, String?>, Int>()
+        entries.forEachIndexed { i, e ->
+            fun fail(
+                field: String,
+                reason: String,
+            ): Nothing = throw IllegalArgumentException("vcsEntries[$i].$field: $reason")
+            val dir = e.checkoutDirectory
+            when {
+                i == 0 && dir != null ->
+                    fail("checkoutDirectory", "must be empty on the primary VCS entry, which is checked out at the checkout root")
+                i > 0 && dir == null -> fail("checkoutDirectory", "required on a secondary VCS entry")
+                dir != null && !CHECKOUT_DIRECTORY_PATTERN.matches(dir) ->
+                    fail("checkoutDirectory", "'$dir' must be one directory name of letters, digits, '.', '_' or '-', not starting with '.'")
+                dir in RESERVED_CHECKOUT_DIRECTORIES -> fail("checkoutDirectory", "'$dir' is reserved")
+            }
+            nameOwners.putIfAbsent((dir ?: e.name).lowercase(), i)?.let {
+                fail("checkoutDirectory", "'$dir' is already the name of vcsEntries[$it]")
+            }
+            e.sourcePath?.let { path ->
+                if (path.split('/').any { it == "." || it == ".." || !SOURCE_PATH_SEGMENT_PATTERN.matches(it) }) {
+                    fail("sourcePath", "'$path' must be a relative path of '/'-separated names of letters, digits, '.', '_' or '-'")
+                }
+            }
+            val caseSensitive = RepositoryType.valueOf(e.repositoryType ?: "GIT").isCaseSensitive
+            val repository = if (caseSensitive) e.vcsPath else e.vcsPath.lowercase()
+            locationOwners.putIfAbsent(repository to e.sourcePath, i)?.let {
+                fail("sourcePath", "repository and sourcePath are the same as vcsEntries[$it]")
+            }
         }
     }
 
@@ -4515,6 +4570,13 @@ class ComponentManagementServiceImpl(
         // SYS-095: strict kebab for a plain key, and the tail permitted after a client-code prefix.
         private val COMPONENT_KEY_PATTERN = Regex("[a-z][a-z0-9-]*")
         private val COMPONENT_KEY_TAIL_PATTERN = Regex("(-[a-z0-9-]*)?")
+
+        // ONB-001 VCS entry placement.
+        private val CHECKOUT_DIRECTORY_PATTERN = Regex("[A-Za-z0-9_][A-Za-z0-9._-]*")
+        private val SOURCE_PATH_SEGMENT_PATTERN = Regex("[A-Za-z0-9._-]+")
+
+        // Checkout-root directories the build templates write.
+        private val RESERVED_CHECKOUT_DIRECTORIES = setOf("report-templates", "sonar-config", "target", "sonar-report")
 
         private const val ROW_TYPE_BASE = "BASE"
         private const val ATTR_JAVA_VERSION = "build.javaVersion"
