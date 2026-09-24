@@ -97,9 +97,10 @@ entry's `sourcePath`.
 
 ### Requirement: Derived name
 
-The registry SHALL ignore `name` in v4 requests and SHALL store as `name` the entry's
-`checkoutDirectory` when set; otherwise the stored name of the row's only entry when the row had
-exactly one entry before the write; otherwise `main`.
+The registry SHALL ignore `name` in v4 requests. It SHALL store as a secondary entry's `name` its
+`checkoutDirectory`, and as the primary entry's `name` the stored name of the row's previous primary
+entry (`sort_order` 0 before the write) when the row had entries before the write, otherwise
+`main`.
 
 #### Scenario: Name equals checkout directory
 - **WHEN** a secondary entry is saved with `checkoutDirectory: "feature"` and `name: "other"`
@@ -112,20 +113,25 @@ exactly one entry before the write; otherwise `main`.
 
 #### Scenario: Primary of an existing multi-entry row
 - **WHEN** a row with entries `core` and `feature` is saved again unchanged
-- **THEN** the primary's name is `main` and the secondary's is `feature`
+- **THEN** the primary's name stays `core` and the secondary's is `feature`
 
 #### Scenario: Single entry keeps its name
 - **WHEN** a single-entry row named `core` is saved without `checkoutDirectory`
 - **THEN** the name stays `core`
 
-#### Scenario: Single entry re-pointed to another repository
-- **WHEN** a single-entry row named `main` is saved with a different repository and no
-  `checkoutDirectory`
-- **THEN** the name stays `main`
+#### Scenario: Primary re-pointed to another repository
+- **WHEN** a row with entries `core` and `feature` is saved with a different repository for the
+  primary
+- **THEN** the primary's name stays `core`
 
 #### Scenario: Two entries reduced to one
-- **WHEN** a row with entries `alpha` and `beta` is saved with one entry and no `checkoutDirectory`
-- **THEN** the name is `main`
+- **WHEN** a row with entries `alpha` and `beta` is saved with only the `alpha` entry
+- **THEN** the name is `alpha`
+
+#### Scenario: Secondary promoted to primary
+- **WHEN** a row with entries `alpha` and `beta` (`checkoutDirectory` `beta`) is saved with only
+  the `beta` entry and `checkoutDirectory: null`
+- **THEN** the entry's name is `alpha` and it has no `checkoutDirectory`
 
 #### Scenario: New unplaced entry
 - **WHEN** a component is created with one entry without `checkoutDirectory`

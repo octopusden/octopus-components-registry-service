@@ -48,9 +48,10 @@ JSON, the DTO shape and the v4 write behaviour this change builds on.
   the create/update split); other row errors keep their shape. The Portal re-sends every
   override row, so without the prefix an error on an untouched migrated row could not be routed.
   The field-override endpoints (one row per request) use the unprefixed form.
-- Name derivation in `replaceVcsEntries`: `checkoutDirectory` when set; otherwise the stored name
-  of the row's only entry when the row had exactly one entry before the write (read before
-  `clear()`); otherwise `main`, today's default. No slug derivation. The request `name` is ignored.
+- Name derivation in `replaceVcsEntries`: a secondary entry's name is its `checkoutDirectory`; the
+  primary's is the stored name of the row's previous `sort_order`-0 entry (read before `clear()`)
+  when the row had entries before the write; otherwise `main`, today's default. No slug
+  derivation. The request `name` is ignored.
 - Chain-mismatch warning: emitted when the request carries base-configuration `vcsEntries` and the
   component has a TeamCity project link (`component.versionLines` is not empty). No before/after
   comparison: the Portal sends the base VCS slice only when it is dirty. Marker-row writes do not
@@ -68,12 +69,11 @@ JSON, the DTO shape and the v4 write behaviour this change builds on.
 ## Risks / Trade-offs
 
 - A v4 client that still sends `name` sees it ignored — documented in the changelog.
-- A two-entry row reduced to one entry without `checkoutDirectory` gets the name `main`, not the
-  kept entry's old name; escrow then exports it inline, as for any single-root component. If the
-  kept entry was a secondary, its `checkoutDirectory` must be cleared, since it is now the primary.
-- The primary of a migrated multi-entry row keeps its name until the row's next VCS write, which
-  renames it to `main` (the row had more than one entry). In production at least 9 of the 10
-  primaries are named otherwise, so escrow-generator and the wiki publisher see the new name then.
+- The primary's name is stable by rule: it carries over from the previous primary on every write,
+  so migrated rows keep their names and escrow layout. A row reduced to one entry keeps the previous
+  primary's name; escrow then exports it inline, as for any single-root component. If the kept
+  entry was a secondary, it takes the previous primary's name and its `checkoutDirectory` must be
+  cleared (the Portal sends `null`), since it is now the primary.
 - A secondary Checkout Directory can equal a directory of the primary repository, which then
   holds both. The registry cannot see repository content; this is a documented residual, and the
   generator logs each placement.

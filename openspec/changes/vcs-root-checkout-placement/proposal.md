@@ -18,9 +18,9 @@ decision is recorded in the program repository (ADR-001, change
   names are unique in the row case-insensitively, the primary included; `sourcePath` is relative,
   with plain segments and no `.` or `..`; the pair (repository, `sourcePath`) is unique in the row.
   Errors name the field (`vcsEntries[<i>].<field>: …`).
-- `name` becomes derived and read-only: equal to `checkoutDirectory` when set, otherwise the stored
-  name of the row's only entry when the row had exactly one entry, otherwise `main`. A `name` in a
-  request is ignored.
+- `name` becomes derived and read-only: a secondary entry's name is its `checkoutDirectory`; the
+  primary's is the stored name of the row's previous primary (`sort_order` 0 before the write) when
+  the row had entries, otherwise `main`. A `name` in a request is ignored.
 - A migration adds the two columns and sets `checkoutDirectory := name` for the secondary entries
   (`sort_order > 0`) of existing rows with more than one entry; the primary keeps none. The DSL
   import applies the same back-fill.

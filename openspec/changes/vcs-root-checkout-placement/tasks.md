@@ -13,7 +13,8 @@
       marker rows; `fieldOverrides[<j>].` prefix in a combined PATCH): primary without and
       secondaries with Checkout Directory, final names unique across all entries, fixed reserved
       names, segment regex
-- [ ] 2.5 Derived name (Checkout Directory; sole previous name; `main`), incl. 2→1 and re-pointed
+- [ ] 2.5 Derived name (secondary: Checkout Directory; primary: previous primary's name, else
+      `main`), incl. 2→1, re-pointed and secondary promoted to primary
 - [ ] 2.6 Chain-mismatch warning and `warnings` on the detail response
 - [ ] 2.7 Groovy model + v2 DTO fields (appended, `@JvmOverloads`); v2 exposure; Groovy
       six-argument call test
