@@ -18,6 +18,17 @@ refresh it with `./gradlew :components-registry-service-server:generateOpenApiDo
 
 ## Unreleased
 
+- **`genericArtifacts` added to component configurations (SYS-094).** Configuration read responses
+  (`ComponentConfigurationResponse`) gain a required `genericArtifacts: GenericArtifactResponse[]`
+  field (always present, empty when none are set). Configuration write requests
+  (`ComponentConfigurationCreateRequest`, `ComponentConfigurationPatchRequest`) accept an optional
+  `genericArtifacts: GenericArtifactRequest[]`. New schemas:
+  `GenericArtifactRequest { path: string }` — the storage path, which may contain the `${version}`
+  template resolved at distribution time; and
+  `GenericArtifactResponse { id: uuid, path: string, sortOrder: int32 }` — the persisted artifact
+  with its stable identity and display order. Purely additive on the read side; clients that ignore
+  the new field are unaffected. The write side accepts but does not require the field.
+
 - **`GET /rest/api/4/components/{idOrName}/archive-readiness` added.** Read-only pre-flight check
   for the archive/delete flow, gated by the same authorization as `deleteComponent`
   (`ACCESS_COMPONENTS` + `canDeleteComponent`). Returns `{ready: Boolean, entries: [...]}`: one
