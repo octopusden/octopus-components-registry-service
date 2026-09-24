@@ -379,6 +379,27 @@ class ComponentCodeRendererTest {
     }
 
     @Test
+    @DisplayName("ONB-001: DSL export omits sourcePath and checkoutDirectory (Groovy DSL has no placement)")
+    fun fullMultiVcsPlacementOmitted() {
+        fun render(placed: Boolean): String {
+            val c = component()
+            val b = base(c) { buildSystem = "MAVEN" }
+            b.vcsEntries.add(vcs(b, name = "core", path = "org/core", repo = "GIT", order = 0).apply { if (placed) sourcePath = "mapper" })
+            b.vcsEntries.add(
+                vcs(b, name = "ui", path = "org/ui", repo = "GIT", order = 1).apply {
+                    if (placed) {
+                        sourcePath = "data"
+                        checkoutDirectory = "ui"
+                    }
+                },
+            )
+            return renderer.renderFull(c)
+        }
+
+        assertEquals(render(placed = false), render(placed = true))
+    }
+
+    @Test
     @DisplayName("FULL: single unnamed VCS root renders flat (no named sub-block)")
     fun fullSingleVcsFlat() {
         val c = component()

@@ -308,6 +308,34 @@ class GitVsDbValidationTest {
         }
     }
 
+    /**
+     * ONB-001 known difference: the Groovy DSL has no VCS placement, while the import back-fills
+     * `checkoutDirectory = name` on the secondary roots of a multi-root component. The DB response
+     * carries that extra field (VAL-003 compares LENIENT, so an added field passes); everything else is equal.
+     */
+    @Test
+    @DisplayName("VAL-003a: multi-root vcs-settings differ only by checkoutDirectory on DB secondary roots")
+    fun `VAL-003a multi-root placement is the known difference`() {
+        val path = "/rest/api/2/components/multi-root-service/versions/${versionFor("multi-root-service")}/vcs-settings"
+        fun roots(source: String): List<Map<String, Any?>> {
+            sourceRegistry.setComponentSource("multi-root-service", source)
+            val body = mvc.perform(get(path).accept(APPLICATION_JSON)).andExpect(status().isOk).andReturn().response.contentAsString
+            return objectMapper.readValue<Map<String, Any?>>(body)["versionControlSystemRoots"].let {
+                @Suppress("UNCHECKED_CAST")
+                it as List<Map<String, Any?>>
+            }
+        }
+        try {
+            val git = roots("git")
+            val db = roots("db")
+            assertEquals(listOf(null, null), git.map { it["checkoutDirectory"] })
+            assertEquals(listOf(null, "secondary"), db.map { it["checkoutDirectory"] })
+            assertEquals(git, db.map { it - "checkoutDirectory" })
+        } finally {
+            sourceRegistry.setComponentSource("multi-root-service", "db")
+        }
+    }
+
     // -------------------------------------------------------------------------
     // VAL-004: GET .../versions/{ver}/jira-component
     // -------------------------------------------------------------------------
