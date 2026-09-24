@@ -11,16 +11,19 @@ decision is recorded in the program repository (ADR-001, change
 
 - VCS entries gain two optional fields, `sourcePath` and `checkoutDirectory`, stored per
   configuration row (base and per-range overrides alike); a blank value is absent.
-- Validation on every v4 write that replaces VCS entries: a configuration row with more than one
-  entry requires a `checkoutDirectory` on each; `checkoutDirectory` is a single directory name
-  without a leading dot, unique in the row and not reserved (`report-templates`, `sonar-config`);
-  `sourcePath` is relative, with plain segments and no `.` or `..`; the pair (repository,
-  `sourcePath`) is unique in the row. Errors name the field (`vcsEntries[<i>].<field>: …`).
+- Validation on every v4 write that replaces VCS entries: the primary entry (the first) must not
+  have a `checkoutDirectory`, since it is checked out at the checkout root, single-entry rows
+  included; every secondary entry requires one; `checkoutDirectory` is a single directory name
+  without a leading dot and not reserved (`report-templates`, `sonar-config`); the final derived
+  names are unique in the row case-insensitively, the primary included; `sourcePath` is relative,
+  with plain segments and no `.` or `..`; the pair (repository, `sourcePath`) is unique in the row.
+  Errors name the field (`vcsEntries[<i>].<field>: …`).
 - `name` becomes derived and read-only: equal to `checkoutDirectory` when set, otherwise the stored
   name of the row's only entry when the row had exactly one entry, otherwise `main`. A `name` in a
   request is ignored.
-- A migration adds the two columns and sets `checkoutDirectory := name` for every entry of existing
-  rows with more than one entry; the DSL import applies the same back-fill.
+- A migration adds the two columns and sets `checkoutDirectory := name` for the secondary entries
+  (`sort_order > 0`) of existing rows with more than one entry; the primary keeps none. The DSL
+  import applies the same back-fill.
 - v4 VCS entry request/response carry the fields; the component detail response gains `warnings`,
   carrying a chain-mismatch warning when a request carries base-configuration VCS entries for a
   component with a linked TeamCity project (marker-row writes do not warn).

@@ -7,34 +7,40 @@ JSON, the DTO shape and the v4 write behaviour this change builds on.
 ## Decisions
 
 - Migration: next incremental Flyway file (`V8__`): two nullable `varchar` columns on
-  `vcs_settings_entries`; `update … set checkout_directory = name where component_configuration_id
-  in (select … group by … having count(*) > 1)`. Names are copied verbatim. A row whose names are
-  not valid or not distinct Checkout Directories (production: none; QA: checked by the program
-  task) stays readable, and its next v4 write fails with 400 until the editor sets valid, distinct
-  values; the migration itself never fails on data.
+  `vcs_settings_entries`; `update vcs_settings_entries set checkout_directory = name where
+  sort_order > 0`. `sort_order` is `0..n-1` in every row (production check Q6; `replaceVcsEntries`
+  writes the list index), so this reaches exactly the secondary entries of multi-entry rows; the
+  primary keeps a null Checkout Directory. Names are copied verbatim. A row whose secondary names
+  are not valid Checkout Directories, or whose final names would not be distinct (production:
+  none; QA: 0 duplicate names, checked by the program task), stays readable, and its next v4 write
+  fails with 400 until the editor sets valid, distinct values; the migration itself never fails on
+  data.
 - DSL import (`ImportServiceImpl.attachVcsEntries`) builds entries directly, not through
-  `replaceVcsEntries`; it back-fills `checkoutDirectory := name` for rows with more than one entry,
-  the migration's rule, and leaves `sourcePath` null. Imported names are not validated (same
+  `replaceVcsEntries`; it back-fills `checkoutDirectory := name` for the secondary entries
+  (index > 0) of rows with more than one entry, the migration's rule, and leaves `sourcePath` null. Imported names are not validated (same
   outcome as the migration).
 - Blank values: `sourcePath` and `checkoutDirectory` are trimmed and a blank value is stored as
   null before validation, so `""` means absent rather than failing the regex.
 - Validation runs in `replaceVcsEntries`, which every v4 path uses (create, PATCH, field
   overrides, apply-plan via `applyMarkerChildren`), against the final list of the row:
-  - more than one entry ⇒ every entry has a `checkoutDirectory`;
-  - `checkoutDirectory` matches `^[A-Za-z0-9_][A-Za-z0-9._-]*$` (one segment, no leading dot), is
-    unique in the row, and is not `report-templates` or `sonar-config` (fixed in code; no
-    configuration property);
+  - the entry at index 0 (the primary, checked out at the checkout root) has no
+    `checkoutDirectory`, whatever the row's size; every entry at index > 0 has one;
+  - `checkoutDirectory` matches `^[A-Za-z0-9_][A-Za-z0-9._-]*$` (one segment, no leading dot) and
+    is not `report-templates` or `sonar-config` (fixed in code; no configuration property);
+  - the final derived names (see below) are unique in the row, compared case-insensitively, the
+    primary included; the primary comes first and has no Checkout Directory, so a collision is
+    always reported on the later entry's `checkoutDirectory`, e.g. a secondary `main` next to a
+    primary named `main`;
   - `sourcePath` is `/`-separated, each segment matches `^[A-Za-z0-9._-]+$` and is not `.` or
     `..` (so it is relative and cannot carry TeamCity rule or parameter syntax);
   - (repository, `sourcePath`) is unique in the row; Git repositories compare case-insensitively,
     matching the model's read-time lower-casing; stored `vcsPath` keeps its case.
 - Error shape: `IllegalArgumentException` with message `vcsEntries[<i>].<field>: <reason>`, i.e.
-  `{"errorMessage": "vcsEntries[1].checkoutDirectory: required when a row has more than one VCS
-  entry"}` through the existing handler: the colon-prefixed single-message form of other v4 rules
+  `{"errorMessage": "vcsEntries[1].checkoutDirectory: required on a secondary VCS entry"}` through the existing handler: the colon-prefixed single-message form of other v4 rules
   (`distribution: …`), not the `Validation failed: …` bean-validation form. The Portal extends its
   parser to accept the indexed path. The first failing
   rule is reported; `<i>` is the index in the row's list. A duplicate (repository, `sourcePath`)
-  names the later entry's `sourcePath`; a duplicate `checkoutDirectory` (case-insensitive) names the later entry's
+  names the later entry's `sourcePath`; a duplicate name names the later entry's
   `checkoutDirectory`. A multi-row request (PATCH with `fieldOverrides`, applied row by row in
   `applyFieldOverrideDesiredSet` → `applyMarkerChildren`) fails on the first failing row. In `applyFieldOverrideDesiredSet` an
   `IllegalArgumentException` whose message starts with `vcsEntries[` is rethrown as
@@ -63,11 +69,14 @@ JSON, the DTO shape and the v4 write behaviour this change builds on.
 
 - A v4 client that still sends `name` sees it ignored — documented in the changelog.
 - A two-entry row reduced to one entry without `checkoutDirectory` gets the name `main`, not the
-  kept entry's old name; escrow then exports it inline, as for any single-root component.
-- A single entry that gets a `checkoutDirectory` is renamed from its old name (usually `main`) to
-  that value. Single-root consumers of the v2 `name` (escrow-generator, the wiki publisher; program
-  intake §4 position 5) see a new name only when someone deliberately places a single root, and
-  then use it as the directory name, which is the intent.
+  kept entry's old name; escrow then exports it inline, as for any single-root component. If the
+  kept entry was a secondary, its `checkoutDirectory` must be cleared, since it is now the primary.
+- The primary of a migrated multi-entry row keeps its name until the row's next VCS write, which
+  renames it to `main` (the row had more than one entry). In production at least 9 of the 10
+  primaries are named otherwise, so escrow-generator and the wiki publisher see the new name then.
+- A secondary Checkout Directory can equal a directory of the primary repository, which then
+  holds both. The registry cannot see repository content; this is a documented residual, and the
+  generator logs each placement.
 - A per-range VCS marker row change does not warn, although it can also leave the chain out of
   date.
 - Per-range VCS marker rows follow the same rules; production has none with more than one entry.
@@ -85,15 +94,15 @@ Names survive (the Portal sends the stored name). Repair runbook, no new code (c
 1. Before rolling back, snapshot placed entries:
    `select component_configuration_id, sort_order, vcs_path, source_path, checkout_directory from
    vcs_settings_entries where source_path is not null or checkout_directory is not null;`
-2. After rolling forward, find multi-entry rows missing a Checkout Directory:
-   `select component_configuration_id from vcs_settings_entries group by 1 having count(*) > 1 and
-   count(checkout_directory) < count(*);`
-3. Repair them with the migration's rule:
+2. After rolling forward, find secondary entries missing a Checkout Directory:
+   `select component_configuration_id, sort_order from vcs_settings_entries where sort_order > 0
+   and checkout_directory is null;`
+3. Repair them with the migration's rule, secondary entries only:
    `update vcs_settings_entries set checkout_directory = name where checkout_directory is null and
-   component_configuration_id in (select component_configuration_id from vcs_settings_entries group
-   by 1 having count(*) > 1);`
-4. Re-enter any Source Path or single-root Checkout Directory from the snapshot that is missing now.
-   An entry added during the rollback window is named `main`; if its row already has a `main`,
-   step 3 yields a duplicate Checkout Directory, so set that entry's Checkout Directory by hand.
+   sort_order > 0;`
+4. Re-enter any Source Path from the snapshot that is missing now. An entry added during the
+   rollback window is named `main`; if it is a secondary and its row's primary is also `main`, or
+   another secondary is, step 3 yields a duplicate name, so set that entry's Checkout Directory by
+   hand. The previous release never writes a Checkout Directory, so no primary gets one there.
 
 See the program design for cross-repository order.
