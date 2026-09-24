@@ -2143,6 +2143,8 @@ class ImportServiceImpl(
                 ),
             )
         }
+        // Secondary roots of a multi-root row are checked out under their name (the V8 migration rule).
+        if (sortOrder > 1) row.vcsEntries.filter { it.sortOrder > 0 }.forEach { it.checkoutDirectory = it.name }
     }
 
     private fun attachRequiredTools(
