@@ -2,7 +2,6 @@ package org.octopusden.octopus.components.registry.server.config
 
 import org.junit.jupiter.api.Assertions.assertNotEquals
 import org.junit.jupiter.api.Test
-import org.junit.jupiter.api.extension.ExtendWith
 import org.octopusden.cloud.commons.security.client.AuthServerClient
 import org.octopusden.octopus.components.registry.server.ComponentRegistryServiceApplication
 import org.octopusden.octopus.components.registry.test.BaseComponentsRegistryServiceTest
@@ -11,7 +10,6 @@ import org.springframework.boot.test.autoconfigure.web.servlet.AutoConfigureMock
 import org.springframework.boot.test.context.SpringBootTest
 import org.springframework.boot.test.mock.mockito.MockBean
 import org.springframework.test.context.ActiveProfiles
-import org.springframework.test.context.junit.jupiter.SpringExtension
 import org.springframework.test.web.servlet.MockMvc
 import org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get
 import org.springframework.test.web.servlet.result.MockMvcResultMatchers.status
@@ -55,9 +53,8 @@ import org.springframework.test.web.servlet.result.MockMvcResultMatchers.status
  * which predates this change, and a 404 says nothing about a security rule since a
  * blocked-but-mapped endpoint would answer 401.
  */
-@ExtendWith(SpringExtension::class)
 @SpringBootTest(
-    webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT,
+    webEnvironment = SpringBootTest.WebEnvironment.MOCK,
     classes = [ComponentRegistryServiceApplication::class],
 )
 @AutoConfigureMockMvc
