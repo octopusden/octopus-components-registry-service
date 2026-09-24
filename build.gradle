@@ -104,7 +104,9 @@ octopusQuality {
         // its only knobs, and its rule sets `counter = "LINE"`. The gates in projectsEvaluated below
         // verify BRANCH as well and carry a floor per module, so they stay. Enabling the plugin's
         // wiring would register `jacocoOverallCoverage*` beside tasks of the same name.
-        // Per-module jacoco (jacocoTestReport, jacocoTestCoverageVerification) IS the plugin's, and
+        // The plugin still applies jacoco and configures the per-module reports; what `false` also
+        // costs is its per-module RULE, so `jacocoTestCoverageVerification` exists and passes
+        // vacuously. Every real per-module floor is `jacocoCoverageFloor` below.
         // `qualityCoverage` stays the entry point, so the shared workflow's default command holds.
         enabled = false
     }
@@ -634,9 +636,10 @@ gradle.projectsEvaluated {
         }
     }
 
-    // Per-module coverage floor. The plugin-owned `jacocoTestCoverageVerification` keeps its lenient
-    // 10% floor (it is wired off `test` and must stay runnable without the heavy suites); this task adds
-    // the strict per-module LINE/BRANCH minimums on top, in a task of our own so that:
+    // Per-module coverage floor, and the only one: the plugin attaches its `minimumLineCoverage` rule
+    // to `jacocoTestCoverageVerification` only when `coverage.enabled` is true, so with the aggregate
+    // delegated here that task verifies nothing. This one carries the LINE/BRANCH minimums, in a task
+    // of our own so that:
     //   - it declares the heavy suites it needs (`dependsOn`), so a standalone invocation measures the
     //     same exec set as CI instead of failing on missing dbTest coverage, and
     //   - it never runs as part of `check`/`test`, so TeamCity [1.0] (`clean build …`) is unaffected —
