@@ -18,6 +18,30 @@ refresh it with `./gradlew :components-registry-service-server:generateOpenApiDo
 
 ## Unreleased
 
+- **VCS entry placement (`sourcePath`, `checkoutDirectory`) and derived names.** `VcsEntryRequest` /
+  `VcsEntryResponse` (base configuration and `vcs.settings` marker rows alike) gain two optional
+  fields: `sourcePath`, the repository directory that belongs to the component, and
+  `checkoutDirectory`, the directory an entry is checked out to on the build agent. A blank value is
+  stored as absent. Every write that replaces a row's VCS entries now validates the final list and
+  fails with `400` and `errorMessage` `vcsEntries[<i>].<field>: <reason>` when: the first (primary)
+  entry has a `checkoutDirectory` (it is checked out at the checkout root); a later (secondary) entry
+  has none; a `checkoutDirectory` is not one segment matching `^[A-Za-z0-9_][A-Za-z0-9._-]*$` or is
+  `report-templates`, `sonar-config`, `target` or `sonar-report`; two entries end up with the same
+  name, compared case-insensitively (reported on the later entry's `checkoutDirectory`); a
+  `sourcePath` segment is empty, `.`, `..` or does not match `^[A-Za-z0-9._-]+$`; or two entries
+  share repository (Git ignoring case) and `sourcePath` (reported on the later entry's `sourcePath`).
+  In a component PATCH the error of a `fieldOverrides` row is prefixed with its index:
+  `fieldOverrides[<j>].vcsEntries[<i>].…`; the field-override endpoints use the unprefixed form.
+  **`name` in a request is now ignored**: a secondary entry is named by its `checkoutDirectory`, the
+  primary keeps the stored name of the row's previous primary (`main` for a row that had no
+  entries). **`ComponentDetailResponse.warnings`** (list of strings, `[]` by default, also on GET) is
+  added; a create or PATCH that carries `baseConfiguration.vcsEntries` for a component with a linked
+  TeamCity project returns `"VCS entries changed; the TeamCity build chain no longer matches and must
+  be recreated."`. Marker-row writes do not warn. Existing multi-entry rows are migrated with
+  `checkoutDirectory = name` on their secondary entries (`V8__`); a migrated row whose names are not
+  valid or not distinct checkout directories fails its next VCS save with `400` until corrected.
+  The legacy v2 VCS settings carry both fields, omitted when empty.
+
 - **`GET /rest/api/4/components/{idOrName}/archive-readiness` added.** Read-only pre-flight check
   for the archive/delete flow, gated by the same authorization as `deleteComponent`
   (`ACCESS_COMPONENTS` + `canDeleteComponent`). Returns `{ready: Boolean, entries: [...]}`: one

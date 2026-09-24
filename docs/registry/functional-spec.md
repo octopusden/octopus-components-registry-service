@@ -109,6 +109,47 @@ shape/format rules on both `POST /rest/api/4/components` and
 These format checks are skipped for a field whose admin field-config visibility is
 `HIDDEN`. On `PATCH`, the hidden value is also stripped before persistence.
 
+#### VCS entry placement (create + update + field overrides)
+
+Each VCS entry of a configuration row (base or `vcs.settings` marker) may carry `sourcePath` (the
+repository directory that belongs to the component; absent = whole repository) and
+`checkoutDirectory` (where the entry is checked out on the build agent). A blank value is absent.
+The first entry is the **primary**, checked out at the checkout root; later entries are
+**secondaries**, each checked out under its `checkoutDirectory`.
+
+Every v4 write that replaces a row's VCS entries (create, PATCH `baseConfiguration.vcsEntries`, the
+field-override endpoints, a PATCH `fieldOverrides` row) validates the row's final list; the first
+failing rule is a `400` `{ "errorMessage": "vcsEntries[<i>].<field>: <reason>" }`, `<i>` being the
+entry's index in the row:
+
+| Rule | Reported on |
+|------|-------------|
+| The primary has no `checkoutDirectory`, whatever the row's size | `vcsEntries[0].checkoutDirectory` |
+| Every secondary has a `checkoutDirectory` | that entry's `checkoutDirectory` |
+| `checkoutDirectory` matches `^[A-Za-z0-9_][A-Za-z0-9._-]*$` (one segment, no leading dot) and is not `report-templates`, `sonar-config`, `target` or `sonar-report` | that entry's `checkoutDirectory` |
+| Entry names are unique in the row, case-insensitively, the primary included | the later entry's `checkoutDirectory` |
+| `sourcePath` is `/`-separated, each segment matches `^[A-Za-z0-9._-]+$` and is not `.` or `..` | that entry's `sourcePath` |
+| (repository, `sourcePath`) is unique in the row; Git repositories compare case-insensitively | the later entry's `sourcePath` |
+
+In a component PATCH, a VCS error of the `j`-th `fieldOverrides` element is prefixed
+`fieldOverrides[<j>].`; other errors of that element keep their shape.
+
+**Names are derived; a request `name` is ignored.** A secondary entry's name is its
+`checkoutDirectory`; the primary's is the stored name of the row's previous primary when the row had
+entries before the write, otherwise `main`. Names therefore never change while a row keeps at least
+one entry; a row emptied by one write (allowed) names its next primary `main`. A secondary kept as
+the only entry becomes the primary, takes the previous primary's name and must drop its
+`checkoutDirectory`.
+
+**Chain-mismatch warning.** `ComponentDetailResponse.warnings` is `[]` except on a create or PATCH
+that carries `baseConfiguration.vcsEntries` for a component with a linked TeamCity project:
+`"VCS entries changed; the TeamCity build chain no longer matches and must be recreated."` (logged at
+INFO). Marker-row writes do not warn.
+
+The legacy v2 VCS settings (`VersionControlSystemRootDTO`) carry both fields, omitted when empty, so
+an unplaced component's v2 JSON is unchanged. The Groovy DSL mode and the as-code export do not
+carry placement.
+
 #### Intentional legacy-validation relaxations
 
 - `displayName` is **nullable** + UNIQUE at the DB layer. It is stored **verbatim** from the DSL —
@@ -386,6 +427,7 @@ Changes to field configuration and component defaults are recorded in the audit 
 | Duplicate name on **create** | 400 | `{ "errorMessage": "name: a component with name '...' already exists" }` (field-prefixed → Portal routes inline) |
 | Duplicate name on **rename** (PATCH name) | 409 | `{ "errorMessage": "Component with name '...' already exists" }` (`ComponentNameConflictException`) |
 | Duplicate `displayName` (create/update) | 400 | `{ "errorMessage": "displayName: a component with display name '...' already exists" }` |
+| Invalid VCS entry placement (§1.4) | 400 | `{ "errorMessage": "vcsEntries[1].checkoutDirectory: required on a secondary VCS entry" }` (`fieldOverrides[<j>].` prefix inside a PATCH `fieldOverrides` row) |
 | Optimistic lock conflict | 409 | `{ "error": "Component was modified by another user" }` |
 | Validation failure | 400 | `{ "errors": [{ "field": "name", "message": "must not be blank" }] }` |
 | Unauthorized | 401 | Standard Spring Security response |
