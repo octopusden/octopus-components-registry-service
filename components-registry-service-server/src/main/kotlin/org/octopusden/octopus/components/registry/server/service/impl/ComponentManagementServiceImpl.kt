@@ -107,6 +107,8 @@ import org.octopusden.octopus.components.registry.server.util.VersionRangePartit
 import org.octopusden.octopus.components.registry.server.util.computeEffectiveJiraPairs
 import org.octopusden.octopus.escrow.config.ConfigHelper
 import org.octopusden.octopus.escrow.configuration.validation.GroovySlurperConfigValidator
+import org.octopusden.octopus.escrow.dto.EscrowExpressionContext
+import org.octopusden.octopus.escrow.utilities.EscrowExpressionParser
 import org.octopusden.releng.versions.NumericVersionFactory
 import org.octopusden.releng.versions.VersionRangeFactory
 import org.springframework.context.ApplicationEventPublisher
@@ -2810,7 +2812,15 @@ class ComponentManagementServiceImpl(
 
     private fun validateGenericArtifactPath(path: String) {
         require(path.isNotBlank()) { "path is not specified for a genericArtifact" }
-        require(GroovySlurperConfigValidator.GENERIC_ENTRY.matcher(path).matches()) {
+        val validationContext = EscrowExpressionContext("validation", "1.0", "validation", numericVersionFactory)
+        val evaluated = try {
+            EscrowExpressionParser.getInstance().parseAndEvaluate(path, validationContext).toString()
+        } catch (e: Exception) {
+            throw IllegalArgumentException(
+                "genericArtifact path '$path' contains an invalid expression: ${e.message}", e
+            )
+        }
+        require(GroovySlurperConfigValidator.GENERIC_ENTRY.matcher(evaluated).matches()) {
             "genericArtifact path '$path' does not match the required shape " +
                 "'<segment>/<segment>/<segment>[/…]' where each segment is [A-Za-z0-9._-] " +
                 "(commas, URL schemes, whitespace and leading slashes are not allowed — " +

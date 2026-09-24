@@ -160,6 +160,12 @@ class GroovySlurperConfigValidatorTest extends GroovyTestCase {
         assert !GENERIC_PATTERN.matcher("../../etc/passwd").matches()
         assert !GENERIC_PATTERN.matcher("releases/../../../etc/passwd").matches()
         assert !GENERIC_PATTERN.matcher(".././x/y").matches()
+        // Reject dot-only segments at CSV entry boundaries (comma is also a valid boundary).
+        assert !GENERIC_PATTERN.matcher("releases/foo/..,releases/1.0/file").matches()
+        assert !GENERIC_PATTERN.matcher("releases/foo/.,releases/1.0/file").matches()
+        assert !GENERIC_PATTERN.matcher("releases/1.0/file,releases/foo/..").matches()
+        // Valid multi-entry CSV still accepted.
+        assert GENERIC_PATTERN.matcher("releases/demo-tool/1.0/demo-tool.tar.gz,releases/demo-tool/1.0/demo-tool.zip").matches()
     }
 
     void test_SYS_094_genericValidationRejectsFullUrl() {
