@@ -100,13 +100,10 @@ octopusQuality {
     }
     kotlin { failOnViolation = true }
     coverage {
-        // The plugin's aggregate verifies LINE alone — `overallMinimum` and `minimumLineCoverage` are
-        // its only knobs, and its rule sets `counter = "LINE"`. The gates in projectsEvaluated below
-        // verify BRANCH as well and carry a floor per module, so they stay. Enabling the plugin's
-        // wiring would register `jacocoOverallCoverage*` beside tasks of the same name.
-        // The plugin still applies jacoco and configures the per-module reports; what `false` also
-        // costs is its per-module RULE, so `jacocoTestCoverageVerification` exists and passes
-        // vacuously. Every real per-module floor is `jacocoCoverageFloor` below.
+        // Not "no coverage": the gates are registered in projectsEvaluated below, which says why they
+        // are not the plugin's. Two things follow from `false` and are the reason not to flip it:
+        // the plugin would register `jacocoOverallCoverage*` beside tasks of those exact names, and
+        // `jacocoTestCoverageVerification` carries its rule only while this is true.
         // `qualityCoverage` stays the entry point, so the shared workflow's default command holds.
         enabled = false
     }
@@ -636,10 +633,8 @@ gradle.projectsEvaluated {
         }
     }
 
-    // Per-module coverage floor, and the only one: the plugin attaches its `minimumLineCoverage` rule
-    // to `jacocoTestCoverageVerification` only when `coverage.enabled` is true, so with the aggregate
-    // delegated here that task verifies nothing. This one carries the LINE/BRANCH minimums, in a task
-    // of our own so that:
+    // Per-module coverage floor, and the ONLY one — nothing gates underneath it (see the root
+    // `coverage` block). It carries the LINE/BRANCH minimums, in a task of our own so that:
     //   - it declares the heavy suites it needs (`dependsOn`), so a standalone invocation measures the
     //     same exec set as CI instead of failing on missing dbTest coverage, and
     //   - it never runs as part of `check`/`test`, so TeamCity [1.0] (`clean build …`) is unaffected —
