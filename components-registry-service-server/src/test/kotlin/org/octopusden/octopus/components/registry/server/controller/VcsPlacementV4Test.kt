@@ -162,6 +162,47 @@ class VcsPlacementV4Test {
         assertTrue(error.startsWith("fieldOverrides[1].vcsEntries[0].checkoutDirectory: "), error)
     }
 
+    @Test
+    @DisplayName("ONB-001: a base VCS write on a component with a linked TeamCity project warns that the chain must be recreated")
+    fun `chain mismatch warning`() {
+        val id = linkedComponent()
+        val detail =
+            patchComponent(id, """"baseConfiguration":{"vcsEntries":[{"vcsPath":"$REPO_A"},{"vcsPath":"$REPO_B","checkoutDirectory":"feature"}]}""")
+                .andExpect(status().isOk)
+                .json()
+        assertEquals(listOf(CHAIN_WARNING), detail["warnings"].map { it.asText() })
+        assertEquals(0, getComponent(id)["warnings"].size(), "GET carries no warnings")
+    }
+
+    @Test
+    @DisplayName("ONB-001: no chain warning without a linked project, on an unrelated edit, or on marker-row writes")
+    fun `no chain mismatch warning`() {
+        val unlinked = newComponent()
+        val vcs = """"baseConfiguration":{"vcsEntries":[{"vcsPath":"$REPO_A"}]}"""
+        assertEquals(0, patchComponent(unlinked, vcs).andExpect(status().isOk).json()["warnings"].size())
+
+        val linked = linkedComponent()
+        assertEquals(0, patchComponent(linked, """"displayName":"Renamed $linked"""").andExpect(status().isOk).json()["warnings"].size())
+
+        val marker = createVcsMarker(linked, """{"vcsPath":"$REPO_A"}""").andExpect(status().is2xxSuccessful).json()
+        assertTrue(marker["warnings"] == null, "field-override responses carry no warnings")
+        val patched =
+            patchComponent(
+                linked,
+                """"fieldOverrides":[{"id":"${marker["id"].asText()}","overriddenAttribute":"vcs.settings","versionRange":"[1.0,2.0)",""" +
+                    """"markerChildren":{"vcsEntries":[{"vcsPath":"$REPO_B"}]}}]""",
+            ).andExpect(status().isOk)
+                .json()
+        assertEquals(0, patched["warnings"].size())
+    }
+
+    private fun linkedComponent(): String =
+        newComponent().also { id ->
+            patchComponent(id, """"teamcityProjects":[{"projectId":"TestProject_${id.take(8)}"}]""").andExpect(status().isOk)
+        }
+
+    private fun ResultActions.json(): JsonNode = objectMapper.readTree(andReturn().response.contentAsString)
+
     private fun ResultActions.errorMessage(): String = objectMapper.readTree(andReturn().response.contentAsString)["errorMessage"].asText()
 
     private fun baseVcsEntries(detail: JsonNode): List<JsonNode> = detail["configurations"].first { it["rowType"].asText() == "BASE" }["vcsEntries"].toList()
@@ -220,5 +261,6 @@ class VcsPlacementV4Test {
     companion object {
         private const val REPO_A = "ssh://git@example.test/proj/repo-a.git"
         private const val REPO_B = "ssh://git@example.test/proj/repo-b.git"
+        private const val CHAIN_WARNING = "VCS entries changed; the TeamCity build chain no longer matches and must be recreated."
     }
 }
