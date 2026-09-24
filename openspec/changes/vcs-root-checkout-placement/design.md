@@ -36,8 +36,11 @@ JSON, the DTO shape and the v4 write behaviour this change builds on.
   rule is reported; `<i>` is the index in the row's list. A duplicate (repository, `sourcePath`)
   names the later entry's `sourcePath`; a duplicate `checkoutDirectory` names the later entry's
   `checkoutDirectory`. A multi-row request (PATCH with `fieldOverrides`, applied row by row in
-  `applyFieldOverrideDesiredSet` → `applyMarkerChildren`) fails on the first failing row; the error
-  keeps the same form, `<i>` being the entry index within that row, and does not name the row.
+  `applyFieldOverrideDesiredSet` → `applyMarkerChildren`) fails on the first failing row. A marker-row error is prefixed with the row's
+  index in the request's `fieldOverrides` list: `fieldOverrides[<j>].vcsEntries[<i>].<field>: …`
+  (a catch-and-rethrow around each row in `applyFieldOverrideDesiredSet`). The Portal re-sends every
+  override row, so without the prefix an error on an untouched migrated row could not be routed.
+  The field-override endpoints (one row per request) use the unprefixed form.
 - Name derivation in `replaceVcsEntries`: `checkoutDirectory` when set; otherwise the stored name
   of the row's only entry when the row had exactly one entry before the write (read before
   `clear()`); otherwise `main`, today's default. No slug derivation. The request `name` is ignored.
@@ -89,5 +92,7 @@ Names survive (the Portal sends the stored name). Repair runbook, no new code (c
    component_configuration_id in (select component_configuration_id from vcs_settings_entries group
    by 1 having count(*) > 1);`
 4. Re-enter any Source Path or single-root Checkout Directory from the snapshot that is missing now.
+   An entry added during the rollback window is named `main`; if its row already has a `main`,
+   step 3 yields a duplicate Checkout Directory, so set that entry's Checkout Directory by hand.
 
 See the program design for cross-repository order.

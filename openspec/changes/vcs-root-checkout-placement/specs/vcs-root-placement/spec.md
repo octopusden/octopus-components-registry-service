@@ -144,9 +144,16 @@ otherwise, including on GET. Writes of VCS marker rows (per-range overrides) SHA
 - **WHEN** only the component's display name changes
 - **THEN** the response `warnings` is empty
 
+#### Scenario: Marker-row error in a combined PATCH
+- **WHEN** a component PATCH carries `fieldOverrides` whose second entry is a VCS marker row with
+  two entries and no Checkout Directory on its first entry
+- **THEN** the response is 400 with `errorMessage` starting
+  `fieldOverrides[1].vcsEntries[0].checkoutDirectory: `
+
 #### Scenario: Marker-row write
 - **WHEN** a VCS marker row of a component with a linked TeamCity project is written, through the
-  field-override endpoints or the `fieldOverrides` of a component PATCH
+  field-override endpoints or the `fieldOverrides` of a component PATCH that carries no base
+  `vcsEntries`
 - **THEN** no chain-mismatch warning is returned
 
 ### Requirement: Compatible v2 DTO
