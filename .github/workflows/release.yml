@@ -6,7 +6,7 @@ on:
 
 jobs:
   build:
-    uses: octopusden/octopus-base/.github/workflows/common-java-gradle-release.yml@v3.0.2
+    uses: octopusden/octopus-base/.github/workflows/common-java-gradle-release.yml@v3.1.0
     permissions:
       contents: write
       packages: write
