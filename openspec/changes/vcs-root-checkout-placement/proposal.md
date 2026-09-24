@@ -10,7 +10,7 @@ decision is recorded in the program repository (ADR-001, change
 ## What Changes
 
 - VCS entries gain two optional fields, `sourcePath` and `checkoutDirectory`, stored per
-  configuration row (base and per-range overrides alike).
+  configuration row (base and per-range overrides alike); a blank value is absent.
 - Validation on every v4 write that replaces VCS entries: a configuration row with more than one
   entry requires a `checkoutDirectory` on each; `checkoutDirectory` is a single directory name
   without a leading dot, unique in the row and not reserved (`report-templates`, `sonar-config`);
@@ -22,8 +22,8 @@ decision is recorded in the program repository (ADR-001, change
 - A migration adds the two columns and sets `checkoutDirectory := name` for every entry of existing
   rows with more than one entry; the DSL import applies the same back-fill.
 - v4 VCS entry request/response carry the fields; the component detail response gains `warnings`,
-  carrying a chain-mismatch warning when a request carries VCS entries for a component with a
-  linked TeamCity project.
+  carrying a chain-mismatch warning when a request carries base-configuration VCS entries for a
+  component with a linked TeamCity project (marker-row writes do not warn).
 - Legacy v2 VCS settings carry the fields (omitted when empty); `VersionControlSystemRootDTO` gets
   them as trailing parameters with defaults and `@JvmOverloads`, keeping the six-parameter
   constructor.

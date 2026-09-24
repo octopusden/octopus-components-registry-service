@@ -16,6 +16,8 @@ JSON, the DTO shape and the v4 write behaviour this change builds on.
   `replaceVcsEntries`; it back-fills `checkoutDirectory := name` for rows with more than one entry,
   the migration's rule, and leaves `sourcePath` null. Imported names are not validated (same
   outcome as the migration).
+- Blank values: `sourcePath` and `checkoutDirectory` are trimmed and a blank value is stored as
+  null before validation, so `""` means absent rather than failing the regex.
 - Validation runs in `replaceVcsEntries`, which every v4 path uses (create, PATCH, field
   overrides, apply-plan via `applyMarkerChildren`), against the final list of the row:
   - more than one entry ⇒ every entry has a `checkoutDirectory`;
@@ -31,13 +33,20 @@ JSON, the DTO shape and the v4 write behaviour this change builds on.
   entry"}` through the existing handler: the colon-prefixed single-message form of other v4 rules
   (`distribution: …`), not the `Validation failed: …` bean-validation form. The Portal extends its
   parser to accept the indexed path. The first failing
-  rule is reported; `<i>` is the index in the row's list. A duplicate names the later entry.
+  rule is reported; `<i>` is the index in the row's list. A duplicate (repository, `sourcePath`)
+  names the later entry's `sourcePath`; a duplicate `checkoutDirectory` names the later entry's
+  `checkoutDirectory`. A multi-row request (PATCH with `fieldOverrides`, applied row by row in
+  `applyFieldOverrideDesiredSet` → `applyMarkerChildren`) fails on the first failing row; the error
+  keeps the same form, `<i>` being the entry index within that row, and does not name the row.
 - Name derivation in `replaceVcsEntries`: `checkoutDirectory` when set; otherwise the stored name
   of the row's only entry when the row had exactly one entry before the write (read before
   `clear()`); otherwise `main`, today's default. No slug derivation. The request `name` is ignored.
-- Chain-mismatch warning: emitted when the request carries `vcsEntries` (base configuration or a
-  VCS marker row) and the component has a TeamCity project link (`component.versionLines` is not
-  empty). No before/after comparison: the Portal sends the VCS slice only when it is dirty. Text:
+- Chain-mismatch warning: emitted when the request carries base-configuration `vcsEntries` and the
+  component has a TeamCity project link (`component.versionLines` is not empty). No before/after
+  comparison: the Portal sends the base VCS slice only when it is dirty. Marker-row writes do not
+  warn: the field-override endpoints return `FieldOverrideResponse`, which has no `warnings`, and a
+  Portal PATCH re-sends the full override set in `fieldOverrides` whenever any override changed,
+  so a marker row's presence says nothing about a VCS change. Text:
   "VCS entries changed; the TeamCity build chain no longer matches and must be recreated." Logged
   at INFO with the component name. `warnings` is `[]` on every other response, including GET.
 - v2: `VersionControlSystemRoot` (Groovy model) gains the two properties; the DB mapper fills them;
@@ -51,6 +60,12 @@ JSON, the DTO shape and the v4 write behaviour this change builds on.
 - A v4 client that still sends `name` sees it ignored — documented in the changelog.
 - A two-entry row reduced to one entry without `checkoutDirectory` gets the name `main`, not the
   kept entry's old name; escrow then exports it inline, as for any single-root component.
+- A single entry that gets a `checkoutDirectory` is renamed from its old name (usually `main`) to
+  that value. Single-root consumers of the v2 `name` (escrow-generator, the wiki publisher; program
+  intake §4 position 5) see a new name only when someone deliberately places a single root, and
+  then use it as the directory name, which is the intent.
+- A per-range VCS marker row change does not warn, although it can also leave the chain out of
+  date.
 - Per-range VCS marker rows follow the same rules; production has none with more than one entry.
 
 ## Migration Plan

@@ -9,12 +9,18 @@ check out multi-root and shared-repository components from registry data alone.
 
 The registry SHALL accept `sourcePath` and `checkoutDirectory` on each v4 VCS entry, store them per
 configuration row, and return them in v4 responses and in the legacy v2 VCS settings, omitting a
-field that is empty.
+field that is empty. A blank value (empty or whitespace only) in a request SHALL be treated as
+absent.
 
 #### Scenario: v4 round-trip
 - **WHEN** a component is updated with an entry carrying `sourcePath: "mapper"` and
   `checkoutDirectory: "core"`
 - **THEN** the v4 component response returns both values for that entry
+
+#### Scenario: Blank value is absent
+- **WHEN** an entry is saved with `checkoutDirectory: ""` and `sourcePath: " "`
+- **THEN** the write is not rejected for those fields and the entry is stored and returned without
+  either field
 
 #### Scenario: v2 exposure
 - **WHEN** the v2 VCS settings are requested for a version covered by that configuration
@@ -32,7 +38,7 @@ has more than one entry and an entry lacks `checkoutDirectory`; has a `checkoutD
 not match `^[A-Za-z0-9_][A-Za-z0-9._-]*$`, repeats another entry's `checkoutDirectory` or is
 `report-templates` or `sonar-config`; has a `sourcePath` with a segment that is empty, `.`, `..`
 or does not match `^[A-Za-z0-9._-]+$` (which excludes absolute paths); or has two entries with the
-same repository and `sourcePath`.
+same repository and `sourcePath`, reported on the later entry's `sourcePath`.
 
 #### Scenario: Multi-entry row without placement
 - **WHEN** a write leaves a row with two entries and the second has no `checkoutDirectory`
@@ -60,9 +66,9 @@ same repository and `sourcePath`.
 - **THEN** the write fails with 400 naming that field
 
 #### Scenario: Same repository and path twice
-- **WHEN** two entries of one row have the same repository (ignoring case for Git) and the same
+- **WHEN** entries 0 and 2 of one row have the same repository (ignoring case for Git) and the same
   `sourcePath`
-- **THEN** the write fails with 400
+- **THEN** the write fails with 400 and `errorMessage` starting `vcsEntries[2].sourcePath: `
 
 ### Requirement: Derived name
 
@@ -73,6 +79,10 @@ exactly one entry before the write; otherwise `main`.
 #### Scenario: Name equals checkout directory
 - **WHEN** an entry is saved with `checkoutDirectory: "core"` and `name: "other"`
 - **THEN** the stored and returned name is `core`
+
+#### Scenario: Single entry placed
+- **WHEN** a single-entry row named `main` is saved with `checkoutDirectory: "core"`
+- **THEN** the name is `core`, in v4 and in the v2 VCS settings
 
 #### Scenario: Single entry keeps its name
 - **WHEN** a single-entry row named `main` is saved without `checkoutDirectory`
@@ -118,9 +128,9 @@ rows it creates.
 ### Requirement: Chain-mismatch warning
 
 The registry SHALL include in the v4 component detail response to a successful write a warning that
-the TeamCity build chain must be recreated, when the request carries `vcsEntries` (base
-configuration or a VCS marker row) and the component has a linked TeamCity project; `warnings`
-SHALL be an empty list otherwise, including on GET.
+the TeamCity build chain must be recreated, when the request carries base-configuration
+`vcsEntries` and the component has a linked TeamCity project; `warnings` SHALL be an empty list
+otherwise, including on GET. Writes of VCS marker rows (per-range overrides) SHALL not warn.
 
 #### Scenario: Entry added with linked project
 - **WHEN** an entry is added to a component with a linked TeamCity project
@@ -133,6 +143,11 @@ SHALL be an empty list otherwise, including on GET.
 #### Scenario: Unrelated edit
 - **WHEN** only the component's display name changes
 - **THEN** the response `warnings` is empty
+
+#### Scenario: Marker-row write
+- **WHEN** a VCS marker row of a component with a linked TeamCity project is written, through the
+  field-override endpoints or the `fieldOverrides` of a component PATCH
+- **THEN** no chain-mismatch warning is returned
 
 ### Requirement: Compatible v2 DTO
 
