@@ -85,4 +85,19 @@ class VersionControlSystemRootDtoBaselineTest {
 
         assertEquals(VCSSettingsDTO(listOf(dto)), parsed)
     }
+
+    @Test
+    @DisplayName("ONB-001: placement properties are appended after the six existing ones and omitted from JSON when null")
+    fun `placement properties appended`() {
+        val placed = dto.copy(sourcePath = "data", checkoutDirectory = "feature")
+        val (name, path) = placed
+
+        assertEquals(listOf("main", "ssh://git@example.test/proj/repo-a.git"), listOf(name, path))
+        assertEquals(listOf("data", "feature"), listOf(placed.component7(), placed.component8()))
+        assertEquals(
+            """{"name":"main","vcsPath":"ssh://git@example.test/proj/repo-a.git","type":"GIT",""" +
+                """"tag":"test-component-a-1.0","branch":"master","hotfixBranch":"hotfix/1.0"}""",
+            jacksonObjectMapper().writeValueAsString(dto),
+        )
+    }
 }
