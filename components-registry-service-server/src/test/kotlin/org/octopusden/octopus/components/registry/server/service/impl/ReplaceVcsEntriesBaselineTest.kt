@@ -2,6 +2,7 @@ package org.octopusden.octopus.components.registry.server.service.impl
 
 import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.Assertions.assertNull
+import org.junit.jupiter.api.Assertions.assertThrows
 import org.junit.jupiter.api.Assertions.assertTrue
 import org.junit.jupiter.api.BeforeEach
 import org.junit.jupiter.api.DisplayName
@@ -37,6 +38,7 @@ import org.octopusden.releng.versions.VersionRangeFactory
 import org.springframework.context.ApplicationEventPublisher
 import org.springframework.core.env.Environment
 import org.springframework.transaction.PlatformTransactionManager
+import java.lang.reflect.InvocationTargetException
 import java.lang.reflect.Method
 import java.util.UUID
 import java.util.concurrent.TimeUnit
@@ -50,6 +52,9 @@ import java.util.concurrent.TimeUnit
  * both become `"main"`); the list is replaced wholesale on every write (prior entity instances are
  * dropped and new ones carry no id, so the DB assigns fresh ids through `orphanRemoval` + generated
  * UUIDs); `sortOrder` is the request list index.
+ *
+ * ONB-001 placement rules (`vcsEntries[<i>].<field>: ` errors) are driven here too; the two-unnamed-entries
+ * baseline is superseded by the rule that a secondary entry requires a `checkoutDirectory`.
  */
 @Timeout(30, unit = TimeUnit.SECONDS)
 class ReplaceVcsEntriesBaselineTest {
@@ -118,20 +123,10 @@ class ReplaceVcsEntriesBaselineTest {
         write(
             config,
             VcsEntryRequest(vcsPath = REPO_A),
-            VcsEntryRequest(name = "repo-b", vcsPath = REPO_B),
+            VcsEntryRequest(name = "repo-b", vcsPath = REPO_B, checkoutDirectory = "repo-b"),
         )
 
         assertEquals(listOf("main", "repo-b"), config.vcsEntries.map { it.name })
-    }
-
-    @Test
-    @DisplayName("ONB-001 baseline: two unnamed v4 VCS entries are both stored as \"main\" (duplicate accepted)")
-    fun `baseline two unnamed entries both become main`() {
-        val config = baseRow()
-        write(config, VcsEntryRequest(vcsPath = REPO_A), VcsEntryRequest(vcsPath = REPO_B))
-
-        assertEquals(listOf("main", "main"), config.vcsEntries.map { it.name })
-        assertEquals(listOf(REPO_A, REPO_B), config.vcsEntries.map { it.vcsPath })
     }
 
     @Test
@@ -146,7 +141,7 @@ class ReplaceVcsEntriesBaselineTest {
         write(
             config,
             VcsEntryRequest(name = "repo-b", vcsPath = REPO_B, branch = "master"),
-            VcsEntryRequest(name = "repo-a", vcsPath = REPO_A),
+            VcsEntryRequest(name = "second", vcsPath = REPO_A, checkoutDirectory = "second"),
         )
 
         assertEquals(listOf(REPO_B, REPO_A), config.vcsEntries.map { it.vcsPath })
@@ -155,8 +150,137 @@ class ReplaceVcsEntriesBaselineTest {
         config.vcsEntries.forEach { assertNull(it.id, "a recreated entry carries no id; the DB assigns a new one") }
     }
 
+    private fun assertRejected(
+        expectedPrefix: String,
+        vararg requests: VcsEntryRequest,
+        config: ComponentConfigurationEntity = baseRow(),
+    ) {
+        val before = config.vcsEntries.toList()
+        val thrown = assertThrows(InvocationTargetException::class.java) { write(config, *requests) }.targetException
+        assertTrue(thrown is IllegalArgumentException, "expected IllegalArgumentException, got $thrown")
+        assertTrue(thrown.message!!.startsWith(expectedPrefix), "expected '$expectedPrefix…', got '${thrown.message}'")
+        assertEquals(before, config.vcsEntries.toList(), "a rejected write leaves the row untouched")
+    }
+
+    private fun stored(
+        config: ComponentConfigurationEntity,
+        vararg names: String,
+    ) = config.apply {
+        names.forEachIndexed { i, name ->
+            vcsEntries.add(
+                VcsSettingsEntryEntity(
+                    componentConfiguration = this,
+                    name = name,
+                    vcsPath = "ssh://git@example.test/proj/stored-$i.git",
+                    sortOrder = i,
+                    checkoutDirectory = name.takeIf { i > 0 },
+                ),
+            )
+        }
+    }
+
+    @Test
+    @DisplayName("ONB-001: a secondary entry without checkoutDirectory is rejected")
+    fun `secondary requires checkout directory`() {
+        assertRejected("vcsEntries[1].checkoutDirectory: ", VcsEntryRequest(vcsPath = REPO_A), VcsEntryRequest(vcsPath = REPO_B))
+    }
+
+    @Test
+    @DisplayName("ONB-001: the primary entry must not carry a checkoutDirectory, single or multi-entry row")
+    fun `primary rejects checkout directory`() {
+        assertRejected("vcsEntries[0].checkoutDirectory: ", VcsEntryRequest(vcsPath = REPO_A, checkoutDirectory = "core"))
+        assertRejected(
+            "vcsEntries[0].checkoutDirectory: ",
+            VcsEntryRequest(vcsPath = REPO_A, checkoutDirectory = "core"),
+            VcsEntryRequest(vcsPath = REPO_B, checkoutDirectory = "feature"),
+        )
+    }
+
+    @Test
+    @DisplayName("ONB-001: a secondary checkoutDirectory equal to the primary's name (ignoring case) is rejected")
+    fun `secondary colliding with primary name`() {
+        assertRejected(
+            "vcsEntries[1].checkoutDirectory: ",
+            VcsEntryRequest(vcsPath = REPO_A),
+            VcsEntryRequest(vcsPath = REPO_B, checkoutDirectory = "Main"),
+        )
+    }
+
+    @Test
+    @DisplayName("ONB-001: two secondaries with the same checkoutDirectory (ignoring case) are rejected on the later one")
+    fun `duplicate secondary checkout directories`() {
+        assertRejected(
+            "vcsEntries[2].checkoutDirectory: ",
+            VcsEntryRequest(vcsPath = REPO_A),
+            VcsEntryRequest(vcsPath = REPO_B, checkoutDirectory = "feature"),
+            VcsEntryRequest(vcsPath = REPO_C, checkoutDirectory = "FEATURE"),
+        )
+    }
+
+    @Test
+    @DisplayName("ONB-001: checkoutDirectory must be one segment without a leading dot and not reserved")
+    fun `invalid checkout directories`() {
+        listOf(".hidden", "a/b", "a b", "report-templates", "sonar-config", "target", "sonar-report").forEach { dir ->
+            assertRejected(
+                "vcsEntries[1].checkoutDirectory: ",
+                VcsEntryRequest(vcsPath = REPO_A),
+                VcsEntryRequest(vcsPath = REPO_B, checkoutDirectory = dir),
+            )
+        }
+    }
+
+    @Test
+    @DisplayName("ONB-001: sourcePath must be relative with plain segments")
+    fun `invalid source paths`() {
+        listOf("../other", "/abs", "a b", ".", "a//b", "a/", "a/../b", "%param%").forEach { path ->
+            assertRejected("vcsEntries[0].sourcePath: ", VcsEntryRequest(vcsPath = REPO_A, sourcePath = path))
+        }
+    }
+
+    @Test
+    @DisplayName("ONB-001: the same repository (Git ignoring case) and sourcePath twice is rejected on the later entry")
+    fun `duplicate repository and source path`() {
+        assertRejected(
+            "vcsEntries[2].sourcePath: ",
+            VcsEntryRequest(vcsPath = REPO_A, sourcePath = "mapper"),
+            VcsEntryRequest(vcsPath = REPO_B, checkoutDirectory = "feature"),
+            VcsEntryRequest(vcsPath = REPO_A.uppercase(), sourcePath = "mapper", checkoutDirectory = "other"),
+        )
+    }
+
+    @Test
+    @DisplayName("ONB-001: valid placement is accepted: one repository split by sourcePath, nested sourcePath, dotted directory")
+    fun `valid placement accepted`() {
+        val config = baseRow()
+        write(
+            config,
+            VcsEntryRequest(vcsPath = REPO_A, sourcePath = "mapper"),
+            VcsEntryRequest(vcsPath = REPO_A, sourcePath = "data/sub.dir", checkoutDirectory = "feature"),
+            VcsEntryRequest(vcsPath = REPO_B, checkoutDirectory = "v1.2_x-y"),
+        )
+
+        assertEquals(listOf(null, "feature", "v1.2_x-y"), config.vcsEntries.map { it.checkoutDirectory })
+        assertEquals(listOf("mapper", "data/sub.dir", null), config.vcsEntries.map { it.sourcePath })
+    }
+
+    @Test
+    @DisplayName("ONB-001: a migrated row whose names are unusable fails its next unchanged save on vcsEntries[1].checkoutDirectory")
+    fun `migrated unusable names fail the next save`() {
+        listOf(listOf("main", "main"), listOf("main", "a/b")).forEach { names ->
+            val config = stored(baseRow(), *names.toTypedArray())
+            assertRejected(
+                "vcsEntries[1].checkoutDirectory: ",
+                *config.vcsEntries
+                    .map { VcsEntryRequest(name = it.name, vcsPath = it.vcsPath, checkoutDirectory = it.checkoutDirectory) }
+                    .toTypedArray(),
+                config = config,
+            )
+        }
+    }
+
     companion object {
         private const val REPO_A = "ssh://git@example.test/proj/repo-a.git"
         private const val REPO_B = "ssh://git@example.test/proj/repo-b.git"
+        private const val REPO_C = "ssh://git@example.test/proj/repo-c.git"
     }
 }

@@ -105,6 +105,65 @@ class VcsPlacementV4Test {
         assertEquals("feature", second["checkoutDirectory"].asText())
     }
 
+    @Test
+    @DisplayName("ONB-001: an invalid base VCS write is a 400 whose errorMessage names the entry field")
+    fun `base write error shape`() {
+        val id = newComponent()
+        val error =
+            patchComponent(
+                id,
+                """"baseConfiguration":{"vcsEntries":[{"vcsPath":"$REPO_A"},{"vcsPath":"$REPO_B"}]}""",
+            ).andExpect(status().isBadRequest)
+                .errorMessage()
+        assertTrue(error.startsWith("vcsEntries[1].checkoutDirectory: "), error)
+    }
+
+    @Test
+    @DisplayName("ONB-001: a field-override write validates the vcs.settings marker row, unprefixed")
+    fun `marker row validated`() {
+        val id = newComponent()
+        val error =
+            createVcsMarker(id, """{"vcsPath":"$REPO_A"},{"vcsPath":"$REPO_B"}""")
+                .andExpect(status().isBadRequest)
+                .errorMessage()
+        assertTrue(error.startsWith("vcsEntries[1].checkoutDirectory: "), error)
+    }
+
+    @Test
+    @DisplayName("ONB-001: a marker-row error in a combined PATCH is prefixed with its fieldOverrides index (create path)")
+    fun `combined patch prefixes marker error on create`() {
+        val id = newComponent()
+        val error =
+            patchComponent(
+                id,
+                """"fieldOverrides":[""" +
+                    """{"overriddenAttribute":"build.buildFilePath","versionRange":"[5.0,6.0)","value":"FileA"},""" +
+                    """{"overriddenAttribute":"vcs.settings","versionRange":"[1.0,2.0)",""" +
+                    """"markerChildren":{"vcsEntries":[{"vcsPath":"$REPO_A"},{"vcsPath":"$REPO_B"}]}}]""",
+            ).andExpect(status().isBadRequest)
+                .errorMessage()
+        assertTrue(error.startsWith("fieldOverrides[1].vcsEntries[1].checkoutDirectory: "), error)
+    }
+
+    @Test
+    @DisplayName("ONB-001: a marker-row error in a combined PATCH is prefixed with its fieldOverrides index (update path)")
+    fun `combined patch prefixes marker error on update`() {
+        val id = newComponent()
+        val markerId = objectMapper.readTree(createVcsMarker(id, """{"vcsPath":"$REPO_A"}""").andReturn().response.contentAsString)["id"].asText()
+        val error =
+            patchComponent(
+                id,
+                """"fieldOverrides":[""" +
+                    """{"overriddenAttribute":"build.buildFilePath","versionRange":"[5.0,6.0)","value":"FileA"},""" +
+                    """{"id":"$markerId","overriddenAttribute":"vcs.settings","versionRange":"[1.0,2.0)",""" +
+                    """"markerChildren":{"vcsEntries":[{"vcsPath":"$REPO_A","checkoutDirectory":"core"}]}}]""",
+            ).andExpect(status().isBadRequest)
+                .errorMessage()
+        assertTrue(error.startsWith("fieldOverrides[1].vcsEntries[0].checkoutDirectory: "), error)
+    }
+
+    private fun ResultActions.errorMessage(): String = objectMapper.readTree(andReturn().response.contentAsString)["errorMessage"].asText()
+
     private fun baseVcsEntries(detail: JsonNode): List<JsonNode> = detail["configurations"].first { it["rowType"].asText() == "BASE" }["vcsEntries"].toList()
 
     private fun newComponent(): String {
