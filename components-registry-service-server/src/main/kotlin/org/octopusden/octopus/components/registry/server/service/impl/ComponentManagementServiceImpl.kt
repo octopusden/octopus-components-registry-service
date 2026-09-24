@@ -1385,7 +1385,7 @@ class ComponentManagementServiceImpl(
     ): FieldOverrideApplyPlan {
         fun isImportManaged(row: ComponentConfigurationEntity) = row.rowType == "MARKER" && row.overriddenAttribute !in MarkerAttributes.ALL
 
-        val existing = component.configurations.filter { it.rowType in FIELD_OVERRIDE_ROW_TYPES }
+        val existing = component.configurations.filter { it.rowType in fieldOverrideRowTypes }
         val byId = existing.mapNotNull { row -> row.id?.let { it to row } }.toMap()
 
         // Referenced ids must exist on this component (clear 400, not a silent create).
@@ -1559,7 +1559,7 @@ class ComponentManagementServiceImpl(
                 .findByComponentId(componentId)
                 .filter { it.rowType == "RANGE_PRESENCE" }
                 .map { it.versionRange }
-                .sortedWith(SUPPORTED_RANGE_ORDER)
+                .sortedWith(supportedRangeOrder)
         // No bounded RANGE_PRESENCE rows ⇒ the ALL_VERSIONS base covers everything (ADR-018).
         return SupportedVersionsResponse(all = ranges.isEmpty(), ranges = ranges)
     }
@@ -1626,11 +1626,11 @@ class ComponentManagementServiceImpl(
             component.configurations
                 .filter { it.rowType == "RANGE_PRESENCE" }
                 .map { it.versionRange }
-                .sortedWith(SUPPORTED_RANGE_ORDER)
+                .sortedWith(supportedRangeOrder)
         publishAuditEvent(
             action = "UPDATE",
             entityId = component.id.toString(),
-            oldValue = mapOf("supportedVersions" to existingPresence.map { it.versionRange }.sortedWith(SUPPORTED_RANGE_ORDER)),
+            oldValue = mapOf("supportedVersions" to existingPresence.map { it.versionRange }.sortedWith(supportedRangeOrder)),
             newValue = mapOf("supportedVersions" to resulting.ifEmpty { listOf("ALL") }),
             jiraTaskKey = request.jiraTaskKey,
             changeComment = request.changeComment,
@@ -1674,7 +1674,7 @@ class ComponentManagementServiceImpl(
         if (all) return emptyList()
         val supportedObjs = supported.mapNotNull { runCatching { versionRangeFactory.create(it) }.getOrNull() }
         return component.configurations
-            .filter { it.rowType in FIELD_OVERRIDE_ROW_TYPES }
+            .filter { it.rowType in fieldOverrideRowTypes }
             .filter { ov ->
                 // An unparseable override range is itself unreachable — surface it (warn), do NOT
                 // silently treat it as covered (that would suppress the very advisory it should raise).
@@ -2817,7 +2817,8 @@ class ComponentManagementServiceImpl(
             EscrowExpressionParser.getInstance().parseAndEvaluate(path, validationContext).toString()
         } catch (e: Exception) {
             throw IllegalArgumentException(
-                "genericArtifact path '$path' contains an invalid expression: ${e.message}", e
+                "genericArtifact path '$path' contains an invalid expression: ${e.message}",
+                e,
             )
         }
         require(GroovySlurperConfigValidator.GENERIC_ENTRY.matcher(evaluated).matches()) {
@@ -3028,21 +3029,21 @@ class ComponentManagementServiceImpl(
     // D5 (closed-range only) is enforced by the Portal at input but is NOT
     // yet mirrored here; see the validateFieldOverrideRange KDoc.
 
-    private val FIELD_OVERRIDE_ROW_TYPES = setOf("SCALAR_OVERRIDE", "MARKER")
+    private val fieldOverrideRowTypes = setOf("SCALAR_OVERRIDE", "MARKER")
 
     // Anchored regex matches only single-segment ranges (no top-level comma
     // between segments), so composites short-circuit via the regex-mismatch
     // path inside parseSimpleSegment without a separate composite-detector.
-    private val SIMPLE_SEGMENT_PATTERN = Regex("^([\\[(])([^,]*),([^,]*)([\\])])$")
+    private val simpleSegmentPattern = Regex("^([\\[(])([^,]*),([^,]*)([\\])])$")
 
     // The exact-version ("hard version") form `[X]` is also a single Maven
     // segment — the simplest one — but carries no comma, so it never matched
-    // SIMPLE_SEGMENT_PATTERN and was misclassified as composite (rejected on
+    // simpleSegmentPattern and was misclassified as composite (rejected on
     // POST/PATCH). Maven only allows the closed `[X]` shape for a hard version:
     // `(X)`, `[X)`, `(X]` are all invalid, so this pattern is intentionally
     // square-bracket only. The releng VersionRangeFactory parses `[X]` as
     // lo == hi, both inclusive — we mirror that below.
-    private val EXACT_VERSION_PATTERN = Regex("^\\[([^,\\[\\]()]+)]$")
+    private val exactVersionPattern = Regex("^\\[([^,\\[\\]()]+)]$")
 
     private data class ParsedSimpleRange(
         val lo: String?,
@@ -3055,11 +3056,11 @@ class ComponentManagementServiceImpl(
 
     private fun parseSimpleSegment(range: String): ParsedSimpleRange? {
         val compact = normalizeRange(range)
-        EXACT_VERSION_PATTERN.matchEntire(compact)?.let { exact ->
+        exactVersionPattern.matchEntire(compact)?.let { exact ->
             val v = exact.groupValues[1]
             return ParsedSimpleRange(lo = v, loIncl = true, hi = v, hiIncl = true)
         }
-        val m = SIMPLE_SEGMENT_PATTERN.matchEntire(compact) ?: return null
+        val m = simpleSegmentPattern.matchEntire(compact) ?: return null
         val (open, loStr, hiStr, close) = m.destructured
         if (loStr.any { it in "()[]" } || hiStr.any { it in "()[]" }) return null
         return ParsedSimpleRange(
@@ -3079,7 +3080,7 @@ class ComponentManagementServiceImpl(
      * Stable display ordering for supported-coverage ranges: by lower bound (open-lower / composite
      * ranges, whose simple floor is null, sort first via the "0" fallback), then by raw string.
      */
-    private val SUPPORTED_RANGE_ORDER: Comparator<String> =
+    private val supportedRangeOrder: Comparator<String> =
         compareBy<String>(
             { parseSimpleSegment(it)?.lo?.let(::DefaultArtifactVersion) ?: DefaultArtifactVersion("0") },
             { it },
@@ -3179,7 +3180,7 @@ class ComponentManagementServiceImpl(
         for (row in component.configurations) {
             if (row.id != null && row.id == excludeOverrideId) continue
             if (row.overriddenAttribute != attribute) continue
-            if (row.rowType !in FIELD_OVERRIDE_ROW_TYPES) continue
+            if (row.rowType !in fieldOverrideRowTypes) continue
             val existingRangeObj = try {
                 versionRangeFactory.create(row.versionRange)
             } catch (_: Exception) {

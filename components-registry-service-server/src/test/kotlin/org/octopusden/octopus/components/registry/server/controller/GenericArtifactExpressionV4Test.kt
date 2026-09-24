@@ -42,7 +42,6 @@ import java.nio.file.Paths
 @Timeout(120)
 @Tag("integration")
 class GenericArtifactExpressionV4Test {
-
     @MockBean
     @Suppress("UnusedPrivateProperty")
     private lateinit var authServerClient: AuthServerClient
@@ -72,27 +71,32 @@ class GenericArtifactExpressionV4Test {
         val templatePath = "releases/expr-test/\${version}/expr-test.tar.gz"
         val createBody = componentBody("ga-expr-001", templatePath)
 
-        val createResponse =
-            mvc.perform(
-                post("/rest/api/4/components")
-                    .with(adminJwt())
-                    .contentType(MediaType.APPLICATION_JSON)
-                    .content(createBody),
-            ).andExpect(status().is2xxSuccessful)
-                .andReturn().response.contentAsString
+        val createResult = mvc.perform(
+            post("/rest/api/4/components")
+                .with(adminJwt())
+                .contentType(MediaType.APPLICATION_JSON)
+                .content(createBody),
+        )
+        val createResponse = createResult
+            .andExpect(status().is2xxSuccessful)
+            .andReturn()
+            .response
+            .contentAsString
 
         val id = objectMapper.readTree(createResponse)["id"].asText()
 
-        val getBody =
-            mvc.perform(get("/rest/api/4/components/$id").with(adminJwt()))
-                .andExpect(status().isOk)
-                .andReturn().response.contentAsString
+        val getResult = mvc.perform(get("/rest/api/4/components/$id").with(adminJwt()))
+        val getBody = getResult
+            .andExpect(status().isOk)
+            .andReturn()
+            .response
+            .contentAsString
 
-        val baseConfig =
-            objectMapper.readTree(getBody)
-                .path("configurations")
-                .firstOrNull { it.path("rowType").asText() == "BASE" }
-                ?: error("Component must have a BASE row; response=$getBody")
+        val tree = objectMapper.readTree(getBody)
+        val baseConfig = tree
+            .path("configurations")
+            .firstOrNull { it.path("rowType").asText() == "BASE" }
+            ?: error("Component must have a BASE row; response=$getBody")
 
         val artifacts = baseConfig.path("genericArtifacts")
         assertEquals(1, artifacts.size(), "Expected 1 genericArtifact; got: $artifacts")
@@ -109,12 +113,13 @@ class GenericArtifactExpressionV4Test {
             "\${unknownProp} → 400",
     )
     fun `SYS-094-EXPR-002 invalid SpEL expression rejected with 400`() {
-        mvc.perform(
+        val result = mvc.perform(
             post("/rest/api/4/components")
                 .with(adminJwt())
                 .contentType(MediaType.APPLICATION_JSON)
                 .content(componentBody("ga-expr-002", "releases/bad/\${unknownProp}/file")),
-        ).andExpect(status().isBadRequest)
+        )
+        result.andExpect(status().isBadRequest)
     }
 
     // -------------------------------------------------------------------------
@@ -126,12 +131,13 @@ class GenericArtifactExpressionV4Test {
         "SYS-094-EXPR-003: POST component with plain literal genericArtifact path → 2xx",
     )
     fun `SYS-094-EXPR-003 plain literal path accepted`() {
-        mvc.perform(
+        val result = mvc.perform(
             post("/rest/api/4/components")
                 .with(adminJwt())
                 .contentType(MediaType.APPLICATION_JSON)
                 .content(componentBody("ga-expr-003", "releases/demo-tool/1.0.0/demo-tool.tar.gz")),
-        ).andExpect(status().is2xxSuccessful)
+        )
+        result.andExpect(status().is2xxSuccessful)
     }
 
     // -------------------------------------------------------------------------
@@ -143,12 +149,13 @@ class GenericArtifactExpressionV4Test {
         "SYS-094-EXPR-004: POST component with comma in a single genericArtifact path → 400",
     )
     fun `SYS-094-EXPR-004 comma in single path rejected with 400`() {
-        mvc.perform(
+        val result = mvc.perform(
             post("/rest/api/4/components")
                 .with(adminJwt())
                 .contentType(MediaType.APPLICATION_JSON)
                 .content(componentBody("ga-expr-004", "releases/1.0/a.tar.gz,releases/1.0/b.tar.gz")),
-        ).andExpect(status().isBadRequest)
+        )
+        result.andExpect(status().isBadRequest)
     }
 
     // -------------------------------------------------------------------------
@@ -160,18 +167,21 @@ class GenericArtifactExpressionV4Test {
         "SYS-094-EXPR-005: POST component with dot-only segment in genericArtifact path → 400",
     )
     fun `SYS-094-EXPR-005 dot-only segment rejected with 400`() {
-        mvc.perform(
+        val result = mvc.perform(
             post("/rest/api/4/components")
                 .with(adminJwt())
                 .contentType(MediaType.APPLICATION_JSON)
                 .content(componentBody("ga-expr-005", "releases/../../../etc/passwd")),
-        ).andExpect(status().isBadRequest)
+        )
+        result.andExpect(status().isBadRequest)
     }
 
     // -------------------------------------------------------------------------
 
-    private fun componentBody(nameSuffix: String, genericPath: String) =
-        """
+    private fun componentBody(
+        nameSuffix: String,
+        genericPath: String,
+    ) = """
         {
           "name": "generic-expr-$nameSuffix",
           "componentOwner": "owner1",

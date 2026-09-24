@@ -26,7 +26,6 @@ import org.octopusden.octopus.components.registry.core.dto.DistributionDTO
  */
 @Tag("unit")
 class DistributionDTOWireCompatTest {
-
     private val mapper = jacksonObjectMapper()
 
     @Test
@@ -73,9 +72,8 @@ class DistributionDTOWireCompatTest {
         "SYS-094-COMPAT-004: new JSON with generic deserializes on older client (ignoreUnknown backward-compat)",
     )
     fun `SYS-094-COMPAT-004 new JSON with generic field tolerated by client without generic field`() {
-        val newJson = """
-            {"explicit":true,"external":true,"generic":"releases/foo/1.0/foo.tar.gz","securityGroups":{}}
-        """.trimIndent()
+        val newJson =
+            """{"explicit":true,"external":true,"generic":"releases/foo/1.0/foo.tar.gz","securityGroups":{}}"""
         val dto: DistributionDTO = mapper.readValue(newJson)
         assertTrue(dto.explicit)
         assertTrue(dto.external)

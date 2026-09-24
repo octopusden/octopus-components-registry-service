@@ -44,7 +44,6 @@ import java.nio.file.Paths
 @Timeout(120)
 @Tag("integration")
 class V8GenericArtifactConstraintIntegrationTest {
-
     @MockBean
     @Suppress("UnusedPrivateProperty")
     private lateinit var authServerClient: AuthServerClient
@@ -59,10 +58,8 @@ class V8GenericArtifactConstraintIntegrationTest {
     private lateinit var em: EntityManager
 
     init {
-        val testResourcesPath =
-            Paths.get(
-                V8GenericArtifactConstraintIntegrationTest::class.java.getResource("/expected-data")!!.toURI(),
-            ).parent
+        val url = V8GenericArtifactConstraintIntegrationTest::class.java.getResource("/expected-data")!!
+        val testResourcesPath = Paths.get(url.toURI()).parent
         System.setProperty("COMPONENTS_REGISTRY_SERVICE_TEST_DATA_DIR", testResourcesPath.toString())
     }
 
