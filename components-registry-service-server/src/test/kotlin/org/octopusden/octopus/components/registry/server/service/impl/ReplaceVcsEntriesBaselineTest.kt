@@ -117,7 +117,7 @@ class ReplaceVcsEntriesBaselineTest {
     }
 
     @Test
-    @DisplayName("ONB-001 baseline: v4 VCS entry without name is stored as \"main\"; an explicit name is kept")
+    @DisplayName("ONB-001 baseline: v4 VCS entry without name is stored as \"main\"; a secondary is named by its checkoutDirectory")
     fun `baseline missing name is stored as main`() {
         val config = baseRow()
         write(
@@ -276,6 +276,79 @@ class ReplaceVcsEntriesBaselineTest {
                 config = config,
             )
         }
+    }
+
+    private fun names(config: ComponentConfigurationEntity) = config.vcsEntries.map { it.name }
+
+    private fun echo(config: ComponentConfigurationEntity) =
+        config.vcsEntries
+            .map { VcsEntryRequest(name = it.name, vcsPath = it.vcsPath, checkoutDirectory = it.checkoutDirectory) }
+            .toTypedArray()
+
+    @Test
+    @DisplayName("ONB-001: a secondary entry is named by its checkoutDirectory; the request name is ignored")
+    fun `secondary name is checkout directory`() {
+        val config = baseRow()
+        write(config, VcsEntryRequest(name = "x", vcsPath = REPO_A), VcsEntryRequest(name = "other", vcsPath = REPO_B, checkoutDirectory = "feature"))
+
+        assertEquals(listOf("main", "feature"), names(config))
+    }
+
+    @Test
+    @DisplayName("ONB-001: the primary keeps the previous primary's name when a secondary is added, on an unchanged save and when re-pointed")
+    fun `primary keeps previous primary name`() {
+        val config = stored(baseRow(), "core")
+        write(config, VcsEntryRequest(vcsPath = REPO_A), VcsEntryRequest(vcsPath = REPO_B, checkoutDirectory = "feature"))
+        assertEquals(listOf("core", "feature"), names(config))
+
+        write(config, *echo(config))
+        assertEquals(listOf("core", "feature"), names(config))
+
+        write(config, VcsEntryRequest(vcsPath = REPO_C), VcsEntryRequest(vcsPath = REPO_B, checkoutDirectory = "feature"))
+        assertEquals(listOf("core", "feature"), names(config))
+    }
+
+    @Test
+    @DisplayName("ONB-001: a single entry keeps its name")
+    fun `single entry keeps name`() {
+        val config = stored(baseRow(), "core")
+        write(config, VcsEntryRequest(name = "renamed", vcsPath = REPO_A))
+
+        assertEquals(listOf("core"), names(config))
+    }
+
+    @Test
+    @DisplayName("ONB-001: two entries reduced to one keep the primary's name, also when the secondary is promoted")
+    fun `two entries reduced to one`() {
+        val kept = stored(baseRow(), "alpha", "beta")
+        write(kept, VcsEntryRequest(vcsPath = kept.vcsEntries[0].vcsPath))
+        assertEquals(listOf("alpha"), names(kept))
+
+        val promoted = stored(baseRow(), "alpha", "beta")
+        write(promoted, VcsEntryRequest(name = "beta", vcsPath = promoted.vcsEntries[1].vcsPath, checkoutDirectory = null))
+        assertEquals(listOf("alpha"), names(promoted))
+        assertNull(promoted.vcsEntries.single().checkoutDirectory)
+    }
+
+    @Test
+    @DisplayName("ONB-001: an emptied row is accepted and its next single entry is named main")
+    fun `emptied row refilled`() {
+        val config = stored(baseRow(), "alpha", "beta")
+        write(config)
+        assertTrue(config.vcsEntries.isEmpty())
+
+        write(config, VcsEntryRequest(name = "alpha", vcsPath = REPO_A))
+        assertEquals(listOf("main"), names(config))
+    }
+
+    @Test
+    @DisplayName("ONB-001: an imported multi-root row saves unchanged")
+    fun `imported row saves unchanged`() {
+        val config = stored(baseRow(), "alpha", "beta")
+        write(config, *echo(config))
+
+        assertEquals(listOf("alpha", "beta"), names(config))
+        assertEquals(listOf(null, "beta"), config.vcsEntries.map { it.checkoutDirectory })
     }
 
     companion object {
