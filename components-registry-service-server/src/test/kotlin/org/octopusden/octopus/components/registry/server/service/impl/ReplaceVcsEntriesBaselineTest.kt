@@ -413,6 +413,37 @@ class ReplaceVcsEntriesBaselineTest {
     }
 
     @Test
+    @DisplayName("ONB-001 rev. 3: one repository placed and at the root saves unchanged; the root entry keeps its own name")
+    fun `same repository placed and at the root echo`() {
+        val config = baseRow()
+        config.vcsEntries.add(
+            VcsSettingsEntryEntity(componentConfiguration = config, name = "ui", vcsPath = REPO_A, sortOrder = 0, checkoutDirectory = "ui"),
+        )
+        config.vcsEntries.add(
+            VcsSettingsEntryEntity(componentConfiguration = config, name = "main", vcsPath = REPO_A, sortOrder = 1, sourcePath = "core"),
+        )
+        write(
+            config,
+            VcsEntryRequest(vcsPath = REPO_A, checkoutDirectory = "ui"),
+            VcsEntryRequest(vcsPath = REPO_A, sourcePath = "core"),
+        )
+
+        assertEquals(listOf("ui", "main"), names(config))
+    }
+
+    @Test
+    @DisplayName("ONB-001 rev. 3: a Checkout Directory moved to another repository; the root entry does not inherit a name now in use")
+    fun `checkout directory moved to another repository`() {
+        val config = baseRow()
+        config.vcsEntries.add(
+            VcsSettingsEntryEntity(componentConfiguration = config, name = "ui", vcsPath = REPO_A, sortOrder = 0, checkoutDirectory = "ui"),
+        )
+        write(config, VcsEntryRequest(vcsPath = REPO_A), VcsEntryRequest(vcsPath = REPO_B, checkoutDirectory = "UI"))
+
+        assertEquals(listOf("main", "UI"), names(config))
+    }
+
+    @Test
     @DisplayName("ONB-001 rev. 3: two entries reduced to one; an entry moved to the root keeps its own repository's name")
     fun `two entries reduced to one`() {
         val kept = stored(baseRow(), "alpha", "beta")
