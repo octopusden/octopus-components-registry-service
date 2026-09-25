@@ -2361,7 +2361,9 @@ class ImportServiceImpl(
         if (base == null || override == null) return true
         val baseRoots = base.versionControlSystemRoots ?: emptyList<Any>()
         val overRoots = override.versionControlSystemRoots ?: emptyList<Any>()
-        return baseRoots != overRoots || base.externalRegistry != override.externalRegistry
+        return baseRoots != overRoots ||
+            base.externalRegistry != override.externalRegistry ||
+            base.buildWorkingDirectory != override.buildWorkingDirectory
     }
 
     private fun mavenArtifactsDiffer(
