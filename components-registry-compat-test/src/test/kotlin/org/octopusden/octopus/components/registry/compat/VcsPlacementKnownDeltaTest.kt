@@ -31,7 +31,11 @@ class VcsPlacementKnownDeltaTest {
         placement: String = "",
     ) = """{"name":"$name","vcsPath":"ssh://git@example.test/proj/$name.git","type":"GIT","branch":"master"$placement}"""
 
-    private fun settings(vararg roots: String) = """{"versionControlSystemRoots":[${roots.joinToString(",")}],"externalRegistry":null}"""
+    private fun settings(
+        vararg roots: String,
+        bwd: String? = null,
+    ) = """{"versionControlSystemRoots":[${roots.joinToString(",")}],"externalRegistry":null""" +
+        (bwd?.let { ""","buildWorkingDirectory":"$it"""" } ?: "") + "}"
 
     private fun ranges(vcsSettings: String) =
         """[{"componentName":"alpha-fixture","versionRange":"[1.0,)",""" +
@@ -98,21 +102,39 @@ class VcsPlacementKnownDeltaTest {
         DiffCollector.clear()
     }
 
+    private val endpoints =
+        listOf(
+            "GET /rest/api/2/components/{component}/versions/{version}/vcs-settings",
+            "GET /rest/api/2/projects/{projectKey}/versions/{version}/vcs-settings",
+            "GET /rest/api/2/projects/{projectKey}/jira-component-version-ranges",
+            "GET /rest/api/2/common/jira-component-version-ranges",
+        )
+
+    private fun records(
+        endpoint: String,
+        baseline: String,
+        candidate: String,
+    ): List<DiffRecord> {
+        DiffCollector.clear()
+        return if (endpoint.endsWith("/vcs-settings")) {
+            compare(endpoint, baseline, candidate)
+        } else {
+            compare(endpoint, ranges(baseline), ranges(candidate))
+        }
+    }
+
     @Test
-    @DisplayName("ONB-001: checkoutDirectory on a secondary VCS root is a suppressed known delta on all four v2 endpoints")
-    fun `secondary checkoutDirectory is suppressed`() {
+    @DisplayName("ONB-001 rev. 3: placement on any VCS root and a Build Working Directory are suppressed known deltas on all four v2 endpoints")
+    fun `placement and build working directory are suppressed`() {
         val baseline = settings(root("alpha"), root("beta"))
-        val candidate = settings(root("alpha"), root("beta", ""","checkoutDirectory":"beta""""))
-        val cases =
-            listOf(
-                "GET /rest/api/2/components/{component}/versions/{version}/vcs-settings" to (baseline to candidate),
-                "GET /rest/api/2/projects/{projectKey}/versions/{version}/vcs-settings" to (baseline to candidate),
-                "GET /rest/api/2/projects/{projectKey}/jira-component-version-ranges" to (ranges(baseline) to ranges(candidate)),
-                "GET /rest/api/2/common/jira-component-version-ranges" to (ranges(baseline) to ranges(candidate)),
+        val candidate =
+            settings(
+                root("alpha", ""","checkoutDirectory":"alpha","sourcePath":"mapper""""),
+                root("beta", ""","sourcePath":"data""""),
+                bwd = "alpha/mapper",
             )
-        cases.forEach { (endpoint, bodies) ->
-            DiffCollector.clear()
-            val records = compare(endpoint, bodies.first, bodies.second)
+        endpoints.forEach { endpoint ->
+            val records = records(endpoint, baseline, candidate)
 
             assertThat(records).describedAs(endpoint).isNotEmpty
             assertThat(records.filterNot(::suppressed)).describedAs(endpoint).isEmpty()
@@ -120,15 +142,16 @@ class VcsPlacementKnownDeltaTest {
     }
 
     @Test
-    @DisplayName("ONB-001: checkoutDirectory on the primary VCS root is NOT suppressed")
-    fun `primary checkoutDirectory is not suppressed`() {
-        val records =
-            compare(
-                "GET /rest/api/2/components/{component}/versions/{version}/vcs-settings",
-                settings(root("alpha")),
-                settings(root("alpha", ""","checkoutDirectory":"alpha"""")),
-            )
-
-        assertThat(records.filterNot(::suppressed)).isNotEmpty
+    @DisplayName("ONB-001 rev. 3: a changed Checkout Directory or Build Working Directory stays active")
+    fun `changed placement is not suppressed`() {
+        val baseline = settings(root("alpha", ""","checkoutDirectory":"alpha""""), root("beta"), bwd = "alpha")
+        listOf(
+            settings(root("alpha", ""","checkoutDirectory":"other""""), root("beta"), bwd = "alpha"),
+            settings(root("alpha", ""","checkoutDirectory":"alpha""""), root("beta"), bwd = "beta"),
+        ).forEach { candidate ->
+            endpoints.forEach { endpoint ->
+                assertThat(records(endpoint, baseline, candidate).filterNot(::suppressed)).describedAs(endpoint).isNotEmpty
+            }
+        }
     }
 }
