@@ -38,7 +38,8 @@ class VcsPlacementKnownDeltaTest {
             """"component":{"projectKey":"PRJX","displayName":null,"componentVersionFormat":{"majorVersionFormat":"${'$'}major",""" +
             """"releaseVersionFormat":"${'$'}major.${'$'}minor","buildVersionFormat":"${'$'}major.${'$'}minor-${'$'}build",""" +
             """"hotfixVersionFormat":"${'$'}major.${'$'}minor-${'$'}build","lineVersionFormat":"${'$'}major"},""" +
-            """"componentInfo":{"versionPrefix":"alpha","versionFormat":"${'$'}versionPrefix-${'$'}baseVersionFormat"},"technical":false},""" +
+            """"componentInfo":{"versionPrefix":"alpha",""" +
+            """"versionFormat":"${'$'}versionPrefix-${'$'}baseVersionFormat"},"technical":false},""" +
             """"distribution":{"explicit":false,"external":true},"vcsSettings":$vcsSettings}]"""
 
     private fun response(body: String) =
@@ -75,7 +76,12 @@ class VcsPlacementKnownDeltaTest {
     ): List<DiffRecord> {
         Comparators.compareRaw(endpoint, mapOf("p" to "x"), response(baseline), response(candidate))
         if (endpoint.endsWith("/vcs-settings")) {
-            Comparators.compareDto(endpoint, mapOf("p" to "x"), mapper.readValue<VCSSettingsDTO>(baseline), mapper.readValue<VCSSettingsDTO>(candidate))
+            Comparators.compareDto(
+                endpoint,
+                mapOf("p" to "x"),
+                mapper.readValue<VCSSettingsDTO>(baseline),
+                mapper.readValue<VCSSettingsDTO>(candidate),
+            )
         } else {
             Comparators.compareDto(
                 endpoint,

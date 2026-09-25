@@ -133,7 +133,10 @@ class ComponentSectionAuditTest {
         val markerId = overrideIds(id).single()
         val before = updateRowCount(id)
 
-        patchComponent(id, marker(""","sourcePath":"data"""").replace("""[{"overriddenAttribute""", """[{"id":"$markerId","overriddenAttribute"""))
+        patchComponent(
+            id,
+            marker(""","sourcePath":"data"""").replace("""[{"overriddenAttribute""", """[{"id":"$markerId","overriddenAttribute"""),
+        )
 
         assertEquals(before + 1, updateRowCount(id), "a sourcePath-only marker change must be audited: ${historyActions(id)}")
     }

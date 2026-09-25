@@ -233,7 +233,8 @@ class ReplaceVcsEntriesBaselineTest {
     @DisplayName("ONB-001: sourcePath must be relative with plain segments")
     fun `invalid source paths`() {
         // Also TeamCity checkout-rule syntax (`=>`, `+:`), a line break, and a fullwidth-unicode lookalike of `abc`.
-        listOf("../other", "/abs", "a b", ".", "a//b", "a/", "a/../b", "%param%", "a=>b", "+:x", "a\nb", "\uFF41\uFF42\uFF43").forEach { path ->
+        val paths = listOf("../other", "/abs", "a b", ".", "a//b", "a/", "a/../b", "%param%", "a=>b", "+:x", "a\nb", "\uFF41\uFF42\uFF43")
+        paths.forEach { path ->
             assertRejected("vcsEntries[0].sourcePath: ", VcsEntryRequest(vcsPath = REPO_A, sourcePath = path))
         }
     }
@@ -251,7 +252,13 @@ class ReplaceVcsEntriesBaselineTest {
 
         val config = baseRow()
         write(config, VcsEntryRequest(vcsPath = REPO_A, sourcePath = "a".repeat(255)))
-        assertEquals(255, config.vcsEntries.single().sourcePath!!.length)
+        assertEquals(
+            255,
+            config.vcsEntries
+                .single()
+                .sourcePath!!
+                .length,
+        )
     }
 
     @Test
