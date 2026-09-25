@@ -4455,6 +4455,8 @@ class ComponentManagementServiceImpl(
                         "tag" to it.tag,
                         "hotfixBranch" to it.hotfixBranch,
                         "repositoryType" to it.repositoryType,
+                        "sourcePath" to it.sourcePath,
+                        "checkoutDirectory" to it.checkoutDirectory,
                     )
                 },
             "mavenArtifacts" to
