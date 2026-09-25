@@ -245,12 +245,12 @@ class MigrationIntegrationTest {
     @Test
     @Transactional
     @DisplayName(
-        "SYS-094 / V8: MARKER row with overridden_attribute='distribution.generic' " +
-            "satisfies the V8 taxonomy constraint; generic artifact row is persisted and readable",
+        "SYS-094 / V10: MARKER row with overridden_attribute='distribution.generic' " +
+            "satisfies the V10 taxonomy constraint; generic artifact row is persisted and readable",
     )
-    fun `SYS-094 V8 migration constraint accepts distribution generic marker`() {
+    fun `SYS-094 V10 migration constraint accepts distribution generic marker`() {
         val component = componentRepository.save(
-            ComponentEntity(componentKey = "test-sys-094-v8-generic"),
+            ComponentEntity(componentKey = "test-sys-094-v10-generic"),
         )
         val marker = configurationRepository.save(
             ComponentConfigurationEntity(

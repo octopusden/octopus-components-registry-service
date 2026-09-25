@@ -30,7 +30,7 @@ import java.nio.file.Paths
 
 /**
  * SYS-094 taxonomy constraint: verifies that the PostgreSQL CHECK constraint
- * added by V9__add_distribution_generic_artifacts.sql correctly allows MARKER
+ * added by V10__add_distribution_generic_artifacts.sql correctly allows MARKER
  * and rejects SCALAR_OVERRIDE for `overridden_attribute = 'distribution.generic'`.
  *
  * Uses a real PostgreSQL 16 testcontainer with Flyway applying all migrations
@@ -43,7 +43,7 @@ import java.nio.file.Paths
 @ActiveProfiles("common", "test-db-validate")
 @Timeout(120)
 @Tag("integration")
-class V9GenericArtifactConstraintIntegrationTest {
+class V10GenericArtifactConstraintIntegrationTest {
     @MockBean
     @Suppress("UnusedPrivateProperty")
     private lateinit var authServerClient: AuthServerClient
@@ -58,24 +58,24 @@ class V9GenericArtifactConstraintIntegrationTest {
     private lateinit var em: EntityManager
 
     init {
-        val url = V9GenericArtifactConstraintIntegrationTest::class.java.getResource("/expected-data")!!
+        val url = V10GenericArtifactConstraintIntegrationTest::class.java.getResource("/expected-data")!!
         val testResourcesPath = Paths.get(url.toURI()).parent
         System.setProperty("COMPONENTS_REGISTRY_SERVICE_TEST_DATA_DIR", testResourcesPath.toString())
     }
 
     // -------------------------------------------------------------------------
-    // SYS-094-V9-001: MARKER / distribution.generic persists with artifact child
+    // SYS-094-V10-001: MARKER / distribution.generic persists with artifact child
     // -------------------------------------------------------------------------
 
     @Test
     @DisplayName(
-        "SYS-094-V9-001: MARKER row with overridden_attribute='distribution.generic' and " +
+        "SYS-094-V10-001: MARKER row with overridden_attribute='distribution.generic' and " +
             "its generic artifact child persist and reload correctly after EntityManager clear",
     )
     @Transactional
-    fun `SYS-094-V9-001 distribution generic MARKER row persists with child`() {
+    fun `SYS-094-V10-001 distribution generic MARKER row persists with child`() {
         val component = componentRepository.save(
-            ComponentEntity(componentKey = "SYS094-V9-001", archived = false),
+            ComponentEntity(componentKey = "SYS094-V10-001", archived = false),
         )
 
         configurationRepository.save(
@@ -119,18 +119,18 @@ class V9GenericArtifactConstraintIntegrationTest {
     }
 
     // -------------------------------------------------------------------------
-    // SYS-094-V9-002: SCALAR_OVERRIDE / distribution.generic is rejected
+    // SYS-094-V10-002: SCALAR_OVERRIDE / distribution.generic is rejected
     // -------------------------------------------------------------------------
 
     @Test
     @DisplayName(
-        "SYS-094-V9-002: SCALAR_OVERRIDE row with overridden_attribute='distribution.generic' " +
-            "violates the V9 taxonomy CHECK constraint",
+        "SYS-094-V10-002: SCALAR_OVERRIDE row with overridden_attribute='distribution.generic' " +
+            "violates the V10 taxonomy CHECK constraint",
     )
     @Transactional
-    fun `SYS-094-V9-002 distribution generic SCALAR_OVERRIDE rejected by CHECK constraint`() {
+    fun `SYS-094-V10-002 distribution generic SCALAR_OVERRIDE rejected by CHECK constraint`() {
         val component = componentRepository.save(
-            ComponentEntity(componentKey = "SYS094-V9-002", archived = false),
+            ComponentEntity(componentKey = "SYS094-V10-002", archived = false),
         )
 
         configurationRepository.save(
