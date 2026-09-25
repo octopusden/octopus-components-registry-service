@@ -212,7 +212,8 @@ class ImportServiceImplVcsNameTest {
             ImportServiceImpl::class.java
                 .getDeclaredMethod("vcsSettingsDiffer", VCSSettings::class.java, VCSSettings::class.java)
                 .apply { isAccessible = true }
-        val roots = listOf(VersionControlSystemRoot.create("core", RepositoryType.GIT, "ssh://git@gitlab:project/core.git", null, "main", null))
+        val roots =
+            listOf(VersionControlSystemRoot.create("core", RepositoryType.GIT, "ssh://git@gitlab:project/core.git", null, "main", null))
 
         assertEquals(true, differ.invoke(service, VCSSettings.create(null, roots), VCSSettings.create(null, roots, "core")))
         assertEquals(false, differ.invoke(service, VCSSettings.create(null, roots, "core"), VCSSettings.create(null, roots, "core")))

@@ -36,13 +36,13 @@
         <error line="14" column="1" source="standard:no-consecutive-comments" />
     </file>
     <file name="src/main/kotlin/org/octopusden/octopus/components/registry/server/service/impl/ComponentManagementServiceImpl.kt">
-        <error line="3102" column="17" source="standard:property-naming" />
-        <error line="3107" column="17" source="standard:property-naming" />
-        <error line="3116" column="17" source="standard:property-naming" />
-        <error line="3153" column="17" source="standard:property-naming" />
+        <error line="3105" column="17" source="standard:property-naming" />
+        <error line="3110" column="17" source="standard:property-naming" />
+        <error line="3119" column="17" source="standard:property-naming" />
+        <error line="3156" column="17" source="standard:property-naming" />
     </file>
     <file name="src/main/kotlin/org/octopusden/octopus/components/registry/server/service/impl/ImportServiceImpl.kt">
-        <error line="2703" column="1" source="standard:no-consecutive-comments" />
+        <error line="2705" column="1" source="standard:no-consecutive-comments" />
     </file>
     <file name="src/test/kotlin/org/octopusden/octopus/components/registry/server/controller/TeamcityValidationControllerV4SecurityTest.kt">
         <error line="62" column="9" source="standard:function-naming" />

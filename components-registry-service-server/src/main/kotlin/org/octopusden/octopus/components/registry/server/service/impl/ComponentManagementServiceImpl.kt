@@ -2723,7 +2723,13 @@ class ComponentManagementServiceImpl(
         // it; one without keeps the name of the row's previous entry on the same repository, preferring a
         // previous entry that was at the root, then the lowest sort order (vcsEntries has no @OrderBy); a
         // kept name that is now another entry's checkout directory, or none, gives main.
-        val newDirectories = entries.mapNotNull { it.checkoutDirectory?.trim()?.ifEmpty { null }?.lowercase() }.toSet()
+        val newDirectories = entries
+            .mapNotNull {
+                it.checkoutDirectory
+                    ?.trim()
+                    ?.ifEmpty { null }
+                    ?.lowercase()
+            }.toSet()
         val previousNames =
             config.vcsEntries
                 .sortedWith(compareBy({ it.checkoutDirectory != null }, { it.sortOrder }))
