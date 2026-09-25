@@ -242,11 +242,14 @@ class ReplaceVcsEntriesBaselineTest {
     fun `placement length bound`() {
         val long = "a".repeat(256)
         assertRejected(
-            "vcsEntries[1].checkoutDirectory: must be at most 255 characters",
+            "vcsEntries[1].checkoutDirectory: is 256 characters long; a Checkout Directory can have at most 255",
             VcsEntryRequest(vcsPath = REPO_A),
             VcsEntryRequest(vcsPath = REPO_B, checkoutDirectory = long),
         )
-        assertRejected("vcsEntries[0].sourcePath: must be at most 255 characters", VcsEntryRequest(vcsPath = REPO_A, sourcePath = long))
+        assertRejected(
+            "vcsEntries[0].sourcePath: is 256 characters long; a Source Path can have at most 255",
+            VcsEntryRequest(vcsPath = REPO_A, sourcePath = long),
+        )
 
         val config = baseRow()
         write(config, VcsEntryRequest(vcsPath = REPO_A, sourcePath = "a".repeat(255)))
@@ -321,7 +324,7 @@ class ReplaceVcsEntriesBaselineTest {
         assertRejected("buildWorkingDirectory: ", *placed("core", "feature").toTypedArray(), config = withBwd("other"))
         assertRejected("buildWorkingDirectory: ", *placed("core", "feature").toTypedArray(), config = withBwd("Core/x"))
         assertRejected(
-            "buildWorkingDirectory: required when every VCS entry has a Checkout Directory",
+            "buildWorkingDirectory: required: every VCS root has a Checkout Directory, so set the folder the build runs in",
             *placed("core", "feature").toTypedArray(),
             config = withBwd(null),
         )
@@ -336,6 +339,85 @@ class ReplaceVcsEntriesBaselineTest {
     fun `stored build working directory checked against new entries`() {
         assertRejected("buildWorkingDirectory: ", *placed("a", "b").toTypedArray(), config = withBwd("core"))
         assertRejected("vcsEntries[1].checkoutDirectory: ", *placed(null, null).toTypedArray(), config = withBwd("../x"))
+    }
+
+    private fun messageOf(
+        vararg requests: VcsEntryRequest,
+        config: ComponentConfigurationEntity = baseRow(),
+    ): String = assertThrows(InvocationTargetException::class.java) { write(config, *requests) }.targetException.message!!
+
+    @Test
+    @DisplayName("ONB-001: placement errors name VCS roots 1-based with their repository and say what to do")
+    fun `user-facing placement messages`() {
+        val tds = "ssh://git@example.test/proj/tdsecure.git"
+        val plugins = "ssh://git@example.test/proj/tdsecure-plugins.git"
+        assertEquals(
+            "vcsEntries[1].checkoutDirectory: required: VCS root 1 (tdsecure) is already checked out at the checkout root, and only one " +
+                "VCS root can be. Set a Checkout Directory for this VCS root, a folder name such as 'tdsecure-plugins', or give one to VCS root 1.",
+            messageOf(VcsEntryRequest(vcsPath = tds), VcsEntryRequest(vcsPath = plugins)),
+        )
+        assertEquals(
+            "vcsEntries[1].checkoutDirectory: Checkout Directory 'UI' is already used by VCS root 1 (tdsecure). Each VCS root needs its own " +
+                "folder, and the comparison ignores case. Choose another folder name.",
+            messageOf(
+                VcsEntryRequest(vcsPath = tds, checkoutDirectory = "ui"),
+                VcsEntryRequest(vcsPath = plugins, checkoutDirectory = "UI"),
+            ),
+        )
+        assertEquals(
+            "vcsEntries[1].checkoutDirectory: Checkout Directory 'Main' is already the name of VCS root 1 (tdsecure), which is checked out " +
+                "at the checkout root. Names must be unique, ignoring case. Choose another folder name.",
+            messageOf(VcsEntryRequest(vcsPath = tds), VcsEntryRequest(vcsPath = plugins, checkoutDirectory = "Main")),
+        )
+        assertEquals(
+            "vcsEntries[2].sourcePath: VCS root 1 (tdsecure) already checks out the same repository and Source Path ('core'). " +
+                "Change the Source Path, or remove one of the VCS roots.",
+            messageOf(
+                VcsEntryRequest(vcsPath = tds, sourcePath = "core"),
+                VcsEntryRequest(vcsPath = plugins, checkoutDirectory = "plugins"),
+                VcsEntryRequest(vcsPath = tds, sourcePath = "core", checkoutDirectory = "again"),
+            ),
+        )
+        assertEquals(
+            "vcsEntries[0].checkoutDirectory: 'a/b' is not a valid Checkout Directory: use a single folder name of letters, digits, " +
+                "'.', '_' or '-' that does not start with '.', for example 'app'.",
+            messageOf(VcsEntryRequest(vcsPath = tds, checkoutDirectory = "a/b"), VcsEntryRequest(vcsPath = plugins)),
+        )
+        assertEquals(
+            "vcsEntries[0].checkoutDirectory: 'Target' is reserved: the build tooling uses that folder at the checkout root. " +
+                "Choose another folder name, for example 'tdsecure'.",
+            messageOf(VcsEntryRequest(vcsPath = tds, checkoutDirectory = "Target"), VcsEntryRequest(vcsPath = plugins)),
+        )
+        assertEquals(
+            "vcsEntries[0].sourcePath: '../x' is not a valid Source Path: use a relative path of '/'-separated folder names " +
+                "(letters, digits, '.', '_', '-'; no '.' or '..'), for example 'services/api'.",
+            messageOf(VcsEntryRequest(vcsPath = tds, sourcePath = "../x")),
+        )
+    }
+
+    @Test
+    @DisplayName("ONB-001: Build Working Directory errors say what is wrong and what to do")
+    fun `user-facing build working directory messages`() {
+        assertEquals(
+            "buildWorkingDirectory: required: every VCS root has a Checkout Directory, so set the folder the build runs in, " +
+                "for example 'core' or 'core/app'.",
+            messageOf(*placed("core", "feature").toTypedArray(), config = withBwd(null)),
+        )
+        assertEquals(
+            "buildWorkingDirectory: 'other/app' is not inside any checked-out VCS root. Start it with one of the Checkout Directories: " +
+                "core, feature; or check one VCS root out at the checkout root (no Checkout Directory) to allow any folder.",
+            messageOf(*placed("core", "feature").toTypedArray(), config = withBwd("other/app")),
+        )
+        assertEquals(
+            "buildWorkingDirectory: the row has no VCS roots, so the build has no folder to run in. Add a VCS root, " +
+                "or clear the Build Working Directory.",
+            messageOf(config = withBwd("core")),
+        )
+        assertEquals(
+            "buildWorkingDirectory: '../x' is not a valid Build Working Directory: use a relative path of '/'-separated folder names " +
+                "(letters, digits, '.', '_', '-'; no '.' or '..'), for example 'core/app'.",
+            messageOf(*placed("core", null).toTypedArray(), config = withBwd("../x")),
+        )
     }
 
     private fun names(config: ComponentConfigurationEntity) = config.vcsEntries.map { it.name }
