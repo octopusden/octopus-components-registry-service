@@ -43,6 +43,18 @@ The compat-test exercises **API contracts**:
   untouched. The legacy `$.name` and every write-back surface are excluded from the rule by design
   — see the ADR — so this delta does not spread beyond the Jira-facing payloads.
 
+- **VCS entry placement** (ONB-001, 2026-09) — the `V8__` migration and the DSL import set
+  `checkoutDirectory = name` on the secondary roots of multi-root rows, and the v2
+  `VersionControlSystemRootDTO` carries it (omitted when empty). A migrated candidate therefore adds
+  `checkoutDirectory` on `versionControlSystemRoots[1..n]` of `components/{c}/versions/{v}/vcs-settings`,
+  `projects/{p}/versions/{v}/vcs-settings` and both `jira-component-version-ranges` endpoints; the
+  baseline has none. Raw layer: STRUCTURAL_DIFF `known-deltas-db.json` entries pinned to
+  `\.versionControlSystemRoots\[[1-9]\d*\]\.checkoutDirectory$`, so a `checkoutDirectory` on the
+  primary root `[0]` still surfaces. Typed layer: a field comparator in `Comparators.buildAssertion`
+  forgives exactly baseline-null → value on `versionControlSystemRoots.checkoutDirectory`; a changed
+  or dropped value is still a VALUE_DIFF. Regression tests: `GitVsDbValidationTest` VAL-003a and
+  `VcsPlacementKnownDeltaTest`. `known-deltas-git.json` stays empty: Git mode has no placement.
+
 **Operational metadata endpoints are explicitly excluded** from the compat surface:
 
 - `GET /rest/api/2/components-registry/service/status` — read **only** by

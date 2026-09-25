@@ -148,6 +148,34 @@
       "messagePattern": "TD-022 RECOVERY CONFIRMED",
       "reason": "ADR-021 + TD-022 (2026-09): JiraComponentVersionRange.equals/hashCode omit componentName, so components whose version range and Jira configuration are identical collapse into ONE element of the returned Set. A component declaring only a componentDisplayName had component.displayName = null, which is precisely what made it identical to its siblings; ADR-021 resolves that name and the collapsed component reappears. The candidate is therefore a STRICT SUPERSET of the baseline, and the addition is a recovery, not a regression. This entry does NOT accept an arbitrary superset: the 'TD-022 RECOVERY CONFIRMED' marker is emitted by Adr021RangeRecovery only when nothing is lost, every addition's componentName is absent from the baseline ranges yet present in the baseline's /components inventory (the independent evidence that it existed and was merely hidden — without it the rule refuses), a baseline twin exists under the REAL equality contract (versionRange + component modulo displayName + vcsSettings; distribution is excluded because Distribution.equals compares nothing — see TD-023), and that twin's displayName was absent while the addition's is not. Any other size difference carries 'NOT A TD-022 RECOVERY: <reason>' instead and stays active. db-mode only (the rule refuses in git-mode), and the typed layer removes the very same confirmed elements rather than suppressing its record, so a co-occurring regression still fails. Affected component keys are withheld from this public repo; they are named in the build's summary.md.",
       "regressionTest": "Adr021RangeRecoveryTest (9 cases: the confirmed shape plus loss / no-twin / already-named-twin / duplicate / nameless / git-mode refusals)"
+    },
+    {
+      "endpoint": "GET /rest/api/2/components/{component}/versions/{version}/vcs-settings",
+      "category": "STRUCTURAL_DIFF",
+      "jsonPathPattern": "\\.versionControlSystemRoots\\[[1-9]\\d*\\]\\.checkoutDirectory$",
+      "reason": "ONB-001 VCS entry placement (2026-09): V8__add_vcs_entry_placement.sql and the DSL import set checkoutDirectory = name on the secondary roots (sort_order > 0) of multi-root rows, and the v2 VersionControlSystemRootDTO carries it (NON_NULL). The baseline has no placement, so a migrated candidate adds checkoutDirectory on roots [1..n]. The primary root [0] never gets one, and the pattern does not match index 0, so a checkoutDirectory on a primary still surfaces. See docs/registry/api-compat-deltas.md.",
+      "regressionTest": "GitVsDbValidationTest.VAL-003a multi-root placement is the known difference"
+    },
+    {
+      "endpoint": "GET /rest/api/2/projects/{projectKey}/versions/{version}/vcs-settings",
+      "category": "STRUCTURAL_DIFF",
+      "jsonPathPattern": "\\.versionControlSystemRoots\\[[1-9]\\d*\\]\\.checkoutDirectory$",
+      "reason": "ONB-001 VCS entry placement (2026-09): V8__add_vcs_entry_placement.sql and the DSL import set checkoutDirectory = name on the secondary roots (sort_order > 0) of multi-root rows, and the v2 VersionControlSystemRootDTO carries it (NON_NULL). The baseline has no placement, so a migrated candidate adds checkoutDirectory on roots [1..n]. The primary root [0] never gets one, and the pattern does not match index 0, so a checkoutDirectory on a primary still surfaces. See docs/registry/api-compat-deltas.md.",
+      "regressionTest": "GitVsDbValidationTest.VAL-003a multi-root placement is the known difference"
+    },
+    {
+      "endpoint": "GET /rest/api/2/projects/{projectKey}/jira-component-version-ranges",
+      "category": "STRUCTURAL_DIFF",
+      "jsonPathPattern": "\\.versionControlSystemRoots\\[[1-9]\\d*\\]\\.checkoutDirectory$",
+      "reason": "ONB-001 VCS entry placement (2026-09): V8__add_vcs_entry_placement.sql and the DSL import set checkoutDirectory = name on the secondary roots (sort_order > 0) of multi-root rows, and the v2 VersionControlSystemRootDTO carries it (NON_NULL). The baseline has no placement, so a migrated candidate adds checkoutDirectory on roots [1..n]. The primary root [0] never gets one, and the pattern does not match index 0, so a checkoutDirectory on a primary still surfaces. See docs/registry/api-compat-deltas.md.",
+      "regressionTest": "GitVsDbValidationTest.VAL-003a multi-root placement is the known difference"
+    },
+    {
+      "endpoint": "GET /rest/api/2/common/jira-component-version-ranges",
+      "category": "STRUCTURAL_DIFF",
+      "jsonPathPattern": "\\.versionControlSystemRoots\\[[1-9]\\d*\\]\\.checkoutDirectory$",
+      "reason": "ONB-001 VCS entry placement (2026-09): V8__add_vcs_entry_placement.sql and the DSL import set checkoutDirectory = name on the secondary roots (sort_order > 0) of multi-root rows, and the v2 VersionControlSystemRootDTO carries it (NON_NULL). The baseline has no placement, so a migrated candidate adds checkoutDirectory on roots [1..n]. The primary root [0] never gets one, and the pattern does not match index 0, so a checkoutDirectory on a primary still surfaces. See docs/registry/api-compat-deltas.md.",
+      "regressionTest": "GitVsDbValidationTest.VAL-003a multi-root placement is the known difference"
     }
   ]
 }
