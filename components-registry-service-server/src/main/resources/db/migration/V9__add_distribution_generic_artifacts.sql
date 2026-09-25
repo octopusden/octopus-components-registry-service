@@ -6,8 +6,12 @@ CREATE TABLE distribution_generic_artifacts (
 );
 CREATE INDEX idx_dist_generic_config ON distribution_generic_artifacts(component_configuration_id);
 
+-- Replace the V1 taxonomy CHECK (auto-named component_configurations_check1 on fresh schema)
+-- with an extended version that adds 'distribution.generic' to the MARKER allow-list.
+-- IF EXISTS degrades gracefully on environments where the constraint was already renamed
+-- or replaced by an earlier migration.
 ALTER TABLE component_configurations
-    DROP CONSTRAINT IF EXISTS component_configurations_check;
+    DROP CONSTRAINT IF EXISTS component_configurations_check1;
 
 ALTER TABLE component_configurations
     ADD CONSTRAINT component_configurations_row_type_taxonomy_check CHECK (

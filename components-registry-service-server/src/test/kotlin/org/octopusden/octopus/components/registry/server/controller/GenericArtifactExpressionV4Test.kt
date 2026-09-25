@@ -187,6 +187,7 @@ class GenericArtifactExpressionV4Test {
           "componentOwner": "owner1",
           "group": {"groupKey": "org.example.test", "isFake": false},
           "baseConfiguration": {
+            "build": {"buildSystem": "MAVEN"},
             "genericArtifacts": [{"path": "$genericPath"}]
           }
         }
