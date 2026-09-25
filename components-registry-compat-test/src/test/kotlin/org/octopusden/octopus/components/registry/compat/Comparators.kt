@@ -404,13 +404,13 @@ object Comparators {
                         java.util.function.BiPredicate<Any?, Any?> { a, b -> Adr021DisplayName.detailedComponentEqual(a, b) },
                         "^detailedComponentVersion\\.component$",
                     )
-                    // ONB-001: a migrated candidate carries checkoutDirectory on secondary VCS roots (V8
-                    // back-fill), the baseline none. Forgive EXACTLY baseline-null -> value; a changed or
-                    // dropped value is still a VALUE_DIFF. The typed path has no element index, so the
-                    // primary-root case is left to the raw layer, whose known-delta matches roots [1..n] only.
+                    // ONB-001: a migrated candidate carries VCS placement (sourcePath / checkoutDirectory on
+                    // any root) and a Build Working Directory, the baseline none. Forgive EXACTLY
+                    // baseline-null -> value; a changed or dropped value is still a VALUE_DIFF.
                     .withEqualsForFieldsMatchingRegexes(
                         java.util.function.BiPredicate<Any?, Any?> { a, b -> a == null || a == b },
-                        "^(.+\\.)?versionControlSystemRoots\\.checkoutDirectory$",
+                        "^(.+\\.)?versionControlSystemRoots\\.(checkoutDirectory|sourcePath)$",
+                        "^(.+\\.)?buildWorkingDirectory$",
                     )
             // ADR-021, root-level shape. On the detailed-version endpoints `component` IS the display-name
             // string (`DetailedComponentVersion.component`) and sits at `component` (GET) or
