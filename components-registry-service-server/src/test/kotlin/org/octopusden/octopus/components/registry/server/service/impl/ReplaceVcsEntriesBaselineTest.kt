@@ -54,7 +54,7 @@ import java.util.concurrent.TimeUnit
  * UUIDs); `sortOrder` is the request list index.
  *
  * ONB-001 placement rules (`vcsEntries[<i>].<field>: ` errors) are driven here too; the two-unnamed-entries
- * baseline is superseded by the rule that a secondary entry requires a `checkoutDirectory`.
+ * baseline is superseded by the rule that at most one entry of a row goes without a `checkoutDirectory`.
  */
 @Timeout(30, unit = TimeUnit.SECONDS)
 class ReplaceVcsEntriesBaselineTest {
@@ -117,7 +117,7 @@ class ReplaceVcsEntriesBaselineTest {
     }
 
     @Test
-    @DisplayName("ONB-001 baseline: v4 VCS entry without name is stored as \"main\"; a secondary is named by its checkoutDirectory")
+    @DisplayName("ONB-001 baseline: v4 VCS entry without name is stored as \"main\"; an entry with a checkoutDirectory is named by it")
     fun `baseline missing name is stored as main`() {
         val config = baseRow()
         write(
@@ -180,25 +180,23 @@ class ReplaceVcsEntriesBaselineTest {
     }
 
     @Test
-    @DisplayName("ONB-001: a secondary entry without checkoutDirectory is rejected")
-    fun `secondary requires checkout directory`() {
+    @DisplayName("ONB-001: a second entry at the checkout root (no checkoutDirectory) is rejected on the later one")
+    fun `two entries at the checkout root`() {
         assertRejected("vcsEntries[1].checkoutDirectory: ", VcsEntryRequest(vcsPath = REPO_A), VcsEntryRequest(vcsPath = REPO_B))
     }
 
     @Test
-    @DisplayName("ONB-001: the primary entry must not carry a checkoutDirectory, single or multi-entry row")
-    fun `primary rejects checkout directory`() {
-        assertRejected("vcsEntries[0].checkoutDirectory: ", VcsEntryRequest(vcsPath = REPO_A, checkoutDirectory = "core"))
-        assertRejected(
-            "vcsEntries[0].checkoutDirectory: ",
-            VcsEntryRequest(vcsPath = REPO_A, checkoutDirectory = "core"),
-            VcsEntryRequest(vcsPath = REPO_B, checkoutDirectory = "feature"),
-        )
+    @DisplayName("ONB-001 rev. 3: the first entry may carry a checkoutDirectory when a later entry is at the checkout root")
+    fun `first entry placed, later entry at the root`() {
+        val config = baseRow()
+        write(config, VcsEntryRequest(vcsPath = REPO_A, checkoutDirectory = "core"), VcsEntryRequest(vcsPath = REPO_B))
+
+        assertEquals(listOf("core", null), config.vcsEntries.map { it.checkoutDirectory })
     }
 
     @Test
-    @DisplayName("ONB-001: a secondary checkoutDirectory equal to the primary's name (ignoring case) is rejected")
-    fun `secondary colliding with primary name`() {
+    @DisplayName("ONB-001: a checkoutDirectory equal to the name of the entry at the checkout root (ignoring case) is rejected")
+    fun `checkout directory colliding with the root entry name`() {
         assertRejected(
             "vcsEntries[1].checkoutDirectory: ",
             VcsEntryRequest(vcsPath = REPO_A),
@@ -207,8 +205,8 @@ class ReplaceVcsEntriesBaselineTest {
     }
 
     @Test
-    @DisplayName("ONB-001: two secondaries with the same checkoutDirectory (ignoring case) are rejected on the later one")
-    fun `duplicate secondary checkout directories`() {
+    @DisplayName("ONB-001: two entries with the same checkoutDirectory (ignoring case) are rejected on the later one")
+    fun `duplicate checkout directories`() {
         assertRejected(
             "vcsEntries[2].checkoutDirectory: ",
             VcsEntryRequest(vcsPath = REPO_A),

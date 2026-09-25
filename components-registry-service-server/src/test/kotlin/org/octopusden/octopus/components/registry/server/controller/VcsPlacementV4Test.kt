@@ -160,10 +160,10 @@ class VcsPlacementV4Test {
                 """"fieldOverrides":[""" +
                     """{"overriddenAttribute":"build.buildFilePath","versionRange":"[5.0,6.0)","value":"FileA"},""" +
                     """{"id":"$markerId","overriddenAttribute":"vcs.settings","versionRange":"[1.0,2.0)",""" +
-                    """"markerChildren":{"vcsEntries":[{"vcsPath":"$REPO_A","checkoutDirectory":"core"}]}}]""",
+                    """"markerChildren":{"vcsEntries":[{"vcsPath":"$REPO_A"},{"vcsPath":"$REPO_B"}]}}]""",
             ).andExpect(status().isBadRequest)
                 .errorMessage()
-        assertTrue(error.startsWith("fieldOverrides[1].vcsEntries[0].checkoutDirectory: "), error)
+        assertTrue(error.startsWith("fieldOverrides[1].vcsEntries[1].checkoutDirectory: "), error)
     }
 
     @Test
