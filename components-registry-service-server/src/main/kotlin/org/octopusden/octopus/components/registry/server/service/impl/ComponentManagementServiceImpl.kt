@@ -2711,15 +2711,20 @@ class ComponentManagementServiceImpl(
         entries: List<VcsEntryRequest>,
     ) {
         entries.forEach { req -> req.repositoryType?.let { validateRepositoryType(it) } }
-        // Names are derived, never taken from the request: the primary keeps the previous primary's
-        // name (vcsEntries has no @OrderBy), a secondary is named by its checkout directory.
-        val primaryName = config.vcsEntries.minByOrNull { it.sortOrder }?.name ?: "main"
+        // Names are derived, never taken from the request: an entry with a checkout directory is named by
+        // it; one without keeps the name of the row's previous entry on the same repository (the lowest
+        // sort order; vcsEntries has no @OrderBy), else main.
+        val previousNames =
+            config.vcsEntries
+                .sortedBy { it.sortOrder }
+                .distinctBy { repositoryKey(it.vcsPath, it.repositoryType) }
+                .associate { repositoryKey(it.vcsPath, it.repositoryType) to it.name }
         val replacement =
             entries.mapIndexed { index, req ->
                 val checkoutDirectory = req.checkoutDirectory?.trim()?.ifEmpty { null }
                 VcsSettingsEntryEntity(
                     componentConfiguration = config,
-                    name = if (index == 0) primaryName else checkoutDirectory.orEmpty(),
+                    name = checkoutDirectory ?: previousNames[repositoryKey(req.vcsPath, req.repositoryType)] ?: "main",
                     vcsPath = req.vcsPath,
                     branch = req.branch,
                     tag = req.tag,
@@ -2755,8 +2760,8 @@ class ComponentManagementServiceImpl(
                 rootEntry = i
             }
             checkoutDirectoryError(dir)?.let { fail("checkoutDirectory", it) }
-            nameOwners.putIfAbsent((dir ?: e.name).lowercase(), i)?.let {
-                fail("checkoutDirectory", "'$dir' is already the name of vcsEntries[$it]")
+            nameOwners.putIfAbsent(e.name.lowercase(), i)?.let {
+                fail("checkoutDirectory", "name '${e.name}' is already used by vcsEntries[$it]")
             }
             e.sourcePath?.let { path ->
                 if (path.length > MAX_PLACEMENT_LENGTH) fail("sourcePath", "must be at most $MAX_PLACEMENT_LENGTH characters")
@@ -2764,13 +2769,17 @@ class ComponentManagementServiceImpl(
                     fail("sourcePath", "'$path' must be a relative path of '/'-separated names of letters, digits, '.', '_' or '-'")
                 }
             }
-            val caseSensitive = RepositoryType.valueOf(e.repositoryType ?: "GIT").isCaseSensitive
-            val repository = if (caseSensitive) e.vcsPath else e.vcsPath.lowercase()
-            locationOwners.putIfAbsent(repository to e.sourcePath, i)?.let {
+            locationOwners.putIfAbsent(repositoryKey(e.vcsPath, e.repositoryType) to e.sourcePath, i)?.let {
                 fail("sourcePath", "repository and sourcePath are the same as vcsEntries[$it]")
             }
         }
     }
+
+    /** A repository's identity in a row: Git (and other case-insensitive types) ignore case, as the model does on read. */
+    private fun repositoryKey(
+        vcsPath: String,
+        repositoryType: String?,
+    ): String = if (RepositoryType.valueOf(repositoryType ?: "GIT").isCaseSensitive) vcsPath else vcsPath.lowercase()
 
     private fun checkoutDirectoryError(dir: String?): String? =
         when {
