@@ -12,7 +12,7 @@ permissions:
 
 jobs:
   quality:
-    uses: octopusden/octopus-base/.github/workflows/common-java-gradle-quality-gates.yml@v3.0.2
+    uses: octopusden/octopus-base/.github/workflows/common-java-gradle-quality-gates.yml@v3.1.0
     with:
       java-version: '21'
     secrets: inherit

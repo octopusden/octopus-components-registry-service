@@ -22,7 +22,7 @@ jobs:
     name: release/smoke
     # Inputs mirror release.yml with dry-run added, and the commit and version taken from this
     # run rather than a repository_dispatch payload.
-    uses: octopusden/octopus-base/.github/workflows/common-java-gradle-release.yml@v3.0.2
+    uses: octopusden/octopus-base/.github/workflows/common-java-gradle-release.yml@v3.1.0
     with:
       flow-type: hybrid
       java-version: '21'

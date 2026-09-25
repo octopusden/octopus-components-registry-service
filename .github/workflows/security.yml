@@ -16,7 +16,7 @@ permissions:
 
 jobs:
   security:
-    uses: octopusden/octopus-base/.github/workflows/common-java-gradle-security-reports.yml@v3.0.2
+    uses: octopusden/octopus-base/.github/workflows/common-java-gradle-security-reports.yml@v3.1.0
     with:
       java-version: '21'
       enable-codeql: true
