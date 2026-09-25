@@ -50,6 +50,9 @@ refresh it with `./gradlew :components-registry-service-server:generateOpenApiDo
   after the first entry of existing multi-entry rows; `V9__` adds the Build Working Directory. A
   migrated row whose names are not valid or not distinct checkout directories fails its next VCS save
   with `400` until corrected. The legacy v2 VCS settings carry all three fields, omitted when empty.
+  The text after the colon is written for editors ("VCS root N", 1-based, the repository name, what
+  to change, an example value) and may be reworded; clients route on the prefix before the colon
+  only.
   Binary note for Kotlin consumers of the published v2 DTOs: `VersionControlSystemRootDTO` and
   `VCSSettingsDTO` keep their previous JVM constructors (six and two parameters), but their `copy`
   methods and default-argument constructors change signature, so Kotlin code calling them must be

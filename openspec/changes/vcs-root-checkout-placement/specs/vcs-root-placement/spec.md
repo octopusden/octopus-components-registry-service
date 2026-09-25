@@ -112,7 +112,7 @@ PATCH's `fieldOverrides`) when it is longer than 255 characters, when a segment 
 `..` or does not match `^[A-Za-z0-9._-]+$`, or when its first segment equals no entry's
 `checkoutDirectory` (compared case-sensitively) and every entry of the row has one. When the row has entries and every one
 has a `checkoutDirectory`, an absent `buildWorkingDirectory` SHALL be rejected the same way
-(`buildWorkingDirectory: required when every VCS entry has a Checkout Directory`). It SHALL be validated whenever the row's
+(`buildWorkingDirectory: required: every VCS root has a Checkout Directory, …`). It SHALL be validated whenever the row's
 VCS entries or its Build Working Directory are written.
 
 #### Scenario: Inside a placed entry
@@ -133,7 +133,7 @@ VCS entries or its Build Working Directory are written.
 #### Scenario: Every entry in a Checkout Directory without a Build Working Directory
 - **WHEN** a row is saved with entries in `core` and `feature` and no `buildWorkingDirectory`
 - **THEN** the write fails with 400 and `errorMessage` starting
-  `buildWorkingDirectory: required when every VCS entry has a Checkout Directory`
+  `buildWorkingDirectory: required: every VCS root has a Checkout Directory`
 
 #### Scenario: Missing value on a per-range row in a combined PATCH
 - **WHEN** a component PATCH carries `fieldOverrides` whose second entry is a VCS marker row with

@@ -48,8 +48,9 @@ the placement rules and the name rule, and adds the Build Working Directory.
     sensitively, it is a path on the agent) the `checkoutDirectory` of an entry of the row, or the
     row has an entry without `checkoutDirectory`. A row without entries therefore cannot have one.
   - a row with entries that all have a `checkoutDirectory` requires a `buildWorkingDirectory`
-    (empty means the checkout root, valid only when an entry is checked out there): "required when
-    every VCS entry has a Checkout Directory".
+    (empty means the checkout root, valid only when an entry is checked out there): "required: every
+    VCS root has a Checkout Directory, …". Reason texts call entries "VCS root N" (1-based), as the
+    Portal does, name the repository and say what to change.
 - Error shape: `IllegalArgumentException` with message `vcsEntries[<i>].<field>: <reason>` or
   `buildWorkingDirectory: <reason>`, through the existing handler as
   `{"errorMessage": "…"}`: the colon-prefixed single-message form of other v4 rules. The first

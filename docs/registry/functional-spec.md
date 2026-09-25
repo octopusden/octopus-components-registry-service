@@ -134,6 +134,10 @@ row; the first failing rule is a `400` `{ "errorMessage": "<field>: <reason>" }`
 | `buildWorkingDirectory` has the `sourcePath` shape and starts in the `checkoutDirectory` of an entry (case-sensitive), unless an entry is at the checkout root; a row without entries has none | `buildWorkingDirectory` |
 | `buildWorkingDirectory` is required when every entry has a `checkoutDirectory` | `buildWorkingDirectory` |
 
+The prefix before the colon is the routing key and stays fixed; the reason after it is for people:
+it names VCS roots 1-based as the Portal does ("VCS root N"), with the repository (the last segment of its path,
+without `.git`), says what is wrong and what to do, and gives an example value.
+
 In a component PATCH, a `vcsEntries[` or `buildWorkingDirectory:` error of the `j`-th
 `fieldOverrides` element is prefixed `fieldOverrides[<j>].`; other errors of that element keep their
 shape.
@@ -433,7 +437,7 @@ Changes to field configuration and component defaults are recorded in the audit 
 | Duplicate name on **create** | 400 | `{ "errorMessage": "name: a component with name '...' already exists" }` (field-prefixed → Portal routes inline) |
 | Duplicate name on **rename** (PATCH name) | 409 | `{ "errorMessage": "Component with name '...' already exists" }` (`ComponentNameConflictException`) |
 | Duplicate `displayName` (create/update) | 400 | `{ "errorMessage": "displayName: a component with display name '...' already exists" }` |
-| Invalid VCS entry placement or Build Working Directory (§1.4) | 400 | `{ "errorMessage": "vcsEntries[1].checkoutDirectory: required: vcsEntries[0] is already checked out at the checkout root" }` or `buildWorkingDirectory: …` (`fieldOverrides[<j>].` prefix inside a PATCH `fieldOverrides` row) |
+| Invalid VCS entry placement or Build Working Directory (§1.4) | 400 | `{ "errorMessage": "vcsEntries[1].checkoutDirectory: required: VCS root 1 (app) is already checked out at the checkout root, and only one VCS root can be. Set a Checkout Directory for this VCS root, a folder name such as 'plugins', or give one to VCS root 1." }` or `buildWorkingDirectory: …` (`fieldOverrides[<j>].` prefix inside a PATCH `fieldOverrides` row) |
 | Optimistic lock conflict | 409 | `{ "error": "Component was modified by another user" }` |
 | Validation failure | 400 | `{ "errors": [{ "field": "name", "message": "must not be blank" }] }` |
 | Unauthorized | 401 | Standard Spring Security response |

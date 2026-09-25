@@ -2770,15 +2770,34 @@ class ComponentManagementServiceImpl(
     ) {
         fun fail(reason: String): Nothing = throw IllegalArgumentException("buildWorkingDirectory: $reason")
         val rootTaken = entries.any { it.checkoutDirectory == null }
+        val directories = entries.mapNotNull { it.checkoutDirectory }
         if (buildWorkingDirectory == null) {
-            if (entries.isNotEmpty() && !rootTaken) fail("required when every VCS entry has a Checkout Directory")
+            if (entries.isNotEmpty() && !rootTaken) {
+                val example = directories.first()
+                fail(
+                    "required: every VCS root has a Checkout Directory, so set the folder the build runs in, " +
+                        "for example '$example' or '$example/app'.",
+                )
+            }
             return
         }
-        if (buildWorkingDirectory.length > MAX_PLACEMENT_LENGTH) fail("must be at most $MAX_PLACEMENT_LENGTH characters")
-        if (!isPlainRelativePath(buildWorkingDirectory)) fail("'$buildWorkingDirectory' $PLAIN_RELATIVE_PATH_RULE")
+        lengthError("Build Working Directory", buildWorkingDirectory)?.let { fail(it) }
+        if (!isPlainRelativePath(
+                buildWorkingDirectory,
+            )
+        ) {
+            fail(relativePathError("Build Working Directory", buildWorkingDirectory, "core/app"))
+        }
+        if (entries.isEmpty()) {
+            fail("the row has no VCS roots, so the build has no folder to run in. Add a VCS root, or clear the Build Working Directory.")
+        }
         val first = buildWorkingDirectory.substringBefore('/')
-        if (!rootTaken && entries.none { it.checkoutDirectory == first }) {
-            fail("'$buildWorkingDirectory' must start in the Checkout Directory of a VCS entry of the row, or below the checkout root")
+        if (!rootTaken && first !in directories) {
+            fail(
+                "'$buildWorkingDirectory' is not inside any checked-out VCS root. Start it with one of the Checkout Directories: " +
+                    "${directories.joinToString(", ")}; or check one VCS root out at the checkout root (no Checkout Directory) " +
+                    "to allow any folder.",
+            )
         }
     }
 
@@ -2803,21 +2822,33 @@ class ComponentManagementServiceImpl(
                 field: String,
                 reason: String,
             ): Nothing = throw IllegalArgumentException("vcsEntries[$i].$field: $reason")
+
+            fun label(k: Int) = "VCS root ${k + 1} (${repositoryName(entries[k].vcsPath)})"
             val dir = e.checkoutDirectory
             if (dir == null) {
-                rootEntry?.let { fail("checkoutDirectory", "required: vcsEntries[$it] is already checked out at the checkout root") }
+                rootEntry?.let {
+                    fail(
+                        "checkoutDirectory",
+                        "required: ${label(it)} is already checked out at the checkout root, and only one VCS root can be. " +
+                            "Set a Checkout Directory for this VCS root, a folder name such as '${repositoryName(e.vcsPath)}', " +
+                            "or give one to VCS root ${it + 1}.",
+                    )
+                }
                 rootEntry = i
             }
-            checkoutDirectoryError(dir)?.let { fail("checkoutDirectory", it) }
-            nameOwners.putIfAbsent(e.name.lowercase(), i)?.let {
-                fail("checkoutDirectory", "name '${e.name}' is already used by vcsEntries[$it]")
-            }
+            checkoutDirectoryError(dir, repositoryName(e.vcsPath))?.let { fail("checkoutDirectory", it) }
+            nameOwners.putIfAbsent(e.name.lowercase(), i)?.let { fail("checkoutDirectory", nameCollision(e, entries[it], label(it))) }
             e.sourcePath?.let { path ->
-                if (path.length > MAX_PLACEMENT_LENGTH) fail("sourcePath", "must be at most $MAX_PLACEMENT_LENGTH characters")
-                if (!isPlainRelativePath(path)) fail("sourcePath", "'$path' $PLAIN_RELATIVE_PATH_RULE")
+                lengthError("Source Path", path)?.let { fail("sourcePath", it) }
+                if (!isPlainRelativePath(path)) fail("sourcePath", relativePathError("Source Path", path, "services/api"))
             }
             locationOwners.putIfAbsent(repositoryKey(e.vcsPath, e.repositoryType) to e.sourcePath, i)?.let {
-                fail("sourcePath", "repository and sourcePath are the same as vcsEntries[$it]")
+                val where = e.sourcePath?.let { "Source Path ('$it')" } ?: "Source Path (the whole repository)"
+                fail(
+                    "sourcePath",
+                    "${label(it)} already checks out the same repository and $where. " +
+                        "Change the Source Path, or remove one of the VCS roots.",
+                )
             }
         }
     }
@@ -2828,14 +2859,66 @@ class ComponentManagementServiceImpl(
         repositoryType: String?,
     ): String = if (RepositoryType.valueOf(repositoryType ?: "GIT").isCaseSensitive) vcsPath else vcsPath.lowercase()
 
-    private fun checkoutDirectoryError(dir: String?): String? =
+    private fun checkoutDirectoryError(
+        dir: String?,
+        repositoryName: String,
+    ): String? =
         when {
-            dir != null && dir.length > MAX_PLACEMENT_LENGTH -> "must be at most $MAX_PLACEMENT_LENGTH characters"
-            dir != null && !CHECKOUT_DIRECTORY_PATTERN.matches(dir) ->
-                "'$dir' must be one directory name of letters, digits, '.', '_' or '-', not starting with '.'"
-            dir != null && dir.lowercase() in RESERVED_CHECKOUT_DIRECTORIES -> "'$dir' is reserved"
+            dir == null -> null
+            dir.length > MAX_PLACEMENT_LENGTH -> lengthError("Checkout Directory", dir)
+            !CHECKOUT_DIRECTORY_PATTERN.matches(dir) ->
+                "'$dir' is not a valid Checkout Directory: use a single folder name of letters, digits, '.', '_' or '-' " +
+                    "that does not start with '.', for example 'app'."
+            dir.lowercase() in RESERVED_CHECKOUT_DIRECTORIES ->
+                "'$dir' is reserved: the build tooling uses that folder at the checkout root. " +
+                    "Choose another folder name, for example '$repositoryName'."
             else -> null
         }
+
+    /** Why [entry]'s name clashes with [owner]'s, which came first in the row; names are compared ignoring case. */
+    private fun nameCollision(
+        entry: VcsSettingsEntryEntity,
+        owner: VcsSettingsEntryEntity,
+        ownerLabel: String,
+    ): String =
+        when {
+            entry.checkoutDirectory == null ->
+                "this VCS root is checked out at the checkout root under the name '${entry.name}', which $ownerLabel already uses. " +
+                    "Set a Checkout Directory for this VCS root, or change the Checkout Directory of $ownerLabel."
+            owner.checkoutDirectory == null ->
+                "Checkout Directory '${entry.name}' is already the name of $ownerLabel, which is checked out at the checkout root. " +
+                    "Names must be unique, ignoring case. Choose another folder name."
+            else ->
+                "Checkout Directory '${entry.name}' is already used by $ownerLabel. Each VCS root needs its own folder, " +
+                    "and the comparison ignores case. Choose another folder name."
+        }
+
+    private fun lengthError(
+        what: String,
+        value: String,
+    ): String? =
+        if (value.length >
+            MAX_PLACEMENT_LENGTH
+        ) {
+            "is ${value.length} characters long; a $what can have at most $MAX_PLACEMENT_LENGTH"
+        } else {
+            null
+        }
+
+    private fun relativePathError(
+        what: String,
+        value: String,
+        example: String,
+    ) = "'$value' is not a valid $what: use a relative path of '/'-separated folder names " +
+        "(letters, digits, '.', '_', '-'; no '.' or '..'), for example '$example'."
+
+    /** How the Portal names a repository: the last segment of its path, without `.git`. */
+    private fun repositoryName(vcsPath: String) =
+        vcsPath
+            .trimEnd('/')
+            .substringAfterLast('/')
+            .substringAfterLast(':')
+            .removeSuffix(".git")
 
     private fun replaceMavenArtifacts(
         config: ComponentConfigurationEntity,
@@ -4671,7 +4754,6 @@ class ComponentManagementServiceImpl(
 
         // vcs_settings_entries.source_path / checkout_directory are VARCHAR(255).
         private const val MAX_PLACEMENT_LENGTH = 255
-        private const val PLAIN_RELATIVE_PATH_RULE = "must be a relative path of '/'-separated names of letters, digits, '.', '_' or '-'"
 
         // Checkout-root directories the build templates write (compared ignoring case).
         private val RESERVED_CHECKOUT_DIRECTORIES = setOf("report-templates", "sonar-config", "target", "sonar-report")

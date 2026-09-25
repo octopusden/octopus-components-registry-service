@@ -353,11 +353,13 @@ class ReplaceVcsEntriesBaselineTest {
         val plugins = "ssh://git@example.test/proj/tdsecure-plugins.git"
         assertEquals(
             "vcsEntries[1].checkoutDirectory: required: VCS root 1 (tdsecure) is already checked out at the checkout root, and only one " +
-                "VCS root can be. Set a Checkout Directory for this VCS root, a folder name such as 'tdsecure-plugins', or give one to VCS root 1.",
+                "VCS root can be. Set a Checkout Directory for this VCS root, a folder name such as 'tdsecure-plugins', " +
+                "or give one to VCS root 1.",
             messageOf(VcsEntryRequest(vcsPath = tds), VcsEntryRequest(vcsPath = plugins)),
         )
         assertEquals(
-            "vcsEntries[1].checkoutDirectory: Checkout Directory 'UI' is already used by VCS root 1 (tdsecure). Each VCS root needs its own " +
+            "vcsEntries[1].checkoutDirectory: Checkout Directory 'UI' is already used by VCS root 1 (tdsecure). " +
+                "Each VCS root needs its own " +
                 "folder, and the comparison ignores case. Choose another folder name.",
             messageOf(
                 VcsEntryRequest(vcsPath = tds, checkoutDirectory = "ui"),
@@ -365,7 +367,8 @@ class ReplaceVcsEntriesBaselineTest {
             ),
         )
         assertEquals(
-            "vcsEntries[1].checkoutDirectory: Checkout Directory 'Main' is already the name of VCS root 1 (tdsecure), which is checked out " +
+            "vcsEntries[1].checkoutDirectory: Checkout Directory 'Main' is already the name of VCS root 1 (tdsecure), " +
+                "which is checked out " +
                 "at the checkout root. Names must be unique, ignoring case. Choose another folder name.",
             messageOf(VcsEntryRequest(vcsPath = tds), VcsEntryRequest(vcsPath = plugins, checkoutDirectory = "Main")),
         )
