@@ -8,8 +8,9 @@ QA database with a copy of the production one. Script: `scripts/teamcity/recreat
 1. Checks that the target is not production (below). Nothing is written before these checks pass.
 2. Dumps the production schema, including the extensions installed in it (`pgcrypto`).
 3. Keeps the current QA schema as the build artifact `qa-backup/qa-before-recreate.sql.gz`.
-4. In one transaction on QA: `DROP SCHEMA "components-registry" CASCADE`, then loads the dump. Any failure,
-   including a 30 s lock timeout while a QA session holds a table, rolls back and leaves QA as it was.
+4. In one transaction on QA: `DROP SCHEMA "components-registry" CASCADE`, then loads the dump. Any failure
+   rolls back and leaves QA as it was. The drop waits at most 30 s for a QA session holding a table; once
+   it succeeds it holds every lock the load needs.
 5. Compares row counts table by table (a difference is a warning: production keeps serving writes) and
    logs the production migration version now on QA.
 
@@ -61,15 +62,17 @@ The database side (role, network, `pg_hba`, Vault policy) is written up as a rea
    created by a database administrator (the application user cannot create roles).
 
 2. **Vault** (KV mount `f1-config-server`):
-   - new secret `teamcity-crs-qa-refresh` with keys `prod.readonly.username` and `prod.readonly.password`.
+   - new secret `teamcity-crs-qa-refresh` with keys `prod_readonly_username` and `prod_readonly_password`
+     (no dots: TeamCity reads the key as a JsonPath).
      The name deliberately does not start with `components-registry-service`, so the config server
      serves it to no application;
    - the QA credentials are read from the QA application's own secret
      `components-registry-service-cloud-qa` (`spring.datasource.username` / `spring.datasource.password`);
    - the approle of the TeamCity Vault connection needs `read` on both paths. The mount is KV v2, so
      policies and the `%vault:...%` references in `.teamcity/settings.kts` address
-     `f1-config-server/data/<secret>`. The first run confirms the references, including keys that
-     contain dots.
+     `f1-config-server/data/<secret>`. The QA keys contain dots, so their references use the JsonPath
+     bracket form (`!/['spring.datasource.password']`); the first run confirms it. If TeamCity rejects it,
+     copy the QA credentials into `teamcity-crs-qa-refresh` as `qa_username` / `qa_password`.
 
 3. **TeamCity parameters** on the parent project: `CRS_PROD_DB_HOST` and `CRS_QA_DB_HOST`, preferably
    with the read-only spec.

@@ -1776,19 +1776,21 @@ object id80RecreateQaDbFromProdManual : BuildType({
     params {
         // Vault references cannot be composed from other parameters, so the mount is spelled out in each
         // one. The config-server mount is KV v2 (octopus-config-server: kv-version 2), hence "/data/".
+        // The part after "!/" is a JsonPath: a key containing dots needs the bracket form, or it is read
+        // as a nested path and does not resolve.
         text("env.SRC_HOST", "%CRS_PROD_DB_HOST%", readOnly = true, allowEmpty = false)
         text("env.SRC_PORT", "5432", readOnly = true, allowEmpty = false)
         text("env.SRC_DB", "components-registry", readOnly = true, allowEmpty = false)
         // A role holding only pg_read_all_data.
-        text("env.SRC_USER", "%vault:f1-config-server/data/teamcity-crs-qa-refresh!/prod.readonly.username%", readOnly = true, allowEmpty = false)
-        password("env.SRC_PASSWORD", "%vault:f1-config-server/data/teamcity-crs-qa-refresh!/prod.readonly.password%", readOnly = true)
+        text("env.SRC_USER", "%vault:f1-config-server/data/teamcity-crs-qa-refresh!/prod_readonly_username%", readOnly = true, allowEmpty = false)
+        password("env.SRC_PASSWORD", "%vault:f1-config-server/data/teamcity-crs-qa-refresh!/prod_readonly_password%", readOnly = true)
 
         text("env.DST_HOST", "%CRS_QA_DB_HOST%", readOnly = true, allowEmpty = false)
         text("env.DST_PORT", "5432", readOnly = true, allowEmpty = false)
         text("env.DST_DB", "components-registry", readOnly = true, allowEmpty = false)
         // The QA application's own datasource credentials, so a password rotation needs no change here.
-        text("env.DST_USER", "%vault:f1-config-server/data/components-registry-service-cloud-qa!/spring.datasource.username%", readOnly = true, allowEmpty = false)
-        password("env.DST_PASSWORD", "%vault:f1-config-server/data/components-registry-service-cloud-qa!/spring.datasource.password%", readOnly = true)
+        text("env.DST_USER", "%vault:f1-config-server/data/components-registry-service-cloud-qa!/['spring.datasource.username']%", readOnly = true, allowEmpty = false)
+        password("env.DST_PASSWORD", "%vault:f1-config-server/data/components-registry-service-cloud-qa!/['spring.datasource.password']%", readOnly = true)
 
         text("env.DB_SCHEMA", "components-registry", readOnly = true, allowEmpty = false)
         text("env.QA_BACKUP_FILE", "qa-backup/qa-before-recreate.sql.gz", readOnly = true, allowEmpty = false)
@@ -1816,6 +1818,16 @@ object id80RecreateQaDbFromProdManual : BuildType({
     failureConditions {
         // The copy is a few MB and takes seconds.
         executionTimeoutMin = 15
+    }
+
+    features {
+        // The postgres image comes through the corporate registry, which needs a login (as in id17).
+        dockerSupport {
+            id = "DockerSupport"
+            loginToRegistry = on {
+                dockerRegistryId = "PROJECT_EXT_177,PROJECT_EXT_350,PROJECT_EXT_351"
+            }
+        }
     }
 })
 

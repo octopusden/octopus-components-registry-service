@@ -41,8 +41,9 @@ done
 
 sql() { docker exec "$NET-$1" psql -U crs -d crs -X -q -A -t -v ON_ERROR_STOP=1 -c "$2"; }
 sql src 'create schema "components-registry"; create extension pgcrypto schema "components-registry";
-         create table "components-registry".components(id uuid default "components-registry".gen_random_uuid(), name text);
+         create table "components-registry".components(id uuid default "components-registry".gen_random_uuid(), seq bigserial, name text);
          insert into "components-registry".components(name) select g::text from generate_series(1, 5) g;
+         select setval(pg_get_serial_sequence($$"components-registry".components$$, $$seq$$), 42);
          create table "components-registry".flyway_schema_history(installed_rank int, version text, success bool);
          insert into "components-registry".flyway_schema_history values (1, $$9$$, true), (2, $$10$$, true), (3, $$11$$, false);'
 sql src 'create role ro login password $$pw$$; grant pg_read_all_data to ro;'
@@ -67,6 +68,7 @@ check "copy succeeds" '[ $? -eq 0 ]'
 check "a read-only production role raises no warning" '! grep -q "can write" "$OUT/run.log"'
 check "target has the source rows" '[ "$(sql dst "select count(*) from \"components-registry\".components")" = 5 ]'
 check "stale target table is gone" '[ "$(sql dst "select to_regclass(\$\$\"components-registry\".stale\$\$) is null")" = t ]'
+check "sequence position travelled (read by the pg_read_all_data role)" '[ "$(sql dst "select last_value from \"components-registry\".components_seq_seq")" = 42 ]'
 check "extension travelled with the schema" '[ "$(sql dst "select count(*) from pg_extension where extname = \$\$pgcrypto\$\$")" = 1 ]'
 check "source is unchanged" '[ "$(sql src "select count(*) from \"components-registry\".components")" = 5 ]'
 check "old target schema is kept as a gzipped dump" 'gunzip -c "$OUT/qa-before.sql.gz" | grep -q "CREATE TABLE \"components-registry\".stale"'

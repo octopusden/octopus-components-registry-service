@@ -29,3 +29,4 @@ BOOT-INF/
 # documented recipe calls them by path — an ignored helper leaves the doc pointing at a file nobody
 # else has.
 !scripts/quality-baseline/*.sh
+.DS_Store

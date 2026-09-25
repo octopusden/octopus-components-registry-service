@@ -7,7 +7,7 @@ unable to write there, and unable to hold locks that stall the application.
 
 ## 1. Production: a read-only role
 
-Server `prod-components-registry-pg`, database `components-registry`.
+Server `<prod-pg-host>` (the CRS production PostgreSQL), database `components-registry`.
 
 | Parameter | Value |
 |---|---|
@@ -17,7 +17,7 @@ Server `prod-components-registry-pg`, database `components-registry`.
 | Session default | `default_transaction_read_only = on` |
 | Connection limit | 3 |
 | Password | generated, at least 32 characters, stored as SCRAM-SHA-256 |
-| Database access | `CONNECT` on `components-registry` (normally already granted to `PUBLIC`) |
+| Database access | `CONNECT` on `components-registry` — only needs a grant if it was revoked from `PUBLIC` |
 
 ```sql
 CREATE ROLE "components-registry-readonly" LOGIN PASSWORD '<generated>'
@@ -34,20 +34,22 @@ the dump starts failing after the next one.
 
 | Server | Database | Role | From |
 |---|---|---|---|
-| `prod-components-registry-pg` | `components-registry` | `components-registry-readonly` | TeamCity agents; the internal/VPN network |
-| `qa-lifecycle-svc-pg` | `components-registry` | `components-registry` (the existing QA application user) | TeamCity agents |
+| `<prod-pg-host>` | `components-registry` | `components-registry-readonly` | TeamCity agents (the build); the internal/VPN network (read-only inspection by the team, replacing today's use of the application user) |
+| `<qa-pg-host>` | `components-registry` | `components-registry` (the existing QA application user) | TeamCity agents (the build) |
 
 Port 5432 from the TeamCity agents to both servers. Nothing else changes on QA: the application user
 already owns the schema and its extension and may `CREATE` in the database, which is all the copy needs.
-The copy touches only the `components-registry` database, not `lifecycle-svc` on the same server.
+The copy touches only the `components-registry` database, not other databases on the same server.
 
 ## 3. Handing over the password
 
 Write it directly into Vault, not by mail or chat:
 
 - path `f1-config-server/teamcity-crs-qa-refresh` (KV v2)
-- `prod.readonly.username` = `components-registry-readonly`
-- `prod.readonly.password` = the password
+- `prod_readonly_username` = `components-registry-readonly`
+- `prod_readonly_password` = the password
+
+(Keys without dots on purpose: TeamCity reads the key as a JsonPath, where a dot means nesting.)
 
 The approle of the TeamCity Vault connection ("HashiCorp Vault Cloud Wrapper") needs `read` on:
 
@@ -58,7 +60,8 @@ path "f1-config-server/data/components-registry-service-cloud-qa" { capabilities
 
 ## 4. Acceptance
 
-Connected as `components-registry-readonly` to production:
+Connected as `components-registry-readonly` to production, each statement on its own (autocommit), since
+a failed statement inside a transaction would make the following ones fail for the wrong reason:
 
 ```sql
 SELECT pg_has_role(current_user, 'pg_read_all_data', 'member');   -- true
