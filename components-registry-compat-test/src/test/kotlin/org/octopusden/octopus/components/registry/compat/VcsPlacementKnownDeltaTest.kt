@@ -165,6 +165,26 @@ class VcsPlacementKnownDeltaTest {
         }
     }
 
+    @Test
+    @DisplayName("ONB-001 rev. 3: trace-replay records with literal paths carry the same suppressed placement deltas")
+    fun `literal trace paths are suppressed`() {
+        val baseline = settings(root("alpha"), root("beta"))
+        val candidate = settings(root("alpha", ""","checkoutDirectory":"alpha""""), root("beta", ""","sourcePath":"data""""), bwd = "alpha")
+        listOf(
+            "GET /rest/api/2/components/alpha-fixture/versions/1.0/vcs-settings" to (baseline to candidate),
+            "GET /rest/api/2/projects/PRJX/versions/1.0/vcs-settings" to (baseline to candidate),
+            "GET /rest/api/2/projects/PRJX/jira-component-version-ranges" to (ranges(baseline) to ranges(candidate)),
+            "GET /rest/api/2/components/alpha-fixture/versions/1.0" to (detailed(baseline) to detailed(candidate)),
+        ).forEach { (endpoint, bodies) ->
+            DiffCollector.clear()
+            Comparators.compareRaw(endpoint, emptyMap(), response(bodies.first), response(bodies.second))
+            val records = DiffCollector.snapshot()
+
+            assertThat(records).describedAs(endpoint).isNotEmpty
+            assertThat(records.filterNot(::suppressed)).describedAs(endpoint).isEmpty()
+        }
+    }
+
     private companion object {
         const val DETAILED_COMPONENT = "GET /rest/api/2/components/{component}/versions/{version}"
     }
