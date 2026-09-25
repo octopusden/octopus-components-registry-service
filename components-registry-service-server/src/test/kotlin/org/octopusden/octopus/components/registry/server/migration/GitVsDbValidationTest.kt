@@ -312,6 +312,8 @@ class GitVsDbValidationTest {
      * ONB-001 known difference: the Groovy DSL has no VCS placement, while the import back-fills
      * `checkoutDirectory = name` on the secondary roots of a multi-root component. The DB response
      * carries that extra field (VAL-003 compares LENIENT, so an added field passes); everything else is equal.
+     * The import never sets a Build Working Directory, so right after import there is none on either side;
+     * one set later through v4 is the same kind of DB-only addition.
      */
     @Test
     @DisplayName("VAL-003a: multi-root vcs-settings differ only by checkoutDirectory on DB secondary roots")

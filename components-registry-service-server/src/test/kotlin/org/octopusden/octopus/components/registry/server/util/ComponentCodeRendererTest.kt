@@ -379,7 +379,7 @@ class ComponentCodeRendererTest {
     }
 
     @Test
-    @DisplayName("ONB-001: DSL export omits sourcePath and checkoutDirectory (Groovy DSL has no placement)")
+    @DisplayName("ONB-001: DSL export omits sourcePath, checkoutDirectory and buildWorkingDirectory (Groovy DSL has none)")
     fun fullMultiVcsPlacementOmitted() {
         fun render(placed: Boolean): String {
             val c = component()
@@ -393,6 +393,7 @@ class ComponentCodeRendererTest {
                     }
                 },
             )
+            if (placed) b.buildWorkingDirectory = "ui/app"
             return renderer.renderFull(c)
         }
 
