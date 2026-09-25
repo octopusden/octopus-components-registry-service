@@ -220,7 +220,7 @@ class ReplaceVcsEntriesBaselineTest {
     @Test
     @DisplayName("ONB-001: checkoutDirectory must be one segment without a leading dot and not reserved")
     fun `invalid checkout directories`() {
-        listOf(".hidden", "a/b", "a b", "report-templates", "sonar-config", "target", "sonar-report").forEach { dir ->
+        listOf(".hidden", "a/b", "a b", "a=>b", "report-templates", "sonar-config", "target", "Target", "sonar-report").forEach { dir ->
             assertRejected(
                 "vcsEntries[1].checkoutDirectory: ",
                 VcsEntryRequest(vcsPath = REPO_A),
@@ -232,9 +232,26 @@ class ReplaceVcsEntriesBaselineTest {
     @Test
     @DisplayName("ONB-001: sourcePath must be relative with plain segments")
     fun `invalid source paths`() {
-        listOf("../other", "/abs", "a b", ".", "a//b", "a/", "a/../b", "%param%").forEach { path ->
+        // Also TeamCity checkout-rule syntax (`=>`, `+:`), a line break, and a fullwidth-unicode lookalike of `abc`.
+        listOf("../other", "/abs", "a b", ".", "a//b", "a/", "a/../b", "%param%", "a=>b", "+:x", "a\nb", "\uFF41\uFF42\uFF43").forEach { path ->
             assertRejected("vcsEntries[0].sourcePath: ", VcsEntryRequest(vcsPath = REPO_A, sourcePath = path))
         }
+    }
+
+    @Test
+    @DisplayName("ONB-001: checkoutDirectory and sourcePath are at most 255 characters (VARCHAR(255))")
+    fun `placement length bound`() {
+        val long = "a".repeat(256)
+        assertRejected(
+            "vcsEntries[1].checkoutDirectory: must be at most 255 characters",
+            VcsEntryRequest(vcsPath = REPO_A),
+            VcsEntryRequest(vcsPath = REPO_B, checkoutDirectory = long),
+        )
+        assertRejected("vcsEntries[0].sourcePath: must be at most 255 characters", VcsEntryRequest(vcsPath = REPO_A, sourcePath = long))
+
+        val config = baseRow()
+        write(config, VcsEntryRequest(vcsPath = REPO_A, sourcePath = "a".repeat(255)))
+        assertEquals(255, config.vcsEntries.single().sourcePath!!.length)
     }
 
     @Test
