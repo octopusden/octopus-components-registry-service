@@ -4490,6 +4490,7 @@ class ComponentManagementServiceImpl(
             "jira.versionPrefix" to base?.jiraVersionPrefix,
             "jira.versionFormat" to base?.jiraVersionFormat,
             "jira.hotfixVersionFormat" to base?.jiraHotfixVersionFormat,
+            "buildWorkingDirectory" to base?.buildWorkingDirectory,
         )
 
     private fun baseConfigCollectionAuditEntries(base: ComponentConfigurationEntity?): Map<String, Any?> =
