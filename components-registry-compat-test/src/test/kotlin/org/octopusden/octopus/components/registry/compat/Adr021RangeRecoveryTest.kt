@@ -24,12 +24,14 @@ class Adr021RangeRecoveryTest {
         versionRange: String = "(,)",
         vcsUrl: String = "ssh://repo",
         gav: String? = null,
+        placement: String = "",
+        settings: String = "",
     ) = """
         {"componentName":"$componentName","versionRange":"$versionRange",
          "component":{"projectKey":"$projectKey","displayName":${displayName?.let { "\"$it\"" } ?: "null"},
                       "componentVersionFormat":{"majorVersionFormat":"fmt"}},
          "distribution":{"explicit":false,"external":false,"GAV":${gav?.let { "\"$it\"" } ?: "null"}},
-         "vcsSettings":{"versionControlSystemRoots":[{"vcsPath":"$vcsUrl"}]}}
+         "vcsSettings":{"versionControlSystemRoots":[{"vcsPath":"$vcsUrl"$placement}]$settings}}
         """.trimIndent()
 
     private fun arrayOf(vararg elements: String) = mapper.readTree("[${elements.joinToString(",")}]")
@@ -59,6 +61,37 @@ class Adr021RangeRecoveryTest {
         assertThat(verdict).isInstanceOf(Adr021RangeRecovery.Verdict.Confirmed::class.java)
         assertThat((verdict as Adr021RangeRecovery.Verdict.Confirmed).keys)
             .containsExactly("componentName=comp-a, versionRange=(,)")
+    }
+
+    @Test
+    @DisplayName("ONB-001: VCS placement added by the candidate (V8 back-fill) does not hide the recovery")
+    fun recoveryThroughPlacement() {
+        val placed = ""","checkoutDirectory":"root-b","sourcePath":"data""""
+        val verdict =
+            Adr021RangeRecovery.analyse(
+                baseline = arrayOf(element("comp-c"), element("comp-b", vcsUrl = "ssh://other")),
+                candidate =
+                    arrayOf(
+                        element("comp-c", "Component C", placement = placed, settings = ""","buildWorkingDirectory":"root-b""""),
+                        element("comp-a", "Component A", placement = placed, settings = ""","buildWorkingDirectory":"root-b""""),
+                        element("comp-b", vcsUrl = "ssh://other", placement = placed),
+                    ),
+            )
+        assertThat(verdict).isInstanceOf(Adr021RangeRecovery.Verdict.Confirmed::class.java)
+        assertThat((verdict as Adr021RangeRecovery.Verdict.Confirmed).keys)
+            .containsExactly("componentName=comp-a, versionRange=(,)")
+    }
+
+    @Test
+    @DisplayName("ONB-001: with placement set aside, a real loss is still refused")
+    fun lossThroughPlacementIsRejected() {
+        val placed = ""","checkoutDirectory":"root-b""""
+        val verdict =
+            Adr021RangeRecovery.analyse(
+                baseline = arrayOf(element("comp-c"), element("comp-x", projectKey = "OTHER")),
+                candidate = arrayOf(element("comp-c", "Component C", placement = placed), element("comp-a", "Component A", placement = placed)),
+            )
+        assertThat((verdict as Adr021RangeRecovery.Verdict.Rejected).reason).contains("unmatched")
     }
 
     @Test
