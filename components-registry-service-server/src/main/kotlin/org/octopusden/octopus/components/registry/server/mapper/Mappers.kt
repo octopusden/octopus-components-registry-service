@@ -65,7 +65,7 @@ fun VCSSettings.toDTO(): VCSSettingsDTO {
         versionControlSystemRoots.map {
             it.toDTO()
         }
-    return VCSSettingsDTO(vcsRoots, externalRegistry)
+    return VCSSettingsDTO(vcsRoots, externalRegistry, buildWorkingDirectory)
 }
 
 fun VersionControlSystemRoot.toDTO(): VersionControlSystemRootDTO =

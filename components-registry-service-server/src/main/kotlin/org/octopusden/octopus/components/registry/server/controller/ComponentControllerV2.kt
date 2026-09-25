@@ -76,6 +76,7 @@ class ComponentControllerV2(
                         )
                     },
                 externalRegistry,
+                buildWorkingDirectory,
             )
         }
 

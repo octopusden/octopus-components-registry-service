@@ -53,7 +53,7 @@ class AbstractResolver {
                     root.checkoutDirectory,
             ))
         }
-        VCSSettings vcsSettingsNew = VCSSettings.create(vcsSettings.externalRegistry, vcsRootsResolved)
+        VCSSettings vcsSettingsNew = VCSSettings.create(vcsSettings.externalRegistry, vcsRootsResolved as List, vcsSettings.buildWorkingDirectory)
         ModelConfigPostProcessor modelConfigPostProcessor = new ModelConfigPostProcessor(ComponentVersion.create(componentName, version), versionNames)
         return modelConfigPostProcessor.resolveVariables(vcsSettingsNew)
     }

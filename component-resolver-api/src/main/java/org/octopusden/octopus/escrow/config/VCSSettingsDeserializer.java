@@ -28,7 +28,9 @@ class VCSSettingsDeserializer {
         } else {
             JsonNode externalRegistry = vcsSettingsNode.get("externalRegistry");
             ArrayList<VersionControlSystemRoot> vcsRoots = getVersionControlSystemRoots(vcsSettingsNode);
-            return VCSSettings.create(externalRegistry != null ? externalRegistry.textValue() : null, vcsRoots);
+            JsonNode buildWorkingDirectory = vcsSettingsNode.get("buildWorkingDirectory");
+            return VCSSettings.create(externalRegistry != null ? externalRegistry.textValue() : null, vcsRoots,
+                    buildWorkingDirectory != null ? buildWorkingDirectory.textValue() : null);
         }
     }
 
