@@ -48,8 +48,9 @@ The compat-test exercises **API contracts**:
   omitted when empty. `V8__` and the DSL import set `checkoutDirectory = name` after the first root
   of multi-root rows; the placement import and the Portal may set either field on any root, `[0]`
   included, and a Build Working Directory on the row (`V9__`). A migrated candidate therefore adds
-  these fields on `components/{c}/versions/{v}/vcs-settings`, `projects/{p}/versions/{v}/vcs-settings`
-  and both `jira-component-version-ranges` endpoints; the baseline has none. Raw layer:
+  these fields on `components/{c}/versions/{v}/vcs-settings`, `projects/{p}/versions/{v}/vcs-settings`,
+  both `jira-component-version-ranges` endpoints and `components/{c}/versions/{v}` (the
+  `DetailedComponent`, under `vcsSettings.`); the baseline has none. Raw layer:
   STRUCTURAL_DIFF `known-deltas-db.json` entries pinned to
   `\.versionControlSystemRoots\[\d+\]\.(checkoutDirectory|sourcePath)$` and
   `(^\$|\.vcsSettings)\.buildWorkingDirectory$`; they match only an added field, so a changed value
