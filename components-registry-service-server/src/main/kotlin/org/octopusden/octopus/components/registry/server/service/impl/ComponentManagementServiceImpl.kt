@@ -2265,7 +2265,10 @@ class ComponentManagementServiceImpl(
         try {
             applyPayload()
         } catch (e: IllegalArgumentException) {
-            if (e.message?.startsWith("vcsEntries[") == true) throw IllegalArgumentException("fieldOverrides[$j].${e.message}", e)
+            val message = e.message.orEmpty()
+            if (message.startsWith("vcsEntries[") || message.startsWith("buildWorkingDirectory:")) {
+                throw IllegalArgumentException("fieldOverrides[$j].$message", e)
+            }
             throw e
         }
 
@@ -2594,6 +2597,7 @@ class ComponentManagementServiceImpl(
         }
         request.buildWorkingDirectory?.let { config.buildWorkingDirectory = it.trim().ifEmpty { null } }
         request.vcsEntries?.let { replaceVcsEntries(config, it) }
+            ?: request.buildWorkingDirectory?.let { validateBuildWorkingDirectory(config.vcsEntries, config.buildWorkingDirectory) }
         request.mavenArtifacts?.let { replaceMavenArtifacts(config, it) }
         request.fileUrlArtifacts?.let { replaceFileUrlArtifacts(config, it) }
         request.dockerImages?.let { replaceDockerImages(config, it) }
@@ -2694,6 +2698,7 @@ class ComponentManagementServiceImpl(
         // null = unchanged, blank = clear (V4_SCALAR_CLEAR_SEMANTICS).
         patch.buildWorkingDirectory?.let { config.buildWorkingDirectory = it.trim().ifEmpty { null } }
         patch.vcsEntries?.let { replaceVcsEntries(config, it) }
+            ?: patch.buildWorkingDirectory?.let { validateBuildWorkingDirectory(config.vcsEntries, config.buildWorkingDirectory) }
         patch.mavenArtifacts?.let { replaceMavenArtifacts(config, it) }
         patch.fileUrlArtifacts?.let { replaceFileUrlArtifacts(config, it) }
         patch.dockerImages?.let { replaceDockerImages(config, it) }
@@ -2739,9 +2744,36 @@ class ComponentManagementServiceImpl(
                 )
             }
         validateVcsPlacement(replacement)
+        validateBuildWorkingDirectory(replacement, config.buildWorkingDirectory)
         config.vcsEntries.clear()
         config.vcsEntries.addAll(replacement)
     }
+
+    /**
+     * ONB-001 rev. 3: the Build Working Directory is a relative path that starts in the checkout
+     * directory of one of the row's entries (compared case-sensitively: it is a path on the agent), or
+     * anywhere below the checkout root when an entry is checked out there. When every entry has a
+     * checkout directory it is required. Failures are a 400 `buildWorkingDirectory: <reason>`.
+     */
+    private fun validateBuildWorkingDirectory(
+        entries: List<VcsSettingsEntryEntity>,
+        buildWorkingDirectory: String?,
+    ) {
+        fun fail(reason: String): Nothing = throw IllegalArgumentException("buildWorkingDirectory: $reason")
+        val rootTaken = entries.any { it.checkoutDirectory == null }
+        if (buildWorkingDirectory == null) {
+            if (entries.isNotEmpty() && !rootTaken) fail("required when every VCS entry has a Checkout Directory")
+            return
+        }
+        if (buildWorkingDirectory.length > MAX_PLACEMENT_LENGTH) fail("must be at most $MAX_PLACEMENT_LENGTH characters")
+        if (!isPlainRelativePath(buildWorkingDirectory)) fail("'$buildWorkingDirectory' $PLAIN_RELATIVE_PATH_RULE")
+        val first = buildWorkingDirectory.substringBefore('/')
+        if (!rootTaken && entries.none { it.checkoutDirectory == first }) {
+            fail("'$buildWorkingDirectory' must start in the Checkout Directory of a VCS entry of the row, or below the checkout root")
+        }
+    }
+
+    private fun isPlainRelativePath(path: String) = path.split('/').none { it == "." || it == ".." || !SOURCE_PATH_SEGMENT_PATTERN.matches(it) }
 
     /**
      * ONB-001 placement rules over a row's final VCS entries: each entry is checked out under its
@@ -2768,9 +2800,7 @@ class ComponentManagementServiceImpl(
             }
             e.sourcePath?.let { path ->
                 if (path.length > MAX_PLACEMENT_LENGTH) fail("sourcePath", "must be at most $MAX_PLACEMENT_LENGTH characters")
-                if (path.split('/').any { it == "." || it == ".." || !SOURCE_PATH_SEGMENT_PATTERN.matches(it) }) {
-                    fail("sourcePath", "'$path' must be a relative path of '/'-separated names of letters, digits, '.', '_' or '-'")
-                }
+                if (!isPlainRelativePath(path)) fail("sourcePath", "'$path' $PLAIN_RELATIVE_PATH_RULE")
             }
             locationOwners.putIfAbsent(repositoryKey(e.vcsPath, e.repositoryType) to e.sourcePath, i)?.let {
                 fail("sourcePath", "repository and sourcePath are the same as vcsEntries[$it]")
@@ -4624,6 +4654,7 @@ class ComponentManagementServiceImpl(
 
         // vcs_settings_entries.source_path / checkout_directory are VARCHAR(255).
         private const val MAX_PLACEMENT_LENGTH = 255
+        private const val PLAIN_RELATIVE_PATH_RULE = "must be a relative path of '/'-separated names of letters, digits, '.', '_' or '-'"
 
         // Checkout-root directories the build templates write (compared ignoring case).
         private val RESERVED_CHECKOUT_DIRECTORIES = setOf("report-templates", "sonar-config", "target", "sonar-report")
