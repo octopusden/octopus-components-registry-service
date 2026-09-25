@@ -8,13 +8,6 @@ import com.fasterxml.jackson.databind.node.ArrayNode;
 import com.fasterxml.jackson.databind.node.BooleanNode;
 import com.fasterxml.jackson.databind.node.ObjectNode;
 import com.fasterxml.jackson.databind.node.TextNode;
-import org.octopusden.octopus.escrow.model.Distribution;
-import org.octopusden.octopus.escrow.model.SecurityGroups;
-import org.octopusden.octopus.escrow.model.VCSSettings;
-import org.octopusden.octopus.releng.JiraComponentVersionDeserializer;
-import org.octopusden.octopus.releng.dto.JiraComponent;
-import org.octopusden.releng.versions.VersionNames;
-
 import java.io.IOException;
 import java.util.ArrayList;
 import java.util.Collections;
@@ -22,6 +15,12 @@ import java.util.HashMap;
 import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
+import org.octopusden.octopus.escrow.model.Distribution;
+import org.octopusden.octopus.escrow.model.SecurityGroups;
+import org.octopusden.octopus.escrow.model.VCSSettings;
+import org.octopusden.octopus.releng.JiraComponentVersionDeserializer;
+import org.octopusden.octopus.releng.dto.JiraComponent;
+import org.octopusden.releng.versions.VersionNames;
 
 public class ComponentConfigDeserializer extends JsonDeserializer<ComponentConfig> {
 
@@ -38,11 +37,11 @@ public class ComponentConfigDeserializer extends JsonDeserializer<ComponentConfi
     public ComponentConfig deserialize(JsonParser jsonParser, DeserializationContext deserializationContext) throws IOException {
         JsonNode treeNode = jsonParser.getCodec().readTree(jsonParser);
         Map<String, List<JiraComponentVersionRange>> projectKeyToJiraComponentVersionRangeMap =
-                getKeyToJiraComponentVersionRangeMap("projectKeyToJiraComponentVersionRangeMap",
-                        treeNode);
+            getKeyToJiraComponentVersionRangeMap("projectKeyToJiraComponentVersionRangeMap",
+                treeNode);
         Map<String, List<JiraComponentVersionRange>> componentNameToJiraComponentVersionRangeMap =
-                getKeyToJiraComponentVersionRangeMap("componentNameToJiraComponentVersionRangeMap",
-                        treeNode);
+            getKeyToJiraComponentVersionRangeMap("componentNameToJiraComponentVersionRangeMap",
+                treeNode);
         return new ComponentConfig(projectKeyToJiraComponentVersionRangeMap, componentNameToJiraComponentVersionRangeMap);
 
     }
@@ -81,11 +80,11 @@ public class ComponentConfigDeserializer extends JsonDeserializer<ComponentConfi
         VCSSettings vcsSettings = VCS_SETTINGS_DESERIALIZER.deserialize(node.get("vcsSettings"));
 
         return jiraComponentVersionRangeFactory.create(
-                componentName.textValue(),
-                versionRange.textValue(),
-                jiraComponent,
-                distribution,
-                vcsSettings
+            componentName.textValue(),
+            versionRange.textValue(),
+            jiraComponent,
+            distribution,
+            vcsSettings
         );
     }
 
@@ -99,18 +98,21 @@ public class ComponentConfigDeserializer extends JsonDeserializer<ComponentConfi
             TextNode deb = (TextNode) distributionNode.get("DEB");
             TextNode rpm = (TextNode) distributionNode.get("RPM");
             TextNode docker = (TextNode) distributionNode.get("docker");
+            TextNode generic = (TextNode) distributionNode.get("generic");
             ObjectNode securityGroups = (ObjectNode) distributionNode.get("securityGroups");
             final JsonNode rdNode = securityGroups.get("read");
 
             final String read = rdNode != null ? rdNode.textValue() : null;
 
-            return new Distribution(explicit.asBoolean(),
-                    external.asBoolean(),
-                    gav != null ? gav.textValue() : null,
-                    deb != null ? deb.textValue() : null,
-                    rpm != null ? rpm.textValue() : null,
-                    docker != null ? docker.textValue() : null,
-                    new SecurityGroups(read)
+            return new Distribution(
+                explicit.asBoolean(),
+                external.asBoolean(),
+                gav != null ? gav.textValue() : null,
+                deb != null ? deb.textValue() : null,
+                rpm != null ? rpm.textValue() : null,
+                docker != null ? docker.textValue() : null,
+                generic != null ? generic.textValue() : null,
+                new SecurityGroups(read)
             );
         }
         return null;

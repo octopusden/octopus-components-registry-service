@@ -21,6 +21,7 @@ import org.octopusden.octopus.components.registry.server.dto.v4.FieldOverrideRes
 import org.octopusden.octopus.components.registry.server.dto.v4.FieldOverrideUpdateRequest
 import org.octopusden.octopus.components.registry.server.dto.v4.FieldOverrideUpsertRequest
 import org.octopusden.octopus.components.registry.server.dto.v4.FileUrlArtifactRequest
+import org.octopusden.octopus.components.registry.server.dto.v4.GenericArtifactRequest
 import org.octopusden.octopus.components.registry.server.dto.v4.MarkerChildrenPayload
 import org.octopusden.octopus.components.registry.server.dto.v4.MavenArtifactRequest
 import org.octopusden.octopus.components.registry.server.dto.v4.PackageRequest
@@ -42,6 +43,7 @@ import org.octopusden.octopus.components.registry.server.entity.ComponentSecurit
 import org.octopusden.octopus.components.registry.server.entity.ComponentSystemEntity
 import org.octopusden.octopus.components.registry.server.entity.DistributionDockerImageEntity
 import org.octopusden.octopus.components.registry.server.entity.DistributionFileUrlArtifactEntity
+import org.octopusden.octopus.components.registry.server.entity.DistributionGenericArtifactEntity
 import org.octopusden.octopus.components.registry.server.entity.DistributionMavenArtifactEntity
 import org.octopusden.octopus.components.registry.server.entity.DistributionPackageEntity
 import org.octopusden.octopus.components.registry.server.entity.DistributionSecurityGroupEntity
@@ -104,6 +106,9 @@ import org.octopusden.octopus.components.registry.server.util.MavenVersionCompar
 import org.octopusden.octopus.components.registry.server.util.VersionRangePartition
 import org.octopusden.octopus.components.registry.server.util.computeEffectiveJiraPairs
 import org.octopusden.octopus.escrow.config.ConfigHelper
+import org.octopusden.octopus.escrow.configuration.validation.GroovySlurperConfigValidator
+import org.octopusden.octopus.escrow.dto.EscrowExpressionContext
+import org.octopusden.octopus.escrow.utilities.EscrowExpressionParser
 import org.octopusden.releng.versions.NumericVersionFactory
 import org.octopusden.releng.versions.VersionRangeFactory
 import org.springframework.context.ApplicationEventPublisher
@@ -1380,7 +1385,7 @@ class ComponentManagementServiceImpl(
     ): FieldOverrideApplyPlan {
         fun isImportManaged(row: ComponentConfigurationEntity) = row.rowType == "MARKER" && row.overriddenAttribute !in MarkerAttributes.ALL
 
-        val existing = component.configurations.filter { it.rowType in FIELD_OVERRIDE_ROW_TYPES }
+        val existing = component.configurations.filter { it.rowType in fieldOverrideRowTypes }
         val byId = existing.mapNotNull { row -> row.id?.let { it to row } }.toMap()
 
         // Referenced ids must exist on this component (clear 400, not a silent create).
@@ -1554,7 +1559,7 @@ class ComponentManagementServiceImpl(
                 .findByComponentId(componentId)
                 .filter { it.rowType == "RANGE_PRESENCE" }
                 .map { it.versionRange }
-                .sortedWith(SUPPORTED_RANGE_ORDER)
+                .sortedWith(supportedRangeOrder)
         // No bounded RANGE_PRESENCE rows ⇒ the ALL_VERSIONS base covers everything (ADR-018).
         return SupportedVersionsResponse(all = ranges.isEmpty(), ranges = ranges)
     }
@@ -1621,11 +1626,11 @@ class ComponentManagementServiceImpl(
             component.configurations
                 .filter { it.rowType == "RANGE_PRESENCE" }
                 .map { it.versionRange }
-                .sortedWith(SUPPORTED_RANGE_ORDER)
+                .sortedWith(supportedRangeOrder)
         publishAuditEvent(
             action = "UPDATE",
             entityId = component.id.toString(),
-            oldValue = mapOf("supportedVersions" to existingPresence.map { it.versionRange }.sortedWith(SUPPORTED_RANGE_ORDER)),
+            oldValue = mapOf("supportedVersions" to existingPresence.map { it.versionRange }.sortedWith(supportedRangeOrder)),
             newValue = mapOf("supportedVersions" to resulting.ifEmpty { listOf("ALL") }),
             jiraTaskKey = request.jiraTaskKey,
             changeComment = request.changeComment,
@@ -1669,7 +1674,7 @@ class ComponentManagementServiceImpl(
         if (all) return emptyList()
         val supportedObjs = supported.mapNotNull { runCatching { versionRangeFactory.create(it) }.getOrNull() }
         return component.configurations
-            .filter { it.rowType in FIELD_OVERRIDE_ROW_TYPES }
+            .filter { it.rowType in fieldOverrideRowTypes }
             .filter { ov ->
                 // An unparseable override range is itself unreachable — surface it (warn), do NOT
                 // silently treat it as covered (that would suppress the very advisory it should raise).
@@ -2579,6 +2584,7 @@ class ComponentManagementServiceImpl(
         request.fileUrlArtifacts?.let { replaceFileUrlArtifacts(config, it) }
         request.dockerImages?.let { replaceDockerImages(config, it) }
         request.packages?.let { replacePackages(config, it) }
+        request.genericArtifacts?.let { replaceGenericArtifacts(config, it) }
         request.buildToolBeans?.let {
             validateBuildToolBeans(it)
             replaceBuildToolBeans(config, it)
@@ -2677,6 +2683,7 @@ class ComponentManagementServiceImpl(
         patch.fileUrlArtifacts?.let { replaceFileUrlArtifacts(config, it) }
         patch.dockerImages?.let { replaceDockerImages(config, it) }
         patch.packages?.let { replacePackages(config, it) }
+        patch.genericArtifacts?.let { replaceGenericArtifacts(config, it) }
         patch.buildToolBeans?.let {
             validateBuildToolBeans(it)
             replaceBuildToolBeans(config, it)
@@ -2786,6 +2793,42 @@ class ComponentManagementServiceImpl(
         }
     }
 
+    private fun replaceGenericArtifacts(
+        config: ComponentConfigurationEntity,
+        generics: List<GenericArtifactRequest>,
+    ) {
+        generics.forEach { validateGenericArtifactPath(it.path) }
+        config.genericArtifacts.clear()
+        generics.forEachIndexed { index, req ->
+            config.genericArtifacts.add(
+                DistributionGenericArtifactEntity(
+                    componentConfiguration = config,
+                    path = req.path,
+                    sortOrder = index,
+                ),
+            )
+        }
+    }
+
+    private fun validateGenericArtifactPath(path: String) {
+        require(path.isNotBlank()) { "path is not specified for a genericArtifact" }
+        val validationContext = EscrowExpressionContext("validation", "1.0", "validation", numericVersionFactory)
+        val evaluated = try {
+            EscrowExpressionParser.getInstance().parseAndEvaluate(path, validationContext).toString()
+        } catch (e: Exception) {
+            throw IllegalArgumentException(
+                "genericArtifact path '$path' contains an invalid expression: ${e.message}",
+                e,
+            )
+        }
+        require(GroovySlurperConfigValidator.GENERIC_ENTRY.matcher(evaluated).matches()) {
+            "genericArtifact path '$path' does not match the required shape " +
+                "'<segment>/<segment>/<segment>[/…]' where each segment is [A-Za-z0-9._-] " +
+                "(commas, URL schemes, whitespace and leading slashes are not allowed — " +
+                "one path per request row)"
+        }
+    }
+
     private fun replaceBuildToolBeans(
         config: ComponentConfigurationEntity,
         beans: List<BuildToolBeanRequest>,
@@ -2870,6 +2913,11 @@ class ComponentManagementServiceImpl(
                 replacePackages(row, payload.packages)
                 null
             }
+            MarkerAttributes.DISTRIBUTION_GENERIC -> {
+                requireNotNull(payload.genericArtifacts) { "Marker '$markerName' requires genericArtifacts payload" }
+                replaceGenericArtifacts(row, payload.genericArtifacts)
+                null
+            }
             MarkerAttributes.BUILD_REQUIRED_TOOLS -> {
                 requireNotNull(payload.requiredTools) { "Marker '$markerName' requires requiredTools payload" }
                 payload.requiredTools
@@ -2901,6 +2949,7 @@ class ComponentManagementServiceImpl(
                 if (payload.fileUrlArtifacts != null) add("fileUrlArtifacts")
                 if (payload.dockerImages != null) add("dockerImages")
                 if (payload.packages != null) add("packages")
+                if (payload.genericArtifacts != null) add("genericArtifacts")
                 if (payload.requiredTools != null) add("requiredTools")
                 if (payload.buildToolBeans != null) add("buildToolBeans")
             }
@@ -2911,6 +2960,7 @@ class ComponentManagementServiceImpl(
                 MarkerAttributes.DISTRIBUTION_FILE_URL -> "fileUrlArtifacts"
                 MarkerAttributes.DISTRIBUTION_DOCKER -> "dockerImages"
                 MarkerAttributes.DISTRIBUTION_PACKAGES -> "packages"
+                MarkerAttributes.DISTRIBUTION_GENERIC -> "genericArtifacts"
                 MarkerAttributes.BUILD_REQUIRED_TOOLS -> "requiredTools"
                 MarkerAttributes.BUILD_TOOLS -> "buildToolBeans"
                 else -> error("Unknown marker '$markerName' — caller did not validate")
@@ -2979,21 +3029,21 @@ class ComponentManagementServiceImpl(
     // D5 (closed-range only) is enforced by the Portal at input but is NOT
     // yet mirrored here; see the validateFieldOverrideRange KDoc.
 
-    private val FIELD_OVERRIDE_ROW_TYPES = setOf("SCALAR_OVERRIDE", "MARKER")
+    private val fieldOverrideRowTypes = setOf("SCALAR_OVERRIDE", "MARKER")
 
     // Anchored regex matches only single-segment ranges (no top-level comma
     // between segments), so composites short-circuit via the regex-mismatch
     // path inside parseSimpleSegment without a separate composite-detector.
-    private val SIMPLE_SEGMENT_PATTERN = Regex("^([\\[(])([^,]*),([^,]*)([\\])])$")
+    private val simpleSegmentPattern = Regex("^([\\[(])([^,]*),([^,]*)([\\])])$")
 
     // The exact-version ("hard version") form `[X]` is also a single Maven
     // segment — the simplest one — but carries no comma, so it never matched
-    // SIMPLE_SEGMENT_PATTERN and was misclassified as composite (rejected on
+    // simpleSegmentPattern and was misclassified as composite (rejected on
     // POST/PATCH). Maven only allows the closed `[X]` shape for a hard version:
     // `(X)`, `[X)`, `(X]` are all invalid, so this pattern is intentionally
     // square-bracket only. The releng VersionRangeFactory parses `[X]` as
     // lo == hi, both inclusive — we mirror that below.
-    private val EXACT_VERSION_PATTERN = Regex("^\\[([^,\\[\\]()]+)]$")
+    private val exactVersionPattern = Regex("^\\[([^,\\[\\]()]+)]$")
 
     private data class ParsedSimpleRange(
         val lo: String?,
@@ -3006,11 +3056,11 @@ class ComponentManagementServiceImpl(
 
     private fun parseSimpleSegment(range: String): ParsedSimpleRange? {
         val compact = normalizeRange(range)
-        EXACT_VERSION_PATTERN.matchEntire(compact)?.let { exact ->
+        exactVersionPattern.matchEntire(compact)?.let { exact ->
             val v = exact.groupValues[1]
             return ParsedSimpleRange(lo = v, loIncl = true, hi = v, hiIncl = true)
         }
-        val m = SIMPLE_SEGMENT_PATTERN.matchEntire(compact) ?: return null
+        val m = simpleSegmentPattern.matchEntire(compact) ?: return null
         val (open, loStr, hiStr, close) = m.destructured
         if (loStr.any { it in "()[]" } || hiStr.any { it in "()[]" }) return null
         return ParsedSimpleRange(
@@ -3030,7 +3080,7 @@ class ComponentManagementServiceImpl(
      * Stable display ordering for supported-coverage ranges: by lower bound (open-lower / composite
      * ranges, whose simple floor is null, sort first via the "0" fallback), then by raw string.
      */
-    private val SUPPORTED_RANGE_ORDER: Comparator<String> =
+    private val supportedRangeOrder: Comparator<String> =
         compareBy<String>(
             { parseSimpleSegment(it)?.lo?.let(::DefaultArtifactVersion) ?: DefaultArtifactVersion("0") },
             { it },
@@ -3130,7 +3180,7 @@ class ComponentManagementServiceImpl(
         for (row in component.configurations) {
             if (row.id != null && row.id == excludeOverrideId) continue
             if (row.overriddenAttribute != attribute) continue
-            if (row.rowType !in FIELD_OVERRIDE_ROW_TYPES) continue
+            if (row.rowType !in fieldOverrideRowTypes) continue
             val existingRangeObj = try {
                 versionRangeFactory.create(row.versionRange)
             } catch (_: Exception) {
@@ -3195,8 +3245,8 @@ class ComponentManagementServiceImpl(
      *
      *  - **explicit-external ≥1 distribution coordinate** (#6): when
      *    `distributionExplicit && distributionExternal`, at least one of GAV
-     *    (maven artifact), docker image, or DEB/RPM package must be defined on
-     *    some configuration row.
+     *    (maven artifact), docker image, DEB/RPM package, or generic artifact
+     *    (SYS-094) must be defined on some configuration row.
      *  - **groupId supported prefix** (#10): every maven `groupPattern` element
      *    must start with one of the env-configured `supportedGroupIds`.
      *  - **archived ≠ explicit-external** (#28): an archived component cannot be
@@ -3223,7 +3273,7 @@ class ComponentManagementServiceImpl(
             }
             require(hasAnyDistributionCoordinate(entity)) {
                 "distribution: an explicit+external component must define at least one " +
-                    "distribution coordinate (maven GAV, docker image, or package) " +
+                    "distribution coordinate (maven GAV, docker image, package, or generic artifact) " +
                     "(component '${entity.componentKey}')"
             }
         }
@@ -3268,7 +3318,8 @@ class ComponentManagementServiceImpl(
         entity.configurations.any { cfg ->
             cfg.mavenArtifacts.isNotEmpty() ||
                 cfg.dockerImages.isNotEmpty() ||
-                cfg.packages.isNotEmpty()
+                cfg.packages.isNotEmpty() ||
+                cfg.genericArtifacts.isNotEmpty()
         }
 
     /**
@@ -4405,6 +4456,10 @@ class ComponentManagementServiceImpl(
                         "packageName" to it.packageName,
                     )
                 },
+            "genericArtifacts" to
+                base?.genericArtifacts.orEmpty().sortedBy { it.sortOrder }.map {
+                    mapOf("path" to it.path)
+                },
             "buildToolBeans" to
                 base?.buildToolBeans.orEmpty().sortedBy { it.sortOrder }.map {
                     mapOf(
@@ -4510,12 +4565,12 @@ class ComponentManagementServiceImpl(
         // Same shape as the old EscrowConfigValidator.CLIENT_CODE_PATTERN.
         private val CLIENT_CODE_PATTERN = Regex("[A-Z_0-9]+")
 
-        // SYS-095: strict kebab for a plain key, and the tail permitted after a client-code prefix.
-        private val COMPONENT_KEY_PATTERN = Regex("[a-z][a-z0-9-]*")
-        private val COMPONENT_KEY_TAIL_PATTERN = Regex("(-[a-z0-9-]*)?")
-
         private const val ROW_TYPE_BASE = "BASE"
         private const val ATTR_JAVA_VERSION = "build.javaVersion"
         private const val ATTR_MAVEN_VERSION = "build.mavenVersion"
+
+        // SYS-095: strict kebab for a plain key, and the tail permitted after a client-code prefix.
+        private val COMPONENT_KEY_PATTERN = Regex("[a-z][a-z0-9-]*")
+        private val COMPONENT_KEY_TAIL_PATTERN = Regex("(-[a-z0-9-]*)?")
     }
 }
