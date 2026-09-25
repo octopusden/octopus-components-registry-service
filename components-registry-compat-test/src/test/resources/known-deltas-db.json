@@ -218,6 +218,20 @@
       "jsonPathPattern": "\\.vcsSettings\\.buildWorkingDirectory$",
       "reason": "ONB-001 Build Working Directory (rev. 3, 2026-09): V9__ adds component_configurations.build_working_directory, and the v2 VCSSettingsDTO serializes it NON_NULL (property level) for versions whose VCS entries come from a row that has one. The baseline has none, so a candidate adds it. Only additions are suppressed; a changed value is a VALUE_DIFF. Typed layer: Comparators.buildAssertion forgives baseline-null -> value. Here embedded in DetailedComponent.vcsSettings. See docs/registry/api-compat-deltas.md.",
       "regressionTest": "VcsPlacementKnownDeltaTest.placement and build working directory are suppressed"
+    },
+    {
+      "endpointPattern": "^GET /rest/api/2/((components|projects)/[^/{}]+/versions/[^/{}]+(/vcs-settings)?|projects/[^/{}]+/jira-component-version-ranges)$",
+      "category": "STRUCTURAL_DIFF",
+      "jsonPathPattern": "\\.versionControlSystemRoots\\[\\d+\\]\\.(checkoutDirectory|sourcePath)$",
+      "reason": "ONB-001 rev. 3 (2026-09), trace-replay twin of the templated placement entries above: the prod-trace replayer does not parameterize paths, so raw requests carry real component keys, which must not be committed here; this entry matches the path SHAPE of the vcs-settings, jira-component-version-ranges and detailed-version endpoints instead. V8__ back-filled checkoutDirectory into existing rows, so replays of these endpoints hit the delta. Only added fields are suppressed; a changed value is a VALUE_DIFF. See docs/registry/api-compat-deltas.md.",
+      "regressionTest": "VcsPlacementKnownDeltaTest.literal trace paths are suppressed"
+    },
+    {
+      "endpointPattern": "^GET /rest/api/2/((components|projects)/[^/{}]+/versions/[^/{}]+(/vcs-settings)?|projects/[^/{}]+/jira-component-version-ranges)$",
+      "category": "STRUCTURAL_DIFF",
+      "jsonPathPattern": "(^\\$|\\.vcsSettings)\\.buildWorkingDirectory$",
+      "reason": "ONB-001 rev. 3 (2026-09), trace-replay twin of the templated placement entries above: the prod-trace replayer does not parameterize paths, so raw requests carry real component keys, which must not be committed here; this entry matches the path SHAPE of the vcs-settings, jira-component-version-ranges and detailed-version endpoints instead. V8__ back-filled checkoutDirectory into existing rows, so replays of these endpoints hit the delta. Only added fields are suppressed; a changed value is a VALUE_DIFF. See docs/registry/api-compat-deltas.md.",
+      "regressionTest": "VcsPlacementKnownDeltaTest.literal trace paths are suppressed"
     }
   ]
 }

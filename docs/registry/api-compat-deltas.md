@@ -54,7 +54,9 @@ The compat-test exercises **API contracts**:
   STRUCTURAL_DIFF `known-deltas-db.json` entries pinned to
   `\.versionControlSystemRoots\[\d+\]\.(checkoutDirectory|sourcePath)$` and
   `(^\$|\.vcsSettings)\.buildWorkingDirectory$`; they match only an added field, so a changed value
-  (a VALUE_DIFF) still surfaces. Typed layer: a field comparator in `Comparators.buildAssertion`
+  (a VALUE_DIFF) still surfaces. Two `endpointPattern` twins match the same fields on trace-replay
+  records, whose paths carry literal component keys (the V8 back-fill reaches production data, so
+  replays hit it). Typed layer: a field comparator in `Comparators.buildAssertion`
   forgives exactly baseline-null → value on those fields; a changed or dropped value is still a
   VALUE_DIFF. Regression tests: `GitVsDbValidationTest` VAL-003a and `VcsPlacementKnownDeltaTest`.
   `known-deltas-git.json` stays empty: Git mode has no placement and no Build Working Directory.
