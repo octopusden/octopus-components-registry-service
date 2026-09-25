@@ -32,7 +32,9 @@ class V9BuildWorkingDirectoryMigrationTest {
         read: (java.sql.ResultSet) -> T,
     ): List<T> =
         DriverManager.getConnection(postgres.jdbcUrl, postgres.username, postgres.password).use { c ->
-            c.createStatement().use { st -> st.executeQuery(sql).use { rs -> generateSequence { if (rs.next()) read(rs) else null }.toList() } }
+            c.createStatement().use { st ->
+                st.executeQuery(sql).use { rs -> buildList { while (rs.next()) add(read(rs)) } }
+            }
         }
 
     private fun execute(sql: String) =
