@@ -16,7 +16,8 @@
 - [x] 2.5 Derived name (secondary: Checkout Directory; primary: previous primary's name, else
       `main`), incl. 2→1, re-pointed and secondary promoted to primary
 - [x] 2.6 Chain-mismatch warning and `warnings` on the detail response
-- [x] 2.7 Groovy model + v2 DTO fields (appended, `@JvmOverloads`); v2 exposure; Groovy
+- [x] 2.7 Groovy model + v2 DTO fields (appended; explicit six-parameter constructor with
+      `@JsonCreator(mode = DISABLED)`, not `@JvmOverloads`); v2 exposure; Groovy
       six-argument call test
 - [x] 2.8 DSL export omits fields; git-vs-db known difference
 - [x] 2.9 `api-changelog.md`, `functional-spec.md`, `schema-spec.md` updated; rollback repair

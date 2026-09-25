@@ -69,9 +69,13 @@ JSON, the DTO shape and the v4 write behaviour this change builds on.
   at INFO with the component name. `warnings` is `[]` on every other response, including GET.
 - v2: `VersionControlSystemRoot` (Groovy model) gains the two properties; the DB mapper fills them;
   the Groovy DSL loader leaves them null. `VersionControlSystemRootDTO` appends
-  `sourcePath: String? = null, checkoutDirectory: String? = null` and puts `@JvmOverloads` on the
-  primary constructor, which keeps the six-parameter JVM constructor for Java/Groovy callers. The
-  `copy` signature changes; no consumer's main code calls it (program CRS evidence).
+  `sourcePath: String? = null, checkoutDirectory: String? = null` and keeps the six-parameter JVM
+  constructor for Java/Groovy callers as an explicit secondary constructor marked
+  `@JsonCreator(mode = DISABLED)`. Not `@JvmOverloads`: the overloads it generates copy each
+  parameter's `@JsonProperty`, and Jackson without the Kotlin module (Feign clients, the v2
+  dbTest suites) then fails with "Conflicting property-based creators". `DISABLED` leaves the
+  primary constructor as the only creator. The `copy` signature changes; no consumer's main code
+  calls it (program CRS evidence).
 
 ## Risks / Trade-offs
 

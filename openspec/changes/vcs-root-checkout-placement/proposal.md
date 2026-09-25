@@ -28,8 +28,8 @@ decision is recorded in the program repository (ADR-001, change
   carrying a chain-mismatch warning when a request carries base-configuration VCS entries for a
   component with a linked TeamCity project (marker-row writes do not warn).
 - Legacy v2 VCS settings carry the fields (omitted when empty); `VersionControlSystemRootDTO` gets
-  them as trailing parameters with defaults and `@JvmOverloads`, keeping the six-parameter
-  constructor.
+  them as trailing parameters with defaults and keeps the six-parameter constructor as an explicit
+  secondary constructor marked `@JsonCreator(mode = DISABLED)`.
 - Groovy DSL mode and DSL export do not carry the fields.
 
 ## Capabilities
