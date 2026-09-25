@@ -100,13 +100,11 @@ octopusQuality {
     }
     kotlin { failOnViolation = true }
     coverage {
-        // Disable built-in qualityCoverage aggregate wiring: the plugin registers
-        // jacocoOverallCoverage* tasks inside a lazy task action, which Gradle 8.6
-        // guards with IllegalMutationException (tasks.register(String,Class,Action)
-        // cannot be called from within another task's configuration action).
-        // Per-module jacoco (jacocoTestReport, jacocoTestCoverageVerification) is
-        // still configured by the plugin. The aggregate tasks are registered manually
-        // in projectsEvaluated below and wired into the plugin-owned qualityCoverage task.
+        // Not "no coverage": the gates are registered in projectsEvaluated below, which says why they
+        // are not the plugin's. Two things follow from `false` and are the reason not to flip it:
+        // the plugin would register `jacocoOverallCoverage*` beside tasks of those exact names, and
+        // `jacocoTestCoverageVerification` carries its rule only while this is true.
+        // `qualityCoverage` stays the entry point, so the shared workflow's default command holds.
         enabled = false
     }
 }
@@ -493,14 +491,13 @@ ${sectionsHtml}
 """
 }
 
-// Aggregate JaCoCo tasks and coverage gate wired in projectsEvaluated (outside any task
-// configuration action) so the task container is still mutable.
-// Workaround for an octopus-quality plugin bug: the plugin's qualityCoverage task calls
-// tasks.register(String,Class,Action) inside its own lazy configuration action, which
-// Gradle 8.6 prohibits (IllegalMutationException during task-graph resolution).
-// coverage.enabled = false stops the plugin from triggering that code path; we then
-// register the aggregate tasks here and wire them into the plugin-owned qualityCoverage
-// task so the shared workflow default command (./gradlew qualityCoverage) remains correct.
+// Aggregate JaCoCo tasks and coverage gate, registered here rather than delegated to the plugin:
+// its aggregate gates LINE only and knows nothing of per-module floors, while these verify BRANCH
+// too — the counter LINE cannot substitute for — and carry a measured floor per module.
+// `coverage.enabled = false` above keeps the plugin from registering tasks of these names; the
+// gates are wired into the plugin-owned `qualityCoverage`, so the shared workflow's default command
+// (./gradlew qualityCoverage) remains correct.
+// In projectsEvaluated, outside any task configuration action, so the task container is mutable.
 gradle.projectsEvaluated {
     def coverageProjects = subprojects.findAll {
         // components-registry-cli is a standalone CLI tool (like -automation): much of its code is
@@ -636,9 +633,8 @@ gradle.projectsEvaluated {
         }
     }
 
-    // Per-module coverage floor. The plugin-owned `jacocoTestCoverageVerification` keeps its lenient
-    // 10% floor (it is wired off `test` and must stay runnable without the heavy suites); this task adds
-    // the strict per-module LINE/BRANCH minimums on top, in a task of our own so that:
+    // Per-module coverage floor, and the ONLY one — nothing gates underneath it (see the root
+    // `coverage` block). It carries the LINE/BRANCH minimums, in a task of our own so that:
     //   - it declares the heavy suites it needs (`dependsOn`), so a standalone invocation measures the
     //     same exec set as CI instead of failing on missing dbTest coverage, and
     //   - it never runs as part of `check`/`test`, so TeamCity [1.0] (`clean build …`) is unaffected —
