@@ -117,7 +117,8 @@ class VcsSettingsV2PlacementTest {
 
         assertEquals(
             """{"versionControlSystemRoots":[""" +
-                """{"name":"main","vcsPath":"ssh://git@example.test/proj/repo-a.git","type":"GIT","branch":"master","sourcePath":"mapper"},""" +
+                """{"name":"main","vcsPath":"ssh://git@example.test/proj/repo-a.git","type":"GIT","branch":"master",""" +
+                """"sourcePath":"mapper"},""" +
                 """{"name":"feature","vcsPath":"ssh://git@example.test/proj/repo-b.git","type":"GIT","branch":"master",""" +
                 """"sourcePath":"data","checkoutDirectory":"feature"}""" +
                 """],"externalRegistry":null}""",

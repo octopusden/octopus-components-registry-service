@@ -317,9 +317,14 @@ class GitVsDbValidationTest {
     @DisplayName("VAL-003a: multi-root vcs-settings differ only by checkoutDirectory on DB secondary roots")
     fun `VAL-003a multi-root placement is the known difference`() {
         val path = "/rest/api/2/components/multi-root-service/versions/${versionFor("multi-root-service")}/vcs-settings"
+
         fun roots(source: String): List<Map<String, Any?>> {
             sourceRegistry.setComponentSource("multi-root-service", source)
-            val body = mvc.perform(get(path).accept(APPLICATION_JSON)).andExpect(status().isOk).andReturn().response.contentAsString
+            val body = mvc
+                .perform(get(path).accept(APPLICATION_JSON))
+                .andExpect(status().isOk)
+                .andReturn()
+                .response.contentAsString
             return objectMapper.readValue<Map<String, Any?>>(body)["versionControlSystemRoots"].let {
                 @Suppress("UNCHECKED_CAST")
                 it as List<Map<String, Any?>>

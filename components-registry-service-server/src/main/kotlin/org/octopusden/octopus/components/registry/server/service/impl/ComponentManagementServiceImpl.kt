@@ -1460,7 +1460,9 @@ class ComponentManagementServiceImpl(
                     overriddenAttribute = d.overriddenAttribute,
                     rowType = "",
                 )
-            withFieldOverrideIndex(j) { applyOverrideUpsertPayload(component, row, d, excludeOverrideId = null) }?.let { pendingTools[row] = it }
+            withFieldOverrideIndex(j) {
+                applyOverrideUpsertPayload(component, row, d, excludeOverrideId = null)
+            }?.let { pendingTools[row] = it }
             component.configurations.add(row)
             // A new override is always an effective change — there was nothing at this
             // range/attribute before (mirrors the single-row create path).
@@ -2747,14 +2749,7 @@ class ComponentManagementServiceImpl(
                 reason: String,
             ): Nothing = throw IllegalArgumentException("vcsEntries[$i].$field: $reason")
             val dir = e.checkoutDirectory
-            when {
-                i == 0 && dir != null ->
-                    fail("checkoutDirectory", "must be empty on the primary VCS entry, which is checked out at the checkout root")
-                i > 0 && dir == null -> fail("checkoutDirectory", "required on a secondary VCS entry")
-                dir != null && !CHECKOUT_DIRECTORY_PATTERN.matches(dir) ->
-                    fail("checkoutDirectory", "'$dir' must be one directory name of letters, digits, '.', '_' or '-', not starting with '.'")
-                dir in RESERVED_CHECKOUT_DIRECTORIES -> fail("checkoutDirectory", "'$dir' is reserved")
-            }
+            checkoutDirectoryError(primary = i == 0, dir)?.let { fail("checkoutDirectory", it) }
             nameOwners.putIfAbsent((dir ?: e.name).lowercase(), i)?.let {
                 fail("checkoutDirectory", "'$dir' is already the name of vcsEntries[$it]")
             }
@@ -2770,6 +2765,19 @@ class ComponentManagementServiceImpl(
             }
         }
     }
+
+    private fun checkoutDirectoryError(
+        primary: Boolean,
+        dir: String?,
+    ): String? =
+        when {
+            primary && dir != null -> "must be empty on the primary VCS entry, which is checked out at the checkout root"
+            !primary && dir == null -> "required on a secondary VCS entry"
+            dir != null && !CHECKOUT_DIRECTORY_PATTERN.matches(dir) ->
+                "'$dir' must be one directory name of letters, digits, '.', '_' or '-', not starting with '.'"
+            dir in RESERVED_CHECKOUT_DIRECTORIES -> "'$dir' is reserved"
+            else -> null
+        }
 
     private fun replaceMavenArtifacts(
         config: ComponentConfigurationEntity,

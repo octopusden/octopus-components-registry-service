@@ -149,7 +149,11 @@ class VcsPlacementV4Test {
     @DisplayName("ONB-001: a marker-row error in a combined PATCH is prefixed with its fieldOverrides index (update path)")
     fun `combined patch prefixes marker error on update`() {
         val id = newComponent()
-        val markerId = objectMapper.readTree(createVcsMarker(id, """{"vcsPath":"$REPO_A"}""").andReturn().response.contentAsString)["id"].asText()
+        val markerId = objectMapper
+            .readTree(
+                createVcsMarker(id, """{"vcsPath":"$REPO_A"}""").andReturn().response.contentAsString,
+            )["id"]
+            .asText()
         val error =
             patchComponent(
                 id,
@@ -167,8 +171,10 @@ class VcsPlacementV4Test {
     fun `chain mismatch warning`() {
         val id = linkedComponent()
         val detail =
-            patchComponent(id, """"baseConfiguration":{"vcsEntries":[{"vcsPath":"$REPO_A"},{"vcsPath":"$REPO_B","checkoutDirectory":"feature"}]}""")
-                .andExpect(status().isOk)
+            patchComponent(
+                id,
+                """"baseConfiguration":{"vcsEntries":[{"vcsPath":"$REPO_A"},{"vcsPath":"$REPO_B","checkoutDirectory":"feature"}]}""",
+            ).andExpect(status().isOk)
                 .json()
         assertEquals(listOf(CHAIN_WARNING), detail["warnings"].map { it.asText() })
         assertEquals(0, getComponent(id)["warnings"].size(), "GET carries no warnings")
@@ -205,7 +211,12 @@ class VcsPlacementV4Test {
 
     private fun ResultActions.errorMessage(): String = objectMapper.readTree(andReturn().response.contentAsString)["errorMessage"].asText()
 
-    private fun baseVcsEntries(detail: JsonNode): List<JsonNode> = detail["configurations"].first { it["rowType"].asText() == "BASE" }["vcsEntries"].toList()
+    private fun baseVcsEntries(detail: JsonNode): List<JsonNode> =
+        detail["configurations"]
+            .first {
+                it["rowType"].asText() == "BASE"
+            }["vcsEntries"]
+            .toList()
 
     private fun newComponent(): String {
         val name = "vcs-placement-${UUID.randomUUID().toString().take(8)}"

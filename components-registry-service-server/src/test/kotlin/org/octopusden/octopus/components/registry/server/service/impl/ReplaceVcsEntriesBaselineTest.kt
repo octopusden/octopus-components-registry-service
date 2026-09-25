@@ -289,13 +289,19 @@ class ReplaceVcsEntriesBaselineTest {
     @DisplayName("ONB-001: a secondary entry is named by its checkoutDirectory; the request name is ignored")
     fun `secondary name is checkout directory`() {
         val config = baseRow()
-        write(config, VcsEntryRequest(name = "x", vcsPath = REPO_A), VcsEntryRequest(name = "other", vcsPath = REPO_B, checkoutDirectory = "feature"))
+        write(
+            config,
+            VcsEntryRequest(name = "x", vcsPath = REPO_A),
+            VcsEntryRequest(name = "other", vcsPath = REPO_B, checkoutDirectory = "feature"),
+        )
 
         assertEquals(listOf("main", "feature"), names(config))
     }
 
     @Test
-    @DisplayName("ONB-001: the primary keeps the previous primary's name when a secondary is added, on an unchanged save and when re-pointed")
+    @DisplayName(
+        "ONB-001: the primary keeps the previous primary's name when a secondary is added, on an unchanged save and when re-pointed",
+    )
     fun `primary keeps previous primary name`() {
         val config = stored(baseRow(), "core")
         write(config, VcsEntryRequest(vcsPath = REPO_A), VcsEntryRequest(vcsPath = REPO_B, checkoutDirectory = "feature"))
