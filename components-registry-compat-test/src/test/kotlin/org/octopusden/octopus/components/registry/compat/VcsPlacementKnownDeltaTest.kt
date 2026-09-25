@@ -26,6 +26,7 @@ class VcsPlacementKnownDeltaTest {
             "GET /rest/api/2/projects/{projectKey}/versions/{version}/vcs-settings",
             "GET /rest/api/2/projects/{projectKey}/jira-component-version-ranges",
             "GET /rest/api/2/common/jira-component-version-ranges",
+            DETAILED_COMPONENT,
         )
 
     private val deltas: List<Map<String, Any?>> =
@@ -53,6 +54,8 @@ class VcsPlacementKnownDeltaTest {
             """"componentInfo":{"versionPrefix":"alpha",""" +
             """"versionFormat":"${'$'}versionPrefix-${'$'}baseVersionFormat"},"technical":false},""" +
             """"distribution":{"explicit":false,"external":true},"vcsSettings":$vcsSettings}]"""
+
+    private fun detailed(vcsSettings: String) = """{"id":"alpha-fixture","version":"1.0","vcsSettings":$vcsSettings}"""
 
     private fun response(body: String) =
         RawResponse(
@@ -116,10 +119,14 @@ class VcsPlacementKnownDeltaTest {
         candidate: String,
     ): List<DiffRecord> {
         DiffCollector.clear()
-        return if (endpoint.endsWith("/vcs-settings")) {
-            compare(endpoint, baseline, candidate)
-        } else {
-            compare(endpoint, ranges(baseline), ranges(candidate))
+        return when {
+            endpoint.endsWith("/vcs-settings") -> compare(endpoint, baseline, candidate)
+            // DetailedComponent embeds the settings; raw layer only here (the typed layer uses the same field comparator).
+            endpoint == DETAILED_COMPONENT -> {
+                Comparators.compareRaw(endpoint, mapOf("p" to "x"), response(detailed(baseline)), response(detailed(candidate)))
+                DiffCollector.snapshot()
+            }
+            else -> compare(endpoint, ranges(baseline), ranges(candidate))
         }
     }
 
@@ -151,9 +158,14 @@ class VcsPlacementKnownDeltaTest {
             settings(root("alpha", ""","checkoutDirectory":"other""""), root("beta"), bwd = "alpha"),
             settings(root("alpha", ""","checkoutDirectory":"alpha""""), root("beta"), bwd = "beta"),
         ).forEach { candidate ->
-            endpoints.forEach { endpoint ->
+            // A changed value is caught by the typed layer; the detailed endpoint is driven raw-only here.
+            (endpoints - DETAILED_COMPONENT).forEach { endpoint ->
                 assertThat(records(endpoint, baseline, candidate).filterNot(::suppressed)).describedAs(endpoint).isNotEmpty
             }
         }
+    }
+
+    private companion object {
+        const val DETAILED_COMPONENT = "GET /rest/api/2/components/{component}/versions/{version}"
     }
 }
