@@ -399,6 +399,26 @@ class ReplaceVcsEntriesBaselineTest {
     }
 
     @Test
+    @DisplayName("ONB-001: the suggested folder name is itself a valid, free Checkout Directory")
+    fun `suggested folder name is valid`() {
+        val target = "ssh://git@example.test/proj/target.git"
+        assertTrue(messageOf(VcsEntryRequest(vcsPath = REPO_A), VcsEntryRequest(vcsPath = "")).contains("a folder name such as 'app',"))
+        assertTrue(messageOf(VcsEntryRequest(vcsPath = REPO_A), VcsEntryRequest(vcsPath = target)).contains("a folder name such as 'app',"))
+        assertTrue(
+            messageOf(VcsEntryRequest(vcsPath = target, checkoutDirectory = "Target"), VcsEntryRequest(vcsPath = REPO_A))
+                .endsWith("Choose another folder name, for example 'app'."),
+        )
+        // The derived name is already another VCS root's Checkout Directory: suggest a free one.
+        assertTrue(
+            messageOf(
+                VcsEntryRequest(vcsPath = REPO_A, checkoutDirectory = "repo-b"),
+                VcsEntryRequest(vcsPath = REPO_C),
+                VcsEntryRequest(vcsPath = REPO_B),
+            ).contains("a folder name such as 'app',"),
+        )
+    }
+
+    @Test
     @DisplayName("ONB-001: Build Working Directory errors say what is wrong and what to do")
     fun `user-facing build working directory messages`() {
         assertEquals(
