@@ -204,4 +204,17 @@ class ImportServiceImplVcsNameTest {
 
         assertEquals(null, row.vcsEntries.single().checkoutDirectory)
     }
+
+    @Test
+    @DisplayName("ONB-001 rev. 3: VCS settings that differ only in the Build Working Directory differ (a marker row is emitted)")
+    fun vcsSettingsDiffer_buildWorkingDirectory() {
+        val differ =
+            ImportServiceImpl::class.java
+                .getDeclaredMethod("vcsSettingsDiffer", VCSSettings::class.java, VCSSettings::class.java)
+                .apply { isAccessible = true }
+        val roots = listOf(VersionControlSystemRoot.create("core", RepositoryType.GIT, "ssh://git@gitlab:project/core.git", null, "main", null))
+
+        assertEquals(true, differ.invoke(service, VCSSettings.create(null, roots), VCSSettings.create(null, roots, "core")))
+        assertEquals(false, differ.invoke(service, VCSSettings.create(null, roots, "core"), VCSSettings.create(null, roots, "core")))
+    }
 }
