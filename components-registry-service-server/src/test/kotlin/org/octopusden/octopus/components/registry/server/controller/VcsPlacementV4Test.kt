@@ -202,6 +202,58 @@ class VcsPlacementV4Test {
         assertEquals(0, patched["warnings"].size())
     }
 
+    @Test
+    @DisplayName("ONB-001 rev. 3: base buildWorkingDirectory round-trips; PATCH null keeps it, blank clears it")
+    fun `base build working directory round-trip`() {
+        val id = newComponent()
+        patchComponent(
+            id,
+            """"baseConfiguration":{"vcsEntries":[{"vcsPath":"$REPO_A"}],"buildWorkingDirectory":" mapper "}""",
+        ).andExpect(status().isOk)
+        assertEquals("mapper", baseRow(getComponent(id))["buildWorkingDirectory"]?.asText())
+
+        patchComponent(id, """"displayName":"Renamed $id"""").andExpect(status().isOk)
+        assertEquals("mapper", baseRow(getComponent(id))["buildWorkingDirectory"]?.asText(), "a PATCH without the field keeps it")
+
+        patchComponent(id, """"baseConfiguration":{"buildWorkingDirectory":""}""").andExpect(status().isOk)
+        val cleared = baseRow(getComponent(id))["buildWorkingDirectory"]
+        assertTrue(cleared == null || cleared.isNull, "blank clears it: $cleared")
+    }
+
+    @Test
+    @DisplayName("ONB-001 rev. 3: a vcs.settings marker row carries buildWorkingDirectory; other markers reject it")
+    fun `marker build working directory round-trip`() {
+        val id = newComponent()
+        val marker =
+            mvc
+                .perform(
+                    post("/rest/api/4/components/$id/field-overrides")
+                        .with(adminJwt())
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(
+                            """{"overriddenAttribute":"vcs.settings","versionRange":"[1.0,2.0)",""" +
+                                """"markerChildren":{"vcsEntries":[{"vcsPath":"$REPO_A"}],"buildWorkingDirectory":"mapper"}}""",
+                        ),
+                ).andExpect(status().is2xxSuccessful)
+                .json()
+        assertEquals("mapper", marker["markerChildren"]["buildWorkingDirectory"].asText())
+        val row = getComponent(id)["configurations"].first { it["id"].asText() == marker["id"].asText() }
+        assertEquals("mapper", row["buildWorkingDirectory"].asText())
+
+        mvc
+            .perform(
+                post("/rest/api/4/components/$id/field-overrides")
+                    .with(adminJwt())
+                    .contentType(MediaType.APPLICATION_JSON)
+                    .content(
+                        """{"overriddenAttribute":"distribution.docker","versionRange":"[1.0,2.0)",""" +
+                            """"markerChildren":{"dockerImages":[{"imageName":"img"}],"buildWorkingDirectory":"mapper"}}""",
+                    ),
+            ).andExpect(status().isBadRequest)
+    }
+
+    private fun baseRow(detail: JsonNode): JsonNode = detail["configurations"].first { it["rowType"].asText() == "BASE" }
+
     private fun linkedComponent(): String =
         newComponent().also { id ->
             patchComponent(id, """"teamcityProjects":[{"projectId":"TestProject_${id.take(8)}"}]""").andExpect(status().isOk)
