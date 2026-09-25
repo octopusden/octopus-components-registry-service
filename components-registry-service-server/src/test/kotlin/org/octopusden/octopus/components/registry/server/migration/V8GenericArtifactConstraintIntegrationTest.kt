@@ -29,8 +29,8 @@ import org.testcontainers.containers.PostgreSQLContainer
 import java.nio.file.Paths
 
 /**
- * SYS-094 V8 taxonomy constraint: verifies that the PostgreSQL CHECK constraint
- * added by V8__add_distribution_generic_artifacts.sql correctly allows MARKER and
+ * SYS-094 V9 taxonomy constraint: verifies that the PostgreSQL CHECK constraint
+ * added by V9__add_distribution_generic_artifacts.sql correctly allows MARKER and
  * rejects SCALAR_OVERRIDE for `overridden_attribute = 'distribution.generic'`.
  *
  * Uses a real PostgreSQL 16 testcontainer with Flyway applying all migrations
