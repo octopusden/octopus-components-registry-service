@@ -2824,19 +2824,20 @@ class ComponentManagementServiceImpl(
             ): Nothing = throw IllegalArgumentException("vcsEntries[$i].$field: $reason")
 
             fun label(k: Int) = "VCS root ${k + 1} (${repositoryName(entries[k].vcsPath)})"
+            val suggestion = suggestedDirectory(e.vcsPath, entries.mapNotNull { it.checkoutDirectory })
             val dir = e.checkoutDirectory
             if (dir == null) {
                 rootEntry?.let {
                     fail(
                         "checkoutDirectory",
                         "required: ${label(it)} is already checked out at the checkout root, and only one VCS root can be. " +
-                            "Set a Checkout Directory for this VCS root, a folder name such as '${repositoryName(e.vcsPath)}', " +
+                            "Set a Checkout Directory for this VCS root, a folder name such as '$suggestion', " +
                             "or give one to VCS root ${it + 1}.",
                     )
                 }
                 rootEntry = i
             }
-            checkoutDirectoryError(dir, repositoryName(e.vcsPath))?.let { fail("checkoutDirectory", it) }
+            checkoutDirectoryError(dir, suggestion)?.let { fail("checkoutDirectory", it) }
             nameOwners.putIfAbsent(e.name.lowercase(), i)?.let { fail("checkoutDirectory", nameCollision(e, entries[it], label(it))) }
             e.sourcePath?.let { path ->
                 lengthError("Source Path", path)?.let { fail("sourcePath", it) }
@@ -2861,7 +2862,7 @@ class ComponentManagementServiceImpl(
 
     private fun checkoutDirectoryError(
         dir: String?,
-        repositoryName: String,
+        suggestion: String,
     ): String? =
         when {
             dir == null -> null
@@ -2871,7 +2872,7 @@ class ComponentManagementServiceImpl(
                     "that does not start with '.', for example 'app'."
             dir.lowercase() in RESERVED_CHECKOUT_DIRECTORIES ->
                 "'$dir' is reserved: the build tooling uses that folder at the checkout root. " +
-                    "Choose another folder name, for example '$repositoryName'."
+                    "Choose another folder name, for example '$suggestion'."
             else -> null
         }
 
@@ -2911,6 +2912,20 @@ class ComponentManagementServiceImpl(
         example: String,
     ) = "'$value' is not a valid $what: use a relative path of '/'-separated folder names " +
         "(letters, digits, '.', '_', '-'; no '.' or '..'), for example '$example'."
+
+    /**
+     * A folder name to suggest for a VCS root: its repository's name when that is a valid Checkout
+     * Directory no other root of the row uses (ignoring case), else a safe literal.
+     */
+    private fun suggestedDirectory(
+        vcsPath: String,
+        taken: List<String>,
+    ): String {
+        val used = taken.map { it.lowercase() }.toSet()
+        // Unbounded fallback: a row has finitely many roots, so a free `app-<n>` always exists.
+        return (sequenceOf(repositoryName(vcsPath), "app") + generateSequence(1) { it + 1 }.map { "app-$it" })
+            .first { checkoutDirectoryError(it, "app") == null && it.lowercase() !in used }
+    }
 
     /** How the Portal names a repository: the last segment of its path, without `.git`. */
     private fun repositoryName(vcsPath: String) =
