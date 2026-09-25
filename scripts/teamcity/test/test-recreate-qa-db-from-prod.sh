@@ -10,7 +10,10 @@
 #   3. a target that is the source under ANOTHER host name is refused (cluster identity check);
 #   4. a target host that mentions prod is refused;
 #   5. a target table held by another session makes the copy roll back, leaving the target intact;
-#   6. a production credential that can write is reported as a warning.
+#   6. a production credential that can write is reported as a warning;
+#   7. a target where objects outside the schema depend on it is refused, since CASCADE would drop
+#      them and the backup covers the schema only;
+#   8. a target table locked exclusively fails the run quickly (the QA backup dump does not wait).
 #
 # Usage:
 #   bash scripts/teamcity/test/test-recreate-qa-db-from-prod.sh   → exit 0 on green
@@ -98,5 +101,24 @@ sql dst "select pg_terminate_backend(pid) from pg_stat_activity where query like
 SRC_USER=crs run "$NET-dst"
 check "a production credential that can write is reported" '[ $? -eq 0 ] && grep -q "credential can write" "$OUT/run.log"'
 
-check "source is still unchanged apart from the test insert" '[ "$(sql src "select count(*) from \"components-registry\".components")" = 6 ]'
+sql dst 'create view public.outside_view as select * from "components-registry".components;
+         grant select on public.outside_view to qa;'
+run "$NET-dst"
+check "a dependent object outside the schema is refused" '[ $? -ne 0 ] && grep -q "outside the schema" "$OUT/run.log"'
+check "the outside object survives" '[ "$(sql dst "select to_regclass(\$\$public.outside_view\$\$) is not null")" = t ]'
+sql dst 'drop view public.outside_view;'
+
+sql src 'insert into "components-registry".components(name) values ($$newer$$)'   # source 7, target 6
+docker exec -d "$NET-dst" psql -U crs -d crs -c 'begin; lock table "components-registry".components in access exclusive mode; select pg_sleep(90);'
+sleep 1
+started=$(date +%s)
+run "$NET-dst"
+# shellcheck disable=SC2034 # rc is read inside the eval'd check below
+rc=$?
+elapsed=$(( $(date +%s) - started ))
+check "an exclusively locked target fails without waiting (${elapsed}s)" '[ $rc -ne 0 ] && [ $elapsed -lt 45 ]'
+check "the exclusively locked target keeps its rows" '[ "$(sql dst "select count(*) from \"components-registry\".components")" = 6 ]'
+sql dst "select pg_terminate_backend(pid) from pg_stat_activity where query like '%pg_sleep%' and pid <> pg_backend_pid()" >/dev/null
+
+check "source is still unchanged apart from the test inserts" '[ "$(sql src "select count(*) from \"components-registry\".components")" = 7 ]'
 exit $fail
