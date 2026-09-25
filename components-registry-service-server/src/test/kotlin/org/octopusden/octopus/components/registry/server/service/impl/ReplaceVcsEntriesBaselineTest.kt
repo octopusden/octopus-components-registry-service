@@ -302,7 +302,8 @@ class ReplaceVcsEntriesBaselineTest {
 
     private fun withBwd(bwd: String?) = baseRow().apply { buildWorkingDirectory = bwd }
 
-    private fun placed(vararg dirs: String?) = dirs.mapIndexed { i, d -> VcsEntryRequest(vcsPath = "ssh://git@example.test/proj/r$i.git", checkoutDirectory = d) }
+    private fun placed(vararg dirs: String?) =
+        dirs.mapIndexed { i, d -> VcsEntryRequest(vcsPath = "ssh://git@example.test/proj/r$i.git", checkoutDirectory = d) }
 
     @Test
     @DisplayName("ONB-001 rev. 3: a Build Working Directory inside a placed entry or below the checkout root is accepted")
@@ -398,7 +399,13 @@ class ReplaceVcsEntriesBaselineTest {
         val config = baseRow()
         config.vcsEntries.add(VcsSettingsEntryEntity(componentConfiguration = config, name = "first", vcsPath = REPO_A, sortOrder = 0))
         config.vcsEntries.add(
-            VcsSettingsEntryEntity(componentConfiguration = config, name = "second", vcsPath = REPO_A, sortOrder = 1, checkoutDirectory = "second"),
+            VcsSettingsEntryEntity(
+                componentConfiguration = config,
+                name = "second",
+                vcsPath = REPO_A,
+                sortOrder = 1,
+                checkoutDirectory = "second",
+            ),
         )
         write(config, VcsEntryRequest(vcsPath = REPO_A.uppercase()))
 

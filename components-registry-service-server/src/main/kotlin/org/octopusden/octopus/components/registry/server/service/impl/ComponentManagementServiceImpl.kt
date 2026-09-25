@@ -2773,7 +2773,12 @@ class ComponentManagementServiceImpl(
         }
     }
 
-    private fun isPlainRelativePath(path: String) = path.split('/').none { it == "." || it == ".." || !SOURCE_PATH_SEGMENT_PATTERN.matches(it) }
+    private fun isPlainRelativePath(path: String) =
+        path.split('/').none {
+            it == "." ||
+                it == ".." ||
+                !SOURCE_PATH_SEGMENT_PATTERN.matches(it)
+        }
 
     /**
      * ONB-001 placement rules over a row's final VCS entries: each entry is checked out under its

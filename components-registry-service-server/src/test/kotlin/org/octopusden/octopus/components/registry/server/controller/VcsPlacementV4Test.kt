@@ -261,7 +261,10 @@ class VcsPlacementV4Test {
             """"baseConfiguration":{"vcsEntries":[{"vcsPath":"$REPO_A","checkoutDirectory":"core"},{"vcsPath":"$REPO_B"}]}""",
         ).andExpect(status().isOk)
 
-        val error = patchComponent(id, """"baseConfiguration":{"buildWorkingDirectory":"../x"}""").andExpect(status().isBadRequest).errorMessage()
+        val error = patchComponent(
+            id,
+            """"baseConfiguration":{"buildWorkingDirectory":"../x"}""",
+        ).andExpect(status().isBadRequest).errorMessage()
         assertTrue(error.startsWith("buildWorkingDirectory: "), error)
         patchComponent(id, """"baseConfiguration":{"buildWorkingDirectory":"core/mapper"}""").andExpect(status().isOk)
     }

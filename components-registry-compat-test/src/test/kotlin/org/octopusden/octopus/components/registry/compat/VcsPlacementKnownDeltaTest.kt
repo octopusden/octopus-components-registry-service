@@ -20,6 +20,14 @@ import org.octopusden.octopus.components.registry.core.dto.VCSSettingsDTO
 class VcsPlacementKnownDeltaTest {
     private val mapper = jacksonObjectMapper()
 
+    private val endpoints =
+        listOf(
+            "GET /rest/api/2/components/{component}/versions/{version}/vcs-settings",
+            "GET /rest/api/2/projects/{projectKey}/versions/{version}/vcs-settings",
+            "GET /rest/api/2/projects/{projectKey}/jira-component-version-ranges",
+            "GET /rest/api/2/common/jira-component-version-ranges",
+        )
+
     private val deltas: List<Map<String, Any?>> =
         mapper.readValue<Map<String, Any?>>(javaClass.getResource("/known-deltas-db.json")!!).let {
             @Suppress("UNCHECKED_CAST")
@@ -102,14 +110,6 @@ class VcsPlacementKnownDeltaTest {
         DiffCollector.clear()
     }
 
-    private val endpoints =
-        listOf(
-            "GET /rest/api/2/components/{component}/versions/{version}/vcs-settings",
-            "GET /rest/api/2/projects/{projectKey}/versions/{version}/vcs-settings",
-            "GET /rest/api/2/projects/{projectKey}/jira-component-version-ranges",
-            "GET /rest/api/2/common/jira-component-version-ranges",
-        )
-
     private fun records(
         endpoint: String,
         baseline: String,
@@ -124,7 +124,9 @@ class VcsPlacementKnownDeltaTest {
     }
 
     @Test
-    @DisplayName("ONB-001 rev. 3: placement on any VCS root and a Build Working Directory are suppressed known deltas on all four v2 endpoints")
+    @DisplayName(
+        "ONB-001 rev. 3: placement on any VCS root and a Build Working Directory are suppressed known deltas on all four v2 endpoints",
+    )
     fun `placement and build working directory are suppressed`() {
         val baseline = settings(root("alpha"), root("beta"))
         val candidate =

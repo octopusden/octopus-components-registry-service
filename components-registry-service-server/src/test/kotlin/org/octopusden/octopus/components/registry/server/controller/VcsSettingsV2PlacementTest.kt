@@ -129,7 +129,9 @@ class VcsSettingsV2PlacementTest {
     @Test
     @DisplayName("ONB-001 rev. 3: a per-range row's buildWorkingDirectory reaches v2 inside its range only")
     fun `v2 vcs-settings per-range build working directory`() {
-        component({ config -> VcsSettingsEntryEntity(componentConfiguration = config, name = "main", vcsPath = REPO, repositoryType = "GIT") })
+        component(
+            { config -> VcsSettingsEntryEntity(componentConfiguration = config, name = "main", vcsPath = REPO, repositoryType = "GIT") },
+        )
         val comp = componentRepository.findByComponentKey(COMPONENT)!!
         val marker =
             ComponentConfigurationEntity(
@@ -140,12 +142,19 @@ class VcsSettingsV2PlacementTest {
             )
         marker.buildWorkingDirectory = "core"
         marker.vcsEntries.add(
-            VcsSettingsEntryEntity(componentConfiguration = marker, name = "core", vcsPath = REPO, repositoryType = "GIT", checkoutDirectory = "core"),
+            VcsSettingsEntryEntity(
+                componentConfiguration = marker,
+                name = "core",
+                vcsPath = REPO,
+                repositoryType = "GIT",
+                checkoutDirectory = "core",
+            ),
         )
         comp.configurations.add(marker)
 
         assertEquals(
-            """{"versionControlSystemRoots":[{"name":"core","vcsPath":"$REPO","type":"GIT","branch":"master","checkoutDirectory":"core"}],""" +
+            """{"versionControlSystemRoots":[""" +
+                """{"name":"core","vcsPath":"$REPO","type":"GIT","branch":"master","checkoutDirectory":"core"}],""" +
                 """"externalRegistry":null,"buildWorkingDirectory":"core"}""",
             vcsSettingsBody("2.1"),
         )
