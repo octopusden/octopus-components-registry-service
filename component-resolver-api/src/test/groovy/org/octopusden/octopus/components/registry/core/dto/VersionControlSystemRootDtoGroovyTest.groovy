@@ -18,4 +18,12 @@ class VersionControlSystemRootDtoGroovyTest extends GroovyTestCase {
         assertNull(dto.sourcePath)
         assertNull(dto.checkoutDirectory)
     }
+
+    void testVcsSettingsTwoArgumentConstructor() {
+        def root = new VersionControlSystemRootDTO("main", "ssh://git@example.test/proj/repo-a.git", RepositoryType.GIT, null, "master", null)
+        def settings = new VCSSettingsDTO([root], null)
+
+        assertEquals([root], settings.versionControlSystemRoots)
+        assertNull(settings.buildWorkingDirectory)
+    }
 }

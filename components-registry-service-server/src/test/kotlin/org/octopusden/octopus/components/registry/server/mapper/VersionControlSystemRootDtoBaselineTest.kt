@@ -111,4 +111,17 @@ class VersionControlSystemRootDtoBaselineTest {
 
         assertEquals(dto.copy(checkoutDirectory = "feature"), ObjectMapper().readValue(json, VersionControlSystemRootDTO::class.java))
     }
+
+    @Test
+    @DisplayName("ONB-001 rev. 3: VCSSettingsDTO appends buildWorkingDirectory, omitted when unset, readable by plain Jackson")
+    fun `vcs settings build working directory`() {
+        val unset = VCSSettingsDTO(listOf(dto), null)
+        assertEquals(
+            """{"versionControlSystemRoots":[${jacksonObjectMapper().writeValueAsString(dto)}],"externalRegistry":null}""",
+            jacksonObjectMapper().writeValueAsString(unset),
+        )
+        val set = unset.copy(buildWorkingDirectory = "core/mapper")
+        assertEquals(listOf(listOf(dto), null), listOf(set.component1(), set.component2()))
+        assertEquals(set, ObjectMapper().readValue(ObjectMapper().writeValueAsString(set), VCSSettingsDTO::class.java))
+    }
 }

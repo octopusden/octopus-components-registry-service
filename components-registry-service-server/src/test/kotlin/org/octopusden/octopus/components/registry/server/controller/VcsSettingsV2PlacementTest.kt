@@ -79,9 +79,9 @@ class VcsSettingsV2PlacementTest {
         `when`(componentRepository.findAll()).thenReturn(mutableListOf(comp))
     }
 
-    private fun vcsSettingsBody(): String =
+    private fun vcsSettingsBody(version: String = "1.0.1"): String =
         mvc
-            .perform(get("/rest/api/2/components/$COMPONENT/versions/1.0.1/vcs-settings"))
+            .perform(get("/rest/api/2/components/$COMPONENT/versions/$version/vcs-settings"))
             .andExpect(status().isOk)
             .andReturn()
             .response.contentAsString
@@ -126,8 +126,38 @@ class VcsSettingsV2PlacementTest {
         )
     }
 
+    @Test
+    @DisplayName("ONB-001 rev. 3: a per-range row's buildWorkingDirectory reaches v2 inside its range only")
+    fun `v2 vcs-settings per-range build working directory`() {
+        component({ config -> VcsSettingsEntryEntity(componentConfiguration = config, name = "main", vcsPath = REPO, repositoryType = "GIT") })
+        val comp = componentRepository.findByComponentKey(COMPONENT)!!
+        val marker =
+            ComponentConfigurationEntity(
+                component = comp,
+                versionRange = "[2,3)",
+                overriddenAttribute = "vcs.settings",
+                rowType = "MARKER",
+            )
+        marker.buildWorkingDirectory = "core"
+        marker.vcsEntries.add(
+            VcsSettingsEntryEntity(componentConfiguration = marker, name = "core", vcsPath = REPO, repositoryType = "GIT", checkoutDirectory = "core"),
+        )
+        comp.configurations.add(marker)
+
+        assertEquals(
+            """{"versionControlSystemRoots":[{"name":"core","vcsPath":"$REPO","type":"GIT","branch":"master","checkoutDirectory":"core"}],""" +
+                """"externalRegistry":null,"buildWorkingDirectory":"core"}""",
+            vcsSettingsBody("2.1"),
+        )
+        assertEquals(
+            """{"versionControlSystemRoots":[{"name":"main","vcsPath":"$REPO","type":"GIT","branch":"master"}],"externalRegistry":null}""",
+            vcsSettingsBody("1.0.1"),
+        )
+    }
+
     companion object {
         private const val COMPONENT = "test-component-a"
         private const val ALL_VERSIONS = "(,0),[0,)"
+        private const val REPO = "ssh://git@example.test/proj/repo-a.git"
     }
 }
