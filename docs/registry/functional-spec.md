@@ -126,9 +126,9 @@ entry's index in the row:
 |------|-------------|
 | The primary has no `checkoutDirectory`, whatever the row's size | `vcsEntries[0].checkoutDirectory` |
 | Every secondary has a `checkoutDirectory` | that entry's `checkoutDirectory` |
-| `checkoutDirectory` matches `^[A-Za-z0-9_][A-Za-z0-9._-]*$` (one segment, no leading dot) and is not `report-templates`, `sonar-config`, `target` or `sonar-report` | that entry's `checkoutDirectory` |
+| `checkoutDirectory` is at most 255 characters, matches `^[A-Za-z0-9_][A-Za-z0-9._-]*$` (one segment, no leading dot) and is not `report-templates`, `sonar-config`, `target` or `sonar-report`, ignoring case | that entry's `checkoutDirectory` |
 | Entry names are unique in the row, case-insensitively, the primary included | the later entry's `checkoutDirectory` |
-| `sourcePath` is `/`-separated, each segment matches `^[A-Za-z0-9._-]+$` and is not `.` or `..` | that entry's `sourcePath` |
+| `sourcePath` is at most 255 characters, `/`-separated, each segment matches `^[A-Za-z0-9._-]+$` and is not `.` or `..` | that entry's `sourcePath` |
 | (repository, `sourcePath`) is unique in the row; Git repositories compare case-insensitively | the later entry's `sourcePath` |
 
 In a component PATCH, a VCS error of the `j`-th `fieldOverrides` element is prefixed

@@ -2754,6 +2754,7 @@ class ComponentManagementServiceImpl(
                 fail("checkoutDirectory", "'$dir' is already the name of vcsEntries[$it]")
             }
             e.sourcePath?.let { path ->
+                if (path.length > MAX_PLACEMENT_LENGTH) fail("sourcePath", "must be at most $MAX_PLACEMENT_LENGTH characters")
                 if (path.split('/').any { it == "." || it == ".." || !SOURCE_PATH_SEGMENT_PATTERN.matches(it) }) {
                     fail("sourcePath", "'$path' must be a relative path of '/'-separated names of letters, digits, '.', '_' or '-'")
                 }
@@ -2773,9 +2774,10 @@ class ComponentManagementServiceImpl(
         when {
             primary && dir != null -> "must be empty on the primary VCS entry, which is checked out at the checkout root"
             !primary && dir == null -> "required on a secondary VCS entry"
+            dir != null && dir.length > MAX_PLACEMENT_LENGTH -> "must be at most $MAX_PLACEMENT_LENGTH characters"
             dir != null && !CHECKOUT_DIRECTORY_PATTERN.matches(dir) ->
                 "'$dir' must be one directory name of letters, digits, '.', '_' or '-', not starting with '.'"
-            dir in RESERVED_CHECKOUT_DIRECTORIES -> "'$dir' is reserved"
+            dir != null && dir.lowercase() in RESERVED_CHECKOUT_DIRECTORIES -> "'$dir' is reserved"
             else -> null
         }
 
@@ -4606,7 +4608,10 @@ class ComponentManagementServiceImpl(
         private const val VCS_CHAIN_MISMATCH_WARNING =
             "VCS entries changed; the TeamCity build chain no longer matches and must be recreated."
 
-        // Checkout-root directories the build templates write.
+        // vcs_settings_entries.source_path / checkout_directory are VARCHAR(255).
+        private const val MAX_PLACEMENT_LENGTH = 255
+
+        // Checkout-root directories the build templates write (compared ignoring case).
         private val RESERVED_CHECKOUT_DIRECTORIES = setOf("report-templates", "sonar-config", "target", "sonar-report")
 
         private const val ROW_TYPE_BASE = "BASE"

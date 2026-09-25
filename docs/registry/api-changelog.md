@@ -25,8 +25,9 @@ refresh it with `./gradlew :components-registry-service-server:generateOpenApiDo
   stored as absent. Every write that replaces a row's VCS entries now validates the final list and
   fails with `400` and `errorMessage` `vcsEntries[<i>].<field>: <reason>` when: the first (primary)
   entry has a `checkoutDirectory` (it is checked out at the checkout root); a later (secondary) entry
-  has none; a `checkoutDirectory` is not one segment matching `^[A-Za-z0-9_][A-Za-z0-9._-]*$` or is
-  `report-templates`, `sonar-config`, `target` or `sonar-report`; two entries end up with the same
+  has none; a `checkoutDirectory` or `sourcePath` is longer than 255 characters; a `checkoutDirectory`
+  is not one segment matching `^[A-Za-z0-9_][A-Za-z0-9._-]*$` or is `report-templates`,
+  `sonar-config`, `target` or `sonar-report` (ignoring case); two entries end up with the same
   name, compared case-insensitively (reported on the later entry's `checkoutDirectory`); a
   `sourcePath` segment is empty, `.`, `..` or does not match `^[A-Za-z0-9._-]+$`; or two entries
   share repository (Git ignoring case) and `sourcePath` (reported on the later entry's `sourcePath`).
