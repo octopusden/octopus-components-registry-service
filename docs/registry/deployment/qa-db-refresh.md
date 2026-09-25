@@ -16,9 +16,9 @@ QA database with a copy of the production one. Script: `scripts/teamcity/recreat
    logs the production migration version now on QA.
 
 The data is copied as is. Nothing outside the `components-registry` schema is copied or changed. If
-objects in another schema depend on it (a view in `public` over its tables, a foreign key, a column of
-one of its types), `CASCADE` would drop them and the backup could not bring them back, so the run
-counts the objects outside the schema before and after the drop and aborts on any difference.
+objects in another schema depend on it (a view in `public` over its tables, a foreign key, a column
+default or type, a trigger), `CASCADE` would drop them and the backup could not bring them back, so
+before the drop the run looks up every such dependency in `pg_depend` and aborts, naming the objects.
 
 ## What it does not do
 

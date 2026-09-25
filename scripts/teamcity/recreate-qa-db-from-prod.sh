@@ -115,34 +115,55 @@ fi
 # --- Replace the QA schema in one transaction ---------------------------------------------------
 
 # CASCADE would also drop objects in other schemas that depend on this one (a view, a foreign key, a
-# column of its type), and the backup covers this schema only. So everything outside it is counted
-# before and after the drop, and any difference aborts the transaction.
-outside_objects="select (select count(*) from pg_class c join pg_namespace n on n.oid = c.relnamespace
-                         where n.nspname not in ('$DB_SCHEMA', 'pg_catalog', 'information_schema', 'pg_toast')
-                           and n.nspname !~ '^pg_(temp|toast_temp)_')
-                      + (select count(*) from pg_attribute a join pg_class c on c.oid = a.attrelid
-                         join pg_namespace n on n.oid = c.relnamespace
-                         where a.attnum > 0 and not a.attisdropped
-                           and n.nspname not in ('$DB_SCHEMA', 'pg_catalog', 'information_schema', 'pg_toast'))
-                      + (select count(*) from pg_constraint k join pg_namespace n on n.oid = k.connamespace
-                         where n.nspname not in ('$DB_SCHEMA', 'pg_catalog', 'information_schema'))
-                      + (select count(*) from pg_trigger g join pg_class c on c.oid = g.tgrelid
-                         join pg_namespace n on n.oid = c.relnamespace where n.nspname <> '$DB_SCHEMA')
-                      + (select count(*) from pg_policy y join pg_class c on c.oid = y.polrelid
-                         join pg_namespace n on n.oid = c.relnamespace where n.nspname <> '$DB_SCHEMA')
-                      + (select count(*) from pg_proc p join pg_namespace n on n.oid = p.pronamespace
-                         where n.nspname not in ('$DB_SCHEMA', 'pg_catalog', 'information_schema'))
-                      + (select count(*) from pg_type t join pg_namespace n on n.oid = t.typnamespace
-                         where n.nspname not in ('$DB_SCHEMA', 'pg_catalog', 'information_schema', 'pg_toast')
-                           and n.nspname !~ '^pg_(temp|toast_temp)_')"
+# column default or type, a trigger, a cast), and the backup covers this schema only. So, before the
+# drop and in the same transaction, any object outside the schema that depends directly on something
+# inside it aborts the run. pg_depend records every such dependency whatever the object kind; internal
+# dependencies (a table's TOAST table) are parts of their object, not dependents. The dependent's schema
+# comes from its own catalog: pg_identify_object() leaves it empty for defaults, triggers, rules and
+# policies, and reports it quoted otherwise. Objects that live in no schema (a cast) count as outside.
+outside_dependents="DO \$\$
+DECLARE
+    target oid := '\"$DB_SCHEMA\"'::regnamespace;
+    n bigint;
+    found text;
+BEGIN
+    SELECT count(*), string_agg(DISTINCT dep.label, ', ')
+      INTO n, found
+      FROM (SELECT o.type || ' ' || o.identity AS label,
+                   CASE d.classid
+                       WHEN 'pg_class'::regclass THEN (SELECT relnamespace FROM pg_class WHERE oid = d.objid)
+                       WHEN 'pg_proc'::regclass THEN (SELECT pronamespace FROM pg_proc WHERE oid = d.objid)
+                       WHEN 'pg_type'::regclass THEN (SELECT typnamespace FROM pg_type WHERE oid = d.objid)
+                       WHEN 'pg_constraint'::regclass THEN (SELECT connamespace FROM pg_constraint WHERE oid = d.objid)
+                       WHEN 'pg_extension'::regclass THEN (SELECT extnamespace FROM pg_extension WHERE oid = d.objid)
+                       WHEN 'pg_attrdef'::regclass THEN (SELECT c.relnamespace FROM pg_attrdef a
+                                                         JOIN pg_class c ON c.oid = a.adrelid WHERE a.oid = d.objid)
+                       WHEN 'pg_trigger'::regclass THEN (SELECT c.relnamespace FROM pg_trigger t
+                                                         JOIN pg_class c ON c.oid = t.tgrelid WHERE t.oid = d.objid)
+                       WHEN 'pg_rewrite'::regclass THEN (SELECT c.relnamespace FROM pg_rewrite w
+                                                         JOIN pg_class c ON c.oid = w.ev_class WHERE w.oid = d.objid)
+                       WHEN 'pg_policy'::regclass THEN (SELECT c.relnamespace FROM pg_policy y
+                                                        JOIN pg_class c ON c.oid = y.polrelid WHERE y.oid = d.objid)
+                       ELSE (SELECT oid FROM pg_namespace WHERE quote_ident(nspname) = o.schema)
+                   END AS ns
+              FROM pg_depend d
+             CROSS JOIN LATERAL pg_identify_object(d.classid, d.objid, d.objsubid) o
+             CROSS JOIN LATERAL pg_identify_object(d.refclassid, d.refobjid, 0) r
+             WHERE d.deptype IN ('n', 'a')
+               AND (r.schema = quote_ident('$DB_SCHEMA')
+                    OR (d.refclassid = 'pg_namespace'::regclass AND d.refobjid = target))) dep
+     WHERE dep.ns IS DISTINCT FROM target;
+    IF n > 0 THEN
+        RAISE EXCEPTION 'objects outside the schema % depend on it, drop them first: %', '$DB_SCHEMA', left(found, 1000);
+    END IF;
+END
+\$\$;"
 {
     printf 'SET client_min_messages = warning;\nSET lock_timeout = %s;\n' "'$LOCK_TIMEOUT'"
-    printf '%s AS outside_before \\gset\n' "$outside_objects"
+    # The schema may not exist yet on a fresh QA database.
+    printf "SELECT to_regnamespace('%s') IS NOT NULL AS schema_exists \\\\gset\n" '"'"$DB_SCHEMA"'"'
+    printf '\\if :schema_exists\n%s\n\\endif\n' "$outside_dependents"
     printf 'DROP SCHEMA IF EXISTS "%s" CASCADE;\n' "$DB_SCHEMA"
-    printf '%s = :outside_before AS outside_intact \\gset\n' "$outside_objects"
-    printf '\\if :outside_intact\n\\else\n'
-    printf "DO \$\$ BEGIN RAISE EXCEPTION 'objects outside the schema %s depend on it; drop them first'; END \$\$;\n" "$DB_SCHEMA"
-    printf '\\endif\n'
     cat "$dump"
 } | dst psql -X -q -v ON_ERROR_STOP=1 --single-transaction >/dev/null
 echo "Replaced schema $DB_SCHEMA on $DST_HOST"
