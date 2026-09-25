@@ -252,6 +252,45 @@ class VcsPlacementV4Test {
             ).andExpect(status().isBadRequest)
     }
 
+    @Test
+    @DisplayName("ONB-001 rev. 3: a base PATCH of only buildWorkingDirectory is validated against the stored entries")
+    fun `build working directory only patch validated`() {
+        val id = newComponent()
+        patchComponent(
+            id,
+            """"baseConfiguration":{"vcsEntries":[{"vcsPath":"$REPO_A","checkoutDirectory":"core"},{"vcsPath":"$REPO_B"}]}""",
+        ).andExpect(status().isOk)
+
+        val error = patchComponent(id, """"baseConfiguration":{"buildWorkingDirectory":"../x"}""").andExpect(status().isBadRequest).errorMessage()
+        assertTrue(error.startsWith("buildWorkingDirectory: "), error)
+        patchComponent(id, """"baseConfiguration":{"buildWorkingDirectory":"core/mapper"}""").andExpect(status().isOk)
+    }
+
+    @Test
+    @DisplayName("ONB-001 rev. 3: Build Working Directory errors of marker rows in a combined PATCH carry the fieldOverrides index")
+    fun `combined patch prefixes build working directory errors`() {
+        val id = newComponent()
+        val bothPlaced = """[{"vcsPath":"$REPO_A","checkoutDirectory":"core"},{"vcsPath":"$REPO_B","checkoutDirectory":"feature"}]"""
+        val missing =
+            patchComponent(
+                id,
+                """"fieldOverrides":[""" +
+                    """{"overriddenAttribute":"build.buildFilePath","versionRange":"[5.0,6.0)","value":"FileA"},""" +
+                    """{"overriddenAttribute":"vcs.settings","versionRange":"[1.0,2.0)","markerChildren":{"vcsEntries":$bothPlaced}}]""",
+            ).andExpect(status().isBadRequest)
+                .errorMessage()
+        assertTrue(missing.startsWith("fieldOverrides[1].buildWorkingDirectory: required"), missing)
+
+        val outside =
+            patchComponent(
+                id,
+                """"fieldOverrides":[{"overriddenAttribute":"vcs.settings","versionRange":"[1.0,2.0)",""" +
+                    """"markerChildren":{"vcsEntries":$bothPlaced,"buildWorkingDirectory":"other"}}]""",
+            ).andExpect(status().isBadRequest)
+                .errorMessage()
+        assertTrue(outside.startsWith("fieldOverrides[0].buildWorkingDirectory: "), outside)
+    }
+
     private fun baseRow(detail: JsonNode): JsonNode = detail["configurations"].first { it["rowType"].asText() == "BASE" }
 
     private fun linkedComponent(): String =

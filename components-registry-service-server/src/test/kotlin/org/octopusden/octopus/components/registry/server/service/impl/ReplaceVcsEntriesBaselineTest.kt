@@ -300,6 +300,43 @@ class ReplaceVcsEntriesBaselineTest {
         }
     }
 
+    private fun withBwd(bwd: String?) = baseRow().apply { buildWorkingDirectory = bwd }
+
+    private fun placed(vararg dirs: String?) = dirs.mapIndexed { i, d -> VcsEntryRequest(vcsPath = "ssh://git@example.test/proj/r$i.git", checkoutDirectory = d) }
+
+    @Test
+    @DisplayName("ONB-001 rev. 3: a Build Working Directory inside a placed entry or below the checkout root is accepted")
+    fun `build working directory accepted`() {
+        write(withBwd("core/mapper"), *placed("core", "feature").toTypedArray())
+        write(withBwd("mapper"), *placed("core", null).toTypedArray())
+        write(withBwd("core"), *placed("core").toTypedArray())
+        write(withBwd(null), *placed("core", null).toTypedArray())
+        write(withBwd(null))
+    }
+
+    @Test
+    @DisplayName("ONB-001 rev. 3: a Build Working Directory outside every placed entry, or missing when all are placed, is rejected")
+    fun `build working directory rejected`() {
+        assertRejected("buildWorkingDirectory: ", *placed("core", "feature").toTypedArray(), config = withBwd("other"))
+        assertRejected("buildWorkingDirectory: ", *placed("core", "feature").toTypedArray(), config = withBwd("Core/x"))
+        assertRejected(
+            "buildWorkingDirectory: required when every VCS entry has a Checkout Directory",
+            *placed("core", "feature").toTypedArray(),
+            config = withBwd(null),
+        )
+        assertRejected("buildWorkingDirectory: ", config = withBwd("core"))
+        listOf("../x", "/abs", "a//b", "a b", "a=>b", "a".repeat(256)).forEach { bwd ->
+            assertRejected("buildWorkingDirectory: ", *placed("core", null).toTypedArray(), config = withBwd(bwd))
+        }
+    }
+
+    @Test
+    @DisplayName("ONB-001 rev. 3: entries changed under a stored Build Working Directory are checked against it; entry rules come first")
+    fun `stored build working directory checked against new entries`() {
+        assertRejected("buildWorkingDirectory: ", *placed("a", "b").toTypedArray(), config = withBwd("core"))
+        assertRejected("vcsEntries[1].checkoutDirectory: ", *placed(null, null).toTypedArray(), config = withBwd("../x"))
+    }
+
     private fun names(config: ComponentConfigurationEntity) = config.vcsEntries.map { it.name }
 
     private fun echo(config: ComponentConfigurationEntity) =
