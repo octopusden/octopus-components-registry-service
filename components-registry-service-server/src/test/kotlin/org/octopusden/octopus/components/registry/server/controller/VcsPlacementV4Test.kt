@@ -293,6 +293,16 @@ class VcsPlacementV4Test {
 
     private fun baseRow(detail: JsonNode): JsonNode = detail["configurations"].first { it["rowType"].asText() == "BASE" }
 
+    @Test
+    @DisplayName("ONB-001 rev. 3: a base PATCH of only buildWorkingDirectory on a linked component warns")
+    fun `chain mismatch warning on build working directory`() {
+        val id = linkedComponent()
+        patchComponent(id, """"baseConfiguration":{"vcsEntries":[{"vcsPath":"$REPO_A"}]}""").andExpect(status().isOk)
+
+        val detail = patchComponent(id, """"baseConfiguration":{"buildWorkingDirectory":"mapper"}""").andExpect(status().isOk).json()
+        assertEquals(listOf(CHAIN_WARNING), detail["warnings"].map { it.asText() })
+    }
+
     private fun linkedComponent(): String =
         newComponent().also { id ->
             patchComponent(id, """"teamcityProjects":[{"projectId":"TestProject_${id.take(8)}"}]""").andExpect(status().isOk)
