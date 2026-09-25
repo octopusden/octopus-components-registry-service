@@ -54,12 +54,11 @@ Whoever presses the button redeploys the QA version they need.
 
 ## One-time setup
 
-1. **Read-only role on production**, run by a database administrator:
+The database side (role, network, `pg_hba`, Vault policy) is written up as a ready-to-send request in
+[qa-db-refresh-dba-request.md](qa-db-refresh-dba-request.md).
 
-   ```sql
-   CREATE ROLE crs_prod_readonly LOGIN PASSWORD '<generated>';
-   GRANT pg_read_all_data TO crs_prod_readonly;
-   ```
+1. **Read-only role on production** `components-registry-readonly`, holding only `pg_read_all_data`,
+   created by a database administrator (the application user cannot create roles).
 
 2. **Vault** (KV mount `f1-config-server`):
    - new secret `teamcity-crs-qa-refresh` with keys `prod.readonly.username` and `prod.readonly.password`.
