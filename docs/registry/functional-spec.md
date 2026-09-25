@@ -140,8 +140,9 @@ shape.
 
 **Names are derived; a request `name` is ignored.** An entry with a `checkoutDirectory` is named by
 it; an entry without one keeps the stored name of the row's previous entry on the same repository
-(Git ignoring case; the lowest previous position when the repository appeared twice), otherwise
-`main`. An entry therefore keeps its name while it stays at the checkout root on the same
+(Git ignoring case; when the repository appeared twice, a previous entry at the root first, then the
+lowest previous position), otherwise `main`; a kept name that is now another entry's
+`checkoutDirectory` (ignoring case) gives `main`. An entry therefore keeps its name while it stays at the checkout root on the same
 repository; re-pointed to another repository it is named `main`; moved from a Checkout Directory to
 the root it keeps the name it had.
 

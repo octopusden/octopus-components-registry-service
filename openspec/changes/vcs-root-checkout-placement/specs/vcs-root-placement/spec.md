@@ -172,8 +172,20 @@ VCS entries or its Build Working Directory are written.
 
 The registry SHALL ignore `name` in v4 requests. It SHALL store as the `name` of an entry with a
 `checkoutDirectory` that directory, and as the `name` of an entry without one the stored name of the
-row's previous entry with the same repository (Git compared case-insensitively; the lowest
-previous position when the repository appeared more than once), otherwise `main`.
+row's previous entry with the same repository (Git compared case-insensitively; when the repository
+appeared more than once, a previous entry without `checkoutDirectory` first, then the lowest previous
+position), otherwise `main`; a kept name that equals, ignoring case, the `checkoutDirectory` of an
+entry of the new list is not kept, and the entry is named `main`.
+
+#### Scenario: One repository in a Checkout Directory and at the checkout root
+- **WHEN** a row with entries `ui` (repository A, `checkoutDirectory: "ui"`) and `main` (repository
+  A, `sourcePath: "core"`, no Checkout Directory) is saved unchanged
+- **THEN** the names stay `ui` and `main`
+
+#### Scenario: Checkout Directory moved to another repository
+- **WHEN** a row with a single entry `ui` (repository A, `checkoutDirectory: "ui"`) is saved with A
+  at the checkout root and repository B in `checkoutDirectory: "ui"`
+- **THEN** A is named `main` and B `ui`
 
 #### Scenario: Name equals checkout directory
 - **WHEN** an entry is saved with `checkoutDirectory: "feature"` and `name: "other"`, next to an

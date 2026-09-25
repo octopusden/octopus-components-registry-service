@@ -2720,13 +2720,16 @@ class ComponentManagementServiceImpl(
     ) {
         entries.forEach { req -> req.repositoryType?.let { validateRepositoryType(it) } }
         // Names are derived, never taken from the request: an entry with a checkout directory is named by
-        // it; one without keeps the name of the row's previous entry on the same repository (the lowest
-        // sort order; vcsEntries has no @OrderBy), else main.
+        // it; one without keeps the name of the row's previous entry on the same repository, preferring a
+        // previous entry that was at the root, then the lowest sort order (vcsEntries has no @OrderBy); a
+        // kept name that is now another entry's checkout directory, or none, gives main.
+        val newDirectories = entries.mapNotNull { it.checkoutDirectory?.trim()?.ifEmpty { null }?.lowercase() }.toSet()
         val previousNames =
             config.vcsEntries
-                .sortedBy { it.sortOrder }
+                .sortedWith(compareBy({ it.checkoutDirectory != null }, { it.sortOrder }))
                 .distinctBy { repositoryKey(it.vcsPath, it.repositoryType) }
                 .associate { repositoryKey(it.vcsPath, it.repositoryType) to it.name }
+                .filterValues { it.lowercase() !in newDirectories }
         val replacement =
             entries.mapIndexed { index, req ->
                 val checkoutDirectory = req.checkoutDirectory?.trim()?.ifEmpty { null }

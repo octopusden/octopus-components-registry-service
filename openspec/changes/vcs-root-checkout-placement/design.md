@@ -61,8 +61,11 @@ the placement rules and the name rule, and adds the Build Working Directory.
 - Name derivation in `replaceVcsEntries`, replacing revision 2's "previous `sort_order` 0 entry"
   (`:2716`): an entry with `checkoutDirectory` is named by it; an entry without one takes the stored
   name of the row's previous entry with the same repository (compared as in the uniqueness rule;
-  the lowest `sort_order` wins when the repository appeared twice), read from `config.vcsEntries`
-  before `clear()`; otherwise `main`. No slug derivation. The request `name` is ignored. So an
+  when the repository appeared twice, a previous entry without Checkout Directory wins, then the
+  lowest `sort_order`), read from `config.vcsEntries` before `clear()`; otherwise `main`. A kept
+  name equal (ignoring case) to a Checkout Directory of the new list is dropped for `main`, so an
+  echo of one repository placed and at the root, or a Checkout Directory moved to another
+  repository, does not collide. No slug derivation. The request `name` is ignored. So an
   entry keeps its name while it stays at the checkout root on the same repository; re-pointing it
   to another repository names it `main`; moving an entry out of a Checkout Directory to the root
   keeps the name it had (its old Checkout Directory).
