@@ -321,41 +321,64 @@ class ReplaceVcsEntriesBaselineTest {
     }
 
     @Test
-    @DisplayName(
-        "ONB-001: the primary keeps the previous primary's name when a secondary is added, on an unchanged save and when re-pointed",
-    )
-    fun `primary keeps previous primary name`() {
+    @DisplayName("ONB-001 rev. 3: an entry at the checkout root keeps the name of its repository's previous entry; re-pointed it is main")
+    fun `root entry keeps its repository's name`() {
         val config = stored(baseRow(), "core")
-        write(config, VcsEntryRequest(vcsPath = REPO_A), VcsEntryRequest(vcsPath = REPO_B, checkoutDirectory = "feature"))
+        val repo = config.vcsEntries.single().vcsPath
+        write(config, VcsEntryRequest(vcsPath = repo), VcsEntryRequest(vcsPath = REPO_B, checkoutDirectory = "feature"))
         assertEquals(listOf("core", "feature"), names(config))
 
         write(config, *echo(config))
         assertEquals(listOf("core", "feature"), names(config))
 
         write(config, VcsEntryRequest(vcsPath = REPO_C), VcsEntryRequest(vcsPath = REPO_B, checkoutDirectory = "feature"))
-        assertEquals(listOf("core", "feature"), names(config))
+        assertEquals(listOf("main", "feature"), names(config))
     }
 
     @Test
-    @DisplayName("ONB-001: a single entry keeps its name")
+    @DisplayName("ONB-001 rev. 3: a single entry on the same repository keeps its name, the request name is ignored")
     fun `single entry keeps name`() {
         val config = stored(baseRow(), "core")
-        write(config, VcsEntryRequest(name = "renamed", vcsPath = REPO_A))
+        write(config, VcsEntryRequest(name = "renamed", vcsPath = config.vcsEntries.single().vcsPath))
 
         assertEquals(listOf("core"), names(config))
     }
 
     @Test
-    @DisplayName("ONB-001: two entries reduced to one keep the primary's name, also when the secondary is promoted")
+    @DisplayName("ONB-001 rev. 3: the entry at the checkout root may be listed second and keeps its repository's name")
+    fun `root entry listed second`() {
+        val config = stored(baseRow(), "app", "gateway")
+        val (app, gateway) = config.vcsEntries.map { it.vcsPath }
+        write(config, VcsEntryRequest(vcsPath = app, checkoutDirectory = "app"), VcsEntryRequest(vcsPath = gateway))
+
+        assertEquals(listOf("app", "gateway"), names(config))
+        assertEquals(listOf("app", null), config.vcsEntries.map { it.checkoutDirectory })
+    }
+
+    @Test
+    @DisplayName("ONB-001 rev. 3: the repository is matched ignoring case for Git; the lowest previous position wins")
+    fun `repository matched ignoring case, lowest position`() {
+        val config = baseRow()
+        config.vcsEntries.add(VcsSettingsEntryEntity(componentConfiguration = config, name = "first", vcsPath = REPO_A, sortOrder = 0))
+        config.vcsEntries.add(
+            VcsSettingsEntryEntity(componentConfiguration = config, name = "second", vcsPath = REPO_A, sortOrder = 1, checkoutDirectory = "second"),
+        )
+        write(config, VcsEntryRequest(vcsPath = REPO_A.uppercase()))
+
+        assertEquals(listOf("first"), names(config))
+    }
+
+    @Test
+    @DisplayName("ONB-001 rev. 3: two entries reduced to one; an entry moved to the root keeps its own repository's name")
     fun `two entries reduced to one`() {
         val kept = stored(baseRow(), "alpha", "beta")
         write(kept, VcsEntryRequest(vcsPath = kept.vcsEntries[0].vcsPath))
         assertEquals(listOf("alpha"), names(kept))
 
-        val promoted = stored(baseRow(), "alpha", "beta")
-        write(promoted, VcsEntryRequest(name = "beta", vcsPath = promoted.vcsEntries[1].vcsPath, checkoutDirectory = null))
-        assertEquals(listOf("alpha"), names(promoted))
-        assertNull(promoted.vcsEntries.single().checkoutDirectory)
+        val moved = stored(baseRow(), "alpha", "beta")
+        write(moved, VcsEntryRequest(name = "alpha", vcsPath = moved.vcsEntries[1].vcsPath, checkoutDirectory = null))
+        assertEquals(listOf("beta"), names(moved))
+        assertNull(moved.vcsEntries.single().checkoutDirectory)
     }
 
     @Test
