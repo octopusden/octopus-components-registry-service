@@ -122,6 +122,18 @@ class ComponentSectionAuditTest {
     }
 
     @Test
+    @DisplayName("ONB-001 rev. 3: a base PATCH of only buildWorkingDirectory writes an UPDATE audit row")
+    fun `build working directory only PATCH is audited`() {
+        val id = createComponent("onb001w-${UUID.randomUUID().toString().take(8)}")
+        patchComponent(id, """{"baseConfiguration":{"vcsEntries":[{"vcsPath":"$REPO_A"}]}}""")
+        val before = updateRowCount(id)
+
+        patchComponent(id, """{"baseConfiguration":{"buildWorkingDirectory":"mapper"}}""")
+
+        assertEquals(before + 1, updateRowCount(id), "a buildWorkingDirectory-only change must be audited: ${historyActions(id)}")
+    }
+
+    @Test
     @DisplayName("ONB-001: a placement-only vcs.settings marker change writes an UPDATE audit row")
     fun `placement-only marker PATCH is audited`() {
         val id = createComponent("onb001m-${UUID.randomUUID().toString().take(8)}")
