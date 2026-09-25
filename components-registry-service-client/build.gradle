@@ -44,7 +44,7 @@ dependencies {
     // the client module's test compile classpath.
     testImplementation "org.octopusden.octopus-cloud-commons:octopus-security-common:${project.properties['octopus-cloud-commons.version']}"
 
-    testImplementation(platform("org.testcontainers:testcontainers-bom:1.19.3"))
+    testImplementation(platform("org.testcontainers:testcontainers-bom:1.21.4"))
     testImplementation("org.testcontainers:postgresql")
 
     testImplementation("org.assertj:assertj-core:3.21.0")
