@@ -106,6 +106,39 @@ class ComponentSectionAuditTest {
     }
 
     @Test
+    @DisplayName("ONB-001: a placement-only vcsEntries PATCH (sourcePath / checkoutDirectory) writes an UPDATE audit row")
+    fun `placement-only vcsEntries PATCH is audited`() {
+        val id = createComponent("onb001p-${UUID.randomUUID().toString().take(8)}")
+        val entries = { placement: String ->
+            """{"baseConfiguration":{"vcsEntries":[{"vcsPath":"$REPO_A"},{"vcsPath":"$REPO_B"$placement}]}}"""
+        }
+        patchComponent(id, entries(""","checkoutDirectory":"feature""""))
+        val before = updateRowCount(id)
+
+        patchComponent(id, entries(""","checkoutDirectory":"feature","sourcePath":"data""""))
+
+        assertEquals(before + 1, updateRowCount(id), "a sourcePath-only change must be audited: ${historyActions(id)}")
+        assertTrue(diffs(id).first().toString().contains("sourcePath"), "diff must carry sourcePath: ${diffs(id).first()}")
+    }
+
+    @Test
+    @DisplayName("ONB-001: a placement-only vcs.settings marker change writes an UPDATE audit row")
+    fun `placement-only marker PATCH is audited`() {
+        val id = createComponent("onb001m-${UUID.randomUUID().toString().take(8)}")
+        val marker = { placement: String ->
+            """{"fieldOverrides":[{"overriddenAttribute":"vcs.settings","versionRange":"[1.0,2.0)",""" +
+                """"markerChildren":{"vcsEntries":[{"vcsPath":"$REPO_A"$placement}]}}]}"""
+        }
+        patchComponent(id, marker(""))
+        val markerId = overrideIds(id).single()
+        val before = updateRowCount(id)
+
+        patchComponent(id, marker(""","sourcePath":"data"""").replace("""[{"overriddenAttribute""", """[{"id":"$markerId","overriddenAttribute"""))
+
+        assertEquals(before + 1, updateRowCount(id), "a sourcePath-only marker change must be audited: ${historyActions(id)}")
+    }
+
+    @Test
     @DisplayName("SYS-053: PATCH of requiredTools (repo-synced junction collection) audits once; identical re-send is a no-op")
     fun `SYS-053 requiredTools PATCH writes an UPDATE audit row and identical re-send does not`() {
         val id = createComponent("sys053t-${UUID.randomUUID().toString().take(8)}")
@@ -226,6 +259,16 @@ class ComponentSectionAuditTest {
         return objectMapper.readTree(body)["content"].toList()
     }
 
+    private fun overrideIds(componentId: String): List<String> {
+        val body =
+            mvc
+                .perform(get("/rest/api/4/components/$componentId/field-overrides").with(adminJwt()))
+                .andExpect(status().isOk)
+                .andReturn()
+                .response.contentAsString
+        return objectMapper.readTree(body).map { it["id"].asText() }
+    }
+
     private fun historyActions(componentId: String): List<String> = history(componentId).map { it["action"].asText() }
 
     private fun updateRowCount(componentId: String): Int = historyActions(componentId).count { it == "UPDATE" }
@@ -241,4 +284,9 @@ class ComponentSectionAuditTest {
         componentId: String,
         key: String,
     ): JsonNode? = diffs(componentId).firstOrNull { it.isObject && it.has(key) }?.get(key)
+
+    companion object {
+        private const val REPO_A = "ssh://git@vcs.example.com/proj/repo-a.git"
+        private const val REPO_B = "ssh://git@vcs.example.com/proj/repo-b.git"
+    }
 }
