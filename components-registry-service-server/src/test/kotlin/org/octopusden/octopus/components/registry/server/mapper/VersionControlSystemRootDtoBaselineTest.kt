@@ -1,5 +1,6 @@
 package org.octopusden.octopus.components.registry.server.mapper
 
+import com.fasterxml.jackson.databind.ObjectMapper
 import com.fasterxml.jackson.module.kotlin.jacksonObjectMapper
 import com.fasterxml.jackson.module.kotlin.readValue
 import org.junit.jupiter.api.Assertions.assertEquals
@@ -99,5 +100,15 @@ class VersionControlSystemRootDtoBaselineTest {
                 """"tag":"test-component-a-1.0","branch":"master","hotfixBranch":"hotfix/1.0"}""",
             jacksonObjectMapper().writeValueAsString(dto),
         )
+    }
+
+    @Test
+    @DisplayName("ONB-001: DTO deserializes with a plain ObjectMapper (no Kotlin module), as Feign/legacy consumers do")
+    fun `plain jackson deserialization`() {
+        val json =
+            """{"name":"main","vcsPath":"ssh://git@example.test/proj/repo-a.git","type":"GIT",""" +
+                """"tag":"test-component-a-1.0","branch":"master","hotfixBranch":"hotfix/1.0","checkoutDirectory":"feature"}"""
+
+        assertEquals(dto.copy(checkoutDirectory = "feature"), ObjectMapper().readValue(json, VersionControlSystemRootDTO::class.java))
     }
 }
