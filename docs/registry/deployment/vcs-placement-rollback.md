@@ -65,4 +65,21 @@ group by component_configuration_id
 having count(*) > 1;
 ```
 
+A row whose Build Working Directory no longer fits its entries also fails its next v4 VCS write
+with `400 buildWorkingDirectory: …`: no entry is at the checkout root, and the Build Working
+Directory's first segment is no entry's Checkout Directory. To list them:
+
+```sql
+select c.id, c.build_working_directory
+from component_configurations c
+where c.build_working_directory is not null
+  and not exists (
+    select 1 from vcs_settings_entries e
+    where e.component_configuration_id = c.id and e.checkout_directory is null)
+  and not exists (
+    select 1 from vcs_settings_entries e
+    where e.component_configuration_id = c.id
+      and e.checkout_directory = split_part(c.build_working_directory, '/', 1));
+```
+
 Drop `vcs_placement_snapshot` once the repair is verified.
