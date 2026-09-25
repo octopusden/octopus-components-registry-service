@@ -1,6 +1,7 @@
 package org.octopusden.octopus.components.registry.compat
 
 import com.fasterxml.jackson.databind.JsonNode
+import com.fasterxml.jackson.databind.node.ObjectNode
 import org.assertj.core.api.RecursiveComparisonAssert
 import java.time.Instant
 
@@ -409,8 +410,7 @@ object Comparators {
                     // baseline-null -> value; a changed or dropped value is still a VALUE_DIFF.
                     .withEqualsForFieldsMatchingRegexes(
                         java.util.function.BiPredicate<Any?, Any?> { a, b -> a == null || a == b },
-                        "^(.+\\.)?versionControlSystemRoots\\.(checkoutDirectory|sourcePath)$",
-                        "^(.+\\.)?buildWorkingDirectory$",
+                        *VcsPlacementFields.typedPathRegexes,
                     )
             // ADR-021, root-level shape. On the detailed-version endpoints `component` IS the display-name
             // string (`DetailedComponentVersion.component`) and sits at `component` (GET) or
@@ -586,5 +586,28 @@ object ArtifactPatternComparator : Comparator<Any?> {
             .map { it.trim() }
             .filter { it.isNotEmpty() }
             .joinToString(",")
+    }
+}
+
+/**
+ * ONB-001: the VCS placement fields a migrated candidate adds that the baseline never serves — per root
+ * and on the VCS settings. One definition for the typed comparator and the TD-022 element pairing
+ * ([Adr021RangeRecovery]); the raw layer's `known-deltas-db.json` entries cover the same fields.
+ */
+object VcsPlacementFields {
+    val ROOT = listOf("checkoutDirectory", "sourcePath")
+    val SETTINGS = listOf("buildWorkingDirectory")
+
+    val typedPathRegexes =
+        arrayOf(
+            "^(.+\\.)?versionControlSystemRoots\\.(${ROOT.joinToString("|")})$",
+            "^(.+\\.)?(${SETTINGS.joinToString("|")})$",
+        )
+
+    /** [vcsSettings] (a JSON object, modified in place) without the placement fields. */
+    fun strip(vcsSettings: JsonNode?) {
+        val settings = vcsSettings as? ObjectNode ?: return
+        SETTINGS.forEach { settings.remove(it) }
+        settings.path("versionControlSystemRoots").forEach { root -> (root as? ObjectNode)?.remove(ROOT) }
     }
 }

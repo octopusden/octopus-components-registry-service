@@ -89,7 +89,11 @@ class Adr021RangeRecoveryTest {
         val verdict =
             Adr021RangeRecovery.analyse(
                 baseline = arrayOf(element("comp-c"), element("comp-x", projectKey = "OTHER")),
-                candidate = arrayOf(element("comp-c", "Component C", placement = placed), element("comp-a", "Component A", placement = placed)),
+                candidate =
+                    arrayOf(
+                        element("comp-c", "Component C", placement = placed),
+                        element("comp-a", "Component A", placement = placed),
+                    ),
             )
         assertThat((verdict as Adr021RangeRecovery.Verdict.Rejected).reason).contains("unmatched")
     }
