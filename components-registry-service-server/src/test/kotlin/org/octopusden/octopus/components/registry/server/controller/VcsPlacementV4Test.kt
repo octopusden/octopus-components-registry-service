@@ -294,6 +294,47 @@ class VcsPlacementV4Test {
         assertTrue(outside.startsWith("fieldOverrides[0].buildWorkingDirectory: "), outside)
     }
 
+    @Test
+    @DisplayName("ONB-001 rev. 3: a standalone field-override PATCH without buildWorkingDirectory clears it; a create stores it")
+    fun `marker patch clears and create stores build working directory`() {
+        val id = newComponent()
+        val markerId =
+            mvc
+                .perform(
+                    post("/rest/api/4/components/$id/field-overrides")
+                        .with(adminJwt())
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(
+                            """{"overriddenAttribute":"vcs.settings","versionRange":"[1.0,2.0)",""" +
+                                """"markerChildren":{"vcsEntries":[{"vcsPath":"$REPO_A"}],"buildWorkingDirectory":"mapper"}}""",
+                        ),
+                ).andExpect(status().is2xxSuccessful)
+                .json()["id"]
+                .asText()
+        mvc
+            .perform(
+                patch("/rest/api/4/components/$id/field-overrides/$markerId")
+                    .with(adminJwt())
+                    .contentType(MediaType.APPLICATION_JSON)
+                    .content("""{"markerChildren":{"vcsEntries":[{"vcsPath":"$REPO_A"}]}}"""),
+            ).andExpect(status().is2xxSuccessful)
+        val row = getComponent(id)["configurations"].first { it["id"].asText() == markerId }
+        assertTrue(row["buildWorkingDirectory"] == null || row["buildWorkingDirectory"].isNull, "the payload replaces the row: $row")
+
+        val created =
+            mvc
+                .perform(
+                    post("/rest/api/4/components").with(adminJwt()).contentType(MediaType.APPLICATION_JSON).content(
+                        """{"name":"vcs-placement-${UUID.randomUUID().toString().take(8)}","componentOwner":"owner1",""" +
+                            """"group":{"groupKey":"org.example.test","isFake":false},""" +
+                            """"baseConfiguration":{"build":{"buildSystem":"MAVEN"},""" +
+                            """"vcsEntries":[{"vcsPath":"$REPO_A","checkoutDirectory":"core"}],"buildWorkingDirectory":"core"}}""",
+                    ),
+                ).andExpect(status().is2xxSuccessful)
+                .json()
+        assertEquals("core", baseRow(created)["buildWorkingDirectory"].asText())
+    }
+
     private fun baseRow(detail: JsonNode): JsonNode = detail["configurations"].first { it["rowType"].asText() == "BASE" }
 
     @Test
