@@ -13,6 +13,8 @@ local developer setup with a working database. (The web UI lives in
   Flyway/validate → `POST /admin/migrate` → verify → flip `default-source` to `db`,
   with the partial-failure recovery and rollback paths (the reusable, generic
   form for QA/prod and another organization)
+- `qa-db-refresh.md` — the `[8.0] Recreate QA DB from PROD` TeamCity button: what it copies, why
+  production stays read-only, the one-time role/Vault setup, and how to undo a run
 - `references/teamcity/` — raw TeamCity Kotlin DSL snippets relevant to the current OKD deployment flow
 - `references/platform/okd-platform-patterns.md` — summarized conventions from `service-deployment`, `service-config`, `octopus-dms-ui`, and `octopus-api-gateway`
 

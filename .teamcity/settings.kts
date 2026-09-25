@@ -3,6 +3,7 @@ import jetbrains.buildServer.configs.kotlin.buildFeatures.XmlReport
 import jetbrains.buildServer.configs.kotlin.buildFeatures.dockerSupport
 import jetbrains.buildServer.configs.kotlin.buildFeatures.swabra
 import jetbrains.buildServer.configs.kotlin.buildFeatures.xmlReport
+import jetbrains.buildServer.configs.kotlin.buildSteps.ScriptBuildStep
 import jetbrains.buildServer.configs.kotlin.buildSteps.gradle
 import jetbrains.buildServer.configs.kotlin.buildSteps.kotlinFile
 import jetbrains.buildServer.configs.kotlin.buildSteps.script
@@ -71,6 +72,7 @@ project {
     buildType(id50ReleasePostProcessingAuto)
     buildType(id60DeployToOkdQaGhAuto)
     buildType(id70DeployToOkdProdManual_2)
+    buildType(id80RecreateQaDbFromProdManual)
     buildType(WL_Validation_id)
 
     // Display order mirrors the numbering: [1.0] first, then [1.1] (off-chain, scheduled), then the two
@@ -91,6 +93,7 @@ project {
         id50ReleasePostProcessingAuto,
         id60DeployToOkdQaGhAuto,
         id70DeployToOkdProdManual_2,
+        id80RecreateQaDbFromProdManual,
         WL_Validation_id
     )
 }
@@ -1747,6 +1750,72 @@ object id70DeployToOkdProdManual_2 : BuildType({
             onDependencyFailure = FailureAction.FAIL_TO_START
             reuseBuilds = ReuseBuilds.SUCCESSFUL
         }
+    }
+})
+
+// Replaces the QA database's CRS schema with a copy of production. Production is only read: see the
+// header of scripts/teamcity/recreate-qa-db-from-prod.sh for the guards. The QA application is not
+// restarted and no migrations run; whoever presses the button redeploys the QA version they need.
+// Runbook: docs/registry/deployment/qa-db-refresh.md.
+//
+// Hosts are UI parameters on the parent project (CRS_PROD_DB_HOST, CRS_QA_DB_HOST); credentials come
+// from Vault through the inherited HashiCorp Vault connection. The env.* params are read-only, so a
+// custom run cannot edit them; the parent-project parameters they reference can still be overridden by
+// a custom run, which the script's cluster-identity check and the SELECT-only production role contain
+// (see the runbook).
+object id80RecreateQaDbFromProdManual : BuildType({
+    id("80RecreateQaDbFromProdManual")
+    name = "[8.0] Recreate QA DB from PROD [MANUAL]"
+    description = "Copies the production CRS schema over QA; the previous QA schema is kept as an artifact"
+
+    // One run at a time: two concurrent copies would race on the same QA schema.
+    maxRunningBuilds = 1
+
+    artifactRules = "qa-backup/qa-before-recreate.sql.gz"
+
+    params {
+        // Vault references cannot be composed from other parameters, so the KV mount is spelled out in
+        // each one; if the mount is KV v2 each path needs "/data" after the mount name.
+        text("env.SRC_HOST", "%CRS_PROD_DB_HOST%", readOnly = true, allowEmpty = false)
+        text("env.SRC_PORT", "5432", readOnly = true, allowEmpty = false)
+        text("env.SRC_DB", "components-registry", readOnly = true, allowEmpty = false)
+        // A role holding only pg_read_all_data.
+        text("env.SRC_USER", "%vault:f1-config-server/teamcity-crs-qa-refresh!/prod.readonly.username%", readOnly = true, allowEmpty = false)
+        password("env.SRC_PASSWORD", "%vault:f1-config-server/teamcity-crs-qa-refresh!/prod.readonly.password%", readOnly = true)
+
+        text("env.DST_HOST", "%CRS_QA_DB_HOST%", readOnly = true, allowEmpty = false)
+        text("env.DST_PORT", "5432", readOnly = true, allowEmpty = false)
+        text("env.DST_DB", "components-registry", readOnly = true, allowEmpty = false)
+        // The QA application's own datasource credentials, so a password rotation needs no change here.
+        text("env.DST_USER", "%vault:f1-config-server/components-registry-service-cloud-qa!/spring.datasource.username%", readOnly = true, allowEmpty = false)
+        password("env.DST_PASSWORD", "%vault:f1-config-server/components-registry-service-cloud-qa!/spring.datasource.password%", readOnly = true)
+
+        text("env.DB_SCHEMA", "components-registry", readOnly = true, allowEmpty = false)
+        text("env.QA_BACKUP_FILE", "qa-backup/qa-before-recreate.sql.gz", readOnly = true, allowEmpty = false)
+    }
+
+    vcs {
+        root(DslContext.settingsRoot)
+        // The step runs the script from the checkout with the production credential in its environment,
+        // so it must only ever run the reviewed script on the default branch.
+        branchFilter = "+:<default>"
+    }
+
+    steps {
+        script {
+            name = "Copy the production schema over QA"
+            id = "COPY_PROD_TO_QA"
+            scriptContent = "bash scripts/teamcity/recreate-qa-db-from-prod.sh"
+            // Client major version >= both servers (production 16, QA 17). Pulled through the corporate
+            // mirror, like the local-stand builds, to avoid the Docker Hub rate limit.
+            dockerImage = "%DOCKER_REGISTRY%/postgres:17"
+            dockerImagePlatform = ScriptBuildStep.ImagePlatform.Linux
+        }
+    }
+
+    failureConditions {
+        // The copy is a few MB and takes seconds.
+        executionTimeoutMin = 15
     }
 })
 
