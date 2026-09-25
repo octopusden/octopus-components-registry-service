@@ -436,7 +436,7 @@ class ComponentManagementServiceImpl(
             changeComment = request.changeComment,
         )
 
-        return toDetail(saved).withVcsChainWarning(request.baseConfiguration?.vcsEntries != null, saved)
+        return toDetail(saved).withVcsChainWarning(request.baseConfiguration?.writesVcs() == true, saved)
     }
 
     // ============================================================
@@ -962,7 +962,7 @@ class ComponentManagementServiceImpl(
             changeComment = request.changeComment,
         )
 
-        return toDetail(saved).withVcsChainWarning(request.baseConfiguration?.vcsEntries != null, saved)
+        return toDetail(saved).withVcsChainWarning(request.baseConfiguration?.writesVcs() == true, saved)
     }
 
     // ============================================================
@@ -3586,9 +3586,11 @@ class ComponentManagementServiceImpl(
         )
     }
 
+    private fun BaseConfigurationRequest.writesVcs() = vcsEntries != null || buildWorkingDirectory != null
+
     /**
-     * ONB-001: a write carrying base-configuration VCS entries on a component with a linked TeamCity
-     * project leaves its build chain out of date. No before/after diff: the Portal sends the base VCS
+     * ONB-001: a write carrying base-configuration VCS entries or Build Working Directory on a component
+     * with a linked TeamCity project leaves its build chain out of date. No before/after diff: the Portal sends the base VCS
      * slice only when it changed. Marker-row (per-range) writes do not warn.
      */
     private fun ComponentDetailResponse.withVcsChainWarning(
