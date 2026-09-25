@@ -2736,11 +2736,12 @@ class ComponentManagementServiceImpl(
     }
 
     /**
-     * ONB-001 placement rules over a row's final VCS entries (index 0 = primary, checked out at the
-     * checkout root; later entries = secondaries, checked out under their checkout directory, which is
-     * also their name). The first failure is a 400 `vcsEntries[<i>].<field>: <reason>`.
+     * ONB-001 placement rules over a row's final VCS entries: each entry is checked out under its
+     * checkout directory, which is also its name, and at most one entry has none (it is checked out at
+     * the checkout root). The first failure is a 400 `vcsEntries[<i>].<field>: <reason>`.
      */
     private fun validateVcsPlacement(entries: List<VcsSettingsEntryEntity>) {
+        var rootEntry: Int? = null
         val nameOwners = HashMap<String, Int>()
         val locationOwners = HashMap<Pair<String, String?>, Int>()
         entries.forEachIndexed { i, e ->
@@ -2749,7 +2750,11 @@ class ComponentManagementServiceImpl(
                 reason: String,
             ): Nothing = throw IllegalArgumentException("vcsEntries[$i].$field: $reason")
             val dir = e.checkoutDirectory
-            checkoutDirectoryError(primary = i == 0, dir)?.let { fail("checkoutDirectory", it) }
+            if (dir == null) {
+                rootEntry?.let { fail("checkoutDirectory", "required: vcsEntries[$it] is already checked out at the checkout root") }
+                rootEntry = i
+            }
+            checkoutDirectoryError(dir)?.let { fail("checkoutDirectory", it) }
             nameOwners.putIfAbsent((dir ?: e.name).lowercase(), i)?.let {
                 fail("checkoutDirectory", "'$dir' is already the name of vcsEntries[$it]")
             }
@@ -2767,13 +2772,8 @@ class ComponentManagementServiceImpl(
         }
     }
 
-    private fun checkoutDirectoryError(
-        primary: Boolean,
-        dir: String?,
-    ): String? =
+    private fun checkoutDirectoryError(dir: String?): String? =
         when {
-            primary && dir != null -> "must be empty on the primary VCS entry, which is checked out at the checkout root"
-            !primary && dir == null -> "required on a secondary VCS entry"
             dir != null && dir.length > MAX_PLACEMENT_LENGTH -> "must be at most $MAX_PLACEMENT_LENGTH characters"
             dir != null && !CHECKOUT_DIRECTORY_PATTERN.matches(dir) ->
                 "'$dir' must be one directory name of letters, digits, '.', '_' or '-', not starting with '.'"
