@@ -67,9 +67,10 @@ Whoever presses the button redeploys the QA version they need.
      serves it to no application;
    - the QA credentials are read from the QA application's own secret
      `components-registry-service-cloud-qa` (`spring.datasource.username` / `spring.datasource.password`);
-   - the approle of the TeamCity Vault connection needs `read` on both paths. If the mount is KV v2,
-     the policy paths and the `%vault:...%` references in `.teamcity/settings.kts` need `/data/` after
-     the mount name. The first run confirms the references, including keys that contain dots.
+   - the approle of the TeamCity Vault connection needs `read` on both paths. The mount is KV v2, so
+     policies and the `%vault:...%` references in `.teamcity/settings.kts` address
+     `f1-config-server/data/<secret>`. The first run confirms the references, including keys that
+     contain dots.
 
 3. **TeamCity parameters** on the parent project: `CRS_PROD_DB_HOST` and `CRS_QA_DB_HOST`, preferably
    with the read-only spec.
