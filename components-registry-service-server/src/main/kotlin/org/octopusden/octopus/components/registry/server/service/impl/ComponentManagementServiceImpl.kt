@@ -2592,6 +2592,7 @@ class ComponentManagementServiceImpl(
             // exposed via V4 (no UI need today); DSL import is the only
             // producer of the per-range column.
         }
+        request.buildWorkingDirectory?.let { config.buildWorkingDirectory = it.trim().ifEmpty { null } }
         request.vcsEntries?.let { replaceVcsEntries(config, it) }
         request.mavenArtifacts?.let { replaceMavenArtifacts(config, it) }
         request.fileUrlArtifacts?.let { replaceFileUrlArtifacts(config, it) }
@@ -2690,6 +2691,8 @@ class ComponentManagementServiceImpl(
             // jiraHotfixVersionFormat per-range PATCH is intentionally not
             // exposed via V4; see applyBaseConfigurationCreate above.
         }
+        // null = unchanged, blank = clear (V4_SCALAR_CLEAR_SEMANTICS).
+        patch.buildWorkingDirectory?.let { config.buildWorkingDirectory = it.trim().ifEmpty { null } }
         patch.vcsEntries?.let { replaceVcsEntries(config, it) }
         patch.mavenArtifacts?.let { replaceMavenArtifacts(config, it) }
         patch.fileUrlArtifacts?.let { replaceFileUrlArtifacts(config, it) }
@@ -2927,6 +2930,7 @@ class ComponentManagementServiceImpl(
         return when (markerName) {
             MarkerAttributes.VCS_SETTINGS -> {
                 requireNotNull(payload.vcsEntries) { "Marker '$markerName' requires vcsEntries payload" }
+                row.buildWorkingDirectory = payload.buildWorkingDirectory?.trim()?.ifEmpty { null }
                 replaceVcsEntries(row, payload.vcsEntries)
                 null
             }
@@ -2983,6 +2987,7 @@ class ComponentManagementServiceImpl(
                 if (payload.packages != null) add("packages")
                 if (payload.requiredTools != null) add("requiredTools")
                 if (payload.buildToolBeans != null) add("buildToolBeans")
+                if (payload.buildWorkingDirectory != null && markerName != MarkerAttributes.VCS_SETTINGS) add("buildWorkingDirectory")
             }
         val expected =
             when (markerName) {

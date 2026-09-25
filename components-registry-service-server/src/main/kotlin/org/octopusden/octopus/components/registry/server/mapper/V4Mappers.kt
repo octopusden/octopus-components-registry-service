@@ -186,6 +186,7 @@ fun ComponentConfigurationEntity.toConfigurationResponse(): ComponentConfigurati
         packages = packages,
         requiredTools = tools,
         buildToolBeans = buildBeans,
+        buildWorkingDirectory = this.buildWorkingDirectory,
     )
 }
 
@@ -321,6 +322,7 @@ private fun ComponentConfigurationEntity.toMarkerChildrenPayload(): MarkerChildr
                             checkoutDirectory = e.checkoutDirectory,
                         )
                     },
+                buildWorkingDirectory = buildWorkingDirectory,
             )
 
         MarkerAttributes.DISTRIBUTION_MAVEN,

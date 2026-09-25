@@ -238,6 +238,10 @@
             },
             "type" : "array"
           },
+          "buildWorkingDirectory" : {
+            "description" : "Write tri-state: omit or null = leave unchanged; \"\" (or blank) = clear to null; non-blank = set verbatim. On create, \"\" is treated as null.",
+            "type" : "string"
+          },
           "dockerImages" : {
             "items" : {
               "$ref" : "#/components/schemas/DockerImageRequest"
@@ -463,6 +467,9 @@
               "$ref" : "#/components/schemas/BuildToolBeanResponse"
             },
             "type" : "array"
+          },
+          "buildWorkingDirectory" : {
+            "type" : "string"
           },
           "dockerImages" : {
             "items" : {
@@ -2020,6 +2027,9 @@
               "$ref" : "#/components/schemas/BuildToolBeanRequest"
             },
             "type" : "array"
+          },
+          "buildWorkingDirectory" : {
+            "type" : "string"
           },
           "dockerImages" : {
             "items" : {
