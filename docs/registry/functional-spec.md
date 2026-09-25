@@ -109,46 +109,51 @@ shape/format rules on both `POST /rest/api/4/components` and
 These format checks are skipped for a field whose admin field-config visibility is
 `HIDDEN`. On `PATCH`, the hidden value is also stripped before persistence.
 
-#### VCS entry placement (create + update + field overrides)
+#### VCS entry placement and Build Working Directory (create + update + field overrides)
 
 Each VCS entry of a configuration row (base or `vcs.settings` marker) may carry `sourcePath` (the
 repository directory that belongs to the component; absent = whole repository) and
-`checkoutDirectory` (where the entry is checked out on the build agent). A blank value is absent.
-The first entry is the **primary**, checked out at the checkout root; later entries are
-**secondaries**, each checked out under its `checkoutDirectory`.
+`checkoutDirectory` (where the entry is checked out on the build agent). At most one entry has no
+`checkoutDirectory`; it is checked out at the checkout root, and it may be listed at any position.
+The row may carry `buildWorkingDirectory`, where the build runs, relative to the checkout root
+(absent = the checkout root). A blank value is absent. In a base PATCH `buildWorkingDirectory: null`
+leaves the stored value and `""` clears it; a `vcs.settings` marker payload replaces the row, so an
+absent value clears it.
 
-Every v4 write that replaces a row's VCS entries (create, PATCH `baseConfiguration.vcsEntries`, the
-field-override endpoints, a PATCH `fieldOverrides` row) validates the row's final list; the first
-failing rule is a `400` `{ "errorMessage": "vcsEntries[<i>].<field>: <reason>" }`, `<i>` being the
-entry's index in the row:
+Every v4 write that replaces a row's VCS entries or sets its `buildWorkingDirectory` (create, PATCH
+`baseConfiguration`, the field-override endpoints, a PATCH `fieldOverrides` row) validates the final
+row; the first failing rule is a `400` `{ "errorMessage": "<field>: <reason>" }`, entry rules first:
 
 | Rule | Reported on |
 |------|-------------|
-| The primary has no `checkoutDirectory`, whatever the row's size | `vcsEntries[0].checkoutDirectory` |
-| Every secondary has a `checkoutDirectory` | that entry's `checkoutDirectory` |
+| At most one entry has no `checkoutDirectory` | the later such entry's `vcsEntries[<i>].checkoutDirectory` |
 | `checkoutDirectory` is at most 255 characters, matches `^[A-Za-z0-9_][A-Za-z0-9._-]*$` (one segment, no leading dot) and is not `report-templates`, `sonar-config`, `target` or `sonar-report`, ignoring case | that entry's `checkoutDirectory` |
-| Entry names are unique in the row, case-insensitively, the primary included | the later entry's `checkoutDirectory` |
+| Entry names are unique in the row, case-insensitively | the later entry's `checkoutDirectory` |
 | `sourcePath` is at most 255 characters, `/`-separated, each segment matches `^[A-Za-z0-9._-]+$` and is not `.` or `..` | that entry's `sourcePath` |
 | (repository, `sourcePath`) is unique in the row; Git repositories compare case-insensitively | the later entry's `sourcePath` |
+| `buildWorkingDirectory` has the `sourcePath` shape and starts in the `checkoutDirectory` of an entry (case-sensitive), unless an entry is at the checkout root; a row without entries has none | `buildWorkingDirectory` |
+| `buildWorkingDirectory` is required when every entry has a `checkoutDirectory` | `buildWorkingDirectory` |
 
-In a component PATCH, a VCS error of the `j`-th `fieldOverrides` element is prefixed
-`fieldOverrides[<j>].`; other errors of that element keep their shape.
+In a component PATCH, a `vcsEntries[` or `buildWorkingDirectory:` error of the `j`-th
+`fieldOverrides` element is prefixed `fieldOverrides[<j>].`; other errors of that element keep their
+shape.
 
-**Names are derived; a request `name` is ignored.** A secondary entry's name is its
-`checkoutDirectory`; the primary's is the stored name of the row's previous primary when the row had
-entries before the write, otherwise `main`. Names therefore never change while a row keeps at least
-one entry; a row emptied by one write (allowed) names its next primary `main`. A secondary kept as
-the only entry becomes the primary, takes the previous primary's name and must drop its
-`checkoutDirectory`.
+**Names are derived; a request `name` is ignored.** An entry with a `checkoutDirectory` is named by
+it; an entry without one keeps the stored name of the row's previous entry on the same repository
+(Git ignoring case; the lowest previous position when the repository appeared twice), otherwise
+`main`. An entry therefore keeps its name while it stays at the checkout root on the same
+repository; re-pointed to another repository it is named `main`; moved from a Checkout Directory to
+the root it keeps the name it had.
 
 **Chain-mismatch warning.** `ComponentDetailResponse.warnings` is `[]` except on a create or PATCH
-that carries `baseConfiguration.vcsEntries` for a component with a linked TeamCity project:
-`"VCS entries changed; the TeamCity build chain no longer matches and must be recreated."` (logged at
-INFO). Marker-row writes do not warn.
+that carries `baseConfiguration.vcsEntries` or `baseConfiguration.buildWorkingDirectory` for a
+component with a linked TeamCity project: `"VCS entries changed; the TeamCity build chain no longer
+matches and must be recreated."` (logged at INFO). Marker-row writes do not warn.
 
-The legacy v2 VCS settings (`VersionControlSystemRootDTO`) carry both fields, omitted when empty, so
-an unplaced component's v2 JSON is unchanged. The Groovy DSL mode and the as-code export do not
-carry placement.
+The legacy v2 VCS settings carry `sourcePath` / `checkoutDirectory` per root
+(`VersionControlSystemRootDTO`) and `buildWorkingDirectory` (`VCSSettingsDTO`) from the row that
+supplies the version's entries, all omitted when empty, so a component without them serves the same
+v2 JSON as before. The Groovy DSL mode and the as-code export do not carry them.
 
 #### Intentional legacy-validation relaxations
 
@@ -427,7 +432,7 @@ Changes to field configuration and component defaults are recorded in the audit 
 | Duplicate name on **create** | 400 | `{ "errorMessage": "name: a component with name '...' already exists" }` (field-prefixed → Portal routes inline) |
 | Duplicate name on **rename** (PATCH name) | 409 | `{ "errorMessage": "Component with name '...' already exists" }` (`ComponentNameConflictException`) |
 | Duplicate `displayName` (create/update) | 400 | `{ "errorMessage": "displayName: a component with display name '...' already exists" }` |
-| Invalid VCS entry placement (§1.4) | 400 | `{ "errorMessage": "vcsEntries[1].checkoutDirectory: required on a secondary VCS entry" }` (`fieldOverrides[<j>].` prefix inside a PATCH `fieldOverrides` row) |
+| Invalid VCS entry placement or Build Working Directory (§1.4) | 400 | `{ "errorMessage": "vcsEntries[1].checkoutDirectory: required: vcsEntries[0] is already checked out at the checkout root" }` or `buildWorkingDirectory: …` (`fieldOverrides[<j>].` prefix inside a PATCH `fieldOverrides` row) |
 | Optimistic lock conflict | 409 | `{ "error": "Component was modified by another user" }` |
 | Validation failure | 400 | `{ "errors": [{ "field": "name", "message": "must not be blank" }] }` |
 | Unauthorized | 401 | Standard Spring Security response |

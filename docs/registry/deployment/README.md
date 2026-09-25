@@ -13,8 +13,8 @@ local developer setup with a working database. (The web UI lives in
   Flyway/validate → `POST /admin/migrate` → verify → flip `default-source` to `db`,
   with the partial-failure recovery and rollback paths (the reusable, generic
   form for QA/prod and another organization)
-- `vcs-placement-rollback.md` — snapshot and repair steps when rolling back across the `V8__` VCS
-  placement migration (placement is dropped by the previous release's VCS writes)
+- `vcs-placement-rollback.md` — snapshot and restore steps when rolling back across the `V8__`/`V9__` VCS
+  placement migrations (placement is dropped by the previous release's VCS writes)
 - `references/teamcity/` — raw TeamCity Kotlin DSL snippets relevant to the current OKD deployment flow
 - `references/platform/okd-platform-patterns.md` — summarized conventions from `service-deployment`, `service-config`, `octopus-dms-ui`, and `octopus-api-gateway`
 

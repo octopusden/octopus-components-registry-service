@@ -16,23 +16,23 @@
 
 ## 3. Revision 3 (test-first; each step starts with a failing test)
 
-- [ ] 3.1 Checkout Directory optional on every entry, single-entry rows included; at most one entry
+- [x] 3.1 Checkout Directory optional on every entry, single-entry rows included; at most one entry
       without it (second one → `vcsEntries[<i>].checkoutDirectory`); revision 2's "must be empty on
       the primary" and "required on a secondary" rules removed
-- [ ] 3.2 Name rule: Checkout Directory, else the previous name of the same repository, else
+- [x] 3.2 Name rule: Checkout Directory, else the previous name of the same repository, else
       `main`; unique ignoring case, reported on the later entry
-- [ ] 3.3 `V9__add_build_working_directory.sql` + entity column; migration test on Testcontainers
+- [x] 3.3 `V9__add_build_working_directory.sql` + entity column; migration test on Testcontainers
       (V8 and V9 from an empty database and from a V8 database)
-- [ ] 3.4 v4 `buildWorkingDirectory` on the base request/response and the `vcs.settings` marker
+- [x] 3.4 v4 `buildWorkingDirectory` on the base request/response and the `vcs.settings` marker
       payload (`rejectExtraneousMarkerFields`), blank = absent, round-trip
-- [ ] 3.5 Build Working Directory validation (shape, 255, inside a placed entry, required when
+- [x] 3.5 Build Working Directory validation (shape, 255, inside a placed entry, required when
       every entry has a Checkout Directory), also when only it changes; `buildWorkingDirectory: ` errors, prefixed `fieldOverrides[<j>].` in a combined PATCH
-- [ ] 3.6 Groovy `VCSSettings` (incl. `equals`/`hashCode`/`toString`) +
+- [x] 3.6 Groovy `VCSSettings` (incl. `equals`/`hashCode`/`toString`) +
       `VCSSettingsDTO.buildWorkingDirectory` (appended, property-level
       NON_NULL, explicit two-parameter constructor with `@JsonCreator(mode = DISABLED)`); DB mapper
       and v2 controller; v2 byte identity when unset; Groovy two-argument call test
-- [ ] 3.7 Chain-mismatch warning also on a base `buildWorkingDirectory`
-- [ ] 3.8 DSL export omits `buildWorkingDirectory`; git-vs-db known difference; compat known-delta
+- [x] 3.7 Chain-mismatch warning also on a base `buildWorkingDirectory`
+- [x] 3.8 DSL export omits `buildWorkingDirectory`; git-vs-db known difference; compat known-delta
       widened to every root (`\[\d+\]`, typed comparator at any index) plus
       `buildWorkingDirectory`; `api-compat-deltas.md` VCS placement entry rewritten for revision 3
 - [ ] 3.9 `api-changelog.md`, `functional-spec.md`, `schema-spec.md` updated; rollback runbook in

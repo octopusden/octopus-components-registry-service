@@ -1,52 +1,68 @@
-# Runbook: rolling back across the VCS placement migration (`V8__`)
+# Runbook: rolling back across the VCS placement migrations (`V8__`, `V9__`)
 
 `V8__add_vcs_entry_placement.sql` adds `source_path` and `checkout_directory` to
-`vcs_settings_entries` and sets `checkout_directory = name` on secondary entries (`sort_order > 0`).
-This runbook covers a rollback to the release before it and the repair after rolling forward again.
-No code is involved; all steps are SQL against the service database.
+`vcs_settings_entries` (and sets `checkout_directory = name` after the first entry of multi-entry
+rows); `V9__add_build_working_directory.sql` adds `build_working_directory` to
+`component_configurations`. This runbook covers a rollback to a release before them and the repair
+after rolling forward again. No code is involved; all steps are SQL against the service database.
 
 ## What a rollback does
 
 The previous release starts on the migrated schema: Spring Boot 3.2.2 ships Flyway 9, whose default
-`ignoreMigrationPatterns=*:future` accepts an applied newer migration, and `ddl-auto: validate`
+`ignoreMigrationPatterns=*:future` accepts applied newer migrations, and `ddl-auto: validate`
 ignores the extra columns.
 
-The previous release does not keep placement. Its `replaceVcsEntries` recreates a row's entries on
-any VCS write, so both columns become NULL for every row written during the rollback window. Names
-survive (the Portal sends the stored name). The previous release never writes a `checkout_directory`,
-so no primary entry gets one.
+- **Build Working Directory**: the previous release never writes `build_working_directory`, so the
+  column keeps its values unless a row is deleted. Nothing to repair.
+- **Entry placement**: the previous release recreates a row's entries on any VCS write, so
+  `source_path` and `checkout_directory` become NULL for every row whose VCS entries it writes.
+  Names survive (the Portal sends the stored name).
+- Rolling back to the revision 2 image instead of the release before `V8__`: rows with a Checkout
+  Directory on their first entry, or with every entry placed, fail their next v4 VCS write until
+  rolled forward. Their data stays intact.
 
-## 1. Before rolling back: snapshot placed entries
+## 1. Before rolling back: snapshot placement
 
 ```sql
-select component_configuration_id, sort_order, vcs_path, source_path, checkout_directory
+create table vcs_placement_snapshot as
+select component_configuration_id, vcs_path, sort_order, source_path, checkout_directory
 from vcs_settings_entries
 where source_path is not null or checkout_directory is not null;
 ```
 
-Keep the result until step 4 is done.
+Keep the table (or an export of it) until step 2 is done.
 
-## 2. After rolling forward: find secondary entries without a checkout directory
+## 2. After rolling forward: restore placement from the snapshot
+
+Match on (`component_configuration_id`, `vcs_path`, `sort_order`): `sort_order` is part of the key
+because one repository may appear twice in a row. Only rows the previous release rewrote differ.
 
 ```sql
-select component_configuration_id, sort_order
+update vcs_settings_entries e
+set source_path = s.source_path, checkout_directory = s.checkout_directory
+from vcs_placement_snapshot s
+where e.component_configuration_id = s.component_configuration_id
+  and e.vcs_path = s.vcs_path
+  and e.sort_order = s.sort_order
+  and (e.source_path is distinct from s.source_path or e.checkout_directory is distinct from s.checkout_directory);
+```
+
+Do **not** re-apply `V8__`'s `checkout_directory = name` rule as a repair: since revision 3 a later
+entry may legitimately have no Checkout Directory.
+
+## 3. Rows written during the window that the snapshot does not cover
+
+Entries added or re-pointed during the rollback window are not in the snapshot and keep what the
+previous release wrote (no placement). A row that ends up with more than one entry without a
+Checkout Directory fails its next v4 VCS write with `400 vcsEntries[<i>].checkoutDirectory: …` until
+an editor places its entries in the Portal. To list them:
+
+```sql
+select component_configuration_id, count(*)
 from vcs_settings_entries
-where sort_order > 0 and checkout_directory is null;
+where checkout_directory is null
+group by component_configuration_id
+having count(*) > 1;
 ```
 
-## 3. Repair them with the migration's rule (secondary entries only)
-
-```sql
-update vcs_settings_entries
-set checkout_directory = name
-where checkout_directory is null and sort_order > 0;
-```
-
-## 4. Re-enter lost Source Paths and check names
-
-- Re-enter any `source_path` from the step 1 snapshot that is missing now (through the Portal, or by
-  SQL keyed on `component_configuration_id` + `sort_order`).
-- An entry added during the rollback window is named `main`. If it is a secondary and its row's
-  primary, or another secondary, is also named `main`, step 3 yields a duplicate name and the row's
-  next VCS save fails with `400 vcsEntries[<i>].checkoutDirectory: …`. Set that entry's Checkout
-  Directory by hand in the Portal.
+Drop `vcs_placement_snapshot` once the repair is verified.
