@@ -7,15 +7,18 @@ QA database with a copy of the production one. Script: `scripts/teamcity/recreat
 
 1. Checks that the target is not production (below). Nothing is written before these checks pass.
 2. Dumps the production schema, including the extensions installed in it (`pgcrypto`).
-3. Keeps the current QA schema as the build artifact `qa-backup/qa-before-recreate.sql.gz`.
+3. Keeps the current QA schema as the build artifact `qa-backup/qa-before-recreate.sql.gz` (this dump,
+   too, gives up after 30 s if QA holds a conflicting lock).
 4. In one transaction on QA: `DROP SCHEMA "components-registry" CASCADE`, then loads the dump. Any failure
    rolls back and leaves QA as it was. The drop waits at most 30 s for a QA session holding a table; once
    it succeeds it holds every lock the load needs.
 5. Compares row counts table by table (a difference is a warning: production keeps serving writes) and
    logs the production migration version now on QA.
 
-The data is copied as is. Nothing outside the `components-registry` schema is copied or changed, except
-objects elsewhere that depend on it (a view in `public` over its tables, say), which `CASCADE` drops.
+The data is copied as is. Nothing outside the `components-registry` schema is copied or changed. If
+objects in another schema depend on it (a view in `public` over its tables, a foreign key, a column of
+one of its types), `CASCADE` would drop them and the backup could not bring them back, so the run
+counts the objects outside the schema before and after the drop and aborts on any difference.
 
 ## What it does not do
 

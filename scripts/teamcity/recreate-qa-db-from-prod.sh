@@ -23,7 +23,8 @@
 # The source credential should be a SELECT-only role; the script warns when it can write.
 #
 # QA is replaced atomically: the drop of the old schema and the load of the dump run in one
-# transaction, so a failure at any point leaves QA exactly as it was. The QA application is not
+# transaction, so a failure at any point leaves QA exactly as it was. The drop is refused if objects
+# outside the schema depend on it, since CASCADE would remove them and the backup covers the schema only. The QA application is not
 # restarted and no migrations are run: whoever presses the button redeploys the QA version they need
 # (docs/registry/deployment/qa-db-refresh.md).
 
@@ -103,7 +104,8 @@ if [ -n "${QA_BACKUP_FILE:-}" ]; then
         mkdir -p "$(dirname "$QA_BACKUP_FILE")"
         dst_ext=$(extension_args dst_sql)
         # shellcheck disable=SC2086
-        dst pg_dump --schema="$DB_SCHEMA" $dst_ext --no-owner --no-privileges | gzip >"$QA_BACKUP_FILE"
+        dst pg_dump --schema="$DB_SCHEMA" $dst_ext --no-owner --no-privileges --lock-wait-timeout="$LOCK_TIMEOUT" |
+            gzip >"$QA_BACKUP_FILE"
         echo "Kept the previous QA schema in $QA_BACKUP_FILE ($(wc -c <"$QA_BACKUP_FILE") bytes)"
     else
         echo "QA has no schema $DB_SCHEMA yet, nothing to keep"
@@ -112,9 +114,35 @@ fi
 
 # --- Replace the QA schema in one transaction ---------------------------------------------------
 
+# CASCADE would also drop objects in other schemas that depend on this one (a view, a foreign key, a
+# column of its type), and the backup covers this schema only. So everything outside it is counted
+# before and after the drop, and any difference aborts the transaction.
+outside_objects="select (select count(*) from pg_class c join pg_namespace n on n.oid = c.relnamespace
+                         where n.nspname not in ('$DB_SCHEMA', 'pg_catalog', 'information_schema', 'pg_toast')
+                           and n.nspname !~ '^pg_(temp|toast_temp)_')
+                      + (select count(*) from pg_attribute a join pg_class c on c.oid = a.attrelid
+                         join pg_namespace n on n.oid = c.relnamespace
+                         where a.attnum > 0 and not a.attisdropped
+                           and n.nspname not in ('$DB_SCHEMA', 'pg_catalog', 'information_schema', 'pg_toast'))
+                      + (select count(*) from pg_constraint k join pg_namespace n on n.oid = k.connamespace
+                         where n.nspname not in ('$DB_SCHEMA', 'pg_catalog', 'information_schema'))
+                      + (select count(*) from pg_trigger g join pg_class c on c.oid = g.tgrelid
+                         join pg_namespace n on n.oid = c.relnamespace where n.nspname <> '$DB_SCHEMA')
+                      + (select count(*) from pg_policy y join pg_class c on c.oid = y.polrelid
+                         join pg_namespace n on n.oid = c.relnamespace where n.nspname <> '$DB_SCHEMA')
+                      + (select count(*) from pg_proc p join pg_namespace n on n.oid = p.pronamespace
+                         where n.nspname not in ('$DB_SCHEMA', 'pg_catalog', 'information_schema'))
+                      + (select count(*) from pg_type t join pg_namespace n on n.oid = t.typnamespace
+                         where n.nspname not in ('$DB_SCHEMA', 'pg_catalog', 'information_schema', 'pg_toast')
+                           and n.nspname !~ '^pg_(temp|toast_temp)_')"
 {
     printf 'SET client_min_messages = warning;\nSET lock_timeout = %s;\n' "'$LOCK_TIMEOUT'"
+    printf '%s AS outside_before \\gset\n' "$outside_objects"
     printf 'DROP SCHEMA IF EXISTS "%s" CASCADE;\n' "$DB_SCHEMA"
+    printf '%s = :outside_before AS outside_intact \\gset\n' "$outside_objects"
+    printf '\\if :outside_intact\n\\else\n'
+    printf "DO \$\$ BEGIN RAISE EXCEPTION 'objects outside the schema %s depend on it; drop them first'; END \$\$;\n" "$DB_SCHEMA"
+    printf '\\endif\n'
     cat "$dump"
 } | dst psql -X -q -v ON_ERROR_STOP=1 --single-transaction >/dev/null
 echo "Replaced schema $DB_SCHEMA on $DST_HOST"
