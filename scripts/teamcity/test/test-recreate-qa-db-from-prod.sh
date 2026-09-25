@@ -108,6 +108,20 @@ check "a dependent object outside the schema is refused" '[ $? -ne 0 ] && grep -
 check "the outside object survives" '[ "$(sql dst "select to_regclass(\$\$public.outside_view\$\$) is not null")" = t ]'
 sql dst 'drop view public.outside_view;'
 
+# A column default in another schema that calls a sequence of this one: CASCADE drops just the default.
+sql dst 'create table public.outside_default(n bigint default nextval($$"components-registry".components_seq_seq$$::regclass));'
+run "$NET-dst"
+check "an outside column default using the schema is refused" '[ $? -ne 0 ] && grep -q "outside the schema" "$OUT/run.log"'
+check "the outside default survives" '[ -n "$(sql dst "select pg_get_expr(adbin, adrelid) from pg_attrdef where adrelid = \$\$public.outside_default\$\$::regclass")" ]'
+sql dst 'drop table public.outside_default;'
+
+# A foreign key from another schema into this one: CASCADE drops just the constraint.
+sql dst 'alter table "components-registry".components add unique (seq);
+         create table public.outside_fk(seq bigint references "components-registry".components(seq));'
+run "$NET-dst"
+check "an outside foreign key into the schema is refused" '[ $? -ne 0 ] && grep -q "outside the schema" "$OUT/run.log"'
+sql dst 'drop table public.outside_fk;'
+
 sql src 'insert into "components-registry".components(name) values ($$newer$$)'   # source 7, target 6
 docker exec -d "$NET-dst" psql -U crs -d crs -c 'begin; lock table "components-registry".components in access exclusive mode; select pg_sleep(90);'
 sleep 1
