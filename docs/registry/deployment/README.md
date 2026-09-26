@@ -15,6 +15,10 @@ local developer setup with a working database. (The web UI lives in
   form for QA/prod and another organization)
 - `vcs-placement-rollback.md` — snapshot and restore steps when rolling back across the `V8__`/`V9__` VCS
   placement migrations (placement is dropped by the previous release's VCS writes)
+- `qa-db-refresh.md` — the `[8.0] Recreate QA DB from PROD` TeamCity button: what it copies, why
+  production stays read-only, the one-time role/Vault setup, and how to undo a run
+- `qa-db-refresh-dba-request.md` — the request to the database administrators for that button: the
+  production read-only role, network/`pg_hba` rules, Vault handover, acceptance checks
 - `references/teamcity/` — raw TeamCity Kotlin DSL snippets relevant to the current OKD deployment flow
 - `references/platform/okd-platform-patterns.md` — summarized conventions from `service-deployment`, `service-config`, `octopus-dms-ui`, and `octopus-api-gateway`
 
