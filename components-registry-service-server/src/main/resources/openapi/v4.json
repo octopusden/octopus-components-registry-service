@@ -238,6 +238,10 @@
             },
             "type" : "array"
           },
+          "buildWorkingDirectory" : {
+            "description" : "Write tri-state: omit or null = leave unchanged; \"\" (or blank) = clear to null; non-blank = set verbatim. On create, \"\" is treated as null.",
+            "type" : "string"
+          },
           "dockerImages" : {
             "items" : {
               "$ref" : "#/components/schemas/DockerImageRequest"
@@ -463,6 +467,9 @@
               "$ref" : "#/components/schemas/BuildToolBeanResponse"
             },
             "type" : "array"
+          },
+          "buildWorkingDirectory" : {
+            "type" : "string"
           },
           "dockerImages" : {
             "items" : {
@@ -804,6 +811,12 @@
           "version" : {
             "format" : "int64",
             "type" : "integer"
+          },
+          "warnings" : {
+            "items" : {
+              "type" : "string"
+            },
+            "type" : "array"
           }
         },
         "required" : [
@@ -821,7 +834,8 @@
           "skipCommitCheck",
           "systems",
           "teamcityProjects",
-          "version"
+          "version",
+          "warnings"
         ],
         "type" : "object"
       },
@@ -2014,6 +2028,9 @@
             },
             "type" : "array"
           },
+          "buildWorkingDirectory" : {
+            "type" : "string"
+          },
           "dockerImages" : {
             "items" : {
               "$ref" : "#/components/schemas/DockerImageRequest"
@@ -3146,6 +3163,9 @@
           "branch" : {
             "type" : "string"
           },
+          "checkoutDirectory" : {
+            "type" : "string"
+          },
           "hotfixBranch" : {
             "type" : "string"
           },
@@ -3153,6 +3173,9 @@
             "type" : "string"
           },
           "repositoryType" : {
+            "type" : "string"
+          },
+          "sourcePath" : {
             "type" : "string"
           },
           "tag" : {
@@ -3172,6 +3195,9 @@
           "branch" : {
             "type" : "string"
           },
+          "checkoutDirectory" : {
+            "type" : "string"
+          },
           "hotfixBranch" : {
             "type" : "string"
           },
@@ -3188,6 +3214,9 @@
           "sortOrder" : {
             "format" : "int32",
             "type" : "integer"
+          },
+          "sourcePath" : {
+            "type" : "string"
           },
           "tag" : {
             "type" : "string"

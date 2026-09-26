@@ -13,22 +13,34 @@ class VersionControlSystemRoot {
     private final String vcsPath
     private final String rawBranch
     private final String hotfixBranch
+    private final String sourcePath
+    private final String checkoutDirectory
 
     static VersionControlSystemRoot create(String name = "main", RepositoryType repositoryType, String vcsPath,
                                            String tag, String branch, String hotfixBranch) {
+        return create(name, repositoryType, vcsPath, tag, branch, hotfixBranch, null, null)
+    }
+
+    /** Placement (ONB-001) comes from the database only; the Groovy DSL leaves it null. */
+    static VersionControlSystemRoot create(String name, RepositoryType repositoryType, String vcsPath,
+                                           String tag, String branch, String hotfixBranch,
+                                           String sourcePath, String checkoutDirectory) {
         def vcsBranch = branch
         return new VersionControlSystemRoot(name, repositoryType,
                 (repositoryType?.isCaseSensitive() == false) ? vcsPath?.toLowerCase() : vcsPath,
-                tag, vcsBranch, hotfixBranch)
+                tag, vcsBranch, hotfixBranch, sourcePath, checkoutDirectory)
     }
 
-    private VersionControlSystemRoot(String name, RepositoryType repositoryType, String vcsPath, String tag, String branch, String hotfixBranch) {
+    private VersionControlSystemRoot(String name, RepositoryType repositoryType, String vcsPath, String tag, String branch, String hotfixBranch,
+                                     String sourcePath, String checkoutDirectory) {
         this.name = name
         this.repositoryType = repositoryType
         this.vcsPath = vcsPath
         this.tag = tag
         this.rawBranch = branch
         this.hotfixBranch = hotfixBranch
+        this.sourcePath = sourcePath
+        this.checkoutDirectory = checkoutDirectory
     }
 
     @JsonInclude(JsonInclude.Include.NON_NULL)
@@ -64,6 +76,16 @@ class VersionControlSystemRoot {
         return name
     }
 
+    @JsonInclude(JsonInclude.Include.NON_NULL)
+    String getSourcePath() {
+        return sourcePath
+    }
+
+    @JsonInclude(JsonInclude.Include.NON_NULL)
+    String getCheckoutDirectory() {
+        return checkoutDirectory
+    }
+
     @JsonIgnore
     boolean isFullyConfigured() {
         return repositoryType != null &&
@@ -81,6 +103,8 @@ class VersionControlSystemRoot {
                 ", vcsPath='" + vcsPath + '\'' +
                 ", branch='" + branch + '\'' +
                 ", hotfixBranch='" + hotfixBranch + '\'' +
+                ", sourcePath='" + sourcePath + '\'' +
+                ", checkoutDirectory='" + checkoutDirectory + '\'' +
                 '}'
     }
 
@@ -95,10 +119,12 @@ class VersionControlSystemRoot {
                 Objects.equals(repositoryType, that.repositoryType) &&
                 Objects.equals(vcsPath, that.vcsPath) &&
                 Objects.equals(tag, that.tag) &&
-                Objects.equals(name, that.name)
+                Objects.equals(name, that.name) &&
+                Objects.equals(sourcePath, that.sourcePath) &&
+                Objects.equals(checkoutDirectory, that.checkoutDirectory)
     }
 
     int hashCode() {
-        return Objects.hash(name, repositoryType, tag, vcsPath, branch, hotfixBranch)
+        return Objects.hash(name, repositoryType, tag, vcsPath, branch, hotfixBranch, sourcePath, checkoutDirectory)
     }
 }

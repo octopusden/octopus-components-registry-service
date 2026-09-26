@@ -65,11 +65,20 @@ fun VCSSettings.toDTO(): VCSSettingsDTO {
         versionControlSystemRoots.map {
             it.toDTO()
         }
-    return VCSSettingsDTO(vcsRoots, externalRegistry)
+    return VCSSettingsDTO(vcsRoots, externalRegistry, buildWorkingDirectory)
 }
 
 fun VersionControlSystemRoot.toDTO(): VersionControlSystemRootDTO =
-    VersionControlSystemRootDTO(name, vcsPath, RepositoryType.valueOf(repositoryType.name), tag, branch, hotfixBranch)
+    VersionControlSystemRootDTO(
+        name,
+        vcsPath,
+        RepositoryType.valueOf(repositoryType.name),
+        tag,
+        branch,
+        hotfixBranch,
+        sourcePath,
+        checkoutDirectory,
+    )
 
 fun ComponentArtifactConfiguration.toDTO(): ComponentArtifactConfigurationDTO =
     ComponentArtifactConfigurationDTO(this.groupPattern, this.artifactPattern)

@@ -1,6 +1,7 @@
 package org.octopusden.octopus.escrow.model
 
 import com.fasterxml.jackson.annotation.JsonIgnore
+import com.fasterxml.jackson.annotation.JsonInclude
 import org.octopusden.octopus.escrow.exceptions.ComponentResolverException
 import org.apache.commons.lang3.StringUtils
 
@@ -10,12 +11,20 @@ class VCSSettings {
 
     private final Collection<VersionControlSystemRoot> versionControlSystemRoots
 
+    private final String buildWorkingDirectory
+
     static VCSSettings create(String externalVCSComponentName) {
         new VCSSettings(externalVCSComponentName, [])
     }
 
     static VCSSettings create(String externalVCSComponentName, List<VersionControlSystemRoot> versionControlSystemRoots) {
         new VCSSettings(externalVCSComponentName, versionControlSystemRoots)
+    }
+
+    /** The Build Working Directory (ONB-001) comes from the database only; the Groovy DSL leaves it null. */
+    static VCSSettings create(String externalVCSComponentName, List<VersionControlSystemRoot> versionControlSystemRoots,
+                              String buildWorkingDirectory) {
+        new VCSSettings(externalVCSComponentName, versionControlSystemRoots, buildWorkingDirectory)
     }
 
     static VCSSettings create(List<VersionControlSystemRoot> versionControlSystemRoots) {
@@ -30,9 +39,10 @@ class VCSSettings {
         new VCSSettings(null, Collections.emptyList());
     }
 
-    private VCSSettings(String externalRegistry, List<VersionControlSystemRoot> versionControlSystemRoots) {
+    private VCSSettings(String externalRegistry, List<VersionControlSystemRoot> versionControlSystemRoots, String buildWorkingDirectory = null) {
         this.externalRegistry = externalRegistry
         this.versionControlSystemRoots = versionControlSystemRoots
+        this.buildWorkingDirectory = buildWorkingDirectory
     }
 
     @JsonIgnore
@@ -58,6 +68,11 @@ class VCSSettings {
         return versionControlSystemRoots
     }
 
+    @JsonInclude(JsonInclude.Include.NON_NULL)
+    String getBuildWorkingDirectory() {
+        return buildWorkingDirectory
+    }
+
     @JsonIgnore
     VersionControlSystemRoot getSingleVCSRoot() {
         if (versionControlSystemRoots.isEmpty()) {
@@ -74,11 +89,12 @@ class VCSSettings {
         if (getClass() != o.class) return false
         VCSSettings that = (VCSSettings) o
         return Objects.equals(versionControlSystemRoots, that.versionControlSystemRoots) &&
-                Objects.equals(externalRegistry, that.externalRegistry)
+                Objects.equals(externalRegistry, that.externalRegistry) &&
+                Objects.equals(buildWorkingDirectory, that.buildWorkingDirectory)
     }
 
     int hashCode() {
-        return Objects.hash(versionControlSystemRoots, externalRegistry)
+        return Objects.hash(versionControlSystemRoots, externalRegistry, buildWorkingDirectory)
     }
 
     @Override
@@ -86,6 +102,7 @@ class VCSSettings {
         return "VCSSettings{" +
                 "versionControlSystemRoots=" + versionControlSystemRoots +
                 ", externalRegistry=" + externalRegistry +
+                ", buildWorkingDirectory=" + buildWorkingDirectory +
                 '}';
     }
 }

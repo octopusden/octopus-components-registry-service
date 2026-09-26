@@ -724,12 +724,9 @@ private fun buildEscrowModuleConfig(
     // with no VCS roots round-trips correctly (the Groovy resolver kept the
     // VCSSettings instance with externalRegistry set and roots empty; v2 was
     // silently dropping it).
-    val vcsEntries =
-        pickMarkerChildren(
-            attribute = MarkerAttributes.VCS_SETTINGS,
-            markerOverrides = markerOverrides,
-            baseChildren = base.vcsEntries.toList(),
-        ) { it.vcsEntries.toList() }
+    // The row that supplies the VCS entries also supplies the Build Working Directory (ONB-001).
+    val vcsRow = markerOverrides.firstOrNull { it.overriddenAttribute == MarkerAttributes.VCS_SETTINGS } ?: base
+    val vcsEntries = vcsRow.vcsEntries.toList()
     // CRS-C legacy bridge: the dedicated skipCommitCheck flag re-materializes the legacy
     // `externalRegistry = "NOT_AVAILABLE"` sentinel for v1–v3 consumers (Jira plugin / RM),
     // so the legacy surface is bit-for-bit identical to the pre-flag world. The flag WINS
@@ -738,7 +735,7 @@ private fun buildEscrowModuleConfig(
     val effectiveExternalRegistry =
         if (component.skipCommitCheck) NOT_AVAILABLE_EXTERNAL_REGISTRY else component.vcsExternalRegistry
     if (vcsEntries.isNotEmpty() || effectiveExternalRegistry != null) {
-        setField(config, "vcsSettings", vcsEntries.toVCSSettings(effectiveExternalRegistry))
+        setField(config, "vcsSettings", vcsEntries.toVCSSettings(effectiveExternalRegistry, vcsRow.buildWorkingDirectory))
     }
 
     // Distribution — composed from four family child collections, each
@@ -1124,7 +1121,10 @@ private fun Boolean?.orFalse(): Boolean = this == true
 // Internal: VCS / Distribution / Jira builders
 // ============================================================
 
-internal fun List<VcsSettingsEntryEntity>.toVCSSettings(externalRegistry: String?): VCSSettings {
+internal fun List<VcsSettingsEntryEntity>.toVCSSettings(
+    externalRegistry: String?,
+    buildWorkingDirectory: String? = null,
+): VCSSettings {
     val sorted = this.sortedBy { it.sortOrder }
     val roots =
         sorted.map { entry ->
@@ -1135,9 +1135,11 @@ internal fun List<VcsSettingsEntryEntity>.toVCSSettings(externalRegistry: String
                 entry.tag,
                 entry.branch,
                 entry.hotfixBranch,
+                entry.sourcePath,
+                entry.checkoutDirectory,
             )
         }
-    return VCSSettings.create(externalRegistry, roots)
+    return VCSSettings.create(externalRegistry, roots, buildWorkingDirectory)
 }
 
 @Suppress("LongParameterList")

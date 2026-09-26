@@ -234,6 +234,8 @@ Per-(component, version_range) typed rows; the spine of Model A'.
 | `jira_line_version_format` | VARCHAR(255) | | |
 | `jira_version_prefix` | VARCHAR(255) | | jira.customer.versionPrefix |
 | `jira_version_format` | VARCHAR(255) | | jira.customer.versionFormat |
+| VCS aspect | | | |
+| `build_working_directory` | VARCHAR(255) | nullable | ONB-001 (`V9__`): where the build runs, relative to the checkout root; set on the base row or a `vcs.settings` marker row; NULL = the checkout root |
 | Timestamps | | | |
 | `created_at` | TIMESTAMP WITH TIME ZONE | NOT NULL DEFAULT now() | |
 | `updated_at` | TIMESTAMP WITH TIME ZONE | NOT NULL DEFAULT now() | |
@@ -339,7 +341,19 @@ SINGLE-VCS is "1 entry with `name = NULL`"; MULTI-VCS is "N entries with names".
 | `tag` | TEXT | |
 | `hotfix_branch` | TEXT | |
 | `repository_type` | VARCHAR(20) | GIT/MERCURIAL/CVS (Java enum); typically GIT |
-| `sort_order` | INT NOT NULL DEFAULT 0 | |
+| `sort_order` | INT NOT NULL DEFAULT 0 | `0..n-1` per row (list order) |
+| `source_path` | VARCHAR(255), nullable | Repository directory that belongs to the component; NULL = whole repository (`V8__`) |
+| `checkout_directory` | VARCHAR(255), nullable | Directory the entry is checked out to; NULL = the checkout root, which at most one entry of a row may use (v4 write path) (`V8__`) |
+
+VCS placement (`V8__`): the migration adds `source_path` / `checkout_directory` and sets
+`checkout_directory = name` on every entry with `sort_order > 0`; the DSL import applies the same
+rule to the rows it creates. (The migration's SQL comment still says "NULL on the primary entry";
+applied migrations are immutable, and since revision 3 any entry may have a checkout directory, so
+this table is authoritative.) Names are copied verbatim, so a row whose later names are not valid or
+not distinct checkout directories stays readable and fails its next v4 VCS write with `400`. On v4
+writes `name` is derived: an entry's `checkout_directory`, else the stored name of the row's previous
+entry on the same repository, else `main`. The row's Build Working Directory is
+`component_configurations.build_working_directory` (`V9__`). Placement rules: functional-spec §1.4.
 
 `vcs.type` (GIT/EXTERNAL/null) computed at API layer:
 - `components.vcs_external_registry IS NOT NULL` → `EXTERNAL`
@@ -395,6 +409,8 @@ All v1-v3 endpoints implemented as adapters over the new schema. Mapper rules:
 | `name` (v1-v3) | `components.component_key` (rename in mapper) |
 | `componentKey` (v4) | `components.component_key` direct |
 | `repositoryType` | `vcs_settings_entries.repository_type`; NULL → default GIT |
+| `sourcePath` / `checkoutDirectory` (v2 VCS roots) | `vcs_settings_entries.source_path` / `checkout_directory`; omitted when NULL; null in Git (DSL) mode |
+| `buildWorkingDirectory` (v2 VCS settings) | `component_configurations.build_working_directory` of the row supplying the version's VCS entries (base or `vcs.settings` marker); omitted when NULL; null in Git (DSL) mode |
 | `teamcityProjectUrl` | Computed at mapper: `<teamcity-base>/project/<project_id>` |
 | `hotfixVersionFormat` (jira) | `components.jira_hotfix_version_format`; UI read-only |
 | `escrow.buildTask` (legacy) | `component_configurations.build_tasks` (consolidated) |

@@ -18,6 +18,47 @@ refresh it with `./gradlew :components-registry-service-server:generateOpenApiDo
 
 ## Unreleased
 
+- **VCS entry placement (`sourcePath`, `checkoutDirectory`), Build Working Directory and derived
+  names.** `VcsEntryRequest` / `VcsEntryResponse` (base configuration and `vcs.settings` marker rows
+  alike) gain two optional fields: `sourcePath`, the repository directory that belongs to the
+  component, and `checkoutDirectory`, the directory an entry is checked out to on the build agent.
+  `BaseConfigurationRequest`, `ComponentConfigurationResponse` and the `vcs.settings`
+  `MarkerChildrenPayload` gain `buildWorkingDirectory`: where the build runs, relative to the
+  checkout root (other markers reject it). In a base PATCH `null` leaves it unchanged and `""` clears
+  it; a marker payload replaces the row, so an absent value clears it. A blank value is stored as
+  absent. Every write that replaces a row's VCS entries or sets its `buildWorkingDirectory`
+  validates the final row and fails with `400` and `errorMessage` `vcsEntries[<i>].<field>: <reason>`
+  when: a second entry has no `checkoutDirectory` (only one entry can be at the checkout root); a
+  `checkoutDirectory` or `sourcePath` is longer than 255 characters; a `checkoutDirectory` is not one
+  segment matching `^[A-Za-z0-9_][A-Za-z0-9._-]*$` or is `report-templates`, `sonar-config`,
+  `target` or `sonar-report` (ignoring case); two entries end up with the same name, compared
+  case-insensitively (reported on the later entry's `checkoutDirectory`); a `sourcePath` segment is
+  empty, `.`, `..` or does not match `^[A-Za-z0-9._-]+$`; or two entries share repository (Git
+  ignoring case) and `sourcePath` (reported on the later entry's `sourcePath`). Entry rules come
+  first; then `buildWorkingDirectory: <reason>` when it is longer than 255 characters, has a segment
+  that is empty, `.`, `..` or does not match `^[A-Za-z0-9._-]+$`, starts outside every entry's
+  `checkoutDirectory` (case-sensitive) while no entry is at the checkout root, or is missing while
+  every entry has a `checkoutDirectory`. In a component PATCH the error of a `fieldOverrides` row is
+  prefixed with its index (`fieldOverrides[<j>].vcsEntries[<i>].…`, `fieldOverrides[<j>].buildWorkingDirectory: …`);
+  the field-override endpoints use the unprefixed form. **`name` in a request is now ignored**: an
+  entry with a `checkoutDirectory` is named by it, one without keeps the stored name of the row's
+  previous entry on the same repository, else `main`. **`ComponentDetailResponse.warnings`** (list of
+  strings, `[]` by default, also on GET) is added; a create or PATCH that carries
+  `baseConfiguration.vcsEntries` or `baseConfiguration.buildWorkingDirectory` for a component with a
+  linked TeamCity project returns `"VCS entries changed; the TeamCity build chain no longer matches
+  and must be recreated."`. Marker-row writes do not warn. `V8__` sets `checkoutDirectory = name`
+  after the first entry of existing multi-entry rows; `V9__` adds the Build Working Directory. A
+  migrated row whose names are not valid or not distinct checkout directories fails its next VCS save
+  with `400` until corrected. The legacy v2 VCS settings carry all three fields, omitted when empty.
+  The text after the colon is written for editors ("VCS root N", 1-based, the repository name, what
+  to change, an example value) and may be reworded; clients route on the prefix before the colon
+  only.
+  Binary note for Kotlin consumers of the published v2 DTOs: `VersionControlSystemRootDTO` and
+  `VCSSettingsDTO` keep their previous JVM constructors (six and two parameters), but their `copy`
+  methods and default-argument constructors change signature, so Kotlin code calling them must be
+  recompiled against the new version; Java and Groovy callers of the previous constructors are
+  unaffected.
+
 - **`GET /rest/api/4/components/{idOrName}/archive-readiness` added.** Read-only pre-flight check
   for the archive/delete flow, gated by the same authorization as `deleteComponent`
   (`ACCESS_COMPONENTS` + `canDeleteComponent`). Returns `{ready: Boolean, entries: [...]}`: one

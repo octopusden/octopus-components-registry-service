@@ -372,7 +372,7 @@ class ListComponentsExtendedFiltersTest {
                 multi,
                 build = """"build":{"buildSystem":"MAVEN"},"vcsEntries":[""" +
                     """{"name":"main","vcsPath":"octo/ext-multi-a"},""" +
-                    """{"name":"alt","vcsPath":"octo/ext-multi-b"}]""",
+                    """{"name":"alt","vcsPath":"octo/ext-multi-b","checkoutDirectory":"alt"}]""",
             ),
         )
         val other = uniqueName("ext_vcs_other")

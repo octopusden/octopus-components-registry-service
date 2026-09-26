@@ -149,6 +149,12 @@ class ComponentConfigurationEntity(
      */
     @Column(name = "jira_hotfix_version_format")
     var jiraHotfixVersionFormat: String? = null,
+    /**
+     * ONB-001: where the build runs on the agent, relative to the checkout root; set on the row that
+     * supplies a version's VCS entries (base or `vcs.settings` marker). NULL = the checkout root.
+     */
+    @Column(name = "build_working_directory")
+    var buildWorkingDirectory: String? = null,
     @CreationTimestamp
     @Column(name = "created_at", updatable = false)
     var createdAt: Instant? = null,
