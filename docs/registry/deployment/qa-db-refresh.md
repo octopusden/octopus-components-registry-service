@@ -7,7 +7,7 @@ QA database with a copy of the production one. Script: `scripts/teamcity/recreat
 
 1. Checks that the target is not production (below). Nothing is written before these checks pass.
 2. Dumps the production schema, including the extensions installed in it (`pgcrypto`).
-3. Keeps the current QA schema as the build artifact `qa-backup/qa-before-recreate.sql.gz` (this dump,
+3. Keeps the current QA schema as the build artifact `qa-before-recreate.sql.gz` (this dump,
    too, gives up after 30 s if QA holds a conflicting lock).
 4. In one transaction on QA: `DROP SCHEMA "components-registry" CASCADE`, then loads the dump. Any failure
    rolls back and leaves QA as it was. The drop waits at most 30 s for a QA session holding a table; once
