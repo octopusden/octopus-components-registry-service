@@ -81,14 +81,13 @@ The database side (role, network, `pg_hba`, Vault policy) is written up as a rea
    Granting the approle access, as a Vault administrator (`vault login` with an admin token):
 
    ```bash
-   cat > /tmp/crs.hcl <<'HCL'
+   vault policy write teamcity-crs-qa-refresh - <<'HCL'
    path "f1-config-server/data/teamcity-crs-qa-refresh"     { capabilities = ["read"] }
    path "f1-config-server/data/components-registry-service" { capabilities = ["read"] }
    HCL
-   vault policy write teamcity-crs-qa-refresh /tmp/crs.hcl
    ```
 
-   The TeamCity connection ("HashiCorp Vault Cloud Wrapper", inherited from a parent project) logs in
+   The TeamCity connection ("HashiCorp Vault Cloud Wrapper") logs in
    as the approle `cloud-wrapper`; its `role-id` is shown in the connection settings and can be checked
    with `vault read -field=role_id auth/approle/role/cloud-wrapper/role-id`. Writing `token_policies`
    replaces the whole list, so read it first and write it back with the new policy added:
@@ -97,8 +96,6 @@ The database side (role, network, `pg_hba`, Vault policy) is written up as a rea
    vault read -field=token_policies auth/approle/role/cloud-wrapper     # e.g. [cloud-wrapper rnd-okd-secrets]
    vault write auth/approle/role/cloud-wrapper token_policies="cloud-wrapper,rnd-okd-secrets,teamcity-crs-qa-refresh"
    ```
-
-   TeamCity logs in anew for every build, so the next run picks the policy up.
 
 3. **TeamCity parameters** on the parent project: `CRS_PROD_DB_HOST` and `CRS_QA_DB_HOST`, preferably
    with the read-only spec.
