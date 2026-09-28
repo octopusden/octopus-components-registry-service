@@ -150,8 +150,7 @@ class V10GenericArtifactConstraintIntegrationTest {
         )
 
         assertThrows<DataIntegrityViolationException> {
-            configurationRepository.save(scalarRow)
-            em.flush()
+            configurationRepository.saveAndFlush(scalarRow)
         }
     }
 
