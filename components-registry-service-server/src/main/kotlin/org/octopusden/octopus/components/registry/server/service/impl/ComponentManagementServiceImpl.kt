@@ -107,8 +107,6 @@ import org.octopusden.octopus.components.registry.server.util.VersionRangePartit
 import org.octopusden.octopus.components.registry.server.util.computeEffectiveJiraPairs
 import org.octopusden.octopus.escrow.config.ConfigHelper
 import org.octopusden.octopus.escrow.configuration.validation.GroovySlurperConfigValidator
-import org.octopusden.octopus.escrow.dto.EscrowExpressionContext
-import org.octopusden.octopus.escrow.utilities.EscrowExpressionParser
 import org.octopusden.releng.versions.NumericVersionFactory
 import org.octopusden.releng.versions.VersionRangeFactory
 import org.springframework.context.ApplicationEventPublisher
@@ -2812,16 +2810,18 @@ class ComponentManagementServiceImpl(
 
     private fun validateGenericArtifactPath(path: String) {
         require(path.isNotBlank()) { "path is not specified for a genericArtifact" }
-        val validationContext = EscrowExpressionContext("validation", "1.0", "validation", numericVersionFactory)
-        val evaluated = try {
-            EscrowExpressionParser.getInstance().parseAndEvaluate(path, validationContext).toString()
-        } catch (e: Exception) {
-            throw IllegalArgumentException(
-                "genericArtifact path '$path' contains an invalid expression: ${e.message}",
-                e,
-            )
+        val allowedPlaceholders = setOf("version", "major", "minor", "service", "fix", "build")
+        val placeholderRegex = Regex("""\$\{([^}]+)\}""")
+        val allowedList = allowedPlaceholders.sorted().joinToString(", ") { "\${$it}" }
+        placeholderRegex.findAll(path).forEach { match ->
+            val name = match.groupValues[1]
+            require(name in allowedPlaceholders) {
+                "genericArtifact path '$path' contains a disallowed placeholder '\${$name}'; " +
+                    "only $allowedList are permitted"
+            }
         }
-        require(GroovySlurperConfigValidator.GENERIC_ENTRY.matcher(evaluated).matches()) {
+        val masked = placeholderRegex.replace(path) { "0" }
+        require(GroovySlurperConfigValidator.GENERIC_ENTRY.matcher(masked).matches()) {
             "genericArtifact path '$path' does not match the required shape " +
                 "'<segment>/<segment>/<segment>[/…]' where each segment is [A-Za-z0-9._-] " +
                 "(commas, URL schemes, whitespace and leading slashes are not allowed — " +

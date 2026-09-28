@@ -1,5 +1,6 @@
 package org.octopusden.octopus.components.registry.compat
 
+import com.fasterxml.jackson.annotation.JsonIgnoreProperties
 import com.fasterxml.jackson.module.kotlin.jacksonObjectMapper
 import com.fasterxml.jackson.module.kotlin.readValue
 import org.junit.jupiter.api.Assertions.assertFalse
@@ -74,9 +75,16 @@ class DistributionDTOWireCompatTest {
     fun `SYS-094-COMPAT-004 new JSON with generic field tolerated by client without generic field`() {
         val newJson =
             """{"explicit":true,"external":true,"generic":"releases/foo/1.0/foo.tar.gz","securityGroups":{}}"""
-        val dto: DistributionDTO = mapper.readValue(newJson)
+        // Deserialize into a fixture that has no 'generic' field — this is what a pre-SYS-094 client sees.
+        // The @JsonIgnoreProperties(ignoreUnknown = true) on the fixture must silently absorb the unknown key.
+        val dto: LegacyDistributionDTO = mapper.readValue(newJson)
         assertTrue(dto.explicit)
         assertTrue(dto.external)
-        assertTrue(dto.generic == "releases/foo/1.0/foo.tar.gz")
     }
+
+    @JsonIgnoreProperties(ignoreUnknown = true)
+    private data class LegacyDistributionDTO(
+        val explicit: Boolean = false,
+        val external: Boolean = false,
+    )
 }

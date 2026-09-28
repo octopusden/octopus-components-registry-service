@@ -27,7 +27,8 @@ import java.nio.file.Paths
  *
  * Verifies that:
  *  - a templated path `releases/foo/${'$'}{version}/foo.tar.gz` is accepted and stored verbatim.
- *  - an invalid SpEL expression is rejected with 400.
+ *  - a disallowed placeholder (e.g. `${'$'}{unknownProp}`) is rejected with 400.
+ *  - a SpEL RCE payload (e.g. `${'$'}{T(java.lang.Runtime).getRuntime().exec('id')}`) is rejected with 400.
  *  - a plain literal path is still accepted (regression guard).
  *  - a comma in a single path item is rejected with 400.
  *  - a dot-only segment is rejected with 400.
@@ -109,10 +110,10 @@ class GenericArtifactExpressionV4Test {
 
     @Test
     @DisplayName(
-        "SYS-094-EXPR-002: POST component with genericArtifact path containing invalid SpEL " +
-            "\${unknownProp} → 400",
+        "SYS-094-EXPR-002: POST component with genericArtifact path containing disallowed " +
+            "placeholder \${unknownProp} → 400",
     )
-    fun `SYS-094-EXPR-002 invalid SpEL expression rejected with 400`() {
+    fun `SYS-094-EXPR-002 disallowed placeholder rejected with 400`() {
         val result = mvc.perform(
             post("/rest/api/4/components")
                 .with(adminJwt())
@@ -172,6 +173,30 @@ class GenericArtifactExpressionV4Test {
                 .with(adminJwt())
                 .contentType(MediaType.APPLICATION_JSON)
                 .content(componentBody("ga-expr-005", "releases/../../../etc/passwd")),
+        )
+        result.andExpect(status().isBadRequest)
+    }
+
+    // -------------------------------------------------------------------------
+    // SYS-094-EXPR-006: SpEL RCE vector → 400 (no server-side code execution)
+    // -------------------------------------------------------------------------
+
+    @Test
+    @DisplayName(
+        "SYS-094-EXPR-006: POST component with SpEL RCE payload in genericArtifact path → 400 " +
+            "(placeholder allowlist must block T(Runtime).exec() before any evaluation)",
+    )
+    fun `SYS-094-EXPR-006 SpEL RCE payload rejected with 400`() {
+        val result = mvc.perform(
+            post("/rest/api/4/components")
+                .with(adminJwt())
+                .contentType(MediaType.APPLICATION_JSON)
+                .content(
+                    componentBody(
+                        "ga-expr-006",
+                        "releases/spel/\${T(java.lang.Runtime).getRuntime().exec('id')}/file",
+                    ),
+                ),
         )
         result.andExpect(status().isBadRequest)
     }
