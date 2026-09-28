@@ -70,8 +70,7 @@ The database side (role, network, `pg_hba`, Vault policy) is written up as a rea
      The name deliberately does not start with `components-registry-service`, so the config server
      serves it to no application;
    - the QA credentials are read where the QA application gets them, the profile-less secret
-     `components-registry-service` (`spring.datasource.username` / `spring.datasource.password`); the
-     `-cloud-qa` secret has no datasource keys, and production overrides these from `-cloud-prod`. That
+     `components-registry-service` (`spring.datasource.username` / `spring.datasource.password`). That
      secret also holds other credentials of the application, all readable by any build using this
      Vault connection;
    - the approle of the TeamCity Vault connection needs `read` on both paths. The mount is KV v2, so
@@ -79,8 +78,7 @@ The database side (role, network, `pg_hba`, Vault policy) is written up as a rea
      `f1-config-server/data/<secret>`. The QA keys contain dots, so their references use the JsonPath
      bracket form (`!/['spring.datasource.password']`), which TeamCity accepts.
 
-   Granting the approle access, as a Vault administrator (`vault login` with an admin token). Write
-   the policy from a file: pasted heredocs and long lines break easily in a terminal.
+   Granting the approle access, as a Vault administrator (`vault login` with an admin token):
 
    ```bash
    cat > /tmp/crs.hcl <<'HCL'
@@ -100,19 +98,13 @@ The database side (role, network, `pg_hba`, Vault policy) is written up as a rea
    vault write auth/approle/role/cloud-wrapper token_policies="cloud-wrapper,rnd-okd-secrets,teamcity-crs-qa-refresh"
    ```
 
-   TeamCity logs in anew for every build, so the next run picks the policy up. To see which keys a
-   secret holds without printing values:
-   `vault kv get -format=json f1-config-server/<secret> | python3 -c 'import json,sys; print(sorted(json.load(sys.stdin)["data"]["data"]))'`.
+   TeamCity logs in anew for every build, so the next run picks the policy up.
 
 3. **TeamCity parameters** on the parent project: `CRS_PROD_DB_HOST` and `CRS_QA_DB_HOST`, preferably
    with the read-only spec.
 
 4. **QA privileges**: the QA application user must own the schema and `pgcrypto` and have `CREATE` on
    the database. This holds today, because the application created them.
-
-5. **First run.** A failure while TeamCity resolves parameters stops the build before any step, so
-   nothing is touched. `403 permission denied` on a path means the policy is missing on the approle;
-   `Cannot extract '<key>'` means the secret has no such key.
 
 ## Undoing a run
 
