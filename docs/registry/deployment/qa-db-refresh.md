@@ -69,8 +69,11 @@ The database side (role, network, `pg_hba`, Vault policy) is written up as a rea
      (no dots: TeamCity reads the key as a JsonPath).
      The name deliberately does not start with `components-registry-service`, so the config server
      serves it to no application;
-   - the QA credentials are read from the QA application's own secret
-     `components-registry-service-cloud-qa` (`spring.datasource.username` / `spring.datasource.password`);
+   - the QA credentials are read where the QA application gets them, the profile-less secret
+     `components-registry-service` (`spring.datasource.username` / `spring.datasource.password`); the
+     `-cloud-qa` secret has no datasource keys, and production overrides these from `-cloud-prod`. That
+     secret also holds other credentials of the application, all readable by any build using this
+     Vault connection;
    - the approle of the TeamCity Vault connection needs `read` on both paths. The mount is KV v2, so
      policies and the `%vault:...%` references in `.teamcity/settings.kts` address
      `f1-config-server/data/<secret>`. The QA keys contain dots, so their references use the JsonPath

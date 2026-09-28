@@ -55,7 +55,7 @@ The approle of the TeamCity Vault connection ("HashiCorp Vault Cloud Wrapper") n
 
 ```hcl
 path "f1-config-server/data/teamcity-crs-qa-refresh"           { capabilities = ["read"] }
-path "f1-config-server/data/components-registry-service-cloud-qa" { capabilities = ["read"] }
+path "f1-config-server/data/components-registry-service"         { capabilities = ["read"] }
 ```
 
 ## 4. Acceptance
