@@ -195,6 +195,20 @@ allprojects {
 allprojects {
     repositories {
         mavenLocal()
+        // The legacy org.gradle artifacts (gradle-core 1.6 and friends in component-resolver-core) come only
+        // from Gradle's own repository. Central republished old gradle-core versions with Gradle module
+        // metadata that declares a single `gradle-distribution` variant and no library, so resolving them
+        // from Central fails with "No matching variant" on any build without a warm cache.
+        exclusiveContent {
+            forRepository {
+                maven {
+                    url = uri("https://repo.gradle.org/gradle/libs-releases-local")
+                }
+            }
+            filter {
+                includeGroup("org.gradle")
+            }
+        }
         mavenCentral()
         maven {
             url = uri("https://repo.gradle.org/gradle/libs-releases-local")
