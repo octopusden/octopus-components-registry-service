@@ -1788,9 +1788,10 @@ object id80RecreateQaDbFromProdManual : BuildType({
         text("env.DST_HOST", "%CRS_QA_DB_HOST%", readOnly = true, allowEmpty = false)
         text("env.DST_PORT", "5432", readOnly = true, allowEmpty = false)
         text("env.DST_DB", "components-registry", readOnly = true, allowEmpty = false)
-        // The QA application's own datasource credentials, so a password rotation needs no change here.
-        text("env.DST_USER", "%vault:f1-config-server/data/components-registry-service-cloud-qa!/['spring.datasource.username']%", readOnly = true, allowEmpty = false)
-        password("env.DST_PASSWORD", "%vault:f1-config-server/data/components-registry-service-cloud-qa!/['spring.datasource.password']%", readOnly = true)
+        // The QA application's own datasource credentials (the profile-less secret; production overrides
+        // them from -cloud-prod), so a password rotation needs no change here.
+        text("env.DST_USER", "%vault:f1-config-server/data/components-registry-service!/['spring.datasource.username']%", readOnly = true, allowEmpty = false)
+        password("env.DST_PASSWORD", "%vault:f1-config-server/data/components-registry-service!/['spring.datasource.password']%", readOnly = true)
 
         text("env.DB_SCHEMA", "components-registry", readOnly = true, allowEmpty = false)
         text("env.QA_BACKUP_FILE", "qa-backup/qa-before-recreate.sql.gz", readOnly = true, allowEmpty = false)
