@@ -13,6 +13,7 @@ import org.springframework.boot.test.autoconfigure.web.servlet.AutoConfigureMock
 import org.springframework.boot.test.context.SpringBootTest
 import org.springframework.boot.test.mock.mockito.MockBean
 import org.springframework.http.MediaType
+import org.springframework.jdbc.core.JdbcTemplate
 import org.springframework.test.annotation.DirtiesContext
 import org.springframework.test.context.ActiveProfiles
 import org.springframework.test.web.servlet.MockMvc
@@ -54,6 +55,9 @@ class CrossComponentValidationTest {
 
     @Autowired
     private lateinit var objectMapper: ObjectMapper
+
+    @Autowired
+    private lateinit var jdbcTemplate: JdbcTemplate
 
     init {
         val testResourcesPath =
@@ -597,6 +601,102 @@ class CrossComponentValidationTest {
         patchComponent(id, """{"version":$version,"displayName":""}""")
             .andExpect(status().isBadRequest)
             .andExpect(jsonPath("$.errorMessage").value(org.hamcrest.Matchers.containsString("displayName")))
+    }
+
+    // ───────── #6 grandfathering: legacy EE rows without a coordinate (CARDS / DM) ─────
+
+    /**
+     * Seeds a legacy explicit+external component with NO distribution coordinate — the
+     * shape imported for components the DSL excluded via `distribution.ee.exclude`. The
+     * API can't create it (CREATE enforces #6), so create with a docker image and strip
+     * it via SQL. Returns (id, version).
+     */
+    private fun createLegacyExplicitExternalWithoutCoordinate(s: String): Pair<String, Long> {
+        val resp =
+            postCreate(
+                """{"name":"xcc-ext-legacy-$s","displayName":"Ext Legacy $s",""" +
+                    """"distributionExplicit":true,"distributionExternal":true,""" +
+                    """"releaseManager":["rm1"],"securityChampion":["sc1"],""" +
+                    """"baseConfiguration":{"build":{"buildSystem":"MAVEN"},""" +
+                    """"dockerImages":[{"imageName":"registry.example/legacy-$s"}]}}""",
+            ).andExpect(status().is2xxSuccessful).andReturn().response.contentAsString
+        val node = objectMapper.readTree(resp)
+        val id = node["id"].asText()
+        jdbcTemplate.update(
+            "DELETE FROM distribution_docker_images WHERE component_configuration_id IN " +
+                "(SELECT id FROM component_configurations WHERE component_id = ?)",
+            UUID.fromString(id),
+        )
+        return id to node["version"].asLong()
+    }
+
+    @Test
+    @DisplayName("PATCH: base-config edit on a legacy explicit+external component with no coordinate → 2xx")
+    fun patch_baseConfig_onLegacyExplicitExternalWithoutCoordinate_ok() {
+        val (id, version) = createLegacyExplicitExternalWithoutCoordinate(sfx())
+        patchComponent(id, """{"version":$version,"baseConfiguration":{"build":{"buildFilePath":"pom.xml"}}}""")
+            .andExpect(status().is2xxSuccessful)
+    }
+
+    @Test
+    @DisplayName("PATCH: full-form Save echoing an unchanged explicit+external gate on a legacy row → 2xx")
+    fun patch_unchangedGateEcho_onLegacyExplicitExternalWithoutCoordinate_ok() {
+        val (id, version) = createLegacyExplicitExternalWithoutCoordinate(sfx())
+        patchComponent(
+            id,
+            """{"version":$version,"distributionExplicit":true,"distributionExternal":true,""" +
+                """"archived":false,"baseConfiguration":{"build":{"buildFilePath":"pom.xml"}}}""",
+        ).andExpect(status().is2xxSuccessful)
+    }
+
+    @Test
+    @DisplayName("POST field-override on a legacy explicit+external component with no coordinate → 2xx")
+    fun postFieldOverride_onLegacyExplicitExternalWithoutCoordinate_ok() {
+        val (id, _) = createLegacyExplicitExternalWithoutCoordinate(sfx())
+        mvc.perform(
+            post("/rest/api/4/components/$id/field-overrides")
+                .with(adminJwt())
+                .contentType(MediaType.APPLICATION_JSON)
+                .content("""{"overriddenAttribute":"build.buildFilePath","versionRange":"[1.0,2.0)","value":"pom.xml"}"""),
+        ).andExpect(status().is2xxSuccessful)
+    }
+
+    @Test
+    @DisplayName("PATCH: flipping the gate to explicit+external with no coordinate → 400 (rule still bites)")
+    fun patch_gateFlipToExplicitExternal_noCoordinate_badRequest() {
+        val s = sfx()
+        val resp =
+            postCreate(
+                """{"name":"xcc-ext-flip-$s","displayName":"Ext Flip $s",""" +
+                    """"releaseManager":["rm1"],"securityChampion":["sc1"],""" +
+                    """"baseConfiguration":{"build":{"buildSystem":"MAVEN"}}}""",
+            ).andExpect(status().is2xxSuccessful).andReturn().response.contentAsString
+        val node = objectMapper.readTree(resp)
+        patchComponent(
+            node["id"].asText(),
+            """{"version":${node["version"].asLong()},"distributionExplicit":true,"distributionExternal":true}""",
+        ).andExpect(status().isBadRequest)
+            .andExpect(jsonPath("$.errorMessage").value(org.hamcrest.Matchers.containsString("distribution coordinate")))
+    }
+
+    @Test
+    @DisplayName("PATCH: removing the last coordinate of an explicit+external component → 400")
+    fun patch_removeLastCoordinate_onExplicitExternal_badRequest() {
+        val s = sfx()
+        val resp =
+            postCreate(
+                """{"name":"xcc-ext-rmcoord-$s","displayName":"Ext Rm $s",""" +
+                    """"distributionExplicit":true,"distributionExternal":true,""" +
+                    """"releaseManager":["rm1"],"securityChampion":["sc1"],""" +
+                    """"baseConfiguration":{"build":{"buildSystem":"MAVEN"},""" +
+                    """"dockerImages":[{"imageName":"registry.example/rmcoord-$s"}]}}""",
+            ).andExpect(status().is2xxSuccessful).andReturn().response.contentAsString
+        val node = objectMapper.readTree(resp)
+        patchComponent(
+            node["id"].asText(),
+            """{"version":${node["version"].asLong()},"baseConfiguration":{"dockerImages":[]}}""",
+        ).andExpect(status().isBadRequest)
+            .andExpect(jsonPath("$.errorMessage").value(org.hamcrest.Matchers.containsString("distribution coordinate")))
     }
 
     // ───────────────────────── #10 groupId supported prefix (400) ──────────────

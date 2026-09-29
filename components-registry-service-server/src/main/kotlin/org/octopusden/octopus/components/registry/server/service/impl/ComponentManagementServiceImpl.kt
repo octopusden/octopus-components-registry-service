@@ -639,6 +639,13 @@ class ComponentManagementServiceImpl(
         val oldSecurityChampions = entity.securityChampionUsernames()
         val oldExplicit = entity.distributionExplicit
         val oldExternal = entity.distributionExternal
+        // Snapshot the explicit+external rule inputs BEFORE the patch (base-config and
+        // field-override patches replace the coordinate collections in place) so the
+        // ≥1-coordinate and archived rules below are CHANGE-based: a legacy EE component
+        // with no coordinate stays editable until the gate/archived flag actually changes
+        // or the patch removes its last coordinate.
+        val oldArchived = entity.archived
+        val oldHadDistributionCoordinate = hasAnyDistributionCoordinate(entity)
         // CRS-C / Q13: snapshot the flag + effective BASE build system BEFORE the patch so the
         // WHISKEY exclusion is CHANGE-based. A full-form combined Save echoes the whole slice, so a
         // grandfathered skipCommitCheck=true + WHISKEY row (admitted by the import bridge with a
@@ -874,8 +881,18 @@ class ComponentManagementServiceImpl(
                 request.fieldOverrides != null // marker overrides can carry colliding maven GAV / docker / jira coordinates
 
         // Malformed-input single-field checks (400) against the PATCHed final
-        // entity state (so a caller need not resend unchanged fields).
-        if (crossComponentRelevantChange) validateMalformedFieldRules(entity)
+        // entity state (so a caller need not resend unchanged fields). The
+        // explicit+external rules are further narrowed to a real CHANGE (value-based,
+        // not presence-based — the UI's full-form Save echoes an unchanged
+        // distributionExplicit/External): a Java-version edit on a legacy EE component
+        // with no distribution coordinate must not 400 on data it did not touch.
+        if (crossComponentRelevantChange) {
+            validateMalformedFieldRules(
+                entity,
+                enforceArchivedRule = gateFlipped || entity.archived != oldArchived,
+                enforceCoordinateRule = gateFlipped || oldHadDistributionCoordinate,
+            )
+        }
 
         entity.updatedAt = Instant.now()
         val saved = componentRepository.saveAndFlush(entity)
@@ -1178,8 +1195,9 @@ class ComponentManagementServiceImpl(
         // Review #2: an override row can carry mavenArtifacts/dockerImages/jira
         // coordinates that collide with another component — re-run the same 409 /
         // 400 composite checks the create/update component paths run, now that the
-        // override row is flushed.
-        validateFieldOverrideCrossComponent(componentId)
+        // override row is flushed. Adding a row can't remove a coordinate, so the
+        // explicit+external ≥1-coordinate rule is not re-checked (legacy rows grandfathered).
+        validateFieldOverrideCrossComponent(componentId, enforceCoordinateRule = false)
         publishAuditEvent(
             action = "UPDATE",
             entityId = component.id.toString(),
@@ -1210,6 +1228,9 @@ class ComponentManagementServiceImpl(
         row.overriddenAttribute?.let { rejectHiddenOverrideAttribute(it) }
 
         val beforeSnapshot = fieldOverrideAuditSnapshot(row)
+        // Before applyMarkerChildren mutates the row in place: the ≥1-coordinate rule is
+        // re-checked only if this update could have removed the component's last coordinate.
+        val hadDistributionCoordinate = hasAnyDistributionCoordinate(row.component)
 
         // Gate-before-validation: an INVALID range/value on a non-editable override must
         // surface the editability error (403/422), not a value-400. The successful
@@ -1267,7 +1288,7 @@ class ComponentManagementServiceImpl(
         // Review #2: re-run the cross-component composite checks — an UPDATE to a
         // marker override can introduce a colliding GAV / docker image / jira
         // coordinate just as a create can.
-        validateFieldOverrideCrossComponent(componentId)
+        validateFieldOverrideCrossComponent(componentId, enforceCoordinateRule = hadDistributionCoordinate)
         publishAuditEvent(
             action = "UPDATE",
             entityId = row.component.id.toString(),
@@ -3209,19 +3230,28 @@ class ComponentManagementServiceImpl(
      * where the component's own key is already persisted.
      *
      * Runs against the final entity state (post-patch / freshly-built on create).
+     * On CREATE every rule runs. On update the caller passes CHANGE-based flags for
+     * #28 / #6 so legacy rows (e.g. imported EE components the DSL excluded via
+     * `distribution.ee.exclude`) are grandfathered until the governed state changes.
      */
-    private fun validateMalformedFieldRules(entity: ComponentEntity) {
+    private fun validateMalformedFieldRules(
+        entity: ComponentEntity,
+        enforceArchivedRule: Boolean = true,
+        enforceCoordinateRule: Boolean = true,
+    ) {
         val explicitExternal =
             (entity.distributionExplicit == true) && (entity.distributionExternal == true)
 
         // #28 archived ≠ explicit-external — checked before the ≥1-coordinate
         // rule so an archived component is never asked for a coordinate.
         if (explicitExternal) {
-            require(!entity.archived) {
-                "distribution: an archived component can't be explicitly+externally " +
-                    "distributed — set distributionExplicit=false (component '${entity.componentKey}')"
+            if (enforceArchivedRule) {
+                require(!entity.archived) {
+                    "distribution: an archived component can't be explicitly+externally " +
+                        "distributed — set distributionExplicit=false (component '${entity.componentKey}')"
+                }
             }
-            require(hasAnyDistributionCoordinate(entity)) {
+            require(!enforceCoordinateRule || entity.archived || hasAnyDistributionCoordinate(entity)) {
                 "distribution: an explicit+external component must define at least one " +
                     "distribution coordinate (maven GAV, docker image, or package) " +
                     "(component '${entity.componentKey}')"
@@ -3594,9 +3624,19 @@ class ComponentManagementServiceImpl(
      * shape as the create/update 409 path. Doc-existence (#20) is component-level,
      * not configuration-level, so it is intentionally NOT re-run here.
      */
-    private fun validateFieldOverrideCrossComponent(componentId: UUID) {
+    private fun validateFieldOverrideCrossComponent(
+        componentId: UUID,
+        enforceCoordinateRule: Boolean,
+    ) {
         val reloaded = findComponentOr404(componentId)
-        validateMalformedFieldRules(reloaded)
+        // An override never changes the component-level gate / archived scalars, so #28
+        // is not re-checked; #6 only when the component had a coordinate before the
+        // write (an override update could remove the last one) — see the call sites.
+        validateMalformedFieldRules(
+            reloaded,
+            enforceArchivedRule = false,
+            enforceCoordinateRule = enforceCoordinateRule,
+        )
         validateCrossComponentIntegrity(reloaded)
     }
 
