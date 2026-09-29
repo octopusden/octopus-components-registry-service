@@ -116,7 +116,8 @@ repository directory that belongs to the component; absent = whole repository) a
 `checkoutDirectory` (where the entry is checked out on the build agent). At most one entry has no
 `checkoutDirectory`; it is checked out at the checkout root, and it may be listed at any position.
 The row may carry `buildWorkingDirectory`, where the build runs, relative to the checkout root
-(absent = the checkout root). A blank value is absent. In a base PATCH `buildWorkingDirectory: null`
+(absent = the checkout root); build-chain generation sets it as the TeamCity parameter `WORK_DIR`
+(`%teamcity.build.checkoutDir%/<buildWorkingDirectory>`). A blank value is absent. In a base PATCH `buildWorkingDirectory: null`
 leaves the stored value and `""` clears it; a `vcs.settings` marker payload replaces the row, so an
 absent value clears it.
 
