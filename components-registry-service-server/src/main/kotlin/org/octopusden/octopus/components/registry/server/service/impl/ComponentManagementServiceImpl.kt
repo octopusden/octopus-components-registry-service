@@ -3196,7 +3196,9 @@ class ComponentManagementServiceImpl(
      *  - **explicit-external ≥1 distribution coordinate** (#6): when
      *    `distributionExplicit && distributionExternal`, at least one of GAV
      *    (maven artifact), docker image, or DEB/RPM package must be defined on
-     *    some configuration row.
+     *    some configuration row. Not applied when the BASE build system is
+     *    WHISKEY: legacy WHISKEY components (e.g. CARDS, DM) define no GAV / docker /
+     *    package coordinate, and the rule must not block editing them.
      *  - **groupId supported prefix** (#10): every maven `groupPattern` element
      *    must start with one of the env-configured `supportedGroupIds`.
      *  - **archived ≠ explicit-external** (#28): an archived component cannot be
@@ -3221,7 +3223,7 @@ class ComponentManagementServiceImpl(
                 "distribution: an archived component can't be explicitly+externally " +
                     "distributed — set distributionExplicit=false (component '${entity.componentKey}')"
             }
-            require(hasAnyDistributionCoordinate(entity)) {
+            require(isBaseBuildSystemWhiskey(entity) || hasAnyDistributionCoordinate(entity)) {
                 "distribution: an explicit+external component must define at least one " +
                     "distribution coordinate (maven GAV, docker image, or package) " +
                     "(component '${entity.componentKey}')"
@@ -3263,6 +3265,12 @@ class ComponentManagementServiceImpl(
                 "(component '${entity.componentKey}')"
         }
     }
+
+    private fun isBaseBuildSystemWhiskey(entity: ComponentEntity): Boolean =
+        entity.configurations
+            .firstOrNull { it.rowType == ROW_TYPE_BASE }
+            ?.buildSystem
+            .equals("WHISKEY", ignoreCase = true)
 
     private fun hasAnyDistributionCoordinate(entity: ComponentEntity): Boolean =
         entity.configurations.any { cfg ->
