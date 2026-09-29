@@ -195,6 +195,20 @@ class ImportServiceImplVcsNameTest {
     }
 
     @Test
+    @DisplayName("ONB-001: a two-root import back-fills checkoutDirectory = name on the second root")
+    fun twoRoots_secondRootGetsCheckoutDirectory() {
+        val roots =
+            listOf("alpha", "beta").map {
+                VersionControlSystemRoot.create(it, RepositoryType.GIT, "ssh://git@gitlab:project/$it.git", null, "main", null)
+            }
+        val row = baseRow()
+
+        callAttachVcsEntries(row, VCSSettings.create(roots))
+
+        assertEquals(listOf(null, "beta"), row.vcsEntries.map { it.checkoutDirectory })
+    }
+
+    @Test
     @DisplayName("ONB-001: single-root import leaves the entry unplaced")
     fun singleRoot_noCheckoutDirectory() {
         val root = VersionControlSystemRoot.create("core", RepositoryType.GIT, "ssh://git@gitlab:project/repo.git", null, "main", null)
