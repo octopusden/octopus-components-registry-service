@@ -2126,7 +2126,7 @@ class ImportServiceImpl(
     ) {
         vcsSettings ?: return
         val roots = vcsSettings.versionControlSystemRoots ?: return
-        var sortOrder = 0
+        var rootCount = 0
         for (root in roots) {
             val path = root.vcsPath ?: continue // skip roots with no path
             val name = root.name
@@ -2139,12 +2139,12 @@ class ImportServiceImpl(
                     tag = root.tag,
                     hotfixBranch = root.hotfixBranch,
                     repositoryType = root.repositoryType?.name,
-                    sortOrder = sortOrder++,
+                    sortOrder = rootCount++,
                 ),
             )
         }
-        // Secondary roots of a multi-root row are checked out under their name (the V8 migration rule).
-        if (sortOrder > 1) row.vcsEntries.filter { it.sortOrder > 0 }.forEach { it.checkoutDirectory = it.name }
+        // Secondary roots (sortOrder > 0) of a multi-root row (2+ roots) are checked out under their name (the V8 migration rule).
+        if (rootCount > 1) row.vcsEntries.filter { it.sortOrder > 0 }.forEach { it.checkoutDirectory = it.name }
     }
 
     private fun attachRequiredTools(
