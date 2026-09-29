@@ -653,12 +653,13 @@ class CrossComponentValidationTest {
     @DisplayName("POST field-override on a legacy explicit+external component with no coordinate → 2xx")
     fun postFieldOverride_onLegacyExplicitExternalWithoutCoordinate_ok() {
         val (id, _) = createLegacyExplicitExternalWithoutCoordinate(sfx())
-        mvc.perform(
-            post("/rest/api/4/components/$id/field-overrides")
-                .with(adminJwt())
-                .contentType(MediaType.APPLICATION_JSON)
-                .content("""{"overriddenAttribute":"build.buildFilePath","versionRange":"[1.0,2.0)","value":"pom.xml"}"""),
-        ).andExpect(status().is2xxSuccessful)
+        mvc
+            .perform(
+                post("/rest/api/4/components/$id/field-overrides")
+                    .with(adminJwt())
+                    .contentType(MediaType.APPLICATION_JSON)
+                    .content("""{"overriddenAttribute":"build.buildFilePath","versionRange":"[1.0,2.0)","value":"pom.xml"}"""),
+            ).andExpect(status().is2xxSuccessful)
     }
 
     @Test
