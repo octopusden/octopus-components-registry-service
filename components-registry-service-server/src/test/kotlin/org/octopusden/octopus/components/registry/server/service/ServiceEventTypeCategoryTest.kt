@@ -31,6 +31,8 @@ class ServiceEventTypeCategoryTest {
                 "MIGRATION_HISTORY",
                 "TEAMCITY_RESYNC",
                 "TEAMCITY_VALIDATION",
+                "TEAMCITY_PLACEMENT_DIFF",
+                "TEAMCITY_PLACEMENT_SYNC",
                 "VALIDATION_SWEEP",
             ),
             ServiceEventType.namesOf(ServiceEventCategory.SYSTEM).toSet(),
