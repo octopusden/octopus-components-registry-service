@@ -157,11 +157,10 @@ class TeamcityPlacementSyncServiceTest {
     }
 
     @Test
-    fun `a resolved marker row is report-only and is never written (owner review finding 5, RED)`() {
-        // ADR-002 decision 4/8 (owner review): marker (per-range `vcs.settings`) rows are
-        // report-only in this version -- Diff still shows them, but Sync must never write one,
-        // even when it is RESOLVED and selected.
-        val diffRow = row(PlacementDiffRowStatus.RESOLVED, rowLabel = "vcs.settings", derivedBwd = "app")
+    fun `an invalid row is skipped even if selected (spec-conformance finding 4 coverage)`() {
+        // Already correct (freshRow.status != RESOLVED already covers it) -- missing only a
+        // dedicated test per the spec-conformance review's checklist.
+        val diffRow = row(PlacementDiffRowStatus.INVALID)
         val diffService = diffServiceReturning(listOf(diffRow))
         val (svc, cms) = service(diffService)
 
@@ -170,7 +169,32 @@ class TeamcityPlacementSyncServiceTest {
         assertEquals(0, result.applied)
         assertEquals(1, result.skipped)
         assertEquals(
-            "skipped: report-only (per-range row)",
+            "skipped: invalid",
+            result.components
+                .single()
+                .rows
+                .single()
+                .outcome,
+        )
+        verify(cms, org.mockito.kotlin.never()).updateComponent(any(), any())
+    }
+
+    @Test
+    fun `an outside-scope row (marker or archived) is skipped, never written (spec-conformance finding 1, RED)`() {
+        // Spec-conformance review: Diff now reports marker (per-range `vcs.settings`) rows and
+        // archived components' rows with the dedicated OUTSIDE_SCOPE status (never RESOLVED or
+        // any other status) -- Sync must key its report-only skip on THAT status, not on rowLabel,
+        // so both cases are covered by the same check.
+        val diffRow = row(PlacementDiffRowStatus.OUTSIDE_SCOPE, rowLabel = "vcs.settings", derivedBwd = "app")
+        val diffService = diffServiceReturning(listOf(diffRow))
+        val (svc, cms) = service(diffService)
+
+        val result = svc.sync(setOf(componentId), PlacementDiffResult(Instant.now(), listOf(diffRow)), "job-42", "alice")
+
+        assertEquals(0, result.applied)
+        assertEquals(1, result.skipped)
+        assertEquals(
+            "skipped: outside scope",
             result.components
                 .single()
                 .rows
