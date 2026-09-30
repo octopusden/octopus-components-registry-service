@@ -457,8 +457,15 @@ fallback).
   Build Working Directory; a value counts only when every compile configuration attaching that
   repository agrees. A repository attached twice within ONE build type with two different
   RESOLVABLE interpretations is a `CONFLICT` (spec-conformance review) — the same classification
-  two DIFFERENT build types disagreeing already get — not `UNEXPRESSIBLE`; a lone unparseable rule
-  (or several attachments that all agree on being unparseable) is still `UNEXPRESSIBLE`.
+  two DIFFERENT build types disagreeing already get — not `UNEXPRESSIBLE`; ANY unparseable rule for
+  that repository in that build type keeps it `UNEXPRESSIBLE` regardless of what else attaches it
+  (Codex second-pass finding: a null parse is a SHAPE problem, not just another "distinct value" a
+  resolvable duplicate could turn into a conflict). `parseWorkDir` similarly rejects
+  (`Unexpressible`) only a value containing a TeamCity property reference (`%...%`) — a leading `/`
+  or a `.`/`..` segment now PARSES, deferring to `VcsPlacementValidator.validateBuildWorkingDirectory`
+  to classify it `INVALID` (Codex second-pass finding: those are CRS validation rules, not
+  unparseable shapes — the exact pre-emption `PlacementRules.checkRules`'s deletion was meant to
+  fix, re-introduced one function over).
   - **Scope:** an archived component's rows, and marker (per-range `vcs.settings`) rows, are always
     `OUTSIDE_SCOPE` (spec-conformance review) — never derived, never subject to the filter below,
     always reported. For a BASE row of a non-archived component: multi-root rows always; a
