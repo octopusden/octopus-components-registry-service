@@ -82,21 +82,27 @@ class TeamcityPlacementControllerV4(
      * Applies the latest Diff's resolved rows for [request]'s component ids ("select all
      * resolved" from the Portal table). Refused with 409 up front, before any component is
      * considered and before the job is even submitted, when [request]'s `diffId` no longer
-     * matches the latest Diff (ADR-002 decision 1) -- Diff keeps no history, so a Sync always
-     * acts on the result the user actually looked at, never on one that has since been replaced.
-     * Otherwise: 202 on a freshly-started run, 409 (same-kind attach or cross-kind) exactly like
-     * every other admin job.
+     * matches the latest COMPLETED Diff (ADR-002 decision 1) -- Diff keeps no history, so a Sync
+     * always acts on the result the user actually looked at, never on one that has since been
+     * replaced. A `diffId` matching a still-RUNNING Diff (id published, `result` still null) is
+     * also refused: there is no completed result yet to bind the write to. The exact
+     * [PlacementDiffResult] read here — not re-fetched once the async job actually runs — is
+     * passed straight through to [TeamcityPlacementSyncJobService.startAsync] (owner review
+     * finding 1 hardening): re-fetching later would reopen the very race this check exists to
+     * close. Otherwise: 202 on a freshly-started run, 409 (same-kind attach or cross-kind) exactly
+     * like every other admin job.
      */
     @PostMapping("/sync")
     @PreAuthorize("@permissionEvaluator.canImport()")
     fun startSync(
         @RequestBody request: TeamcityPlacementSyncRequest,
     ): ResponseEntity<TeamcityPlacementSyncJobResponse> {
-        val currentDiffId = diffJobService.current()?.id
-        if (request.diffId != currentDiffId) {
+        val current = diffJobService.current()
+        val latestDiff = current?.result
+        if (current?.id != request.diffId || latestDiff == null) {
             throw ResponseStatusException(HttpStatus.CONFLICT, "diff replaced, re-run Diff")
         }
-        val outcome = syncJobService.startAsync(currentUserResolver.currentUsername(), request.componentIds)
+        val outcome = syncJobService.startAsync(currentUserResolver.currentUsername(), request.componentIds, latestDiff)
         val httpStatus = if (outcome.isNewlyStarted) HttpStatus.ACCEPTED else HttpStatus.CONFLICT
         return ResponseEntity.status(httpStatus).body(TeamcityPlacementSyncJobResponse.from(outcome.state))
     }
