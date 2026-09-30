@@ -2720,19 +2720,6 @@ class ImportServiceImpl(
 }
 
 /**
- * Stable per-bean key set used to diff build-tool lists across base and override configs.
- * Extracted from `ImportServiceImpl` as a top-level `internal fun` so it can be unit-tested
- * directly without spinning up a Spring context.
- *
- * Key shape: `<beanType>:<settingsProperty>:<version>` (plus `:<edition>` for
- * `OracleDatabaseToolBean`). `settingsProperty` is part of the discriminator because two
- * beans of the same type/version that differ only in `settingsProperty` are semantically
- * distinct — without it, `emitMarkerOverrides` silently drops the override and the base
- * `settingsProperty` bleeds into the override range. `edition` is meaningful only for
- * Oracle (always null for the others).
- */
-
-/**
  * One would-be `distribution_maven_artifacts` row derived from the DSL, for the §6.0
  * uniqueness pre-pass. [origin] names the DSL source for the conflict message:
  * an explicit `distribution { GAV }` coordinate vs the component-level
@@ -2879,6 +2866,18 @@ internal fun computeDisplayNameDbCollisions(
         }.sorted()
 }
 
+/**
+ * Stable per-bean key set used to diff build-tool lists across base and override configs.
+ * Extracted from `ImportServiceImpl` as a top-level `internal fun` so it can be unit-tested
+ * directly without spinning up a Spring context.
+ *
+ * Key shape: `<beanType>:<settingsProperty>:<version>` (plus `:<edition>` for
+ * `OracleDatabaseToolBean`). `settingsProperty` is part of the discriminator because two
+ * beans of the same type/version that differ only in `settingsProperty` are semantically
+ * distinct — without it, `emitMarkerOverrides` silently drops the override and the base
+ * `settingsProperty` bleeds into the override range. `edition` is meaningful only for
+ * Oracle (always null for the others).
+ */
 internal fun buildBuildToolKeys(tools: Collection<BuildTool>?): Set<String> =
     tools
         ?.mapNotNull { tool ->

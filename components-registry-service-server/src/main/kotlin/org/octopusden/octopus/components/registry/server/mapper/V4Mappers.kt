@@ -37,6 +37,7 @@ import org.octopusden.octopus.components.registry.server.entity.ComponentArtifac
 import org.octopusden.octopus.components.registry.server.entity.ComponentBuildToolBeanEntity
 import org.octopusden.octopus.components.registry.server.entity.ComponentConfigurationEntity
 import org.octopusden.octopus.components.registry.server.entity.ComponentEntity
+import org.octopusden.octopus.components.registry.server.entity.DistributionFileUrlArtifactEntity
 import org.octopusden.octopus.components.registry.server.entity.DistributionGenericArtifactEntity
 import org.octopusden.octopus.components.registry.server.service.rms.ComponentBuildRanges
 import org.octopusden.octopus.components.registry.server.service.rms.RegisteredBuildParametersMapper
@@ -434,7 +435,7 @@ private fun org.octopusden.octopus.components.registry.server.entity.Distributio
         sortOrder = this.sortOrder,
     )
 
-private fun org.octopusden.octopus.components.registry.server.entity.DistributionFileUrlArtifactEntity.toResponse(): FileUrlArtifactResponse =
+private fun DistributionFileUrlArtifactEntity.toResponse(): FileUrlArtifactResponse =
     FileUrlArtifactResponse(
         id = this.id!!,
         url = this.url,

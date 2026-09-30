@@ -4839,9 +4839,5 @@ class ComponentManagementServiceImpl(
         private const val ROW_TYPE_BASE = "BASE"
         private const val ATTR_JAVA_VERSION = "build.javaVersion"
         private const val ATTR_MAVEN_VERSION = "build.mavenVersion"
-
-        // SYS-095: strict kebab for a plain key, and the tail permitted after a client-code prefix.
-        private val COMPONENT_KEY_PATTERN = Regex("[a-z][a-z0-9-]*")
-        private val COMPONENT_KEY_TAIL_PATTERN = Regex("(-[a-z0-9-]*)?")
     }
 }
