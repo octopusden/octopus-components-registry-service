@@ -9,6 +9,7 @@ import org.springframework.data.jpa.repository.Modifying
 import org.springframework.data.jpa.repository.Query
 import org.springframework.stereotype.Repository
 import org.springframework.transaction.annotation.Transactional
+import java.time.Instant
 
 @Repository
 interface AuditLogRepository :
@@ -39,6 +40,19 @@ interface AuditLogRepository :
     ): Page<AuditLogEntity>
 
     fun findAllByOrderByChangedAtDesc(pageable: Pageable): Page<AuditLogEntity>
+
+    /**
+     * ONB-002 (TeamCity placement Sync): every real edit of a component since a given instant,
+     * used by `PlacementEditHistory` to tell a V8-auto placement value from one a person actually
+     * set. `action IN (UPDATE, RENAME)` excludes CREATE (a freshly-created component has nothing to
+     * distinguish from V8) and MIGRATED (git-history baseline noise, SYS-049).
+     */
+    fun findByEntityTypeAndEntityIdAndChangedAtAfterAndActionIn(
+        entityType: String,
+        entityId: String,
+        changedAt: Instant,
+        actions: Collection<String>,
+    ): List<AuditLogEntity>
 
     @Modifying
     @Transactional
