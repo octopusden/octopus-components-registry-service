@@ -1,6 +1,7 @@
 package org.octopusden.octopus.components.registry.server.controller
 
 import org.junit.jupiter.api.Assertions.assertEquals
+import org.junit.jupiter.api.Assertions.assertTrue
 import org.junit.jupiter.api.Test
 import org.junit.jupiter.api.assertThrows
 import org.mockito.kotlin.any
@@ -12,11 +13,17 @@ import org.octopusden.octopus.components.registry.server.dto.v4.TeamcityPlacemen
 import org.octopusden.octopus.components.registry.server.security.CurrentUserResolver
 import org.octopusden.octopus.components.registry.server.service.JobState
 import org.octopusden.octopus.components.registry.server.teamcity.placement.PlacementDiffResult
+import org.octopusden.octopus.components.registry.server.teamcity.placement.PlacementDiffRowStatus
+import org.octopusden.octopus.components.registry.server.teamcity.placement.PlacementEntryDiff
+import org.octopusden.octopus.components.registry.server.teamcity.placement.PlacementFieldChange
+import org.octopusden.octopus.components.registry.server.teamcity.placement.PlacementRowDiff
+import org.octopusden.octopus.components.registry.server.teamcity.placement.PlacementSyncResult
 import org.octopusden.octopus.components.registry.server.teamcity.placement.StartPlacementSyncResult
 import org.octopusden.octopus.components.registry.server.teamcity.placement.TeamcityPlacementDiffJobService
 import org.octopusden.octopus.components.registry.server.teamcity.placement.TeamcityPlacementDiffJobState
 import org.octopusden.octopus.components.registry.server.teamcity.placement.TeamcityPlacementSyncJobService
 import org.octopusden.octopus.components.registry.server.teamcity.placement.TeamcityPlacementSyncJobState
+import org.springframework.http.HttpHeaders
 import org.springframework.http.HttpStatus
 import org.springframework.web.server.ResponseStatusException
 import java.time.Instant
@@ -120,5 +127,98 @@ class TeamcityPlacementControllerV4Test {
 
         assertEquals(HttpStatus.CONFLICT, ex.statusCode)
         verify(syncJobService, never()).startAsync(any(), any(), any())
+    }
+
+    @Test
+    fun `a new Diff replaces the latest result -- the old diffId is then refused while reports reflect the new one (spec-conformance finding 4 coverage)`() {
+        val d1 = completedDiff("D1")
+        whenever(diffJobService.current()).thenReturn(d1)
+        assertEquals(d1.result, controller.getReportJson().body)
+
+        // A second Diff completes, replacing the in-memory result.
+        val d2 = completedDiff("D2")
+        whenever(diffJobService.current()).thenReturn(d2)
+
+        val ex = assertThrows<ResponseStatusException> {
+            controller.startSync(TeamcityPlacementSyncRequest(diffId = "D1", componentIds = listOf(UUID.randomUUID())))
+        }
+        assertEquals(HttpStatus.CONFLICT, ex.statusCode)
+        verify(syncJobService, never()).startAsync(any(), any(), any())
+        // The report endpoints already reflect D2, not the replaced D1.
+        assertEquals(d2.result, controller.getReportJson().body)
+    }
+
+    @Test
+    fun `diff report HTML and CSV have the right content type and escape or format correctly (spec-conformance finding 4 coverage)`() {
+        val row = PlacementRowDiff(
+            componentId = UUID.randomUUID(),
+            componentKey = "comp-one",
+            configurationRowId = UUID.randomUUID(),
+            versionRange = "(,0),[0,)",
+            rowLabel = "BASE",
+            status = PlacementDiffRowStatus.CONFLICT,
+            entries = listOf(
+                PlacementEntryDiff(
+                    name = "main",
+                    vcsPath = "ssh://h/prj/app.git",
+                    branch = null,
+                    tag = null,
+                    hotfixBranch = null,
+                    repositoryType = "GIT",
+                    currentCheckoutDirectory = null,
+                    currentSourcePath = null,
+                    derivedCheckoutDirectory = null,
+                    derivedSourcePath = null,
+                ),
+            ),
+            currentBuildWorkingDirectory = null,
+            derivedBuildWorkingDirectory = null,
+            sourceBuildTypeIds = emptyList(),
+            notes = listOf("can't be derived"),
+        )
+        whenever(diffJobService.current()).thenReturn(
+            completedDiff("D1").copy(result = PlacementDiffResult(Instant.now(), listOf(row))),
+        )
+
+        // Content-Type for HTML/JSON is set by @GetMapping's `produces` (Spring MVC content
+        // negotiation), not observable on a directly-invoked ResponseEntity outside dispatch --
+        // pinned instead by the MockMvc round-trip in TeamcityPlacementControllerV4SecurityTest.
+        val html = controller.getReportHtml()
+        assertEquals(HttpStatus.OK, html.statusCode)
+        assertTrue(html.body!!.contains("can&#39;t be derived")) // escaped, not the literal apostrophe
+
+        val csv = controller.getReportCsv()
+        assertEquals(HttpStatus.OK, csv.statusCode)
+        assertEquals("text/csv;charset=UTF-8", csv.headers.getFirst(HttpHeaders.CONTENT_TYPE))
+        assertEquals("attachment; filename=teamcity-placement-diff.csv", csv.headers.getFirst(HttpHeaders.CONTENT_DISPOSITION))
+        assertTrue(csv.body!!.startsWith("componentKey,versionRange,rowLabel,status,"))
+    }
+
+    @Test
+    fun `sync report CSV has the right content type (spec-conformance finding 4 coverage)`() {
+        val syncState = TeamcityPlacementSyncJobState(
+            id = "S1",
+            state = JobState.COMPLETED,
+            startedAt = Instant.now(),
+            finishedAt = Instant.now(),
+            result = PlacementSyncResult(
+                triggeredBy = "alice",
+                requested = 1,
+                applied = 1,
+                skipped = 0,
+                failed = 0,
+                components = emptyList(),
+                fieldChanges = listOf(PlacementFieldChange("comp-one", "BASE", "main", "checkoutDirectory", null, "app")),
+            ),
+            errorMessage = null,
+        )
+        whenever(syncJobService.current()).thenReturn(syncState)
+
+        val csv = controller.getSyncReportCsv()
+
+        assertEquals(HttpStatus.OK, csv.statusCode)
+        assertEquals("text/csv;charset=UTF-8", csv.headers.getFirst(HttpHeaders.CONTENT_TYPE))
+        assertEquals("attachment; filename=teamcity-placement-sync.csv", csv.headers.getFirst(HttpHeaders.CONTENT_DISPOSITION))
+        assertTrue(csv.body!!.startsWith("componentKey,rowLabel,root,field,before,after"))
     }
 }
