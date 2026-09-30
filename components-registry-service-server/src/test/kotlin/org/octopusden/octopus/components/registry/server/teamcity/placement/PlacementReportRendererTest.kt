@@ -103,4 +103,24 @@ class PlacementReportRendererTest {
         assertTrue(lines[1].contains("comp-one,BASE,main,checkoutDirectory,,app"))
         assertTrue(lines[2].contains("comp-one,BASE,,buildWorkingDirectory,,app/build"))
     }
+
+    @Test
+    fun `CSV neutralises a cell that a spreadsheet would run as a formula (independent review finding 1)`() {
+        // A VCS URL is written by component editors, the CSV is read by anyone with view access.
+        val result = PlacementSyncResult(
+            triggeredBy = "alice",
+            requested = 1,
+            applied = 1,
+            skipped = 0,
+            failed = 0,
+            components = emptyList(),
+            fieldChanges = listOf(
+                PlacementFieldChange("comp-one", "BASE", "=HYPERLINK(1)", "checkoutDirectory", "@x", "+y"),
+            ),
+        )
+
+        val dataLine = PlacementReportRenderer.toSyncReportCsv(result).trim().split("\r\n")[1]
+
+        assertEquals("comp-one,BASE,'=HYPERLINK(1),checkoutDirectory,'@x,'+y", dataLine)
+    }
 }
