@@ -500,8 +500,8 @@ class ComponentCodeRendererTest {
     }
 
     @Test
-    @DisplayName("SYS-094: FULL — distribution generic child renders inside distribution block")
-    fun `SYS-094 full distribution generic child renders inside distribution block`() {
+    @DisplayName("SYS-098: FULL — distribution generic child renders inside distribution block")
+    fun `SYS-098 full distribution generic child renders inside distribution block`() {
         val c = component()
         val b = base(c) { buildSystem = "MAVEN" }
         b.genericArtifacts.add(generic(b, path = "releases/foo/1.0.0/foo.tar.gz"))
@@ -513,8 +513,8 @@ class ComponentCodeRendererTest {
     }
 
     @Test
-    @DisplayName("SYS-094: FULL — per-range distribution.generic marker renders a generic block only in the range")
-    fun `SYS-094 full per-range distribution generic marker`() {
+    @DisplayName("SYS-098: FULL — per-range distribution.generic marker renders a generic block only in the range")
+    fun `SYS-098 full per-range distribution generic marker`() {
         val c = component()
         val b = base(c) { buildSystem = "MAVEN" }
         b.genericArtifacts.add(generic(b, path = "releases/foo/1.0.0/foo.tar.gz"))

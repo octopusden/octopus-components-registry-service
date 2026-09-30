@@ -3473,7 +3473,7 @@ class ComponentManagementServiceImpl(
      *  - **explicit-external ≥1 distribution coordinate** (#6): when
      *    `distributionExplicit && distributionExternal`, at least one of GAV
      *    (maven artifact), docker image, DEB/RPM package, or generic artifact
-     *    (SYS-094) must be defined on some configuration row. Not applied when the BASE build system is
+     *    (SYS-098) must be defined on some configuration row. Not applied when the BASE build system is
      *    WHISKEY: legacy WHISKEY components define no GAV / docker /
      *    package coordinate, and the rule must not block editing them.
      *  - **groupId supported prefix** (#10): every maven `groupPattern` element

@@ -29,7 +29,7 @@ import org.testcontainers.containers.PostgreSQLContainer
 import java.nio.file.Paths
 
 /**
- * SYS-094 taxonomy constraint: verifies that the PostgreSQL CHECK constraint
+ * SYS-098 taxonomy constraint: verifies that the PostgreSQL CHECK constraint
  * added by V10__add_distribution_generic_artifacts.sql correctly allows MARKER
  * and rejects SCALAR_OVERRIDE for `overridden_attribute = 'distribution.generic'`.
  *
@@ -64,16 +64,16 @@ class V10GenericArtifactConstraintIntegrationTest {
     }
 
     // -------------------------------------------------------------------------
-    // SYS-094-V10-001: MARKER / distribution.generic persists with artifact child
+    // SYS-098-V10-001: MARKER / distribution.generic persists with artifact child
     // -------------------------------------------------------------------------
 
     @Test
     @DisplayName(
-        "SYS-094-V10-001: MARKER row with overridden_attribute='distribution.generic' and " +
+        "SYS-098-V10-001: MARKER row with overridden_attribute='distribution.generic' and " +
             "its generic artifact child persist and reload correctly after EntityManager clear",
     )
     @Transactional
-    fun `SYS-094-V10-001 distribution generic MARKER row persists with child`() {
+    fun `SYS-098-V10-001 distribution generic MARKER row persists with child`() {
         val component = componentRepository.save(
             ComponentEntity(componentKey = "SYS094-V10-001", archived = false),
         )
@@ -119,16 +119,16 @@ class V10GenericArtifactConstraintIntegrationTest {
     }
 
     // -------------------------------------------------------------------------
-    // SYS-094-V10-002: SCALAR_OVERRIDE / distribution.generic is rejected
+    // SYS-098-V10-002: SCALAR_OVERRIDE / distribution.generic is rejected
     // -------------------------------------------------------------------------
 
     @Test
     @DisplayName(
-        "SYS-094-V10-002: SCALAR_OVERRIDE row with overridden_attribute='distribution.generic' " +
+        "SYS-098-V10-002: SCALAR_OVERRIDE row with overridden_attribute='distribution.generic' " +
             "violates the V10 taxonomy CHECK constraint",
     )
     @Transactional
-    fun `SYS-094-V10-002 distribution generic SCALAR_OVERRIDE rejected by CHECK constraint`() {
+    fun `SYS-098-V10-002 distribution generic SCALAR_OVERRIDE rejected by CHECK constraint`() {
         val component = componentRepository.save(
             ComponentEntity(componentKey = "SYS094-V10-002", archived = false),
         )

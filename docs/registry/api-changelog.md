@@ -59,7 +59,7 @@ refresh it with `./gradlew :components-registry-service-server:generateOpenApiDo
   recompiled against the new version; Java and Groovy callers of the previous constructors are
   unaffected.
 
-- **`genericArtifacts` added to component configurations (SYS-094).** Configuration read responses
+- **`genericArtifacts` added to component configurations (SYS-098).** Configuration read responses
   (`ComponentConfigurationResponse`) gain a required `genericArtifacts: GenericArtifactResponse[]`
   field (always present, empty when none are set). Configuration write requests
   (`ComponentConfigurationCreateRequest`, `ComponentConfigurationPatchRequest`) accept an optional

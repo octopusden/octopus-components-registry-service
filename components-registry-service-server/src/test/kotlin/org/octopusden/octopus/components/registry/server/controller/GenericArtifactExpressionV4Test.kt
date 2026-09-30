@@ -23,7 +23,7 @@ import org.springframework.test.web.servlet.result.MockMvcResultMatchers.status
 import java.nio.file.Paths
 
 /**
- * SYS-094-EXPR: expression support on the v4 generic-artifact write path.
+ * SYS-098-EXPR: expression support on the v4 generic-artifact write path.
  *
  * Verifies that:
  *  - a templated path `releases/foo/${'$'}{version}/foo.tar.gz` is accepted and stored verbatim.
@@ -60,15 +60,15 @@ class GenericArtifactExpressionV4Test {
     }
 
     // -------------------------------------------------------------------------
-    // SYS-094-EXPR-001: ${version} template accepted, stored verbatim
+    // SYS-098-EXPR-001: ${version} template accepted, stored verbatim
     // -------------------------------------------------------------------------
 
     @Test
     @DisplayName(
-        "SYS-094-EXPR-001: POST component with genericArtifact path containing \${version} " +
+        "SYS-098-EXPR-001: POST component with genericArtifact path containing \${version} " +
             "→ 2xx; template preserved verbatim on GET",
     )
-    fun `SYS-094-EXPR-001 version template accepted and stored verbatim`() {
+    fun `SYS-098-EXPR-001 version template accepted and stored verbatim`() {
         val templatePath = "releases/expr-test/\${version}/expr-test.tar.gz"
         val createBody = componentBody("ga-expr-001", templatePath)
 
@@ -105,15 +105,15 @@ class GenericArtifactExpressionV4Test {
     }
 
     // -------------------------------------------------------------------------
-    // SYS-094-EXPR-002: invalid SpEL expression → 400
+    // SYS-098-EXPR-002: invalid SpEL expression → 400
     // -------------------------------------------------------------------------
 
     @Test
     @DisplayName(
-        "SYS-094-EXPR-002: POST component with genericArtifact path containing disallowed " +
+        "SYS-098-EXPR-002: POST component with genericArtifact path containing disallowed " +
             "placeholder \${unknownProp} → 400",
     )
-    fun `SYS-094-EXPR-002 disallowed placeholder rejected with 400`() {
+    fun `SYS-098-EXPR-002 disallowed placeholder rejected with 400`() {
         val result = mvc.perform(
             post("/rest/api/4/components")
                 .with(adminJwt())
@@ -124,14 +124,14 @@ class GenericArtifactExpressionV4Test {
     }
 
     // -------------------------------------------------------------------------
-    // SYS-094-EXPR-003: plain literal path still accepted (regression)
+    // SYS-098-EXPR-003: plain literal path still accepted (regression)
     // -------------------------------------------------------------------------
 
     @Test
     @DisplayName(
-        "SYS-094-EXPR-003: POST component with plain literal genericArtifact path → 2xx",
+        "SYS-098-EXPR-003: POST component with plain literal genericArtifact path → 2xx",
     )
-    fun `SYS-094-EXPR-003 plain literal path accepted`() {
+    fun `SYS-098-EXPR-003 plain literal path accepted`() {
         val result = mvc.perform(
             post("/rest/api/4/components")
                 .with(adminJwt())
@@ -142,14 +142,14 @@ class GenericArtifactExpressionV4Test {
     }
 
     // -------------------------------------------------------------------------
-    // SYS-094-EXPR-004: comma in a single path item → 400
+    // SYS-098-EXPR-004: comma in a single path item → 400
     // -------------------------------------------------------------------------
 
     @Test
     @DisplayName(
-        "SYS-094-EXPR-004: POST component with comma in a single genericArtifact path → 400",
+        "SYS-098-EXPR-004: POST component with comma in a single genericArtifact path → 400",
     )
-    fun `SYS-094-EXPR-004 comma in single path rejected with 400`() {
+    fun `SYS-098-EXPR-004 comma in single path rejected with 400`() {
         val result = mvc.perform(
             post("/rest/api/4/components")
                 .with(adminJwt())
@@ -160,14 +160,14 @@ class GenericArtifactExpressionV4Test {
     }
 
     // -------------------------------------------------------------------------
-    // SYS-094-EXPR-005: dot-only segment → 400
+    // SYS-098-EXPR-005: dot-only segment → 400
     // -------------------------------------------------------------------------
 
     @Test
     @DisplayName(
-        "SYS-094-EXPR-005: POST component with dot-only segment in genericArtifact path → 400",
+        "SYS-098-EXPR-005: POST component with dot-only segment in genericArtifact path → 400",
     )
-    fun `SYS-094-EXPR-005 dot-only segment rejected with 400`() {
+    fun `SYS-098-EXPR-005 dot-only segment rejected with 400`() {
         val result = mvc.perform(
             post("/rest/api/4/components")
                 .with(adminJwt())
@@ -178,15 +178,16 @@ class GenericArtifactExpressionV4Test {
     }
 
     // -------------------------------------------------------------------------
-    // SYS-094-EXPR-006: SpEL RCE vector → 400 (no server-side code execution)
+    // SYS-098-EXPR-006: SpEL static-method call → 400 (allowlist distinguishes fixed vs vulnerable)
+    // Without the fix the validator evaluates T(java.lang.String).valueOf(123) → "123" and returns 2xx.
     // -------------------------------------------------------------------------
 
     @Test
     @DisplayName(
-        "SYS-094-EXPR-006: POST component with SpEL RCE payload in genericArtifact path → 400 " +
-            "(placeholder allowlist must block T(Runtime).exec() before any evaluation)",
+        "SYS-098-EXPR-006: POST component with SpEL static method call in genericArtifact path → 400 " +
+            "(allowlist blocks T(java.lang.String).valueOf(123); without the fix the validator evaluates it to \"123\" and returns 2xx)",
     )
-    fun `SYS-094-EXPR-006 SpEL RCE payload rejected with 400`() {
+    fun `SYS-098-EXPR-006 SpEL static method call rejected with 400`() {
         val result = mvc.perform(
             post("/rest/api/4/components")
                 .with(adminJwt())
@@ -194,7 +195,7 @@ class GenericArtifactExpressionV4Test {
                 .content(
                     componentBody(
                         "ga-expr-006",
-                        "releases/spel/\${T(java.lang.Runtime).getRuntime().exec('id')}/file",
+                        "a/b/\${T(java.lang.String).valueOf(123)}",
                     ),
                 ),
         )

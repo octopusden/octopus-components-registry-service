@@ -32,8 +32,8 @@ class EntityMappersGenericBridgeTest {
         )
 
     @Test
-    @DisplayName("SYS-094: empty generic list → Distribution.generic() is null")
-    fun `SYS-094 empty generic list yields null`() {
+    @DisplayName("SYS-098: empty generic list → Distribution.generic() is null")
+    fun `SYS-098 empty generic list yields null`() {
         val d = buildDistribution(
             explicit = true,
             external = true,
@@ -48,8 +48,8 @@ class EntityMappersGenericBridgeTest {
     }
 
     @Test
-    @DisplayName("SYS-094: single generic path → Distribution.generic() equals that path")
-    fun `SYS-094 single generic path passes through`() {
+    @DisplayName("SYS-098: single generic path → Distribution.generic() equals that path")
+    fun `SYS-098 single generic path passes through`() {
         val parent = cfg()
         val d = buildDistribution(
             explicit = null,
@@ -67,8 +67,8 @@ class EntityMappersGenericBridgeTest {
     }
 
     @Test
-    @DisplayName("SYS-094: many generic paths → Distribution.generic() is comma-joined in sortOrder")
-    fun `SYS-094 many generic paths comma joined in sort order`() {
+    @DisplayName("SYS-098: many generic paths → Distribution.generic() is comma-joined in sortOrder")
+    fun `SYS-098 many generic paths comma joined in sort order`() {
         val parent = cfg()
         val d = buildDistribution(
             explicit = null,
@@ -90,8 +90,8 @@ class EntityMappersGenericBridgeTest {
     }
 
     @Test
-    @DisplayName("SYS-094: generic-only distribution with no explicit/external flags → non-null Distribution surfaces the URL")
-    fun `SYS-094 generic-only distribution produces non-null result`() {
+    @DisplayName("SYS-098: generic-only distribution with no explicit/external flags → non-null Distribution surfaces the URL")
+    fun `SYS-098 generic-only distribution produces non-null result`() {
         val parent = cfg()
         val d = buildDistribution(
             explicit = null,

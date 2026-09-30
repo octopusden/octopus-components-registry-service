@@ -402,8 +402,8 @@ class DistributionEntityMapperTest {
     // -----------------------------------------------------------------------
 
     @Test
-    @DisplayName("SYS-094: BASE row — generic artifact fields round-trip to GenericArtifactResponse")
-    fun `SYS-094 base row generic artifact fields round-trip`() {
+    @DisplayName("SYS-098: BASE row — generic artifact fields round-trip to GenericArtifactResponse")
+    fun `SYS-098 base row generic artifact fields round-trip`() {
         val cfg = baseConfig()
         val generic = DistributionGenericArtifactEntity(
             id = UUID.randomUUID(),
@@ -422,8 +422,8 @@ class DistributionEntityMapperTest {
     }
 
     @Test
-    @DisplayName("SYS-094: MARKER distribution.generic — genericArtifacts surfaced; maven, fileUrl, docker, packages empty")
-    fun `SYS-094 marker distribution generic only generic surfaced`() {
+    @DisplayName("SYS-098: MARKER distribution.generic — genericArtifacts surfaced; maven, fileUrl, docker, packages empty")
+    fun `SYS-098 marker distribution generic only generic surfaced`() {
         val cfg = markerConfig(MarkerAttributes.DISTRIBUTION_GENERIC)
         cfg.genericArtifacts.add(
             DistributionGenericArtifactEntity(
@@ -444,8 +444,8 @@ class DistributionEntityMapperTest {
     }
 
     @Test
-    @DisplayName("SYS-094: generic artifacts sortOrder preserved (sorted ascending)")
-    fun `SYS-094 generic artifacts sort order preserved`() {
+    @DisplayName("SYS-098: generic artifacts sortOrder preserved (sorted ascending)")
+    fun `SYS-098 generic artifacts sort order preserved`() {
         val cfg = baseConfig()
         cfg.genericArtifacts.add(
             DistributionGenericArtifactEntity(

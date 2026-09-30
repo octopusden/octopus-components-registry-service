@@ -12,7 +12,7 @@ import org.junit.jupiter.api.Test
 import org.octopusden.octopus.components.registry.core.dto.DistributionDTO
 
 /**
- * SYS-094: wire-compatibility evidence for the `generic` field added to [DistributionDTO].
+ * SYS-098: wire-compatibility evidence for the `generic` field added to [DistributionDTO].
  *
  * Verifies the two Jackson annotations that make the change safe:
  *   - `@JsonInclude(NON_NULL)`: absent `generic` is elided from the serialized output,
@@ -30,8 +30,8 @@ class DistributionDTOWireCompatTest {
     private val mapper = jacksonObjectMapper()
 
     @Test
-    @DisplayName("SYS-094-COMPAT-001: generic=null is elided from JSON output (NON_NULL)")
-    fun `SYS-094-COMPAT-001 generic null absent from serialized JSON`() {
+    @DisplayName("SYS-098-COMPAT-001: generic=null is elided from JSON output (NON_NULL)")
+    fun `SYS-098-COMPAT-001 generic null absent from serialized JSON`() {
         val dto = DistributionDTO(
             explicit = true,
             external = true,
@@ -43,8 +43,8 @@ class DistributionDTOWireCompatTest {
     }
 
     @Test
-    @DisplayName("SYS-094-COMPAT-002: generic present in JSON when set")
-    fun `SYS-094-COMPAT-002 generic serialized when set`() {
+    @DisplayName("SYS-098-COMPAT-002: generic present in JSON when set")
+    fun `SYS-098-COMPAT-002 generic serialized when set`() {
         val dto = DistributionDTO(
             explicit = true,
             external = true,
@@ -60,9 +60,9 @@ class DistributionDTOWireCompatTest {
 
     @Test
     @DisplayName(
-        "SYS-094-COMPAT-003: old JSON without generic deserializes without error (ignoreUnknown forward-compat)",
+        "SYS-098-COMPAT-003: old JSON without generic deserializes without error (ignoreUnknown forward-compat)",
     )
-    fun `SYS-094-COMPAT-003 old JSON without generic field deserializes correctly`() {
+    fun `SYS-098-COMPAT-003 old JSON without generic field deserializes correctly`() {
         val oldJson = """{"explicit":true,"external":false,"GAV":"com.example:bar:2.0","securityGroups":{}}"""
         val dto: DistributionDTO = mapper.readValue(oldJson)
         assertNull(dto.generic, "generic must be null when absent from old JSON")
@@ -70,12 +70,12 @@ class DistributionDTOWireCompatTest {
 
     @Test
     @DisplayName(
-        "SYS-094-COMPAT-004: new JSON with generic deserializes on older client (ignoreUnknown backward-compat)",
+        "SYS-098-COMPAT-004: new JSON with generic deserializes on older client (ignoreUnknown backward-compat)",
     )
-    fun `SYS-094-COMPAT-004 new JSON with generic field tolerated by client without generic field`() {
+    fun `SYS-098-COMPAT-004 new JSON with generic field tolerated by client without generic field`() {
         val newJson =
             """{"explicit":true,"external":true,"generic":"releases/foo/1.0/foo.tar.gz","securityGroups":{}}"""
-        // Deserialize into a fixture that has no 'generic' field — this is what a pre-SYS-094 client sees.
+        // Deserialize into a fixture that has no 'generic' field — this is what a pre-SYS-098 client sees.
         // The @JsonIgnoreProperties(ignoreUnknown = true) on the fixture must silently absorb the unknown key.
         val dto: LegacyDistributionDTO = mapper.readValue(newJson)
         assertTrue(dto.explicit)
