@@ -74,9 +74,6 @@ class TeamcityPlacementSyncServiceTest {
         val diffRow = row(PlacementDiffRowStatus.RESOLVED)
         val diffService = diffServiceReturning(listOf(diffRow))
         val (svc, cms) = service(diffService)
-        val detail = mock<ComponentDetailResponse>()
-        whenever(detail.version).thenReturn(5L)
-        whenever(cms.getComponent(componentId)).thenReturn(detail)
 
         val result = svc.sync(setOf(componentId), PlacementDiffResult(Instant.now(), listOf(diffRow)), "job-42", "alice")
 
@@ -116,10 +113,7 @@ class TeamcityPlacementSyncServiceTest {
     fun `an applied row's before and after values are recorded per field (owner review finding 6, RED)`() {
         val diffRow = row(PlacementDiffRowStatus.RESOLVED, derivedBwd = "app/build")
         val diffService = diffServiceReturning(listOf(diffRow))
-        val (svc, cms) = service(diffService)
-        val detail = mock<ComponentDetailResponse>()
-        whenever(detail.version).thenReturn(5L)
-        whenever(cms.getComponent(componentId)).thenReturn(detail)
+        val (svc, _) = service(diffService)
 
         val result = svc.sync(setOf(componentId), PlacementDiffResult(Instant.now(), listOf(diffRow)), "job-42", "alice")
 
@@ -230,7 +224,7 @@ class TeamcityPlacementSyncServiceTest {
         val diffRow = row(PlacementDiffRowStatus.RESOLVED)
         val diffService = diffServiceReturning(listOf(diffRow))
         val (svc, cms) = service(diffService)
-        whenever(cms.getComponent(componentId)).thenThrow(RuntimeException("boom"))
+        whenever(cms.updateComponent(any(), any())).thenThrow(RuntimeException("boom"))
 
         val result = svc.sync(setOf(componentId), PlacementDiffResult(Instant.now(), listOf(diffRow)), "job-42", "alice")
 
@@ -273,10 +267,7 @@ class TeamcityPlacementSyncServiceTest {
         // exact same (now stale) response the original Diff read, defeating "changed since diff".
         val diffRow = row(PlacementDiffRowStatus.RESOLVED)
         val diffService = diffServiceReturning(listOf(diffRow))
-        val (svc, cms) = service(diffService)
-        val detail = mock<ComponentDetailResponse>()
-        whenever(detail.version).thenReturn(1L)
-        whenever(cms.getComponent(componentId)).thenReturn(detail)
+        val (svc, _) = service(diffService)
 
         svc.sync(setOf(componentId), PlacementDiffResult(Instant.now(), listOf(diffRow)), "job-42", "alice")
 
