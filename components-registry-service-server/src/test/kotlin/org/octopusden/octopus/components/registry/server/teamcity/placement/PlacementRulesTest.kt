@@ -86,6 +86,21 @@ class DeriveTest {
     }
 
     @Test
+    fun `the same repository attached twice with textually different but equivalent rules still resolves`() {
+        // `+:mapper` and `+:mapper => mapper` both parse to the same PlacementValue (Source Path
+        // "mapper", checkout root) — comparing raw rule text would flag this as a false conflict.
+        val gateway = "ssh://h/prj/app-two.git"
+        val app = "ssh://h/prj/app-one.git"
+        // gateway gets a Checkout Directory too, so only `app` is at the checkout root — two
+        // entries both landing at the root (checkRules) would fail for an unrelated reason.
+        val bt = compileConfig(gateway to "+:. => gw", app to "+:mapper", app to "+:mapper => mapper")
+        val outcome = derive(DeriveInput(ENTRIES, listOf(bt), 0, emptyMap()))
+        assertEquals(PlacementRowStatus.RESOLVED, outcome.status)
+        // ENTRIES = [app-one, app-two]; `app` is app-one's vcsPath -> index 0.
+        assertEquals(PlacementValue(null, "mapper"), outcome.perEntry[0])
+    }
+
+    @Test
     fun `comp-one shape resolves`() {
         val gateway = "ssh://h/prj/app-two.git"
         val app = "ssh://h/prj/app-one.git"
