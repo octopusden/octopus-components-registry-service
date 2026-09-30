@@ -94,6 +94,18 @@ class TeamcityPlacementDiffService(
 ) {
     private val log = KotlinLogging.logger {}
 
+    /**
+     * Forces the next [runDiff] to read live TeamCity state instead of [enrichedTcProjectFetcher]'s
+     * short-TTL cache. `TeamcityPlacementSyncService` calls this before its safety re-derivation:
+     * without it, a re-derivation running inside the cache's TTL window could compare against the
+     * SAME cached (now stale) response the original Diff read, silently agreeing with a snapshot
+     * that no longer reflects TeamCity — defeating the "changed since diff" check entirely. A plain
+     * Diff run does not call this; its own staleness window is an accepted, documented tradeoff.
+     */
+    fun invalidateTeamcityCache() {
+        enrichedTcProjectFetcher.invalidateAll()
+    }
+
     /** [componentIds] restricts the walk to those components — used by Sync to re-derive just the
      * rows it is about to apply, against the same rules the original Diff used. */
     fun runDiff(componentIds: Set<UUID>? = null): PlacementDiffResult {

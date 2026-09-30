@@ -157,22 +157,25 @@ fun derive(input: DeriveInput): PlacementDerivation {
     val workDirSeen = mutableSetOf<WorkDirParse>()
 
     for (bt in input.compileConfigs) {
-        // Keyed by ALL checkout rules seen for that repo in this one build type (not just the
-        // last), so a build type attaching the same repository twice with disagreeing rules is
-        // caught as unexpressible below rather than silently resolved from whichever rule
-        // associate() happened to keep.
-        val attached: Map<String, List<String?>> = bt.vcsRootEntries.groupBy({ repoKey(it.url) }, { it.checkoutRules })
+        // Keyed by every checkout rule seen for that repo in this one build type, PARSED first
+        // (not just the last, and not the raw string) — so a build type attaching the same
+        // repository twice is only unexpressible when the rules actually resolve differently
+        // (`+:mapper` and `+:mapper => mapper` are the same [PlacementValue] even though the raw
+        // text differs), while a genuine disagreement or an unexpressible rule still is.
+        val attached: Map<String, List<PlacementValue?>> =
+            bt.vcsRootEntries.groupBy({ repoKey(it.url) }, { parseCheckoutRule(it.checkoutRules) })
         var hit = false
         entries.forEachIndexed { i, row ->
             val key = repoKey(row.vcsPath)
-            val rules = attached[key]
-            if (rules != null) {
+            val parsedRules = attached[key]
+            if (parsedRules != null) {
                 hit = true
-                if (rules.toSet().size > 1) {
+                val distinct = parsedRules.toSet()
+                val resolved = distinct.singleOrNull()
+                if (distinct.size != 1 || resolved == null) {
                     unexpressible.add(i)
                 } else {
-                    val parsed = parseCheckoutRule(rules.first())
-                    if (parsed == null) unexpressible.add(i) else perEntrySeen.getOrPut(i) { mutableSetOf() }.add(parsed)
+                    perEntrySeen.getOrPut(i) { mutableSetOf() }.add(resolved)
                 }
             }
         }
