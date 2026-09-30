@@ -1,7 +1,7 @@
 package org.octopusden.octopus.components.registry.server.teamcity.placement
 
-import mu.KotlinLogging
 import com.fasterxml.jackson.annotation.JsonIgnore
+import mu.KotlinLogging
 import org.octopusden.octopus.components.registry.server.config.ConditionalOnDatabaseEnabled
 import org.octopusden.octopus.components.registry.server.entity.ComponentConfigurationEntity
 import org.octopusden.octopus.components.registry.server.entity.ComponentEntity
@@ -393,6 +393,7 @@ class TeamcityPlacementDiffService(
             derivedBuildWorkingDirectory = derivedBwd,
             sourceBuildTypeIds = sourceBuildTypeIds,
             notes = notes,
+            componentVersion = component.version,
         )
 
     // ------------------------------------------------------------------

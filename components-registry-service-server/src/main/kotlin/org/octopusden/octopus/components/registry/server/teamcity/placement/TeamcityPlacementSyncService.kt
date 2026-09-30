@@ -168,11 +168,12 @@ class TeamcityPlacementSyncService(
                 checkoutDirectory = it.derivedCheckoutDirectory,
             )
         }
-        val current = componentManagementService.getComponent(componentId)
         componentManagementService.updateComponent(
             componentId,
             ComponentUpdateRequest(
-                version = current.version,
+                // The version read together with [row], not a fresh one: a manual edit since the
+                // re-derivation then fails the optimistic lock instead of being overwritten.
+                version = row.componentVersion,
                 baseConfiguration = BaseConfigurationRequest(
                     vcsEntries = vcsEntries,
                     // Base-row tri-state: null=unchanged, ""=clear to the checkout root — this
