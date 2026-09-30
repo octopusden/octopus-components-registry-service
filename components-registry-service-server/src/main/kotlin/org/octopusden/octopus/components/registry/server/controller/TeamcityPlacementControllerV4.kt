@@ -19,6 +19,7 @@ import org.springframework.web.bind.annotation.PostMapping
 import org.springframework.web.bind.annotation.RequestBody
 import org.springframework.web.bind.annotation.RequestMapping
 import org.springframework.web.bind.annotation.RestController
+import org.springframework.web.server.ResponseStatusException
 
 /**
  * ONB-002: TeamCity -> CRS VCS-placement Diff (read-only) and Sync (writes through the same v4
@@ -79,14 +80,22 @@ class TeamcityPlacementControllerV4(
 
     /**
      * Applies the latest Diff's resolved rows for [request]'s component ids ("select all
-     * resolved" from the Portal table). 202 on a freshly-started run, 409 (same-kind attach or
-     * cross-kind) exactly like every other admin job.
+     * resolved" from the Portal table). Refused with 409 up front, before any component is
+     * considered and before the job is even submitted, when [request]'s `diffId` no longer
+     * matches the latest Diff (ADR-002 decision 1) -- Diff keeps no history, so a Sync always
+     * acts on the result the user actually looked at, never on one that has since been replaced.
+     * Otherwise: 202 on a freshly-started run, 409 (same-kind attach or cross-kind) exactly like
+     * every other admin job.
      */
     @PostMapping("/sync")
     @PreAuthorize("@permissionEvaluator.canImport()")
     fun startSync(
         @RequestBody request: TeamcityPlacementSyncRequest,
     ): ResponseEntity<TeamcityPlacementSyncJobResponse> {
+        val currentDiffId = diffJobService.current()?.id
+        if (request.diffId != currentDiffId) {
+            throw ResponseStatusException(HttpStatus.CONFLICT, "diff replaced, re-run Diff")
+        }
         val outcome = syncJobService.startAsync(currentUserResolver.currentUsername(), request.componentIds)
         val httpStatus = if (outcome.isNewlyStarted) HttpStatus.ACCEPTED else HttpStatus.CONFLICT
         return ResponseEntity.status(httpStatus).body(TeamcityPlacementSyncJobResponse.from(outcome.state))
