@@ -8,6 +8,7 @@ import org.octopusden.octopus.components.registry.server.entity.VcsSettingsEntry
 import org.octopusden.octopus.components.registry.server.repository.ComponentConfigurationRepository
 import org.octopusden.octopus.components.registry.server.repository.VersionLineRepository
 import org.octopusden.octopus.components.registry.server.teamcity.validation.EnrichedTcProjectFetcher
+import org.octopusden.octopus.components.registry.server.util.VcsPlacementValidator
 import org.springframework.stereotype.Service
 import java.time.Instant
 import java.util.UUID
@@ -28,6 +29,11 @@ enum class PlacementDiffRowStatus {
 
     /** Derivation resolved and matches every current value; nothing to do. */
     IN_SYNC,
+
+    /** Derivation resolved and differs from the current value, but the derived values would fail
+     * the SAME v4 write validation a human PATCH runs (see [org.octopusden.octopus.components.registry.server.util.VcsPlacementValidator]) —
+     * never offered to Sync. The validation message is in the row's `notes`. */
+    INVALID,
 
     /** The component's linked TeamCity project(s) could not be read; see the row's notes for why. */
     TC_ERROR,
@@ -170,7 +176,7 @@ class TeamcityPlacementDiffService(
         )
         if (!inScope) return null
 
-        val (status, extraNotes) = finalizeStatus(componentId, placementEntries, row.buildWorkingDirectory, derivation)
+        val (status, extraNotes) = finalizeStatus(componentId, placementEntries, entries, row.buildWorkingDirectory, derivation)
         return toRowDiff(
             component,
             componentId,
@@ -210,12 +216,13 @@ class TeamcityPlacementDiffService(
     }
 
     /**
-     * Layers MANUAL_EDIT / IN_SYNC over a RESOLVED derivation by comparing it against the row's
-     * current values; passes every other status straight through.
+     * Layers INVALID / MANUAL_EDIT / IN_SYNC over a RESOLVED derivation by comparing it against the
+     * row's current values; passes every other status straight through.
      */
     private fun finalizeStatus(
         componentId: UUID,
         entries: List<PlacementRegistryEntry>,
+        rawEntries: List<VcsSettingsEntryEntity>,
         currentBwd: String?,
         derivation: PlacementDerivation,
     ): Pair<PlacementDiffRowStatus, List<String>> {
@@ -229,6 +236,33 @@ class TeamcityPlacementDiffService(
         val bwdDiffers = derivation.buildWorkingDirectory != currentBwd
         if (differingEntries.isEmpty() && !bwdDiffers) {
             return PlacementDiffRowStatus.IN_SYNC to emptyList()
+        }
+        // Owner review finding 4 (ADR-002 decision 3): RESOLVED requires the derived values to
+        // ALSO pass the same validation a real v4 write runs — not just PlacementRules.checkRules'
+        // narrower pure-derivation check (Checkout Directory duplicates/reserved names only, never
+        // entry names or Source Path shape). Per ADR-001 decision 4, a placed entry's name becomes
+        // its Checkout Directory on write; an unplaced entry keeps its current (kept) name.
+        val invalidMessage = runCatching {
+            val candidateEntries = rawEntries.mapIndexed { i, e ->
+                val derived = derivation.perEntry[i]
+                VcsSettingsEntryEntity(
+                    componentConfiguration = e.componentConfiguration,
+                    name = derived?.checkoutDirectory ?: e.name,
+                    vcsPath = e.vcsPath,
+                    branch = e.branch,
+                    tag = e.tag,
+                    hotfixBranch = e.hotfixBranch,
+                    repositoryType = e.repositoryType,
+                    sortOrder = i,
+                    sourcePath = derived?.sourcePath,
+                    checkoutDirectory = derived?.checkoutDirectory,
+                )
+            }
+            VcsPlacementValidator.validateVcsPlacement(candidateEntries)
+            VcsPlacementValidator.validateBuildWorkingDirectory(candidateEntries, derivation.buildWorkingDirectory)
+        }.exceptionOrNull()
+        if (invalidMessage != null) {
+            return PlacementDiffRowStatus.INVALID to listOf(invalidMessage.message ?: "invalid placement")
         }
         val manualEntry = differingEntries.any { i -> placementEditHistory.isManuallyPlaced(componentId, entries[i].vcsPath) }
         val manualBwd = bwdDiffers && placementEditHistory.isBuildWorkingDirectoryManuallySet(componentId, entries.first().vcsPath)
