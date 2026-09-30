@@ -368,12 +368,14 @@ class TeamcityPlacementDiffServiceTest {
     }
 
     @Test
-    fun `a kept name colliding with another root's derived checkout directory is invalid (owner review finding 4, RED)`() {
-        // "app-one" is derived as the APP root's Checkout Directory (and, per ADR-001 decision
-        // 4, becomes its name on write); the GATEWAY root is unplaced (no rule attaches it), so it
-        // keeps its CURRENT registry name -- which here already happens to be "app-one". A real
-        // v4 write would reject this exact collision (`vcsEntries[i].checkoutDirectory: ... already
-        // the name of ...`), so Diff must report it INVALID, not RESOLVED.
+    fun `a kept name that WOULD collide falls back to main exactly as a real write would (owner review finding 4 hardening, RED)`() {
+        // Codex second-pass finding: the first version of this check built its candidate names as
+        // `derived checkoutDirectory ?: kept name` -- no exclusion, no fallback -- so it flagged
+        // this row INVALID. But ComponentManagementServiceImpl.replaceVcsEntries (the REAL write)
+        // excludes a kept name that collides with a NEW checkout directory and falls back to
+        // "main" instead of failing -- so the real write would ACCEPT this row (GATEWAY ends up
+        // named "main", not colliding with APP's "app-one"). Diff's candidate must derive names
+        // the SAME way, or it reports INVALID for rows the real write happily accepts.
         val comp = component()
         val row = ComponentConfigurationEntity(id = UUID.randomUUID(), component = comp, rowType = "BASE")
         row.vcsEntries += VcsSettingsEntryEntity(
@@ -392,7 +394,25 @@ class TeamcityPlacementDiffServiceTest {
         val svc = service(listOf(row), mapOf(comp.id!! to listOf("P")), FakeEnrichedTcProjectFetcher(mapOf("P" to project(bt))))
 
         val diff = svc.runDiff().rows.single()
+        assertEquals(PlacementDiffRowStatus.RESOLVED, diff.status)
+    }
+
+    @Test
+    fun `a collision that survives the real fallback (both land on the literal 'main') is still invalid`() {
+        // The "main" fallback ITSELF can collide: if some entry's derived Checkout Directory is
+        // literally "main", an unplaced root whose kept name collides (so it falls back to the
+        // hardcoded default "main") lands on the SAME name as that other root -- a real v4 write
+        // would reject this exactly the same way. Regression guard for the hardening above: the
+        // fix must not overcorrect into treating every collision as fallback-safe.
+        val comp = component()
+        val row = ComponentConfigurationEntity(id = UUID.randomUUID(), component = comp, rowType = "BASE")
+        row.vcsEntries += VcsSettingsEntryEntity(componentConfiguration = row, name = "main", vcsPath = gatewayId, sortOrder = 0)
+        row.vcsEntries += VcsSettingsEntryEntity(componentConfiguration = row, name = "app-original", vcsPath = appId, sortOrder = 1)
+        val bt = compileBuildType("compileA", roots = listOf(gatewayId to "", appId to "+:. => main"))
+        val svc = service(listOf(row), mapOf(comp.id!! to listOf("P")), FakeEnrichedTcProjectFetcher(mapOf("P" to project(bt))))
+
+        val diff = svc.runDiff().rows.single()
         assertEquals(PlacementDiffRowStatus.INVALID, diff.status)
-        assertTrue(diff.notes.any { it.contains("app-one") })
+        assertTrue(diff.notes.any { it.contains("main") })
     }
 }
