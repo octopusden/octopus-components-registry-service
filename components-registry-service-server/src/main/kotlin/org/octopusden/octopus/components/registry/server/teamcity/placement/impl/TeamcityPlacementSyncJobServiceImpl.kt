@@ -62,7 +62,10 @@ class TeamcityPlacementSyncJobServiceImpl(
         val callerSecurityContext = SecurityContextHolder.getContext()
         val outcome =
             try {
-                lifecycle.claimAndSubmit(buildCandidate = ::buildCandidate, work = { jobId -> runSync(jobId, triggeredBy, componentIds, callerSecurityContext) })
+                lifecycle.claimAndSubmit(
+                    buildCandidate = ::buildCandidate,
+                    work = { jobId -> runSync(jobId, triggeredBy, componentIds, callerSecurityContext) },
+                )
             } catch (rejected: RejectedExecutionException) {
                 serviceEventRecorder.recordInstant(
                     type = ServiceEventType.TEAMCITY_PLACEMENT_SYNC,
@@ -83,7 +86,14 @@ class TeamcityPlacementSyncJobServiceImpl(
     override fun current(): TeamcityPlacementSyncJobState? = lifecycle.current()
 
     private fun buildCandidate(jobId: String): TeamcityPlacementSyncJobState =
-        TeamcityPlacementSyncJobState(id = jobId, state = JobState.RUNNING, startedAt = Instant.now(), finishedAt = null, result = null, errorMessage = null)
+        TeamcityPlacementSyncJobState(
+            id = jobId,
+            state = JobState.RUNNING,
+            startedAt = Instant.now(),
+            finishedAt = null,
+            result = null,
+            errorMessage = null,
+        )
 
     private fun runSync(
         jobId: String,
@@ -122,13 +132,20 @@ class TeamcityPlacementSyncJobServiceImpl(
                     correlationId = jobId,
                     status = ServiceEventStatus.COMPLETED,
                     summary = "TeamCity placement sync completed",
-                    detail = mapOf("requested" to result.requested, "applied" to result.applied, "skipped" to result.skipped, "failed" to result.failed),
+                    detail = mapOf(
+                        "requested" to result.requested,
+                        "applied" to result.applied,
+                        "skipped" to result.skipped,
+                        "failed" to result.failed,
+                    ),
                 )
             } catch (
                 @Suppress("TooGenericExceptionCaught") e: Throwable,
             ) {
                 LOG.error("TeamCity placement sync job {} FAILED", jobId, e)
-                lifecycle.update(jobId) { current -> current.copy(state = JobState.FAILED, finishedAt = Instant.now(), errorMessage = e.message ?: e::class.java.simpleName) }
+                lifecycle.update(jobId) { current ->
+                    current.copy(state = JobState.FAILED, finishedAt = Instant.now(), errorMessage = e.message ?: e::class.java.simpleName)
+                }
                 serviceEventRecorder.recordFinish(
                     type = ServiceEventType.TEAMCITY_PLACEMENT_SYNC,
                     source = ServiceEventSource.CRS,

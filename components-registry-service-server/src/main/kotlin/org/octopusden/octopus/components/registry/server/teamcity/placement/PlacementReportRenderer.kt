@@ -6,6 +6,8 @@ package org.octopusden.octopus.components.registry.server.teamcity.placement
  * directly. Pure functions, no framework dependency; the controller sets the content type.
  */
 object PlacementReportRenderer {
+    private val csvSpecialChars = charArrayOf(',', '"', '\n', '\r')
+
     fun toHtml(result: PlacementDiffResult): String {
         val rowsHtml = result.rows.joinToString("\n") { row ->
             val entriesHtml = row.entries.joinToString("<br/>") { e ->
@@ -20,7 +22,9 @@ object PlacementReportRenderer {
             |  <td>${esc(row.rowLabel)}</td>
             |  <td>${esc(row.status.name)}</td>
             |  <td>$entriesHtml</td>
-            |  <td><code>${esc(row.currentBuildWorkingDirectory ?: "(root)")}</code> &rarr; <code>${esc(row.derivedBuildWorkingDirectory ?: "(root)")}</code></td>
+            |  <td><code>${esc(row.currentBuildWorkingDirectory ?: "(root)")}</code> &rarr; <code>${esc(
+                row.derivedBuildWorkingDirectory ?: "(root)",
+            )}</code></td>
             |  <td>${row.sourceBuildTypeIds.joinToString(", ") { esc(it) }}</td>
             |  <td>${row.notes.joinToString("<br/>") { esc(it) }}</td>
             |</tr>
@@ -47,34 +51,59 @@ object PlacementReportRenderer {
         |</tbody>
         |</table>
         |</body></html>
-        """.trimMargin()
+            """.trimMargin()
     }
 
     fun toCsv(result: PlacementDiffResult): String {
         val header = listOf(
-            "componentKey", "versionRange", "rowLabel", "status", "entryName", "vcsPath",
-            "currentCheckoutDirectory", "currentSourcePath", "derivedCheckoutDirectory", "derivedSourcePath",
-            "currentBuildWorkingDirectory", "derivedBuildWorkingDirectory", "sourceBuildTypeIds", "notes",
+            "componentKey",
+            "versionRange",
+            "rowLabel",
+            "status",
+            "entryName",
+            "vcsPath",
+            "currentCheckoutDirectory",
+            "currentSourcePath",
+            "derivedCheckoutDirectory",
+            "derivedSourcePath",
+            "currentBuildWorkingDirectory",
+            "derivedBuildWorkingDirectory",
+            "sourceBuildTypeIds",
+            "notes",
         )
         val lines = mutableListOf(header.joinToString(",") { csvCell(it) })
         for (row in result.rows) {
             for (entry in row.entries) {
                 lines += listOf(
-                    row.componentKey, row.versionRange, row.rowLabel, row.status.name,
-                    entry.name, entry.vcsPath,
-                    entry.currentCheckoutDirectory.orEmpty(), entry.currentSourcePath.orEmpty(),
-                    entry.derivedCheckoutDirectory.orEmpty(), entry.derivedSourcePath.orEmpty(),
-                    row.currentBuildWorkingDirectory.orEmpty(), row.derivedBuildWorkingDirectory.orEmpty(),
-                    row.sourceBuildTypeIds.joinToString(";"), row.notes.joinToString(";"),
+                    row.componentKey,
+                    row.versionRange,
+                    row.rowLabel,
+                    row.status.name,
+                    entry.name,
+                    entry.vcsPath,
+                    entry.currentCheckoutDirectory.orEmpty(),
+                    entry.currentSourcePath.orEmpty(),
+                    entry.derivedCheckoutDirectory.orEmpty(),
+                    entry.derivedSourcePath.orEmpty(),
+                    row.currentBuildWorkingDirectory.orEmpty(),
+                    row.derivedBuildWorkingDirectory.orEmpty(),
+                    row.sourceBuildTypeIds.joinToString(";"),
+                    row.notes.joinToString(";"),
                 ).joinToString(",") { csvCell(it) }
             }
         }
         return lines.joinToString("\r\n") + "\r\n"
     }
 
-    private fun csvCell(value: String): String =
-        if (value.any { it == ',' || it == '"' || it == '\n' || it == '\r' }) "\"${value.replace("\"", "\"\"")}\"" else value
+    private fun csvCell(value: String): String {
+        val needsQuoting = value.any { it in csvSpecialChars }
+        return if (needsQuoting) "\"${value.replace("\"", "\"\"")}\"" else value
+    }
 
     private fun esc(value: String): String =
-        value.replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;").replace("\"", "&quot;")
+        value
+            .replace("&", "&amp;")
+            .replace("<", "&lt;")
+            .replace(">", "&gt;")
+            .replace("\"", "&quot;")
 }
