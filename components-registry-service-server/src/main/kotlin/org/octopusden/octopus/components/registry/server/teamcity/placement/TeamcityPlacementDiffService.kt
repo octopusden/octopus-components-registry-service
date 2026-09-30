@@ -141,7 +141,7 @@ class TeamcityPlacementDiffService(
         val rowLabel = row.overriddenAttribute ?: "BASE"
 
         if (chain is ChainOutcome.Error) {
-            if (!inScope(entries, row.buildWorkingDirectory, derivedCd = null, derivedBwd = null)) return null
+            if (!inScope(entries, row.buildWorkingDirectory, derivedCd = null, derivedSp = null, derivedBwd = null)) return null
             return toRowDiff(
                 component,
                 componentId,
@@ -160,10 +160,15 @@ class TeamcityPlacementDiffService(
         val outsideCounts = chain.nonCompileRuled.filterValues { it.first.any { key -> key in repoKeys } }.mapValues { it.value.second }
         val derivation = derive(DeriveInput(placementEntries, chain.compileConfigs, chain.pausedCompileCount, outsideCounts))
 
-        val derivedCdForScope = derivation.perEntry.values
-            .firstOrNull()
-            ?.checkoutDirectory
-        if (!inScope(entries, row.buildWorkingDirectory, derivedCdForScope, derivation.buildWorkingDirectory)) return null
+        val derivedForScope = derivation.perEntry.values.firstOrNull()
+        val inScope = inScope(
+            entries,
+            row.buildWorkingDirectory,
+            derivedForScope?.checkoutDirectory,
+            derivedForScope?.sourcePath,
+            derivation.buildWorkingDirectory,
+        )
+        if (!inScope) return null
 
         val (status, extraNotes) = finalizeStatus(componentId, placementEntries, row.buildWorkingDirectory, derivation)
         return toRowDiff(
@@ -180,15 +185,28 @@ class TeamcityPlacementDiffService(
         )
     }
 
-    /** Scope filter — see class kdoc. Only single-root rows are filtered; a multi-root row is always in scope. */
+    /**
+     * Scope filter — see class kdoc. Only single-root rows are filtered; a multi-root row is
+     * always in scope. Checks Source Path alongside Checkout Directory / Build Working Directory:
+     * ADR-001 allows a single root with an empty Checkout Directory but a non-empty Source Path
+     * (`+:<Source Path> => <Source Path>`, a monorepo subdirectory with no rename) — that is a real
+     * placement a row could need synced or reported on, not "nothing".
+     */
     private fun inScope(
         entries: List<VcsSettingsEntryEntity>,
         currentBwd: String?,
         derivedCd: String?,
+        derivedSp: String?,
         derivedBwd: String?,
     ): Boolean {
         if (entries.size != 1) return true
-        return entries.single().checkoutDirectory != null || currentBwd != null || derivedCd != null || derivedBwd != null
+        val entry = entries.single()
+        return entry.checkoutDirectory != null ||
+            entry.sourcePath != null ||
+            currentBwd != null ||
+            derivedCd != null ||
+            derivedSp != null ||
+            derivedBwd != null
     }
 
     /**
