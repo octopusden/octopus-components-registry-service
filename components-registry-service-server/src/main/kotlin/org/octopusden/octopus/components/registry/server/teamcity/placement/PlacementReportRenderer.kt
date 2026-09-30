@@ -9,6 +9,7 @@ import org.springframework.web.util.HtmlUtils
  */
 object PlacementReportRenderer {
     private val csvSpecialChars = charArrayOf(',', '"', '\n', '\r')
+    private val csvFormulaChars = charArrayOf('=', '+', '-', '@', '\t', '\r')
 
     fun toHtml(result: PlacementDiffResult): String {
         val rowsHtml = result.rows.joinToString("\n") { row ->
@@ -117,7 +118,9 @@ object PlacementReportRenderer {
         return lines.joinToString("\r\n") + "\r\n"
     }
 
-    private fun csvCell(value: String): String {
+    private fun csvCell(raw: String): String {
+        // A leading =, +, -, @, tab or CR makes a spreadsheet run the cell as a formula.
+        val value = if (raw.isNotEmpty() && raw[0] in csvFormulaChars) "'$raw" else raw
         val needsQuoting = value.any { it in csvSpecialChars }
         return if (needsQuoting) "\"${value.replace("\"", "\"\"")}\"" else value
     }
