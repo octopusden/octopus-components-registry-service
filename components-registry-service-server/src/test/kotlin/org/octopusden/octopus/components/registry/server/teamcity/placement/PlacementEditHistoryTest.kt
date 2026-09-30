@@ -117,4 +117,30 @@ class PlacementEditHistoryTest {
         assertTrue(history(v8At = null).wasEverManuallyPlaced(componentId, "ssh://h/prj/app.git"))
         assertTrue(history(v8At = null).wasBuildWorkingDirectoryEverManuallySet(componentId))
     }
+
+    @Test
+    fun `a value the Sync job itself last wrote is not a manual edit (owner review finding 2, RED)`() {
+        // PR #510 review: today ANY post-V8 change is "manual", including one written by Sync
+        // itself — so a component TeamCity changes again right after a Sync can never resolve on
+        // the next Diff; it is permanently stuck reporting MANUAL_EDIT against its own prior Sync.
+        // The fix: a change tagged as coming from Sync must not count as a manual edit.
+        val syncWrite = AuditLogEntity(
+            entityType = "Component",
+            entityId = componentId.toString(),
+            action = "UPDATE",
+            oldValue = vcsEntriesSnapshot("ssh://h/prj/app.git", checkoutDirectory = null, sourcePath = null),
+            newValue = vcsEntriesSnapshot("ssh://h/prj/app.git", checkoutDirectory = "app", sourcePath = null),
+            changeComment = "sync from TeamCity (job abc-123)",
+        )
+        whenever(
+            auditLogRepository.findByEntityTypeAndEntityIdAndChangedAtAfterAndActionIn(
+                "Component",
+                componentId.toString(),
+                v8AppliedAt,
+                listOf("UPDATE", "RENAME"),
+            ),
+        ).thenReturn(listOf(syncWrite))
+
+        assertFalse(history().wasEverManuallyPlaced(componentId, "ssh://h/prj/app.git"))
+    }
 }
