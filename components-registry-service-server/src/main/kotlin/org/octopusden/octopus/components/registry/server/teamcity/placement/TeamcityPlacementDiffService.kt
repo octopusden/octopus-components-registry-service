@@ -84,6 +84,8 @@ data class PlacementRowDiff(
 data class PlacementDiffResult(
     val generatedAt: Instant,
     val rows: List<PlacementRowDiff>,
+    /** The Diff run this result belongs to — what a Sync request must name. Set on the report endpoint. */
+    val diffId: String? = null,
 )
 
 /**
