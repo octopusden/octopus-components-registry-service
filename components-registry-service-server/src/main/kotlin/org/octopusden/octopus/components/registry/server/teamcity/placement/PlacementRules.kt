@@ -1,5 +1,6 @@
 package org.octopusden.octopus.components.registry.server.teamcity.placement
 
+import org.octopusden.octopus.components.registry.server.util.VcsUrlCanonicalizer
 import java.util.Locale
 
 /*
@@ -83,20 +84,14 @@ private val CHECKOUT_RULE_PATTERN = Regex("""^\+:\s*(\S+?)(?:\s*=>\s*(\S+))?$"""
 val RESERVED_CHECKOUT_DIRECTORIES: Set<String> = setOf("report-templates", "sonar-config", "target", "sonar-report")
 
 /**
- * Host- and scheme-agnostic `"<project>/<repo>"` in lower case, without a trailing `.git` — matches
- * a TeamCity VCS root URL to a registry `vcsPath` regardless of protocol, host or case. Port of
- * `placement_import.py`'s `repo_key`.
+ * Matches a TeamCity VCS root URL to a registry `vcsPath` by their FULL canonical form (scheme
+ * ignored, host INCLUDED, Git-case-insensitive, trailing `.git` stripped) — the same rule
+ * [VcsUrlCanonicalizer] already applies to cross-component VCS-path comparisons, reused here rather
+ * than re-implemented. The Python one-off `placement_import.py`'s `repo_key` kept only the last two
+ * path segments and dropped the host entirely, silently matching same-named repositories on
+ * different hosts; that bug is deliberately not ported.
  */
-fun repoKey(url: String?): String {
-    var u = (url ?: "").trim().lowercase(Locale.ROOT).trimEnd('/')
-    u = Regex("""\.git/?$""").replace(u, "")
-    u = u.replace(':', '/')
-    return u
-        .split('/')
-        .filter { it.isNotEmpty() }
-        .takeLast(2)
-        .joinToString("/")
-}
+fun repoKey(url: String?): String = VcsUrlCanonicalizer.canonicalize(url ?: "")
 
 /**
  * One checkout rule of a TeamCity VCS root entry -> a [PlacementValue], or `null` when the rule is
