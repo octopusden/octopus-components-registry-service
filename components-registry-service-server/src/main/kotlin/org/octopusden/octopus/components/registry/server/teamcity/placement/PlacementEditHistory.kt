@@ -80,7 +80,9 @@ class PlacementEditHistory(
         auditLogRepository.findByEntityTypeAndEntityIdAndActionInOrderByChangedAtDesc(
             "Component",
             componentId.toString(),
-            listOf("UPDATE", "RENAME"),
+            // CREATE too: a value set at creation is a human choice (CREATE has no oldValue, so
+            // any non-null field in newValue counts as a change). The Git import writes no audit.
+            listOf("CREATE", "UPDATE", "RENAME"),
         )
 
     private fun isSyncTagged(auditRow: AuditLogEntity): Boolean = auditRow.changeComment?.startsWith(SYNC_CHANGE_COMMENT_PREFIX) == true
