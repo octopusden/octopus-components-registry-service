@@ -19,14 +19,19 @@ data class StartPlacementSyncResult(
 )
 
 /**
- * ONB-002: async wrapper around [TeamcityPlacementSyncService.sync], run against the LATEST
- * completed [TeamcityPlacementDiffJobService] result at the moment this job's work actually runs
- * (not at request time) — same in-memory, single-pod, non-resumable shape as the Diff job.
+ * ONB-002: async wrapper around [TeamcityPlacementSyncService.sync]. [startAsync]'s [latestDiff]
+ * is the exact Diff result the caller validated its `diffId` against (owner review finding 1
+ * hardening): the caller reads [TeamcityPlacementDiffJobService.current] ONCE, checks its id, and
+ * passes the SAME result object through here — never re-fetched once the job actually runs. A
+ * re-fetch would reopen the TOCTOU window the `diffId` check exists to close: a new Diff
+ * completing between the check and the (async) work running would otherwise let Sync silently act
+ * on a result the caller never validated.
  */
 interface TeamcityPlacementSyncJobService {
     fun startAsync(
         triggeredBy: String,
         componentIds: List<UUID>,
+        latestDiff: PlacementDiffResult,
     ): StartPlacementSyncResult
 
     fun current(): TeamcityPlacementSyncJobState?
