@@ -1,0 +1,156 @@
+package org.octopusden.octopus.components.registry.server.teamcity.placement
+
+import mu.KotlinLogging
+import org.octopusden.octopus.components.registry.server.config.ConditionalOnDatabaseEnabled
+import org.octopusden.octopus.components.registry.server.dto.v4.BaseConfigurationRequest
+import org.octopusden.octopus.components.registry.server.dto.v4.ComponentUpdateRequest
+import org.octopusden.octopus.components.registry.server.dto.v4.FieldOverrideUpdateRequest
+import org.octopusden.octopus.components.registry.server.dto.v4.MarkerChildrenPayload
+import org.octopusden.octopus.components.registry.server.dto.v4.VcsEntryRequest
+import org.octopusden.octopus.components.registry.server.service.ComponentManagementService
+import org.springframework.stereotype.Service
+import java.util.UUID
+
+/** One row's write outcome. `outcome` is one of: `applied`, `skipped: changed since diff`,
+ * `skipped: <lowercase status>` (not resolved, or resolved-but-manual), `failed: <message>`. */
+data class PlacementRowSyncOutcome(
+    val configurationRowId: UUID,
+    val rowLabel: String,
+    val outcome: String,
+)
+
+data class PlacementComponentSyncOutcome(
+    val componentId: UUID,
+    val componentKey: String,
+    val rows: List<PlacementRowSyncOutcome>,
+)
+
+data class PlacementSyncResult(
+    val triggeredBy: String,
+    val requested: Int,
+    val applied: Int,
+    val skipped: Int,
+    val failed: Int,
+    val components: List<PlacementComponentSyncOutcome>,
+)
+
+/**
+ * ONB-002: applies a previously-run Diff's RESOLVED rows for the selected components.
+ *
+ * Safety (design brief): re-reads TeamCity and the registry and re-derives before writing; if the
+ * fresh derivation of a row differs from the snapshot it was selected from, that row is skipped
+ * with "changed since diff" rather than applied blind. Every write goes through
+ * [ComponentManagementService] — the same validation, name-derivation and audit path a human PATCH
+ * uses — never direct SQL. MANUAL_EDIT rows are never selected for write in the first place (they
+ * are not RESOLVED), so [TeamcityPlacementDiffService.runDiff]'s own re-derivation is the single
+ * place that decides overwrite safety; this service does not re-check it.
+ */
+@ConditionalOnDatabaseEnabled
+@Service
+class TeamcityPlacementSyncService(
+    private val diffService: TeamcityPlacementDiffService,
+    private val componentManagementService: ComponentManagementService,
+) {
+    private val log = KotlinLogging.logger {}
+
+    fun sync(
+        componentIds: Set<UUID>,
+        latestDiff: PlacementDiffResult?,
+        triggeredBy: String,
+    ): PlacementSyncResult {
+        val snapshotByRow = latestDiff?.rows.orEmpty().associateBy { it.configurationRowId }
+        val fresh = if (componentIds.isEmpty()) emptyList() else diffService.runDiff(componentIds).rows
+        val components = mutableListOf<PlacementComponentSyncOutcome>()
+        var applied = 0
+        var skipped = 0
+        var failed = 0
+
+        for (componentId in componentIds) {
+            val componentRows = fresh.filter { it.componentId == componentId }
+            val rowOutcomes = mutableListOf<PlacementRowSyncOutcome>()
+            for (row in componentRows) {
+                val outcome = applyOrSkip(componentId, row, snapshotByRow[row.configurationRowId])
+                when {
+                    outcome == "applied" -> applied++
+                    outcome.startsWith("failed") -> failed++
+                    else -> skipped++
+                }
+                rowOutcomes += PlacementRowSyncOutcome(row.configurationRowId, row.rowLabel, outcome)
+            }
+            val componentKey = componentRows.firstOrNull()?.componentKey ?: snapshotByRow.values.firstOrNull { it.componentId == componentId }?.componentKey ?: componentId.toString()
+            components += PlacementComponentSyncOutcome(componentId, componentKey, rowOutcomes)
+        }
+
+        log.info { "TeamCity placement sync: requested=${componentIds.size}, applied=$applied, skipped=$skipped, failed=$failed" }
+        return PlacementSyncResult(triggeredBy, componentIds.size, applied, skipped, failed, components)
+    }
+
+    private fun applyOrSkip(
+        componentId: UUID,
+        freshRow: PlacementRowDiff,
+        snapshotRow: PlacementRowDiff?,
+    ): String {
+        if (snapshotRow == null || snapshotRow != freshRow) return "skipped: changed since diff"
+        if (freshRow.status != PlacementDiffRowStatus.RESOLVED) return "skipped: ${freshRow.status.name.lowercase()}"
+        return try {
+            applyRow(componentId, freshRow)
+            "applied"
+        } catch (
+            @Suppress("TooGenericExceptionCaught") e: Exception,
+        ) {
+            log.warn(e) { "TeamCity placement sync: failed to write row ${freshRow.configurationRowId} of component '${freshRow.componentKey}'" }
+            "failed: ${e.message ?: e::class.simpleName}"
+        }
+    }
+
+    private fun applyRow(
+        componentId: UUID,
+        row: PlacementRowDiff,
+    ) {
+        val vcsEntries = row.entries.map {
+            VcsEntryRequest(
+                vcsPath = it.vcsPath,
+                branch = it.branch,
+                tag = it.tag,
+                hotfixBranch = it.hotfixBranch,
+                repositoryType = it.repositoryType,
+                sourcePath = it.derivedSourcePath,
+                checkoutDirectory = it.derivedCheckoutDirectory,
+            )
+        }
+        if (row.rowLabel == BASE_ROW_LABEL) {
+            val current = componentManagementService.getComponent(componentId)
+            componentManagementService.updateComponent(
+                componentId,
+                ComponentUpdateRequest(
+                    version = current.version,
+                    baseConfiguration = BaseConfigurationRequest(
+                        vcsEntries = vcsEntries,
+                        // Base-row tri-state: null=unchanged, ""=clear to the checkout root — this
+                        // write always sets the fully-resolved value, so root is "" here, never null.
+                        buildWorkingDirectory = row.derivedBuildWorkingDirectory ?: "",
+                    ),
+                    changeComment = "sync from TeamCity",
+                ),
+            )
+        } else {
+            // A marker payload REPLACES the row: absent buildWorkingDirectory clears it, so null
+            // (root) here is already correct as-is — the opposite convention from the base PATCH
+            // above. FieldOverrideUpdateRequest carries no changeComment/jiraTaskKey field today;
+            // the audit row is still attributed to the triggering user (SecurityContext
+            // propagation into the job's executor thread), just without the "sync from TeamCity"
+            // label — see the PR description.
+            componentManagementService.updateFieldOverride(
+                componentId,
+                row.configurationRowId,
+                FieldOverrideUpdateRequest(
+                    markerChildren = MarkerChildrenPayload(vcsEntries = vcsEntries, buildWorkingDirectory = row.derivedBuildWorkingDirectory),
+                ),
+            )
+        }
+    }
+
+    private companion object {
+        const val BASE_ROW_LABEL = "BASE"
+    }
+}
