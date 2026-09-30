@@ -4,8 +4,6 @@ import mu.KotlinLogging
 import org.octopusden.octopus.components.registry.server.config.ConditionalOnDatabaseEnabled
 import org.octopusden.octopus.components.registry.server.dto.v4.BaseConfigurationRequest
 import org.octopusden.octopus.components.registry.server.dto.v4.ComponentUpdateRequest
-import org.octopusden.octopus.components.registry.server.dto.v4.FieldOverrideUpdateRequest
-import org.octopusden.octopus.components.registry.server.dto.v4.MarkerChildrenPayload
 import org.octopusden.octopus.components.registry.server.dto.v4.VcsEntryRequest
 import org.octopusden.octopus.components.registry.server.service.ComponentManagementService
 import org.springframework.stereotype.Service
@@ -43,7 +41,9 @@ data class PlacementSyncResult(
  * [ComponentManagementService] — the same validation, name-derivation and audit path a human PATCH
  * uses — never direct SQL. MANUAL_EDIT rows are never selected for write in the first place (they
  * are not RESOLVED), so [TeamcityPlacementDiffService.runDiff]'s own re-derivation is the single
- * place that decides overwrite safety; this service does not re-check it.
+ * place that decides overwrite safety; this service does not re-check it. Marker (per-range
+ * `vcs.settings`) rows are report-only in this version (ADR-002 decisions 4/8): whatever their
+ * status, they are always reported "skipped: report-only (per-range row)", never written.
  */
 @ConditionalOnDatabaseEnabled
 @Service
@@ -111,6 +111,12 @@ class TeamcityPlacementSyncService(
         freshRow: PlacementRowDiff,
         snapshotRow: PlacementRowDiff?,
     ): String {
+        // ADR-002 decisions 4/8 (owner review finding 5): marker (per-range `vcs.settings`) rows
+        // are report-only in this version -- Diff shows and classifies them, but Sync never
+        // writes one, whatever its status or selection. Checked first, ahead of every other
+        // outcome, so a marker row is never reported "changed since diff" or a validation status
+        // either -- it is always, unconditionally, report-only.
+        if (freshRow.rowLabel != BASE_ROW_LABEL) return "skipped: report-only (per-range row)"
         if (snapshotRow == null || snapshotRow != freshRow) return "skipped: changed since diff"
         if (freshRow.status != PlacementDiffRowStatus.RESOLVED) return "skipped: ${freshRow.status.name.lowercase()}"
         return try {
@@ -126,6 +132,8 @@ class TeamcityPlacementSyncService(
         }
     }
 
+    /** Always a BASE row here — a marker (per-range `vcs.settings`) row never reaches this point;
+     * see the report-only check in [applyOrSkip]. */
     private fun applyRow(
         componentId: UUID,
         row: PlacementRowDiff,
@@ -141,39 +149,20 @@ class TeamcityPlacementSyncService(
                 checkoutDirectory = it.derivedCheckoutDirectory,
             )
         }
-        if (row.rowLabel == BASE_ROW_LABEL) {
-            val current = componentManagementService.getComponent(componentId)
-            componentManagementService.updateComponent(
-                componentId,
-                ComponentUpdateRequest(
-                    version = current.version,
-                    baseConfiguration = BaseConfigurationRequest(
-                        vcsEntries = vcsEntries,
-                        // Base-row tri-state: null=unchanged, ""=clear to the checkout root — this
-                        // write always sets the fully-resolved value, so root is "" here, never null.
-                        buildWorkingDirectory = row.derivedBuildWorkingDirectory ?: "",
-                    ),
-                    changeComment = "sync from TeamCity",
+        val current = componentManagementService.getComponent(componentId)
+        componentManagementService.updateComponent(
+            componentId,
+            ComponentUpdateRequest(
+                version = current.version,
+                baseConfiguration = BaseConfigurationRequest(
+                    vcsEntries = vcsEntries,
+                    // Base-row tri-state: null=unchanged, ""=clear to the checkout root — this
+                    // write always sets the fully-resolved value, so root is "" here, never null.
+                    buildWorkingDirectory = row.derivedBuildWorkingDirectory ?: "",
                 ),
-            )
-        } else {
-            // A marker payload REPLACES the row: absent buildWorkingDirectory clears it, so null
-            // (root) here is already correct as-is — the opposite convention from the base PATCH
-            // above. FieldOverrideUpdateRequest carries no changeComment/jiraTaskKey field today;
-            // the audit row is still attributed to the triggering user (SecurityContext
-            // propagation into the job's executor thread), just without the "sync from TeamCity"
-            // label — see the PR description.
-            componentManagementService.updateFieldOverride(
-                componentId,
-                row.configurationRowId,
-                FieldOverrideUpdateRequest(
-                    markerChildren = MarkerChildrenPayload(
-                        vcsEntries = vcsEntries,
-                        buildWorkingDirectory = row.derivedBuildWorkingDirectory,
-                    ),
-                ),
-            )
-        }
+                changeComment = "sync from TeamCity",
+            ),
+        )
     }
 
     private companion object {
