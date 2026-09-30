@@ -10,7 +10,8 @@ import org.springframework.stereotype.Service
 import java.util.UUID
 
 /** One row's write outcome. `outcome` is one of: `applied`, `skipped: changed since diff`,
- * `skipped: <lowercase status>` (not resolved, or resolved-but-manual), `failed: <message>`. */
+ * `skipped: outside scope` (a marker row, or an archived component's row), `skipped: <lowercase
+ * status>` (not resolved, or resolved-but-manual/invalid), `failed: <message>`. */
 data class PlacementRowSyncOutcome(
     val configurationRowId: UUID,
     val rowLabel: String,
@@ -53,9 +54,10 @@ data class PlacementSyncResult(
  * [ComponentManagementService] — the same validation, name-derivation and audit path a human PATCH
  * uses — never direct SQL. MANUAL_EDIT rows are never selected for write in the first place (they
  * are not RESOLVED), so [TeamcityPlacementDiffService.runDiff]'s own re-derivation is the single
- * place that decides overwrite safety; this service does not re-check it. Marker (per-range
- * `vcs.settings`) rows are report-only in this version (ADR-002 decisions 4/8): whatever their
- * status, they are always reported "skipped: report-only (per-range row)", never written.
+ * place that decides overwrite safety; this service does not re-check it. A marker (per-range
+ * `vcs.settings`) row, or a row of an archived component, is always `OUTSIDE_SCOPE` from Diff
+ * (ADR-002 decisions 4/8; spec-conformance finding 1) and always reported "skipped: outside
+ * scope", never written.
  */
 @ConditionalOnDatabaseEnabled
 @Service
@@ -127,12 +129,12 @@ class TeamcityPlacementSyncService(
         snapshotRow: PlacementRowDiff?,
         jobId: String,
     ): Pair<String, List<PlacementFieldChange>> {
-        // ADR-002 decisions 4/8 (owner review finding 5): marker (per-range `vcs.settings`) rows
-        // are report-only in this version -- Diff shows and classifies them, but Sync never
-        // writes one, whatever its status or selection. Checked first, ahead of every other
-        // outcome, so a marker row is never reported "changed since diff" or a validation status
-        // either -- it is always, unconditionally, report-only.
-        if (freshRow.rowLabel != BASE_ROW_LABEL) return "skipped: report-only (per-range row)" to emptyList()
+        // ADR-002 decisions 4/8 (owner review finding 5) + spec-conformance finding 1: a marker
+        // (per-range `vcs.settings`) row, or a row of an archived component, is always
+        // OUTSIDE_SCOPE from Diff -- Sync never writes either, whatever the selection. Checked
+        // first, ahead of every other outcome, so such a row is never reported "changed since
+        // diff" either -- it is always, unconditionally, out of scope.
+        if (freshRow.status == PlacementDiffRowStatus.OUTSIDE_SCOPE) return "skipped: outside scope" to emptyList()
         if (snapshotRow == null || snapshotRow != freshRow) return "skipped: changed since diff" to emptyList()
         if (freshRow.status != PlacementDiffRowStatus.RESOLVED) return "skipped: ${freshRow.status.name.lowercase()}" to emptyList()
         return try {
@@ -217,9 +219,5 @@ class TeamcityPlacementSyncService(
                 null
             },
         )
-    }
-
-    private companion object {
-        const val BASE_ROW_LABEL = "BASE"
     }
 }

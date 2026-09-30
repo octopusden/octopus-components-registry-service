@@ -77,19 +77,21 @@ interface ComponentConfigurationRepository : JpaRepository<ComponentConfiguratio
     ): ComponentConfigurationEntity?
 
     /**
-     * Every configuration row (BASE or `vcs.settings` override) of a non-archived component that
-     * carries at least one VCS entry — the population `TeamcityPlacementDiffService` walks. `JOIN
-     * FETCH` avoids a lazy-init exception outside a transaction; `DISTINCT` because the fetch joins
-     * a to-many collection.
+     * Every configuration row (BASE or `vcs.settings` override) of ANY component, archived
+     * included, that carries at least one VCS entry — the population `TeamcityPlacementDiffService`
+     * walks. Archived components are included (not filtered here) so their rows can be reported
+     * `OUTSIDE_SCOPE` rather than silently omitted (spec-conformance review of #510, finding 1);
+     * the service itself decides what to do with `comp.archived`. `JOIN FETCH` avoids a lazy-init
+     * exception outside a transaction; `DISTINCT` because the fetch joins a to-many collection.
      */
     @Query(
         "SELECT DISTINCT cfg FROM ComponentConfigurationEntity cfg " +
             "JOIN FETCH cfg.component comp " +
             "LEFT JOIN FETCH cfg.vcsEntries " +
-            "WHERE comp.archived = false AND cfg.id IN " +
+            "WHERE cfg.id IN " +
             "(SELECT v.componentConfiguration.id FROM VcsSettingsEntryEntity v)",
     )
-    fun findAllNonArchivedRowsWithVcsEntries(): List<ComponentConfigurationEntity>
+    fun findAllRowsWithVcsEntries(): List<ComponentConfigurationEntity>
 }
 
 /** Row projection for effective jira-pair computation (see `computeEffectiveJiraPairs`). */
