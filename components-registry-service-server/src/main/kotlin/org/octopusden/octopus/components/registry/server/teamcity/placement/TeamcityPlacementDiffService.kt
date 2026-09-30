@@ -238,9 +238,13 @@ class TeamcityPlacementDiffService(
             return PlacementDiffRowStatus.IN_SYNC to emptyList()
         }
         // Owner review finding 4 (ADR-002 decision 3): RESOLVED requires the derived values to
-        // ALSO pass the same validation a real v4 write runs — not just PlacementRules.checkRules'
-        // narrower pure-derivation check (Checkout Directory duplicates/reserved names only, never
-        // entry names or Source Path shape). Names are derived by the SAME rule the real write uses
+        // ALSO pass the same validation a real v4 write runs. This is the ONLY place that runs it
+        // (spec-conformance finding 3): PlacementRules.derive's pure engine no longer pre-empts it
+        // with its own narrower check — UNEXPRESSIBLE there is reserved for a rule/WORK_DIR shape
+        // that can't be parsed at all; a value that parses fine but fails a CRS validation rule
+        // (root uniqueness, reserved/duplicate name, Source Path shape, BWD rules) surfaces as
+        // RESOLVED from derive() and is downgraded to INVALID right here instead. Names are derived
+        // by the SAME rule the real write uses
         // (VcsPlacementValidator.deriveNames — owner review finding 4 hardening): building the
         // candidate as `derived.checkoutDirectory ?: e.name`, with no exclusion/fallback, could flag
         // a row INVALID that a real write would accept (an unplaced entry's kept name colliding with
