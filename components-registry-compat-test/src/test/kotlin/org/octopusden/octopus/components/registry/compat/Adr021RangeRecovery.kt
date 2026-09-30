@@ -87,6 +87,9 @@ object Adr021RangeRecovery {
                 distribution.put("GAV", GavCsvComparator.normalize(it.asText()))
             }
         }
+        // Same reason for VCS placement (ONB-001): a migrated candidate adds it where the baseline
+        // has none, and the comparison forgives exactly that addition.
+        VcsPlacementFields.strip(copy.get("vcsSettings"))
         return copy.toString()
     }
 
@@ -116,7 +119,7 @@ object Adr021RangeRecovery {
         return listOf(
             element.path("versionRange").toString(),
             component.toString(),
-            element.path("vcsSettings").toString(),
+            vcsSettingsWithoutPlacement(element),
         ).joinToString("|")
     }
 
@@ -187,11 +190,18 @@ object Adr021RangeRecovery {
         left: JsonNode,
         right: JsonNode,
     ): Boolean =
-        if (field == "component") {
-            componentWithoutName(left) == componentWithoutName(right)
-        } else {
-            left.path(field) == right.path(field)
+        when (field) {
+            "component" -> componentWithoutName(left) == componentWithoutName(right)
+            "vcsSettings" -> vcsSettingsWithoutPlacement(left) == vcsSettingsWithoutPlacement(right)
+            else -> left.path(field) == right.path(field)
         }
+
+    private fun vcsSettingsWithoutPlacement(element: JsonNode): String =
+        element
+            .path("vcsSettings")
+            .deepCopy<JsonNode>()
+            .also { VcsPlacementFields.strip(it) }
+            .toString()
 
     private fun componentWithoutName(element: JsonNode): String {
         val copy = element.path("component").deepCopy<JsonNode>()

@@ -30,6 +30,9 @@ dependencies {
 
     implementation "com.fasterxml.jackson.core:jackson-annotations"
     implementation "com.fasterxml.jackson.core:jackson-databind"
+
+    // VersionControlSystemRootDtoGroovyTest: the v2 DTO's constructor as a Groovy consumer calls it.
+    testImplementation project(':components-registry-service-core')
 }
 
 sourceSets {

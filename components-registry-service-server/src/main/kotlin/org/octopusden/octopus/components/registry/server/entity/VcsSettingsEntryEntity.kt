@@ -17,6 +17,8 @@ import java.util.UUID
  * MULTI-VCS is N rows with distinct `name` values. No discriminator column.
  * `repository_type` carries the VCS engine (`GIT` / `MERCURIAL` / `CVS`);
  * typically `GIT`.
+ * `source_path` / `checkout_directory` place the entry on the build agent (ONB-001): the primary
+ * entry (`sort_order` 0) has no checkout directory; a secondary's `name` equals its checkout directory.
  */
 @Entity
 @Table(name = "vcs_settings_entries")
@@ -41,4 +43,8 @@ class VcsSettingsEntryEntity(
     var repositoryType: String? = null,
     @Column(name = "sort_order", nullable = false)
     var sortOrder: Int = 0,
+    @Column(name = "source_path")
+    var sourcePath: String? = null,
+    @Column(name = "checkout_directory")
+    var checkoutDirectory: String? = null,
 )

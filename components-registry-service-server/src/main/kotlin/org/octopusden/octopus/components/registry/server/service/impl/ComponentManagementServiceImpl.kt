@@ -103,6 +103,7 @@ import org.octopusden.octopus.components.registry.server.util.MavenGavCollision
 import org.octopusden.octopus.components.registry.server.util.MavenVersionComparator
 import org.octopusden.octopus.components.registry.server.util.VersionRangePartition
 import org.octopusden.octopus.components.registry.server.util.computeEffectiveJiraPairs
+import org.octopusden.octopus.escrow.RepositoryType
 import org.octopusden.octopus.escrow.config.ConfigHelper
 import org.octopusden.releng.versions.NumericVersionFactory
 import org.octopusden.releng.versions.VersionRangeFactory
@@ -435,7 +436,7 @@ class ComponentManagementServiceImpl(
             changeComment = request.changeComment,
         )
 
-        return toDetail(saved)
+        return toDetail(saved).withVcsChainWarning(request.baseConfiguration?.writesVcs() == true, saved)
     }
 
     // ============================================================
@@ -961,7 +962,7 @@ class ComponentManagementServiceImpl(
             changeComment = request.changeComment,
         )
 
-        return toDetail(saved)
+        return toDetail(saved).withVcsChainWarning(request.baseConfiguration?.writesVcs() == true, saved)
     }
 
     // ============================================================
@@ -1410,7 +1411,7 @@ class ComponentManagementServiceImpl(
 
         // 2) UPDATE existing editable rows referenced by id.
         val updated = mutableListOf<Pair<ComponentConfigurationEntity, Map<String, Any?>>>()
-        desired.filter { it.id != null }.forEach { d ->
+        desired.withIndex().filter { it.value.id != null }.forEach { (j, d) ->
             val row = byId.getValue(d.id!!)
             if (isImportManaged(row)) return@forEach // preserve; ignore client echo
             // CRS-B: hidden-attribute rows are stripped — preserved as-is, incoming change ignored.
@@ -1424,7 +1425,7 @@ class ComponentManagementServiceImpl(
             // yields the editability error (403/422), not a value-400. A valid change is
             // still gated change-based by the snapshot diff below.
             gatingEditabilityOnInvalidPayload(d.overriddenAttribute) {
-                applyOverrideUpsertPayload(component, row, d, excludeOverrideId = row.id)
+                withFieldOverrideIndex(j) { applyOverrideUpsertPayload(component, row, d, excludeOverrideId = row.id) }
             }?.let { pendingTools[row] = it }
             // CRS-B: gate any actual change (value / markerChildren / range) to an
             // override on a non-editable field; an unchanged echo (combined Save
@@ -1447,7 +1448,7 @@ class ComponentManagementServiceImpl(
 
         // 3) CREATE rows without an id.
         val created = mutableListOf<ComponentConfigurationEntity>()
-        desired.filter { it.id == null }.forEach { d ->
+        desired.withIndex().filter { it.value.id == null }.forEach { (j, d) ->
             // CRS-B: hidden-attribute create is silently dropped (strip); otherwise a new
             // override is a value change on the overridden attribute — gate it.
             if (isHiddenOverrideAttribute(d.overriddenAttribute)) return@forEach
@@ -1459,7 +1460,9 @@ class ComponentManagementServiceImpl(
                     overriddenAttribute = d.overriddenAttribute,
                     rowType = "",
                 )
-            applyOverrideUpsertPayload(component, row, d, excludeOverrideId = null)?.let { pendingTools[row] = it }
+            withFieldOverrideIndex(j) {
+                applyOverrideUpsertPayload(component, row, d, excludeOverrideId = null)
+            }?.let { pendingTools[row] = it }
             component.configurations.add(row)
             // A new override is always an effective change — there was nothing at this
             // range/attribute before (mirrors the single-row create path).
@@ -2251,6 +2254,24 @@ class ComponentManagementServiceImpl(
             throw e
         }
 
+    /**
+     * Routes a VCS entry error of the [j]-th `fieldOverrides` element to that element: the Portal re-sends
+     * every override row, so an unprefixed `vcsEntries[<i>]` could not be told apart. Other errors keep their shape.
+     */
+    private inline fun <T> withFieldOverrideIndex(
+        j: Int,
+        applyPayload: () -> T,
+    ): T =
+        try {
+            applyPayload()
+        } catch (e: IllegalArgumentException) {
+            val message = e.message.orEmpty()
+            if (message.startsWith("vcsEntries[") || message.startsWith("buildWorkingDirectory:")) {
+                throw IllegalArgumentException("fieldOverrides[$j].$message", e)
+            }
+            throw e
+        }
+
     /** True when the override's attribute maps to a field-config `visibility: hidden`. */
     private fun isHiddenOverrideAttribute(attribute: String?): Boolean = attribute != null && fieldConfigService.isHidden(attribute)
 
@@ -2574,7 +2595,9 @@ class ComponentManagementServiceImpl(
             // exposed via V4 (no UI need today); DSL import is the only
             // producer of the per-range column.
         }
+        request.buildWorkingDirectory?.let { config.buildWorkingDirectory = it.trim().ifEmpty { null } }
         request.vcsEntries?.let { replaceVcsEntries(config, it) }
+            ?: request.buildWorkingDirectory?.let { validateBuildWorkingDirectory(config.vcsEntries, config.buildWorkingDirectory) }
         request.mavenArtifacts?.let { replaceMavenArtifacts(config, it) }
         request.fileUrlArtifacts?.let { replaceFileUrlArtifacts(config, it) }
         request.dockerImages?.let { replaceDockerImages(config, it) }
@@ -2672,7 +2695,10 @@ class ComponentManagementServiceImpl(
             // jiraHotfixVersionFormat per-range PATCH is intentionally not
             // exposed via V4; see applyBaseConfigurationCreate above.
         }
+        // null = unchanged, blank = clear (V4_SCALAR_CLEAR_SEMANTICS).
+        patch.buildWorkingDirectory?.let { config.buildWorkingDirectory = it.trim().ifEmpty { null } }
         patch.vcsEntries?.let { replaceVcsEntries(config, it) }
+            ?: patch.buildWorkingDirectory?.let { validateBuildWorkingDirectory(config.vcsEntries, config.buildWorkingDirectory) }
         patch.mavenArtifacts?.let { replaceMavenArtifacts(config, it) }
         patch.fileUrlArtifacts?.let { replaceFileUrlArtifacts(config, it) }
         patch.dockerImages?.let { replaceDockerImages(config, it) }
@@ -2693,22 +2719,221 @@ class ComponentManagementServiceImpl(
         entries: List<VcsEntryRequest>,
     ) {
         entries.forEach { req -> req.repositoryType?.let { validateRepositoryType(it) } }
-        config.vcsEntries.clear()
-        entries.forEachIndexed { index, req ->
-            config.vcsEntries.add(
+        // Names are derived, never taken from the request: an entry with a checkout directory is named by
+        // it; one without keeps the name of the row's previous entry on the same repository, preferring a
+        // previous entry that was at the root, then the lowest sort order (vcsEntries has no @OrderBy); a
+        // kept name that is now another entry's checkout directory, or none, gives main.
+        val newDirectories = entries
+            .mapNotNull {
+                it.checkoutDirectory
+                    ?.trim()
+                    ?.ifEmpty { null }
+                    ?.lowercase()
+            }.toSet()
+        val previousNames =
+            config.vcsEntries
+                .sortedWith(compareBy({ it.checkoutDirectory != null }, { it.sortOrder }))
+                .distinctBy { repositoryKey(it.vcsPath, it.repositoryType) }
+                .associate { repositoryKey(it.vcsPath, it.repositoryType) to it.name }
+                .filterValues { it.lowercase() !in newDirectories }
+        val replacement =
+            entries.mapIndexed { index, req ->
+                val checkoutDirectory = req.checkoutDirectory?.trim()?.ifEmpty { null }
                 VcsSettingsEntryEntity(
                     componentConfiguration = config,
-                    name = req.name ?: "main",
+                    name = checkoutDirectory ?: previousNames[repositoryKey(req.vcsPath, req.repositoryType)] ?: "main",
                     vcsPath = req.vcsPath,
                     branch = req.branch,
                     tag = req.tag,
                     hotfixBranch = req.hotfixBranch,
                     repositoryType = req.repositoryType,
                     sortOrder = index,
-                ),
+                    sourcePath = req.sourcePath?.trim()?.ifEmpty { null },
+                    checkoutDirectory = checkoutDirectory,
+                )
+            }
+        validateVcsPlacement(replacement)
+        validateBuildWorkingDirectory(replacement, config.buildWorkingDirectory)
+        config.vcsEntries.clear()
+        config.vcsEntries.addAll(replacement)
+    }
+
+    /**
+     * ONB-001 rev. 3: the Build Working Directory is a relative path that starts in the checkout
+     * directory of one of the row's entries (compared case-sensitively: it is a path on the agent), or
+     * anywhere below the checkout root when an entry is checked out there. When every entry has a
+     * checkout directory it is required. Failures are a 400 `buildWorkingDirectory: <reason>`.
+     */
+    private fun validateBuildWorkingDirectory(
+        entries: List<VcsSettingsEntryEntity>,
+        buildWorkingDirectory: String?,
+    ) {
+        fun fail(reason: String): Nothing = throw IllegalArgumentException("buildWorkingDirectory: $reason")
+        val rootTaken = entries.any { it.checkoutDirectory == null }
+        val directories = entries.mapNotNull { it.checkoutDirectory }
+        if (buildWorkingDirectory == null) {
+            if (entries.isNotEmpty() && !rootTaken) {
+                val example = directories.first()
+                fail(
+                    "required: every VCS root has a Checkout Directory, so set the folder the build runs in, " +
+                        "for example '$example' or '$example/app'.",
+                )
+            }
+            return
+        }
+        lengthError("Build Working Directory", buildWorkingDirectory)?.let { fail(it) }
+        if (!isPlainRelativePath(
+                buildWorkingDirectory,
+            )
+        ) {
+            fail(relativePathError("Build Working Directory", buildWorkingDirectory, "core/app"))
+        }
+        if (entries.isEmpty()) {
+            fail("the row has no VCS roots, so the build has no folder to run in. Add a VCS root, or clear the Build Working Directory.")
+        }
+        val first = buildWorkingDirectory.substringBefore('/')
+        if (!rootTaken && first !in directories) {
+            fail(
+                "'$buildWorkingDirectory' is not inside any checked-out VCS root. Start it with one of the Checkout Directories: " +
+                    "${directories.joinToString(", ")}; or check one VCS root out at the checkout root (no Checkout Directory) " +
+                    "to allow any folder.",
             )
         }
     }
+
+    private fun isPlainRelativePath(path: String) =
+        path.split('/').none {
+            it == "." ||
+                it == ".." ||
+                !SOURCE_PATH_SEGMENT_PATTERN.matches(it)
+        }
+
+    /**
+     * ONB-001 placement rules over a row's final VCS entries: each entry is checked out under its
+     * checkout directory, which is also its name, and at most one entry has none (it is checked out at
+     * the checkout root). The first failure is a 400 `vcsEntries[<i>].<field>: <reason>`.
+     */
+    private fun validateVcsPlacement(entries: List<VcsSettingsEntryEntity>) {
+        var rootEntry: Int? = null
+        val nameOwners = HashMap<String, Int>()
+        val locationOwners = HashMap<Pair<String, String?>, Int>()
+        entries.forEachIndexed { i, e ->
+            fun fail(
+                field: String,
+                reason: String,
+            ): Nothing = throw IllegalArgumentException("vcsEntries[$i].$field: $reason")
+
+            fun label(k: Int) = "VCS root ${k + 1} (${repositoryName(entries[k].vcsPath)})"
+            val suggestion = suggestedDirectory(e.vcsPath, entries.mapNotNull { it.checkoutDirectory })
+            val dir = e.checkoutDirectory
+            if (dir == null) {
+                rootEntry?.let {
+                    fail(
+                        "checkoutDirectory",
+                        "required: ${label(it)} is already checked out at the checkout root, and only one VCS root can be. " +
+                            "Set a Checkout Directory for this VCS root, a folder name such as '$suggestion', " +
+                            "or give one to VCS root ${it + 1}.",
+                    )
+                }
+                rootEntry = i
+            }
+            checkoutDirectoryError(dir, suggestion)?.let { fail("checkoutDirectory", it) }
+            nameOwners.putIfAbsent(e.name.lowercase(), i)?.let { fail("checkoutDirectory", nameCollision(e, entries[it], label(it))) }
+            e.sourcePath?.let { path ->
+                lengthError("Source Path", path)?.let { fail("sourcePath", it) }
+                if (!isPlainRelativePath(path)) fail("sourcePath", relativePathError("Source Path", path, "services/api"))
+            }
+            locationOwners.putIfAbsent(repositoryKey(e.vcsPath, e.repositoryType) to e.sourcePath, i)?.let {
+                val where = e.sourcePath?.let { "Source Path ('$it')" } ?: "Source Path (the whole repository)"
+                fail(
+                    "sourcePath",
+                    "${label(it)} already checks out the same repository and $where. " +
+                        "Change the Source Path, or remove one of the VCS roots.",
+                )
+            }
+        }
+    }
+
+    /** A repository's identity in a row: Git (and other case-insensitive types) ignore case, as the model does on read. */
+    private fun repositoryKey(
+        vcsPath: String,
+        repositoryType: String?,
+    ): String = if (RepositoryType.valueOf(repositoryType ?: "GIT").isCaseSensitive) vcsPath else vcsPath.lowercase()
+
+    private fun checkoutDirectoryError(
+        dir: String?,
+        suggestion: String,
+    ): String? =
+        when {
+            dir == null -> null
+            dir.length > MAX_PLACEMENT_LENGTH -> lengthError("Checkout Directory", dir)
+            !CHECKOUT_DIRECTORY_PATTERN.matches(dir) ->
+                "'$dir' is not a valid Checkout Directory: use a single folder name of letters, digits, '.', '_' or '-' " +
+                    "that does not start with '.', for example 'app'."
+            dir.lowercase() in RESERVED_CHECKOUT_DIRECTORIES ->
+                "'$dir' is reserved: the build tooling uses that folder at the checkout root. " +
+                    "Choose another folder name, for example '$suggestion'."
+            else -> null
+        }
+
+    /** Why [entry]'s name clashes with [owner]'s, which came first in the row; names are compared ignoring case. */
+    private fun nameCollision(
+        entry: VcsSettingsEntryEntity,
+        owner: VcsSettingsEntryEntity,
+        ownerLabel: String,
+    ): String =
+        when {
+            entry.checkoutDirectory == null ->
+                "this VCS root is checked out at the checkout root under the name '${entry.name}', which $ownerLabel already uses. " +
+                    "Set a Checkout Directory for this VCS root, or change the Checkout Directory of $ownerLabel."
+            owner.checkoutDirectory == null ->
+                "Checkout Directory '${entry.name}' is already the name of $ownerLabel, which is checked out at the checkout root. " +
+                    "Names must be unique, ignoring case. Choose another folder name."
+            else ->
+                "Checkout Directory '${entry.name}' is already used by $ownerLabel. Each VCS root needs its own folder, " +
+                    "and the comparison ignores case. Choose another folder name."
+        }
+
+    private fun lengthError(
+        what: String,
+        value: String,
+    ): String? =
+        if (value.length >
+            MAX_PLACEMENT_LENGTH
+        ) {
+            "is ${value.length} characters long; a $what can have at most $MAX_PLACEMENT_LENGTH"
+        } else {
+            null
+        }
+
+    private fun relativePathError(
+        what: String,
+        value: String,
+        example: String,
+    ) = "'$value' is not a valid $what: use a relative path of '/'-separated folder names " +
+        "(letters, digits, '.', '_', '-'; no '.' or '..'), for example '$example'."
+
+    /**
+     * A folder name to suggest for a VCS root: its repository's name when that is a valid Checkout
+     * Directory no other root of the row uses (ignoring case), else a safe literal.
+     */
+    private fun suggestedDirectory(
+        vcsPath: String,
+        taken: List<String>,
+    ): String {
+        val used = taken.map { it.lowercase() }.toSet()
+        // Unbounded fallback: a row has finitely many roots, so a free `app-<n>` always exists.
+        return (sequenceOf(repositoryName(vcsPath), "app") + generateSequence(1) { it + 1 }.map { "app-$it" })
+            .first { checkoutDirectoryError(it, "app") == null && it.lowercase() !in used }
+    }
+
+    /** How the Portal names a repository: the last segment of its path, without `.git`. */
+    private fun repositoryName(vcsPath: String) =
+        vcsPath
+            .trimEnd('/')
+            .substringAfterLast('/')
+            .substringAfterLast(':')
+            .removeSuffix(".git")
 
     private fun replaceMavenArtifacts(
         config: ComponentConfigurationEntity,
@@ -2847,6 +3072,7 @@ class ComponentManagementServiceImpl(
         return when (markerName) {
             MarkerAttributes.VCS_SETTINGS -> {
                 requireNotNull(payload.vcsEntries) { "Marker '$markerName' requires vcsEntries payload" }
+                row.buildWorkingDirectory = payload.buildWorkingDirectory?.trim()?.ifEmpty { null }
                 replaceVcsEntries(row, payload.vcsEntries)
                 null
             }
@@ -2903,6 +3129,7 @@ class ComponentManagementServiceImpl(
                 if (payload.packages != null) add("packages")
                 if (payload.requiredTools != null) add("requiredTools")
                 if (payload.buildToolBeans != null) add("buildToolBeans")
+                if (payload.buildWorkingDirectory != null && markerName != MarkerAttributes.VCS_SETTINGS) add("buildWorkingDirectory")
             }
         val expected =
             when (markerName) {
@@ -3469,6 +3696,22 @@ class ComponentManagementServiceImpl(
                     patterns[ai.id]?.let { ai.copy(legacyArtifactIdPattern = it) } ?: ai
                 },
         )
+    }
+
+    private fun BaseConfigurationRequest.writesVcs() = vcsEntries != null || buildWorkingDirectory != null
+
+    /**
+     * ONB-001: a write carrying base-configuration VCS entries or Build Working Directory on a component
+     * with a linked TeamCity project leaves its build chain out of date. No before/after diff: the Portal sends the base VCS
+     * slice only when it changed. Marker-row (per-range) writes do not warn.
+     */
+    private fun ComponentDetailResponse.withVcsChainWarning(
+        baseVcsWritten: Boolean,
+        entity: ComponentEntity,
+    ): ComponentDetailResponse {
+        if (!baseVcsWritten || entity.versionLines.isEmpty()) return this
+        log.info("VCS entries of component '{}' changed; its TeamCity build chain must be recreated", entity.componentKey)
+        return copy(warnings = listOf(VCS_CHAIN_MISMATCH_WARNING))
     }
 
     /**
@@ -4359,6 +4602,7 @@ class ComponentManagementServiceImpl(
             "jira.versionPrefix" to base?.jiraVersionPrefix,
             "jira.versionFormat" to base?.jiraVersionFormat,
             "jira.hotfixVersionFormat" to base?.jiraHotfixVersionFormat,
+            "buildWorkingDirectory" to base?.buildWorkingDirectory,
         )
 
     private fun baseConfigCollectionAuditEntries(base: ComponentConfigurationEntity?): Map<String, Any?> =
@@ -4372,6 +4616,8 @@ class ComponentManagementServiceImpl(
                         "tag" to it.tag,
                         "hotfixBranch" to it.hotfixBranch,
                         "repositoryType" to it.repositoryType,
+                        "sourcePath" to it.sourcePath,
+                        "checkoutDirectory" to it.checkoutDirectory,
                     )
                 },
             "mavenArtifacts" to
@@ -4513,6 +4759,19 @@ class ComponentManagementServiceImpl(
         // SYS-095: strict kebab for a plain key, and the tail permitted after a client-code prefix.
         private val COMPONENT_KEY_PATTERN = Regex("[a-z][a-z0-9-]*")
         private val COMPONENT_KEY_TAIL_PATTERN = Regex("(-[a-z0-9-]*)?")
+
+        // ONB-001 VCS entry placement.
+        private val CHECKOUT_DIRECTORY_PATTERN = Regex("[A-Za-z0-9_][A-Za-z0-9._-]*")
+        private val SOURCE_PATH_SEGMENT_PATTERN = Regex("[A-Za-z0-9._-]+")
+
+        private const val VCS_CHAIN_MISMATCH_WARNING =
+            "VCS entries changed; the TeamCity build chain no longer matches and must be recreated."
+
+        // vcs_settings_entries.source_path / checkout_directory are VARCHAR(255).
+        private const val MAX_PLACEMENT_LENGTH = 255
+
+        // Checkout-root directories the build templates write (compared ignoring case).
+        private val RESERVED_CHECKOUT_DIRECTORIES = setOf("report-templates", "sonar-config", "target", "sonar-report")
 
         private const val ROW_TYPE_BASE = "BASE"
         private const val ATTR_JAVA_VERSION = "build.javaVersion"
