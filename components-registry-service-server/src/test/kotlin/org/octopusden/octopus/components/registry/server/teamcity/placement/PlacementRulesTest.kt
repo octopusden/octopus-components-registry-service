@@ -41,10 +41,20 @@ class ParseWorkDirTest {
     }
 
     @Test
-    fun `unexpressible shapes`() {
+    fun `a TeamCity property reference is unexpressible -- the only real parse-shape failure`() {
         assertEquals(WorkDirParse.Unexpressible, parseWorkDir("%CUSTOMIZATION_APP_PATH%"))
-        assertEquals(WorkDirParse.Unexpressible, parseWorkDir("/abs"))
-        assertEquals(WorkDirParse.Unexpressible, parseWorkDir("a/../b"))
+    }
+
+    @Test
+    fun `an absolute path or a segment CRS validation would reject still PARSES (Codex finding, RED)`() {
+        // Codex second-pass finding: a leading "/" and a ".." segment are CRS VALIDATION rules
+        // (VcsPlacementValidator.validateBuildWorkingDirectory's isPlainRelativePath), not
+        // unparseable SHAPES -- parseWorkDir must not pre-empt that check the way the deleted
+        // PlacementRules.checkRules used to. These parse to a plain Path so the Diff service's own
+        // VcsPlacementValidator call can classify them INVALID with its own message, instead of
+        // the pure engine downgrading to UNEXPRESSIBLE first.
+        assertEquals(WorkDirParse.Path("/abs"), parseWorkDir("/abs"))
+        assertEquals(WorkDirParse.Path("a/../b"), parseWorkDir("a/../b"))
     }
 }
 
