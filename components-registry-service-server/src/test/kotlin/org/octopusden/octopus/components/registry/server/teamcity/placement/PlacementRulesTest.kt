@@ -103,8 +103,8 @@ class DeriveTest {
         // "mapper", checkout root) — comparing raw rule text would flag this as a false conflict.
         val gateway = "ssh://h/prj/app-two.git"
         val app = "ssh://h/prj/app-one.git"
-        // gateway gets a Checkout Directory too, so only `app` is at the checkout root — two
-        // entries both landing at the root (checkRules) would fail for an unrelated reason.
+        // gateway gets a Checkout Directory too, so only `app` is at the checkout root — keeps
+        // this fixture from also exercising the (unrelated) two-roots-at-root CRS validation rule.
         val bt = compileConfig(gateway to "+:. => gw", app to "+:mapper", app to "+:mapper => mapper")
         val outcome = derive(DeriveInput(ENTRIES, listOf(bt), 0, emptyMap()))
         assertEquals(PlacementRowStatus.RESOLVED, outcome.status)
