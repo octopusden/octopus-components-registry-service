@@ -50,9 +50,17 @@ class ParseWorkDirTest {
 
 class RepoKeyTest {
     @Test
-    fun `scheme and case agnostic`() {
-        assertEquals("prj/app-one", repoKey("ssh://git@host:7999/PRJ/App-One.git"))
-        assertEquals("prj/app-one", repoKey("git@host:prj/app-one"))
+    fun `scheme and case agnostic, host included`() {
+        assertEquals("host/prj/app-one", repoKey("ssh://git@host/PRJ/App-One.git"))
+        assertEquals("host/prj/app-one", repoKey("git@host:prj/app-one"))
+    }
+
+    @Test
+    fun `the same path on a different host does not match`() {
+        assertEquals(
+            false,
+            repoKey("ssh://host-a/prj/app-one.git") == repoKey("ssh://host-b/prj/app-one.git"),
+        )
     }
 }
 
