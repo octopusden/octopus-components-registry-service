@@ -127,26 +127,25 @@ class TeamcityPlacementDiffService(
             .findAllRowsWithVcsEntries()
             .filter { componentIds == null || it.component.id in componentIds }
         val byComponent = rows.groupBy { it.component }
-        val result = mutableListOf<PlacementRowDiff>()
-        for ((component, componentRows) in byComponent) {
-            val componentId = component.id ?: continue
-            if (component.archived) {
-                // OUTSIDE_SCOPE unconditionally (spec-conformance finding 1) — never consults the
-                // chain at all, so no TeamCity project link is needed for an archived component.
-                for (row in componentRows) {
-                    diffRow(component, componentId, row, chain = null)?.let(result::add)
-                }
-                continue
-            }
-            val projectIds = versionLineRepository.findDistinctTeamcityProjectIdsByComponentId(componentId).orEmpty()
-            if (projectIds.isEmpty()) continue // no TeamCity link: nothing to diff against
-            val chain = fetchChain(component, projectIds)
-            for (row in componentRows) {
-                diffRow(component, componentId, row, chain)?.let(result::add)
-            }
-        }
+        val result = byComponent.flatMap { (component, componentRows) -> diffComponent(component, componentRows) }
         log.info { "TeamCity placement diff: ${result.size} row(s) in scope across ${byComponent.size} linked component(s)" }
         return PlacementDiffResult(Instant.now(), result)
+    }
+
+    private fun diffComponent(
+        component: ComponentEntity,
+        componentRows: List<ComponentConfigurationEntity>,
+    ): List<PlacementRowDiff> {
+        val componentId = component.id ?: return emptyList()
+        if (component.archived) {
+            // OUTSIDE_SCOPE unconditionally (spec-conformance finding 1) — never consults the
+            // chain at all, so no TeamCity project link is needed for an archived component.
+            return componentRows.mapNotNull { diffRow(component, componentId, it, chain = null) }
+        }
+        val projectIds = versionLineRepository.findDistinctTeamcityProjectIdsByComponentId(componentId).orEmpty()
+        if (projectIds.isEmpty()) return emptyList() // no TeamCity link: nothing to diff against
+        val chain = fetchChain(component, projectIds)
+        return componentRows.mapNotNull { diffRow(component, componentId, it, chain) }
     }
 
     /** [chain] is `null` only for an archived component's row, whose OUTSIDE_SCOPE classification
