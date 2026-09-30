@@ -39,10 +39,11 @@ class PlacementEditHistoryTest {
         old: Map<String, Any?>?,
         new: Map<String, Any?>?,
         changeComment: String? = null,
+        action: String = "UPDATE",
     ) = AuditLogEntity(
         entityType = "Component",
         entityId = componentId.toString(),
-        action = "UPDATE",
+        action = action,
         oldValue = old,
         newValue = new,
         changeComment = changeComment,
@@ -173,5 +174,21 @@ class PlacementEditHistoryTest {
 
         assertTrue(history().isCheckoutDirectoryManuallySet(componentId, appVcsPath))
         assertFalse(history().isSourcePathManuallySet(componentId, appVcsPath))
+    }
+
+    @Test
+    fun `a placement set when the component was created is manual (review P1-2, RED)`() {
+        val create = row(old = null, new = vcsSnapshot(cd = "app", sp = "svc", bwd = "app/svc"), action = "CREATE")
+        whenever(
+            auditLogRepository.findByEntityTypeAndEntityIdAndActionInOrderByChangedAtDesc(
+                "Component",
+                componentId.toString(),
+                listOf("CREATE", "UPDATE", "RENAME"),
+            ),
+        ).thenReturn(listOf(create))
+
+        assertTrue(history().isCheckoutDirectoryManuallySet(componentId, appVcsPath))
+        assertTrue(history().isSourcePathManuallySet(componentId, appVcsPath))
+        assertTrue(history().isBuildWorkingDirectoryManuallySet(componentId, appVcsPath))
     }
 }
