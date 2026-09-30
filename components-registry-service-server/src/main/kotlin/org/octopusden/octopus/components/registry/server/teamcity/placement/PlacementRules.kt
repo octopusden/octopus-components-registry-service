@@ -149,14 +149,19 @@ fun derive(input: DeriveInput): PlacementDerivation {
     val entries = input.entries
     val perEntrySeen = mutableMapOf<Int, MutableSet<PlacementValue>>()
     val unexpressible = mutableSetOf<Int>()
+    // Spec-conformance finding 2: a repository attached twice in ONE build type with two
+    // DIFFERENT resolvable interpretations is a CONFLICT (same as two build types disagreeing),
+    // not UNEXPRESSIBLE -- reserved for a rule SHAPE that can't be parsed at all.
+    val conflictingWithinBuildType = mutableSetOf<Int>()
     val workDirSeen = mutableSetOf<WorkDirParse>()
 
     for (bt in input.compileConfigs) {
         // Keyed by every checkout rule seen for that repo in this one build type, PARSED first
         // (not just the last, and not the raw string) — so a build type attaching the same
-        // repository twice is only unexpressible when the rules actually resolve differently
+        // repository twice only conflicts when the rules actually resolve differently
         // (`+:mapper` and `+:mapper => mapper` are the same [PlacementValue] even though the raw
-        // text differs), while a genuine disagreement or an unexpressible rule still is.
+        // text differs), while a genuine disagreement still does and a lone unparseable rule is
+        // still unexpressible.
         val attached: Map<String, List<PlacementValue?>> =
             bt.vcsRootEntries.groupBy({ repoKey(it.url) }, { parseCheckoutRule(it.checkoutRules) })
         var hit = false
@@ -167,7 +172,9 @@ fun derive(input: DeriveInput): PlacementDerivation {
                 hit = true
                 val distinct = parsedRules.toSet()
                 val resolved = distinct.singleOrNull()
-                if (distinct.size != 1 || resolved == null) {
+                if (distinct.size > 1) {
+                    conflictingWithinBuildType.add(i)
+                } else if (resolved == null) {
                     unexpressible.add(i)
                 } else {
                     perEntrySeen.getOrPut(i) { mutableSetOf() }.add(resolved)
@@ -182,6 +189,7 @@ fun derive(input: DeriveInput): PlacementDerivation {
     entries.forEachIndexed { i, row ->
         val seen = perEntrySeen[i].orEmpty()
         when {
+            i in conflictingWithinBuildType -> notes += "${row.name}: configurations disagree (attached twice with different rules)"
             i in unexpressible -> notes += "${row.name}: checkout rule not expressible"
             seen.size > 1 -> notes += "${row.name}: configurations disagree ($seen)"
             seen.isNotEmpty() -> result[i] = seen.single()
