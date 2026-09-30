@@ -37,14 +37,15 @@ class TeamcityPlacementControllerV4Test {
         whenever(currentUserResolver.currentUsername()).thenReturn("alice")
     }
 
-    private fun completedDiff(id: String) = TeamcityPlacementDiffJobState(
-        id = id,
-        state = JobState.COMPLETED,
-        startedAt = Instant.now(),
-        finishedAt = Instant.now(),
-        result = PlacementDiffResult(Instant.now(), emptyList()),
-        errorMessage = null,
-    )
+    private fun completedDiff(id: String) =
+        TeamcityPlacementDiffJobState(
+            id = id,
+            state = JobState.COMPLETED,
+            startedAt = Instant.now(),
+            finishedAt = Instant.now(),
+            result = PlacementDiffResult(Instant.now(), emptyList()),
+            errorMessage = null,
+        )
 
     @Test
     fun `a sync naming a replaced diff id is refused with 409 before anything is considered`() {
