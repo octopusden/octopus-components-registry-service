@@ -230,8 +230,8 @@ class TeamcityPlacementDiffService(
         if (differingEntries.isEmpty() && !bwdDiffers) {
             return PlacementDiffRowStatus.IN_SYNC to emptyList()
         }
-        val manualEntry = differingEntries.any { i -> placementEditHistory.wasEverManuallyPlaced(componentId, entries[i].vcsPath) }
-        val manualBwd = bwdDiffers && placementEditHistory.wasBuildWorkingDirectoryEverManuallySet(componentId)
+        val manualEntry = differingEntries.any { i -> placementEditHistory.isManuallyPlaced(componentId, entries[i].vcsPath) }
+        val manualBwd = bwdDiffers && placementEditHistory.isBuildWorkingDirectoryManuallySet(componentId, entries.first().vcsPath)
         return if (manualEntry || manualBwd) {
             PlacementDiffRowStatus.MANUAL_EDIT to
                 listOf("the registry's current value was set by a real edit, not the V8 migration; not overwritten")
