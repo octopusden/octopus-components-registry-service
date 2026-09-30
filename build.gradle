@@ -31,6 +31,9 @@ plugins {
 //   components-registry-service-server, components-registry-cli — deployables (docker image on
 //     ghcr / built locally per the CLI README);
 //   components-registry-compat-test — internal harness;
+//   test-common — this repository's own test data. Its only non-empty artifact is the
+//     test-fixtures jar, which the client, light-client and server tests use as
+//     `testFixtures(project(':test-common'))`, so it needs no publication;
 //   component-validation — pure validation library with no external consumer yet. The server
 //     depends on it as `project(':component-validation')`, which needs no publication, and it has
 //     never been on Central (it was added after the last release). Publishing it would start
@@ -54,7 +57,6 @@ def centralPublishedProjects = [
         ':components-registry-service-client',
         ':components-registry-service-light-client',
         ':components-registry-service-core',
-        ':test-common',
         ':components-registry-automation',
 ] as Set
 
@@ -78,10 +80,9 @@ octopusQuality {
             ':components-registry-api|mavenJava|org.octopusden.octopus.infrastructure:components-registry-api|[jar, jar:javadoc, jar:sources]',
             ':components-registry-automation|mavenJava|org.octopusden.octopus.components.registry.automation:components-registry-automation|[jar, jar:all, jar:javadoc, jar:sources, zip:metarunners]',
             ':components-registry-dsl|mavenJava|org.octopusden.octopus.infrastructure:components-registry-dsl|[jar, jar:javadoc, jar:sources]',
-            ':components-registry-service-client|mavenJava|org.octopusden.octopus.infrastructure:components-registry-service-client|[jar, jar:javadoc, jar:sources, jar:test-fixtures]',
+            ':components-registry-service-client|mavenJava|org.octopusden.octopus.infrastructure:components-registry-service-client|[jar, jar:javadoc, jar:sources]',
             ':components-registry-service-core|mavenJava|org.octopusden.octopus.infrastructure:components-registry-service-core|[jar, jar:javadoc, jar:sources]',
-            ':components-registry-service-light-client|mavenJava|org.octopusden.octopus.infrastructure:components-registry-service-light-client|[jar, jar:javadoc, jar:sources, jar:test-fixtures]',
-            ':test-common|mavenJava|org.octopusden.octopus.infrastructure:test-common|[jar, jar:javadoc, jar:sources, jar:test-fixtures]',
+            ':components-registry-service-light-client|mavenJava|org.octopusden.octopus.infrastructure:components-registry-service-light-client|[jar, jar:javadoc, jar:sources]',
         ] as Set)
     }
     // NOTE: in octopus-quality 2.5.2 `excludeProjects` maps ONLY to coverage exclusion

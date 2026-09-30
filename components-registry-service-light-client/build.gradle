@@ -1,10 +1,6 @@
 /**
  * Lightweight client for use in Gradle plugins that support older versions.
  */
-plugins {
-    id 'java-test-fixtures'
-}
-
 sourceCompatibility = 1.8
 targetCompatibility = 1.8
 
