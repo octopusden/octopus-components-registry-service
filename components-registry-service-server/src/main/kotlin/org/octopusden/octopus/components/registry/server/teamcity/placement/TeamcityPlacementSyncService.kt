@@ -135,7 +135,11 @@ class TeamcityPlacementSyncService(
         // first, ahead of every other outcome, so such a row is never reported "changed since
         // diff" either -- it is always, unconditionally, out of scope.
         if (freshRow.status == PlacementDiffRowStatus.OUTSIDE_SCOPE) return "skipped: outside scope" to emptyList()
-        if (snapshotRow == null || snapshotRow != freshRow) return "skipped: changed since diff" to emptyList()
+        // The version is left out: an unrelated edit must not skip the row. The fresh derivation
+        // already reflects every placement/branch change, and the write is locked on its version.
+        if (snapshotRow == null || snapshotRow.copy(componentVersion = freshRow.componentVersion) != freshRow) {
+            return "skipped: changed since diff" to emptyList()
+        }
         if (freshRow.status != PlacementDiffRowStatus.RESOLVED) return "skipped: ${freshRow.status.name.lowercase()}" to emptyList()
         return try {
             "applied" to applyRow(componentId, freshRow, jobId)
