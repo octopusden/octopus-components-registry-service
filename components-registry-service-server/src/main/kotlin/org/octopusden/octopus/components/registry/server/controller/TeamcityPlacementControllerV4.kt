@@ -56,7 +56,8 @@ class TeamcityPlacementControllerV4(
     /** The latest completed Diff's rows, for the Portal table. 404 until a Diff has completed at least once. */
     @GetMapping("/diff/report.json", produces = [MediaType.APPLICATION_JSON_VALUE])
     @PreAuthorize("@permissionEvaluator.canViewComponents()")
-    fun getReportJson(): ResponseEntity<PlacementDiffResult> = latestReport()?.let { ResponseEntity.ok(it) } ?: ResponseEntity.notFound().build()
+    fun getReportJson(): ResponseEntity<PlacementDiffResult> =
+        latestReport()?.let { ResponseEntity.ok(it) } ?: ResponseEntity.notFound().build()
 
     @GetMapping("/diff/report.html", produces = [MediaType.TEXT_HTML_VALUE])
     @PreAuthorize("@permissionEvaluator.canViewComponents()")
@@ -67,7 +68,8 @@ class TeamcityPlacementControllerV4(
     @PreAuthorize("@permissionEvaluator.canViewComponents()")
     fun getReportCsv(): ResponseEntity<String> {
         val report = latestReport() ?: return ResponseEntity.notFound().build()
-        return ResponseEntity.ok()
+        return ResponseEntity
+            .ok()
             .header(HttpHeaders.CONTENT_TYPE, "text/csv;charset=UTF-8")
             .header(HttpHeaders.CONTENT_DISPOSITION, "attachment; filename=teamcity-placement-diff.csv")
             .body(PlacementReportRenderer.toCsv(report))

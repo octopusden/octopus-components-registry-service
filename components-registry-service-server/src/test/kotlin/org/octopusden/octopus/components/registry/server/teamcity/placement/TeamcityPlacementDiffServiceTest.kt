@@ -34,7 +34,15 @@ private fun prop(
 private fun props(vararg pairs: Pair<String, String?>) = TeamcityProperties(pairs.map { (n, v) -> prop(n, v) })
 
 private fun vcsRoot(url: String) =
-    TeamcityVcsRoot(id = url, name = url, vcsName = "jetbrains.git", href = "", project = null, projectLocator = null, properties = props("url" to url))
+    TeamcityVcsRoot(
+        id = url,
+        name = url,
+        vcsName = "jetbrains.git",
+        href = "",
+        project = null,
+        projectLocator = null,
+        properties = props("url" to url),
+    )
 
 private fun entry(
     url: String,
@@ -122,9 +130,26 @@ class TeamcityPlacementDiffServiceTest {
         currentAppCd: String? = null,
         currentBwd: String? = null,
     ): ComponentConfigurationEntity {
-        val row = ComponentConfigurationEntity(id = UUID.randomUUID(), component = component, rowType = "BASE", buildWorkingDirectory = currentBwd)
-        row.vcsEntries += VcsSettingsEntryEntity(componentConfiguration = row, name = "app-two", vcsPath = gatewayId, sortOrder = 0, checkoutDirectory = currentGatewayCd)
-        row.vcsEntries += VcsSettingsEntryEntity(componentConfiguration = row, name = "app-one", vcsPath = appId, sortOrder = 1, checkoutDirectory = currentAppCd)
+        val row = ComponentConfigurationEntity(
+            id = UUID.randomUUID(),
+            component = component,
+            rowType = "BASE",
+            buildWorkingDirectory = currentBwd,
+        )
+        row.vcsEntries += VcsSettingsEntryEntity(
+            componentConfiguration = row,
+            name = "app-two",
+            vcsPath = gatewayId,
+            sortOrder = 0,
+            checkoutDirectory = currentGatewayCd,
+        )
+        row.vcsEntries += VcsSettingsEntryEntity(
+            componentConfiguration = row,
+            name = "app-one",
+            vcsPath = appId,
+            sortOrder = 1,
+            checkoutDirectory = currentAppCd,
+        )
         return row
     }
 
@@ -151,7 +176,9 @@ class TeamcityPlacementDiffServiceTest {
         val configRepo = mock<ComponentConfigurationRepository>()
         whenever(configRepo.findAllNonArchivedRowsWithVcsEntries()).thenReturn(rows)
         val versionLineRepo = mock<VersionLineRepository>()
-        projectIdsByComponent.forEach { (id, projects) -> whenever(versionLineRepo.findDistinctTeamcityProjectIdsByComponentId(id)).thenReturn(projects) }
+        projectIdsByComponent.forEach { (id, projects) ->
+            whenever(versionLineRepo.findDistinctTeamcityProjectIdsByComponentId(id)).thenReturn(projects)
+        }
         return TeamcityPlacementDiffService(configRepo, versionLineRepo, fetcher, editHistory)
     }
 
@@ -178,7 +205,14 @@ class TeamcityPlacementDiffServiceTest {
         val bt = compileBuildType("compileA", roots = listOf(gatewayId to "", appId to "+:. => app-one"))
         val svc = service(listOf(row), mapOf(comp.id!! to listOf("P")), FakeEnrichedTcProjectFetcher(mapOf("P" to project(bt))))
 
-        assertEquals(PlacementDiffRowStatus.IN_SYNC, svc.runDiff().rows.single().status)
+        assertEquals(
+            PlacementDiffRowStatus.IN_SYNC,
+            svc
+                .runDiff()
+                .rows
+                .single()
+                .status,
+        )
     }
 
     @Test
@@ -197,9 +231,21 @@ class TeamcityPlacementDiffServiceTest {
                 ),
             ),
         )
-        val svc = service(listOf(row), mapOf(comp.id!! to listOf("P")), FakeEnrichedTcProjectFetcher(mapOf("P" to project(bt))), manualHistory)
+        val svc = service(
+            listOf(row),
+            mapOf(comp.id!! to listOf("P")),
+            FakeEnrichedTcProjectFetcher(mapOf("P" to project(bt))),
+            manualHistory,
+        )
 
-        assertEquals(PlacementDiffRowStatus.MANUAL_EDIT, svc.runDiff().rows.single().status)
+        assertEquals(
+            PlacementDiffRowStatus.MANUAL_EDIT,
+            svc
+                .runDiff()
+                .rows
+                .single()
+                .status,
+        )
     }
 
     @Test
@@ -210,7 +256,14 @@ class TeamcityPlacementDiffServiceTest {
         val b = compileBuildType("b", roots = listOf(gatewayId to "+:. => gw", appId to "+:. => app-one"))
         val svc = service(listOf(row), mapOf(comp.id!! to listOf("P")), FakeEnrichedTcProjectFetcher(mapOf("P" to project(a, b))))
 
-        assertEquals(PlacementDiffRowStatus.CONFLICT, svc.runDiff().rows.single().status)
+        assertEquals(
+            PlacementDiffRowStatus.CONFLICT,
+            svc
+                .runDiff()
+                .rows
+                .single()
+                .status,
+        )
     }
 
     @Test
@@ -272,6 +325,13 @@ class TeamcityPlacementDiffServiceTest {
         val bt = compileBuildType("compileA", roots = listOf(appId to "+:. => app"))
         val svc = service(listOf(row), mapOf(comp.id!! to listOf("P")), FakeEnrichedTcProjectFetcher(mapOf("P" to project(bt))))
 
-        assertEquals(PlacementDiffRowStatus.UNEXPRESSIBLE, svc.runDiff().rows.single().status)
+        assertEquals(
+            PlacementDiffRowStatus.UNEXPRESSIBLE,
+            svc
+                .runDiff()
+                .rows
+                .single()
+                .status,
+        )
     }
 }
