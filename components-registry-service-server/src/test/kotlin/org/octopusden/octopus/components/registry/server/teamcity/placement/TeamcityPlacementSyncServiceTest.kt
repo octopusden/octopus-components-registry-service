@@ -28,6 +28,7 @@ class TeamcityPlacementSyncServiceTest {
         rowId: UUID = UUID.randomUUID(),
         derivedCd: String? = "app",
         derivedBwd: String? = null,
+        componentVersion: Long = 5L,
     ) = PlacementRowDiff(
         componentId = componentId,
         componentKey = "comp-one",
@@ -53,6 +54,7 @@ class TeamcityPlacementSyncServiceTest {
         derivedBuildWorkingDirectory = derivedBwd,
         sourceBuildTypeIds = listOf("compileA"),
         notes = emptyList(),
+        componentVersion = componentVersion,
     )
 
     private fun service(
@@ -90,6 +92,24 @@ class TeamcityPlacementSyncServiceTest {
         assertEquals(true, captor.firstValue.changeComment!!.startsWith(PlacementEditHistory.SYNC_CHANGE_COMMENT_PREFIX))
         assertEquals("app", (captor.firstValue.baseConfiguration as BaseConfigurationRequest).vcsEntries!!.single().checkoutDirectory)
         assertEquals("", captor.firstValue.baseConfiguration!!.buildWorkingDirectory) // root, cleared explicitly
+    }
+
+    @Test
+    fun `the write carries the version the re-derivation read, so a later manual edit conflicts (review P1-1, RED)`() {
+        // The fresh re-derivation read the component at version 4; a manual edit then bumped it to 5.
+        // Writing with a version re-read at write time (5) would silently overwrite that edit.
+        val diffRow = row(PlacementDiffRowStatus.RESOLVED, componentVersion = 4L)
+        val diffService = diffServiceReturning(listOf(diffRow))
+        val (svc, cms) = service(diffService)
+        val detail = mock<ComponentDetailResponse>()
+        whenever(detail.version).thenReturn(5L)
+        whenever(cms.getComponent(componentId)).thenReturn(detail)
+
+        svc.sync(setOf(componentId), PlacementDiffResult(Instant.now(), listOf(diffRow)), "job-42", "alice")
+
+        val captor = argumentCaptor<ComponentUpdateRequest>()
+        verify(cms).updateComponent(org.mockito.kotlin.eq(componentId), captor.capture())
+        assertEquals(4L, captor.firstValue.version)
     }
 
     @Test
