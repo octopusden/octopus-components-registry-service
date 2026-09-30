@@ -32,14 +32,29 @@ import java.util.UUID
 class PlacementEditHistory(
     private val auditLogRepository: AuditLogRepository,
 ) {
-    fun isManuallyPlaced(
+    /** Tracked independently of [isSourcePathManuallySet] (owner review finding 2 hardening): a
+     * Sync write touching only `sourcePath` must not "launder" an earlier manual
+     * `checkoutDirectory` edit into overwritable just because it shares an audit row with a
+     * sync-tagged change to the OTHER field. */
+    fun isCheckoutDirectoryManuallySet(
         componentId: UUID,
         vcsPath: String,
+    ): Boolean = isVcsEntryFieldManual(componentId, vcsPath, "checkoutDirectory")
+
+    fun isSourcePathManuallySet(
+        componentId: UUID,
+        vcsPath: String,
+    ): Boolean = isVcsEntryFieldManual(componentId, vcsPath, "sourcePath")
+
+    private fun isVcsEntryFieldManual(
+        componentId: UUID,
+        vcsPath: String,
+        fieldName: String,
     ): Boolean {
         val key = repoKey(vcsPath)
         for (auditRow in auditRows(componentId)) {
-            val old = vcsEntryFields(auditRow.oldValue, key)
-            val new = vcsEntryFields(auditRow.newValue, key)
+            val old = vcsEntryField(auditRow.oldValue, key, fieldName)
+            val new = vcsEntryField(auditRow.newValue, key, fieldName)
             if (old != new) return !isSyncTagged(auditRow)
         }
         return false
@@ -70,20 +85,25 @@ class PlacementEditHistory(
 
     private fun isSyncTagged(auditRow: AuditLogEntity): Boolean = auditRow.changeComment?.startsWith(SYNC_CHANGE_COMMENT_PREFIX) == true
 
-    /** (checkoutDirectory, sourcePath) of the `vcsEntries` element matching [key], found anywhere in
-     * the (arbitrarily nested) snapshot — a snapshot carries at most one matching section (the base
-     * row's, or one override row's; never both in the same audit event). */
-    private fun vcsEntryFields(
+    /** The single field [fieldName] (`checkoutDirectory` or `sourcePath`) of the `vcsEntries`
+     * element matching [key], found anywhere in the (arbitrarily nested) snapshot — a snapshot
+     * carries at most one matching section (the base row's, or one override row's; never both in
+     * the same audit event). Takes the FIRST matching section, not the first NON-NULL field value:
+     * a legitimately null field (e.g. a cleared checkoutDirectory) must not be treated as "not
+     * found" and fall through to searching an unrelated section. */
+    private fun vcsEntryField(
         node: Any?,
         key: String,
-    ): Pair<Any?, Any?>? =
+        fieldName: String,
+    ): Any? =
         findSections(node, key)
-            .firstNotNullOfOrNull { section ->
+            .firstOrNull()
+            ?.let { section ->
                 (section["vcsEntries"] as? List<*>)
                     ?.asSequence()
                     ?.mapNotNull { it as? Map<*, *> }
                     ?.firstOrNull { repoKey(it["vcsPath"] as? String ?: "") == key }
-                    ?.let { it["checkoutDirectory"] to it["sourcePath"] }
+                    ?.get(fieldName)
             }
 
     /** The `buildWorkingDirectory` sibling of the `vcsEntries` section that mentions [key] — never a
