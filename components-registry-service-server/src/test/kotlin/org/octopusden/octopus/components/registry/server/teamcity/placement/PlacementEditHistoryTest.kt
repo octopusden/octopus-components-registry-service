@@ -55,7 +55,7 @@ class PlacementEditHistoryTest {
             auditLogRepository.findByEntityTypeAndEntityIdAndActionInOrderByChangedAtDesc(
                 "Component",
                 componentId.toString(),
-                listOf("UPDATE", "RENAME"),
+                listOf("CREATE", "UPDATE", "RENAME"),
             ),
         ).thenReturn(rows.toList())
     }
