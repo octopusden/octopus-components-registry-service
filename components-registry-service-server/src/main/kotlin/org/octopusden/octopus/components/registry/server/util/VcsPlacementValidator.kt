@@ -12,6 +12,7 @@ import org.octopusden.octopus.escrow.RepositoryType
  * Both callers construct a candidate `List<VcsSettingsEntryEntity>` (persisted, for a real PATCH;
  * transient, never saved, for the Diff job's what-if check) and pass it here unchanged.
  */
+@Suppress("TooManyFunctions") // One cohesive rule; same pattern as the other util/mapper suppressions.
 object VcsPlacementValidator {
     private val CHECKOUT_DIRECTORY_PATTERN = Regex("[A-Za-z0-9_][A-Za-z0-9._-]*")
     private val SOURCE_PATH_SEGMENT_PATTERN = Regex("[A-Za-z0-9._-]+")
