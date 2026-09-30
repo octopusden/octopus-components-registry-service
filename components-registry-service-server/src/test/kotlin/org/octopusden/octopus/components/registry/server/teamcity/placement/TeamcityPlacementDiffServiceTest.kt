@@ -356,6 +356,27 @@ class TeamcityPlacementDiffServiceTest {
     }
 
     @Test
+    fun `a WORK_DIR containing a parent-directory segment is invalid, not unexpressible (Codex finding, RED)`() {
+        // Codex second-pass finding: parseWorkDir used to reject "a/../b" itself (Unexpressible),
+        // pre-empting VcsPlacementValidator's own segment-shape check (`..` is explicitly a CRS
+        // VALIDATION rule per the spec, not a parse-shape failure) from ever running. It must parse
+        // to a plain Path and be downgraded to INVALID here instead, with the validator's message.
+        val comp = component()
+        val row = ComponentConfigurationEntity(id = UUID.randomUUID(), component = comp, rowType = "BASE")
+        row.vcsEntries += VcsSettingsEntryEntity(componentConfiguration = row, name = "main", vcsPath = appId, sortOrder = 0)
+        val bt = compileBuildType(
+            "compileA",
+            workDir = "%teamcity.build.checkoutDir%/a/../b",
+            roots = listOf(appId to "+:. => app"),
+        )
+        val svc = service(listOf(row), mapOf(comp.id!! to listOf("P")), FakeEnrichedTcProjectFetcher(mapOf("P" to project(bt))))
+
+        val diff = svc.runDiff().rows.single()
+        assertEquals(PlacementDiffRowStatus.INVALID, diff.status)
+        assertTrue(diff.notes.any { it.contains("buildWorkingDirectory", ignoreCase = true) })
+    }
+
+    @Test
     fun `two roots at the checkout root is invalid, not unexpressible (spec-conformance finding 3, RED)`() {
         // "At most one root at the checkout root" is a CRS validation rule
         // (VcsPlacementValidator.validateVcsPlacement's rootEntry check), not a rule-shape problem
