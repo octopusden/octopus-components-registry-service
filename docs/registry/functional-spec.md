@@ -109,6 +109,58 @@ shape/format rules on both `POST /rest/api/4/components` and
 These format checks are skipped for a field whose admin field-config visibility is
 `HIDDEN`. On `PATCH`, the hidden value is also stripped before persistence.
 
+#### VCS entry placement and Build Working Directory (create + update + field overrides)
+
+Each VCS entry of a configuration row (base or `vcs.settings` marker) may carry `sourcePath` (the
+repository directory that belongs to the component; absent = whole repository) and
+`checkoutDirectory` (where the entry is checked out on the build agent). At most one entry has no
+`checkoutDirectory`; it is checked out at the checkout root, and it may be listed at any position.
+The row may carry `buildWorkingDirectory`, where the build runs, relative to the checkout root
+(absent = the checkout root); build-chain generation sets it as the TeamCity parameter `WORK_DIR`
+(`%teamcity.build.checkoutDir%/<buildWorkingDirectory>`). A blank value is absent. In a base PATCH `buildWorkingDirectory: null`
+leaves the stored value and `""` clears it; a `vcs.settings` marker payload replaces the row, so an
+absent value clears it.
+
+Every v4 write that replaces a row's VCS entries or sets its `buildWorkingDirectory` (create, PATCH
+`baseConfiguration`, the field-override endpoints, a PATCH `fieldOverrides` row) validates the final
+row; the first failing rule is a `400` `{ "errorMessage": "<field>: <reason>" }`, entry rules first:
+
+| Rule | Reported on |
+|------|-------------|
+| At most one entry has no `checkoutDirectory` | the later such entry's `vcsEntries[<i>].checkoutDirectory` |
+| `checkoutDirectory` is at most 255 characters, matches `^[A-Za-z0-9_][A-Za-z0-9._-]*$` (one segment, no leading dot) and is not `report-templates`, `sonar-config`, `target` or `sonar-report`, ignoring case | that entry's `checkoutDirectory` |
+| Entry names are unique in the row, case-insensitively | the later entry's `checkoutDirectory` |
+| `sourcePath` is at most 255 characters, `/`-separated, each segment matches `^[A-Za-z0-9._-]+$` and is not `.` or `..` | that entry's `sourcePath` |
+| (repository, `sourcePath`) is unique in the row; Git repositories compare case-insensitively | the later entry's `sourcePath` |
+| `buildWorkingDirectory` has the `sourcePath` shape and starts in the `checkoutDirectory` of an entry (case-sensitive), unless an entry is at the checkout root; a row without entries has none | `buildWorkingDirectory` |
+| `buildWorkingDirectory` is required when every entry has a `checkoutDirectory` | `buildWorkingDirectory` |
+
+The prefix before the colon is the routing key and stays fixed; the reason after it is for people:
+it names VCS roots 1-based as the Portal does ("VCS root N"), with the repository (the last segment of its path,
+without `.git`), says what is wrong and what to do, and gives an example value.
+
+In a component PATCH, a `vcsEntries[` or `buildWorkingDirectory:` error of the `j`-th
+`fieldOverrides` element is prefixed `fieldOverrides[<j>].`; other errors of that element keep their
+shape.
+
+**Names are derived; a request `name` is ignored.** An entry with a `checkoutDirectory` is named by
+it; an entry without one keeps the stored name of the row's previous entry on the same repository
+(Git ignoring case; when the repository appeared twice, a previous entry at the root first, then the
+lowest previous position), otherwise `main`; a kept name that is now another entry's
+`checkoutDirectory` (ignoring case) gives `main`. An entry therefore keeps its name while it stays at the checkout root on the same
+repository; re-pointed to another repository it is named `main`; moved from a Checkout Directory to
+the root it keeps the name it had.
+
+**Chain-mismatch warning.** `ComponentDetailResponse.warnings` is `[]` except on a create or PATCH
+that carries `baseConfiguration.vcsEntries` or `baseConfiguration.buildWorkingDirectory` for a
+component with a linked TeamCity project: `"VCS entries changed; the TeamCity build chain no longer
+matches and must be recreated."` (logged at INFO). Marker-row writes do not warn.
+
+The legacy v2 VCS settings carry `sourcePath` / `checkoutDirectory` per root
+(`VersionControlSystemRootDTO`) and `buildWorkingDirectory` (`VCSSettingsDTO`) from the row that
+supplies the version's entries, all omitted when empty, so a component without them serves the same
+v2 JSON as before. The Groovy DSL mode and the as-code export do not carry them.
+
 #### Intentional legacy-validation relaxations
 
 - `displayName` is **nullable** + UNIQUE at the DB layer. It is stored **verbatim** from the DSL —
@@ -209,7 +261,7 @@ Conflicts with **other** components → **409 Conflict** (`CrossComponentConflic
 The **migration pipeline enforces the same invariants up front** (§6.0 uniqueness pre-pass, `ImportServiceImpl.detectUniquenessViolations`): before the first write, every invariant above (plus displayName uniqueness) is checked across the incoming DSL and against the already-persisted DB state, and the migration fails with ONE aggregated report naming every offender. Incoming rows are modelled exactly as `importModule` would persist them (base GAV rows, `DISTRIBUTION_MAVEN`/`GROUP_ARTIFACT_PATTERN` marker rows, jira scalars, docker images). Reruns are idempotent: only not-yet-imported components contribute candidate rows, and same-componentKey pairs never collide. Pre-existing DB-vs-DB conflicts are NOT flagged (they are fixed through the API and must not brick the migration). Single-component migration (`migrateComponent`) runs the same checks BEFORE any write — dictionary upserts included — and returns a failed `MigrationResult` with the `uniqueness violation: …` message.
 
 Malformed-input rules → **400 Bad Request** (`IllegalArgumentException`, field-name-prefixed message):
-- **Explicit+external requires ≥1 distribution coordinate** — when `distributionExplicit && distributionExternal`, the component must define at least one maven artifact, docker image, package, or generic artifact (SYS-094) on some configuration row.
+- **Explicit+external requires ≥1 distribution coordinate** — when `distributionExplicit && distributionExternal`, the component must define at least one maven artifact, docker image, package, or generic artifact (SYS-094) on some configuration row. **Exemption (SYS-097):** not applied when the BASE build system is `WHISKEY` (case-insensitive; per-range build-system overrides are ignored) — on create, component PATCH and the field-override endpoints alike. A coordinate-less explicit+external component switched off WHISKEY is rejected.
 - **`groupId` supported prefix** — every maven `groupPattern` element must start with a configured `components-registry.supportedGroupIds` prefix. When that list is unconfigured/empty the check is skipped (logged), not enforced.
 - **Archived ≠ explicit+external** — an archived component cannot be explicitly+externally distributed.
 - **Doc-component existence** — every `docs[].docComponentKey` must reference an existing component. The reference is a soft string ref (no FK, see `schema-spec.md:288`), so existence is verified in the service layer. This check runs **post-flush** (alongside the 409 checks), so a component may reference its **own** key (self-documenting) without a false 400 — the component's own row exists by then, and the own key is excluded explicitly regardless of persistence order.
@@ -386,6 +438,7 @@ Changes to field configuration and component defaults are recorded in the audit 
 | Duplicate name on **create** | 400 | `{ "errorMessage": "name: a component with name '...' already exists" }` (field-prefixed → Portal routes inline) |
 | Duplicate name on **rename** (PATCH name) | 409 | `{ "errorMessage": "Component with name '...' already exists" }` (`ComponentNameConflictException`) |
 | Duplicate `displayName` (create/update) | 400 | `{ "errorMessage": "displayName: a component with display name '...' already exists" }` |
+| Invalid VCS entry placement or Build Working Directory (§1.4) | 400 | `{ "errorMessage": "vcsEntries[1].checkoutDirectory: required: VCS root 1 (app) is already checked out at the checkout root, and only one VCS root can be. Set a Checkout Directory for this VCS root, a folder name such as 'plugins', or give one to VCS root 1." }` or `buildWorkingDirectory: …` (`fieldOverrides[<j>].` prefix inside a PATCH `fieldOverrides` row) |
 | Optimistic lock conflict | 409 | `{ "error": "Component was modified by another user" }` |
 | Validation failure | 400 | `{ "errors": [{ "field": "name", "message": "must not be blank" }] }` |
 | Unauthorized | 401 | Standard Spring Security response |

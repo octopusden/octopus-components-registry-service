@@ -599,6 +599,57 @@ class CrossComponentValidationTest {
             .andExpect(jsonPath("$.errorMessage").value(org.hamcrest.Matchers.containsString("displayName")))
     }
 
+    // ───────── #6 exemption: WHISKEY components need no distribution coordinate ─────
+
+    /** Explicit+external WHISKEY component with NO distribution coordinate (CARDS / DM shape). */
+    private fun createExplicitExternalWhiskeyWithoutCoordinate(s: String): Pair<String, Long> {
+        val resp =
+            postCreate(
+                """{"name":"xcc-ext-whiskey-$s","displayName":"Ext Whiskey $s",""" +
+                    """"distributionExplicit":true,"distributionExternal":true,""" +
+                    """"releaseManager":["rm1"],"securityChampion":["sc1"],""" +
+                    """"baseConfiguration":{"build":{"buildSystem":"WHISKEY"}}}""",
+            ).andExpect(status().is2xxSuccessful).andReturn().response.contentAsString
+        val node = objectMapper.readTree(resp)
+        return node["id"].asText() to node["version"].asLong()
+    }
+
+    @Test
+    @DisplayName("SYS-097: CREATE explicit+external WHISKEY component with NO distribution coordinate → 2xx")
+    fun `SYS-097 create explicit-external WHISKEY without coordinate is accepted`() {
+        createExplicitExternalWhiskeyWithoutCoordinate(sfx())
+    }
+
+    @Test
+    @DisplayName("SYS-097: PATCH base-config on an explicit+external WHISKEY component with no coordinate → 2xx")
+    fun `SYS-097 base-config patch on explicit-external WHISKEY without coordinate is accepted`() {
+        val (id, version) = createExplicitExternalWhiskeyWithoutCoordinate(sfx())
+        patchComponent(id, """{"version":$version,"baseConfiguration":{"build":{"buildFilePath":"pom.xml"}}}""")
+            .andExpect(status().is2xxSuccessful)
+    }
+
+    @Test
+    @DisplayName("SYS-097: POST field-override on an explicit+external WHISKEY component with no coordinate → 2xx")
+    fun `SYS-097 field-override create on explicit-external WHISKEY without coordinate is accepted`() {
+        val (id, _) = createExplicitExternalWhiskeyWithoutCoordinate(sfx())
+        mvc
+            .perform(
+                post("/rest/api/4/components/$id/field-overrides")
+                    .with(adminJwt())
+                    .contentType(MediaType.APPLICATION_JSON)
+                    .content("""{"overriddenAttribute":"build.buildFilePath","versionRange":"[1.0,2.0)","value":"pom.xml"}"""),
+            ).andExpect(status().is2xxSuccessful)
+    }
+
+    @Test
+    @DisplayName("SYS-097: PATCH switching an explicit+external component with no coordinate off WHISKEY → 400")
+    fun `SYS-097 switching explicit-external without coordinate off WHISKEY is rejected`() {
+        val (id, version) = createExplicitExternalWhiskeyWithoutCoordinate(sfx())
+        patchComponent(id, """{"version":$version,"baseConfiguration":{"build":{"buildSystem":"MAVEN"}}}""")
+            .andExpect(status().isBadRequest)
+            .andExpect(jsonPath("$.errorMessage").value(org.hamcrest.Matchers.containsString("distribution coordinate")))
+    }
+
     // ───────────────────────── #10 groupId supported prefix (400) ──────────────
 
     @Test

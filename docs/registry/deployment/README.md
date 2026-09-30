@@ -13,6 +13,8 @@ local developer setup with a working database. (The web UI lives in
   Flyway/validate → `POST /admin/migrate` → verify → flip `default-source` to `db`,
   with the partial-failure recovery and rollback paths (the reusable, generic
   form for QA/prod and another organization)
+- `vcs-placement-rollback.md` — snapshot and restore steps when rolling back across the `V8__`/`V9__` VCS
+  placement migrations (placement is dropped by the previous release's VCS writes)
 - `qa-db-refresh.md` — the `[8.0] Recreate QA DB from PROD` TeamCity button: what it copies, why
   production stays read-only, the one-time role/Vault setup, and how to undo a run
 - `qa-db-refresh-dba-request.md` — the request to the database administrators for that button: the

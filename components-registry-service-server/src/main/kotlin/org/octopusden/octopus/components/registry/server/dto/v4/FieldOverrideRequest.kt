@@ -130,4 +130,6 @@ data class MarkerChildrenPayload(
     val genericArtifacts: List<GenericArtifactRequest>? = null,
     val requiredTools: List<String>? = null,
     val buildToolBeans: List<BuildToolBeanRequest>? = null,
+    // vcs.settings only: the row's Build Working Directory; the payload replaces the row, so absent clears it.
+    val buildWorkingDirectory: String? = null,
 )
