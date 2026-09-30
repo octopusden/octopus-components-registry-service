@@ -133,7 +133,7 @@ class TeamcityPlacementControllerV4Test {
     fun `a new Diff replaces the latest result -- the old diffId is refused while reports reflect the new one (finding 4)`() {
         val d1 = completedDiff("D1")
         whenever(diffJobService.current()).thenReturn(d1)
-        assertEquals(d1.result, controller.getReportJson().body)
+        assertEquals("D1", controller.getReportJson().body!!.diffId)
 
         // A second Diff completes, replacing the in-memory result.
         val d2 = completedDiff("D2")
@@ -145,7 +145,16 @@ class TeamcityPlacementControllerV4Test {
         assertEquals(HttpStatus.CONFLICT, ex.statusCode)
         verify(syncJobService, never()).startAsync(any(), any(), any())
         // The report endpoints already reflect D2, not the replaced D1.
-        assertEquals(d2.result, controller.getReportJson().body)
+        assertEquals("D2", controller.getReportJson().body!!.diffId)
+    }
+
+    @Test
+    fun `the diff report names the Diff run it came from, so a Sync can bind to the report shown (review P1-3, RED)`() {
+        whenever(diffJobService.current()).thenReturn(completedDiff("D7"))
+
+        val body = controller.getReportJson().body!!
+
+        assertEquals("D7", body.diffId)
     }
 
     @Test
