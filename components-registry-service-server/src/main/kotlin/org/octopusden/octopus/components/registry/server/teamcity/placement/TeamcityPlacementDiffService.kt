@@ -264,7 +264,16 @@ class TeamcityPlacementDiffService(
         if (invalidMessage != null) {
             return PlacementDiffRowStatus.INVALID to listOf(invalidMessage.message ?: "invalid placement")
         }
-        val manualEntry = differingEntries.any { i -> placementEditHistory.isManuallyPlaced(componentId, entries[i].vcsPath) }
+        // Owner review finding 2 hardening: checked per FIELD, not per entry — a Sync write that
+        // touched only sourcePath must not "launder" an earlier manual checkoutDirectory edit on
+        // the same entry into overwritable.
+        val manualEntry = entries.indices.any { i ->
+            val derived = derivation.perEntry[i]
+            val cdDiffers = derived?.checkoutDirectory != entries[i].currentCheckoutDirectory
+            val spDiffers = derived?.sourcePath != entries[i].currentSourcePath
+            (cdDiffers && placementEditHistory.isCheckoutDirectoryManuallySet(componentId, entries[i].vcsPath)) ||
+                (spDiffers && placementEditHistory.isSourcePathManuallySet(componentId, entries[i].vcsPath))
+        }
         val manualBwd = bwdDiffers && placementEditHistory.isBuildWorkingDirectoryManuallySet(componentId, entries.first().vcsPath)
         return if (manualEntry || manualBwd) {
             PlacementDiffRowStatus.MANUAL_EDIT to
