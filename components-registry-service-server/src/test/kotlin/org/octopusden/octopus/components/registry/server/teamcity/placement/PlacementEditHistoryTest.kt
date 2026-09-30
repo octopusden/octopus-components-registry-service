@@ -17,7 +17,9 @@ class PlacementEditHistoryTest {
 
     private fun history(v8At: Instant? = v8AppliedAt) = PlacementEditHistory(auditLogRepository) { v8At }
 
-    private fun stubRows(vararg newValues: Map<String, Any?>) {
+    /** [rows] are (oldValue, newValue) pairs — the real audit shape: both captured by the same
+     * snapshot function, one before the patch and one after. */
+    private fun stubRows(vararg rows: Pair<Map<String, Any?>, Map<String, Any?>>) {
         whenever(
             auditLogRepository.findByEntityTypeAndEntityIdAndChangedAtAfterAndActionIn(
                 "Component",
@@ -26,9 +28,23 @@ class PlacementEditHistoryTest {
                 listOf("UPDATE", "RENAME"),
             ),
         ).thenReturn(
-            newValues.map { AuditLogEntity(entityType = "Component", entityId = componentId.toString(), action = "UPDATE", newValue = it) },
+            rows.map { (old, new) ->
+                AuditLogEntity(
+                    entityType = "Component",
+                    entityId = componentId.toString(),
+                    action = "UPDATE",
+                    oldValue = old,
+                    newValue = new,
+                )
+            },
         )
     }
+
+    private fun vcsEntriesSnapshot(
+        vcsPath: String,
+        checkoutDirectory: String?,
+        sourcePath: String?,
+    ) = mapOf("vcsEntries" to listOf(mapOf("vcsPath" to vcsPath, "checkoutDirectory" to checkoutDirectory, "sourcePath" to sourcePath)))
 
     @Test
     fun `never touched since V8 is not a manual edit`() {
@@ -37,50 +53,62 @@ class PlacementEditHistoryTest {
     }
 
     @Test
-    fun `a base-row vcsEntries snapshot with a checkout directory for this repository is a manual edit`() {
+    fun `a base-row vcsEntries snapshot that sets a checkout directory for this repository is a manual edit`() {
         stubRows(
-            mapOf(
-                "vcsEntries" to listOf(
-                    mapOf("vcsPath" to "ssh://h/PRJ/App.git", "checkoutDirectory" to "app", "sourcePath" to null),
-                ),
-            ),
+            vcsEntriesSnapshot("ssh://h/PRJ/App.git", checkoutDirectory = null, sourcePath = null) to
+                vcsEntriesSnapshot("ssh://h/PRJ/App.git", checkoutDirectory = "app", sourcePath = null),
         )
         assertTrue(history().wasEverManuallyPlaced(componentId, "ssh://h/prj/app.git"))
     }
 
     @Test
-    fun `a snapshot for a different repository does not flag this one`() {
+    fun `a manual clear back to root is a manual edit, not silently re-syncable`() {
+        // The regression this guards: checking only newValue (never oldValue) would see the clear's
+        // all-null newValue and conclude "never set", letting Sync write TeamCity's value straight
+        // back over a deliberate clear.
         stubRows(
-            mapOf(
-                "vcsEntries" to listOf(
-                    mapOf("vcsPath" to "ssh://h/prj/other.git", "checkoutDirectory" to "other", "sourcePath" to null),
-                ),
-            ),
+            vcsEntriesSnapshot("ssh://h/prj/app.git", checkoutDirectory = "app", sourcePath = null) to
+                vcsEntriesSnapshot("ssh://h/prj/app.git", checkoutDirectory = null, sourcePath = null),
         )
+        assertTrue(history().wasEverManuallyPlaced(componentId, "ssh://h/prj/app.git"))
+    }
+
+    @Test
+    fun `an unrelated field changing in the same row is not a manual edit of this repository`() {
+        val unchanged = vcsEntriesSnapshot("ssh://h/prj/app.git", checkoutDirectory = "app", sourcePath = null)
+        stubRows(unchanged to unchanged)
         assertFalse(history().wasEverManuallyPlaced(componentId, "ssh://h/prj/app.git"))
     }
 
     @Test
-    fun `a vcs-settings override-row snapshot is found under fieldOverride markerChildren`() {
-        stubRows(
-            mapOf(
-                "fieldOverride[vcs.settings]" to mapOf(
-                    "markerChildren" to mapOf(
-                        "vcsEntries" to listOf(
-                            mapOf("vcsPath" to "ssh://h/prj/app.git", "checkoutDirectory" to null, "sourcePath" to "core"),
-                        ),
-                        "buildWorkingDirectory" to "core/app",
+    fun `a snapshot for a different repository does not flag this one`() {
+        val other = vcsEntriesSnapshot("ssh://h/prj/other.git", checkoutDirectory = null, sourcePath = null) to
+            vcsEntriesSnapshot("ssh://h/prj/other.git", checkoutDirectory = "other", sourcePath = null)
+        stubRows(other)
+        assertFalse(history().wasEverManuallyPlaced(componentId, "ssh://h/prj/app.git"))
+    }
+
+    @Test
+    fun `a vcs-settings override row created under fieldOverride markerChildren is a manual edit`() {
+        val created = mapOf(
+            "fieldOverride[vcs.settings]" to mapOf(
+                "markerChildren" to mapOf(
+                    "vcsEntries" to listOf(
+                        mapOf("vcsPath" to "ssh://h/prj/app.git", "checkoutDirectory" to null, "sourcePath" to "core"),
                     ),
+                    "buildWorkingDirectory" to "core/app",
                 ),
             ),
         )
+        stubRows(emptyMap<String, Any?>() to created)
         assertTrue(history().wasEverManuallyPlaced(componentId, "ssh://h/prj/app.git"))
         assertTrue(history().wasBuildWorkingDirectoryEverManuallySet(componentId))
     }
 
     @Test
-    fun `build working directory is untouched when no snapshot ever carried a non-null value`() {
-        stubRows(mapOf("buildWorkingDirectory" to null))
+    fun `build working directory is untouched when it stays null across a row that changes something else`() {
+        val unchanged = mapOf("buildWorkingDirectory" to null)
+        stubRows(unchanged to unchanged)
         assertFalse(history().wasBuildWorkingDirectoryEverManuallySet(componentId))
     }
 
