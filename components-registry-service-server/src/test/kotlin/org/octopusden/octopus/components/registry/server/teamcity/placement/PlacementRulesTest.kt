@@ -75,6 +75,17 @@ private fun compileConfig(
 
 class DeriveTest {
     @Test
+    fun `one build type attaching the same repository twice with disagreeing rules is unexpressible`() {
+        // Regression: a naive last-wins map (Map.associate) over vcsRootEntries would silently
+        // pick whichever rule happened to sort last, hiding this as a resolvable placement.
+        val gateway = "ssh://h/prj/app-two.git"
+        val app = "ssh://h/prj/app-one.git"
+        val bt = compileConfig(gateway to "", app to "+:. => app-one", app to "+:. => other-name")
+        val outcome = derive(DeriveInput(ENTRIES, listOf(bt), 0, emptyMap()))
+        assertEquals(PlacementRowStatus.UNEXPRESSIBLE, outcome.status)
+    }
+
+    @Test
     fun `comp-one shape resolves`() {
         val gateway = "ssh://h/prj/app-two.git"
         val app = "ssh://h/prj/app-one.git"
