@@ -138,12 +138,14 @@ fun parseWorkDir(value: String?): WorkDirParse {
     return if (v.contains('%')) WorkDirParse.Unexpressible else WorkDirParse.Path(v)
 }
 
-/**
- * Derive the placement of one configuration row's VCS entries from its component's compile build
- * configurations. Port of `placement_import.py`'s `derive` (compile-only — see file kdoc).
- */
-@Suppress("CyclomaticComplexMethod", "LongMethod", "NestedBlockDepth")
-fun derive(input: DeriveInput): PlacementDerivation {
+private class CompileConfigScan(
+    val perEntrySeen: Map<Int, Set<PlacementValue>>,
+    val unexpressible: Set<Int>,
+    val conflictingWithinBuildType: Set<Int>,
+    val workDirSeen: Set<WorkDirParse>,
+)
+
+private fun scanCompileConfigs(input: DeriveInput): CompileConfigScan {
     val entries = input.entries
     val perEntrySeen = mutableMapOf<Int, MutableSet<PlacementValue>>()
     val unexpressible = mutableSetOf<Int>()
@@ -186,6 +188,21 @@ fun derive(input: DeriveInput): PlacementDerivation {
         }
         if (hit) workDirSeen.add(parseWorkDir(bt.workDir))
     }
+    return CompileConfigScan(perEntrySeen, unexpressible, conflictingWithinBuildType, workDirSeen)
+}
+
+/**
+ * Derive the placement of one configuration row's VCS entries from its component's compile build
+ * configurations. Port of `placement_import.py`'s `derive` (compile-only — see file kdoc).
+ */
+@Suppress("CyclomaticComplexMethod", "LongMethod", "NestedBlockDepth")
+fun derive(input: DeriveInput): PlacementDerivation {
+    val entries = input.entries
+    val scan = scanCompileConfigs(input)
+    val perEntrySeen = scan.perEntrySeen
+    val unexpressible = scan.unexpressible
+    val conflictingWithinBuildType = scan.conflictingWithinBuildType
+    val workDirSeen = scan.workDirSeen
 
     val notes = mutableListOf<String>()
     val result = mutableMapOf<Int, PlacementValue>()
@@ -216,21 +233,7 @@ fun derive(input: DeriveInput): PlacementDerivation {
                 .joinToString(", ") { "`${it.key}` (${it.value} roots)" } + "; not derived"
     }
 
-    if (input.compileConfigs.isEmpty()) {
-        return when {
-            input.outsideRuledConfigCounts.isNotEmpty() ->
-                PlacementDerivation(PlacementRowStatus.OUTSIDE_TEMPLATES, result, bwd, notes)
-            input.pausedCompileCount > 0 ->
-                PlacementDerivation(
-                    PlacementRowStatus.COMPILE_PAUSED,
-                    result,
-                    bwd,
-                    notes + "${input.pausedCompileCount} compile configuration(s), all paused",
-                )
-            else ->
-                PlacementDerivation(PlacementRowStatus.NO_CHAIN, result, bwd, notes + "no chain configuration found")
-        }
-    }
+    if (input.compileConfigs.isEmpty()) return noCompileConfigDerivation(input, result, bwd, notes)
 
     var status = when {
         unexpressible.isNotEmpty() || workDirUnexpressible -> PlacementRowStatus.UNEXPRESSIBLE
@@ -241,3 +244,23 @@ fun derive(input: DeriveInput): PlacementDerivation {
 
     return PlacementDerivation(status, result, bwd, notes)
 }
+
+private fun noCompileConfigDerivation(
+    input: DeriveInput,
+    result: Map<Int, PlacementValue>,
+    bwd: String?,
+    notes: List<String>,
+): PlacementDerivation =
+    when {
+        input.outsideRuledConfigCounts.isNotEmpty() ->
+            PlacementDerivation(PlacementRowStatus.OUTSIDE_TEMPLATES, result, bwd, notes)
+        input.pausedCompileCount > 0 ->
+            PlacementDerivation(
+                PlacementRowStatus.COMPILE_PAUSED,
+                result,
+                bwd,
+                notes + "${input.pausedCompileCount} compile configuration(s), all paused",
+            )
+        else ->
+            PlacementDerivation(PlacementRowStatus.NO_CHAIN, result, bwd, notes + "no chain configuration found")
+    }
