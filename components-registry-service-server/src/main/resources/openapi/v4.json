@@ -2682,6 +2682,35 @@
         ],
         "type" : "object"
       },
+      "PlacementFieldChange" : {
+        "properties" : {
+          "after" : {
+            "type" : "string"
+          },
+          "before" : {
+            "type" : "string"
+          },
+          "componentKey" : {
+            "type" : "string"
+          },
+          "field" : {
+            "type" : "string"
+          },
+          "root" : {
+            "type" : "string"
+          },
+          "rowLabel" : {
+            "type" : "string"
+          }
+        },
+        "required" : [
+          "componentKey",
+          "field",
+          "root",
+          "rowLabel"
+        ],
+        "type" : "object"
+      },
       "PlacementRowDiff" : {
         "properties" : {
           "componentId" : {
@@ -2732,6 +2761,7 @@
               "COMPILE_PAUSED",
               "MANUAL_EDIT",
               "IN_SYNC",
+              "INVALID",
               "TC_ERROR"
             ],
             "type" : "string"
@@ -2789,6 +2819,12 @@
             "format" : "int32",
             "type" : "integer"
           },
+          "fieldChanges" : {
+            "items" : {
+              "$ref" : "#/components/schemas/PlacementFieldChange"
+            },
+            "type" : "array"
+          },
           "requested" : {
             "format" : "int32",
             "type" : "integer"
@@ -2805,6 +2841,7 @@
           "applied",
           "components",
           "failed",
+          "fieldChanges",
           "requested",
           "skipped",
           "triggeredBy"
@@ -3191,10 +3228,14 @@
               "type" : "string"
             },
             "type" : "array"
+          },
+          "diffId" : {
+            "type" : "string"
           }
         },
         "required" : [
-          "componentIds"
+          "componentIds",
+          "diffId"
         ],
         "type" : "object"
       },
@@ -7165,6 +7206,116 @@
               "*/*" : {
                 "schema" : {
                   "$ref" : "#/components/schemas/TeamcityPlacementSyncJobResponse"
+                }
+              }
+            },
+            "description" : "OK"
+          },
+          "400" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description" : "Bad Request"
+          },
+          "404" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description" : "Not Found"
+          },
+          "409" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description" : "Conflict"
+          },
+          "413" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description" : "Payload Too Large"
+          },
+          "425" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description" : "Too Early"
+          },
+          "500" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description" : "Internal Server Error"
+          },
+          "501" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description" : "Not Implemented"
+          },
+          "502" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description" : "Bad Gateway"
+          },
+          "503" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description" : "Service Unavailable"
+          }
+        },
+        "tags" : [
+          "teamcity-placement-controller-v-4"
+        ]
+      }
+    },
+    "/rest/api/4/admin/teamcity-placement/sync/report.csv" : {
+      "get" : {
+        "operationId" : "getSyncReportCsv",
+        "responses" : {
+          "200" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "type" : "string"
                 }
               }
             },

@@ -34,15 +34,31 @@ refresh it with `./gradlew :components-registry-service-server:generateOpenApiDo
   - `GET /diff/report.json` / `.../report.html` / `.../report.csv` — the latest completed run's
     rows (`PlacementDiffResult`), readable by anyone who can view components (no `IMPORT_DATA`
     needed for the report itself). 404 until a Diff has completed at least once. Per row: status
-    (`RESOLVED`, `CONFLICT`, `UNEXPRESSIBLE`, `NO_CHAIN`, `OUTSIDE_TEMPLATES`, `COMPILE_PAUSED`,
-    `MANUAL_EDIT`, `IN_SYNC`, `TC_ERROR`), current and derived Checkout Directory / Source Path per
-    VCS entry, current and derived Build Working Directory, the source TeamCity build type ids, and
-    human-readable notes.
-  - `POST /sync` (`IMPORT_DATA`, body `{"componentIds": [...]}`) / `GET /sync/job` — applies the
-    latest Diff's `RESOLVED` rows for the given components, re-deriving first and skipping any row
-    that changed since the Diff snapshot. Writes go through the same v4 write path a human PATCH
-    uses (`changeComment: "sync from TeamCity"` on a base-row write); a value the ADR-001 `V8__`
-    migration set automatically is overwritten, a value set by a real edit never is.
+    (`RESOLVED`, `INVALID`, `CONFLICT`, `UNEXPRESSIBLE`, `NO_CHAIN`, `OUTSIDE_TEMPLATES`,
+    `COMPILE_PAUSED`, `MANUAL_EDIT`, `IN_SYNC`, `TC_ERROR`), current and derived Checkout Directory
+    / Source Path per VCS entry, current and derived Build Working Directory, the source TeamCity
+    build type ids, and human-readable notes. `INVALID`: the derived values differ from the
+    registry's but would themselves fail the SAME validation a v4 write runs (Source Path shape,
+    reserved/duplicate Checkout Directory names, name uniqueness, Build Working Directory rules);
+    `notes` carries the validation message. Repository matching is by the full canonical VCS URL,
+    host included (previously host-agnostic, a false-positive-match risk across TeamCity hosts).
+    Marker (per-range `vcs.settings`) rows are always `OUTSIDE_TEMPLATES`-equivalent for Sync
+    purposes (see below) but are still diffed and classified like any other row.
+  - `POST /sync` (`IMPORT_DATA`, body `{"diffId": "...", "componentIds": [...]}`) / `GET /sync/job`
+    — applies the named Diff's `RESOLVED` rows for the given components, re-deriving first and
+    skipping any row that changed since the Diff snapshot. **`diffId` is now required**: if it does
+    not match the latest Diff's id, the whole request is refused with `409` and nothing is written
+    (Diff keeps no history, so a stale `diffId` means the result the caller saw has been replaced —
+    run Diff again). Writes go through the same v4 write path a human PATCH uses, tagging
+    `changeComment` as `"sync from TeamCity (job <jobId>)"` — the Sync run's own id, so its audit
+    rows can be selected for rollback. A marker (per-range `vcs.settings`) row is never written even
+    when `RESOLVED` and selected; its outcome is `"skipped: report-only (per-range row)"`. A value
+    the ADR-001 `V8__` migration set automatically, or one whose last audited change was a Sync
+    itself, is overwritten; a value set by a real user edit never is (re-syncing after TeamCity
+    changes again no longer gets permanently stuck reporting `MANUAL_EDIT` against Sync's own prior
+    write). `PlacementSyncResult` gains `fieldChanges`: one entry per field actually written
+    (`componentKey`, `rowLabel`, `root`, `field`, `before`, `after`) — the rollback trace, also
+    available as `GET /sync/report.csv` (`IMPORT_DATA`, same shape as the Diff CSV).
 
 - **VCS entry placement (`sourcePath`, `checkoutDirectory`), Build Working Directory and derived
   names.** `VcsEntryRequest` / `VcsEntryResponse` (base configuration and `vcs.settings` marker rows
