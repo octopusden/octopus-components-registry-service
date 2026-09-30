@@ -75,7 +75,6 @@ data class PlacementDerivation(
 
 /** Directory-name shape agent-side checkout (and this model) can express as a Checkout Directory. */
 private val CHECKOUT_DIRECTORY_PATTERN = Regex("[A-Za-z0-9_][A-Za-z0-9._-]*")
-private val PATH_SEGMENT_PATTERN = Regex("[A-Za-z0-9._-]+")
 private const val CHECKOUT_DIR_VAR = "%teamcity.build.checkoutDir%"
 private val CHECKOUT_RULE_PATTERN = Regex("""^\+:\s*(\S+?)(?:\s*=>\s*(\S+))?$""")
 
@@ -122,18 +121,21 @@ sealed interface WorkDirParse {
     object Unexpressible : WorkDirParse
 }
 
-/** `WORK_DIR` -> a Build Working Directory. Port of `placement_import.py`'s `parse_work_dir`. */
+/**
+ * `WORK_DIR` -> a Build Working Directory. Port of `placement_import.py`'s `parse_work_dir`, minus
+ * its segment-shape / leading-`/` rejection (spec-conformance review, Codex second-pass finding):
+ * those are CRS VALIDATION rules (`util.VcsPlacementValidator.validateBuildWorkingDirectory`'s
+ * `isPlainRelativePath`), not SHAPES this engine can't parse — pre-empting that check here would
+ * repeat the exact mistake `PlacementRules.checkRules` was deleted for. A `%`-containing value (a
+ * TeamCity property reference, e.g. `%CUSTOMIZATION_APP_PATH%`) is the one genuine parse failure:
+ * it names a value this engine cannot resolve at all, not a value that resolves but fails CRS's
+ * own rules.
+ */
 fun parseWorkDir(value: String?): WorkDirParse {
     var v = (value ?: CHECKOUT_DIR_VAR).trim().trimEnd('/')
     if (v == CHECKOUT_DIR_VAR) return WorkDirParse.Path(null)
     if (v.startsWith("$CHECKOUT_DIR_VAR/")) v = v.substring(CHECKOUT_DIR_VAR.length + 1)
-    if (v.contains('%') || v.startsWith('/')) return WorkDirParse.Unexpressible
-    val segments = v.split('/')
-    return if (segments.all { PATH_SEGMENT_PATTERN.matches(it) && it != "." && it != ".." }) {
-        WorkDirParse.Path(v)
-    } else {
-        WorkDirParse.Unexpressible
-    }
+    return if (v.contains('%')) WorkDirParse.Unexpressible else WorkDirParse.Path(v)
 }
 
 /**
