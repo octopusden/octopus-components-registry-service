@@ -17,7 +17,6 @@ import org.octopusden.octopus.components.registry.server.service.HistoryMigratio
 import org.octopusden.octopus.components.registry.server.service.ImportService
 import org.octopusden.octopus.components.registry.server.service.MigrationConflictException
 import org.octopusden.octopus.components.registry.server.service.MigrationJobService
-import org.octopusden.octopus.components.registry.server.service.MigrationLifecycleGate
 import org.octopusden.octopus.components.registry.server.service.MigrationResult
 import org.octopusden.octopus.components.registry.server.service.MigrationStatus
 import org.octopusden.octopus.components.registry.server.service.ValidationResult
@@ -299,31 +298,13 @@ class AdminControllerV4(
         return ResponseEntity.ok(TeamcityValidationJobResponse.from(state))
     }
 
-    /**
-     * Map cross-kind gate conflicts to a structured 409. Same-kind 409 is
-     * NOT routed here — it returns from startAsync as `isNewlyStarted=false`
-     * with the existing job state body so the SPA can attach.
-     */
-    @ExceptionHandler(MigrationConflictException::class)
-    fun handleCrossKindConflict(e: MigrationConflictException): ResponseEntity<MigrationConflictResponse> {
-        val code =
-            when (e.active.kind) {
-                MigrationLifecycleGate.JobKind.COMPONENTS -> "components-migration-running"
-                MigrationLifecycleGate.JobKind.HISTORY -> "history-migration-running"
-                MigrationLifecycleGate.JobKind.TC_RESYNC -> "tc-resync-running"
-                MigrationLifecycleGate.JobKind.TC_VALIDATION -> "tc-validation-running"
-                MigrationLifecycleGate.JobKind.TC_PLACEMENT_DIFF -> "tc-placement-diff-running"
-                MigrationLifecycleGate.JobKind.TC_PLACEMENT_SYNC -> "tc-placement-sync-running"
-            }
-        return ResponseEntity.status(HttpStatus.CONFLICT).body(
-            MigrationConflictResponse(
-                code = code,
-                message = e.message ?: "Cross-kind migration conflict",
-                activeKind = e.active.kind.name,
-                activeJobId = e.active.jobId,
-            ),
-        )
-    }
+    // Cross-kind gate conflicts (MigrationConflictException -> 409 MigrationConflictResponse) are
+    // handled globally by ControllerExceptionHandler (@ControllerAdvice) — not locally here — so
+    // the mapping also covers other controllers whose jobs share MigrationLifecycleGate
+    // (TeamcityPlacementControllerV4's Diff/Sync). A local @ExceptionHandler only ever sees
+    // exceptions thrown by ITS OWN controller's methods. Same-kind 409 is NOT routed through an
+    // exception at all — it returns from startAsync as `isNewlyStarted=false` with the existing
+    // job state body so the SPA can attach.
 }
 
 /**
