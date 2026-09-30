@@ -38,16 +38,19 @@ class JdbcV8MigrationTimestampProvider(
  * V8 ran a raw SQL backfill (`UPDATE vcs_settings_entries SET checkout_directory = name WHERE
  * sort_order > 0`) that bypassed the application entirely, so it left no `audit_log` row. Every
  * *real* edit, by contrast, goes through `ComponentManagementServiceImpl` (`replaceVcsEntries` /
- * `updateFieldOverride`), which always re-publishes the row's full current state as the audit
- * event's `newValue` snapshot (never a diff). So: if this repository's checkout/source path (or the
- * row's Build Working Directory) shows up in ANY audit snapshot recorded after V8 ran, a real save
- * touched this row at least once since — the current value cannot be assumed to still be V8's guess.
+ * `updateFieldOverride`), which snapshots the row's full state into BOTH `oldValue` (before the
+ * patch) and `newValue` (after) — same shape, captured by the same function on either side of the
+ * mutation. So: this repository's placement (or the row's Build Working Directory) really changed
+ * in a given audit row iff its value in `newValue` differs from its value in `oldValue` — that
+ * catches a set, a re-point, AND a manual CLEAR to null alike (checking `newValue` alone would miss
+ * a clear: nulling a field on purpose looks identical to it never having been set). If ANY post-V8
+ * row shows such a difference, a real save touched it since — the current value cannot be assumed
+ * to still be V8's guess.
  *
- * Deliberately biased toward false positives (flags more as "manual" than strictly is): a person
- * re-saving vcsEntries without changing this particular value also counts. That is the safe
- * direction for a writer — it costs Sync a row it could have safely touched, never a clobbered edit.
- * When V8's own timestamp cannot be read at all (pre-V8 schema, or the flyway table is unreadable),
- * every value fails closed as "manual".
+ * A row that never touches this field at all (`oldValue` and `newValue` agree, including both
+ * lacking it) contributes no signal — most audit rows for a component don't touch this component's
+ * placement. When V8's own timestamp cannot be read at all (pre-V8 schema, or the flyway table is
+ * unreadable), every value fails closed as "manual".
  */
 @ConditionalOnDatabaseEnabled
 @Service
@@ -60,24 +63,17 @@ class PlacementEditHistory(
         vcsPath: String,
     ): Boolean {
         val key = repoKey(vcsPath)
-        return postV8AuditRows(componentId)?.any { newValue ->
-            findAll(newValue, "vcsEntries").any { entries ->
-                (entries as? List<*>)?.any entry@{ entry ->
-                    val row = entry as? Map<*, *> ?: return@entry false
-                    repoKey(row["vcsPath"] as? String) == key &&
-                        (row["checkoutDirectory"] != null || row["sourcePath"] != null)
-                } == true
-            }
-        } ?: true
+        return postV8AuditRows(componentId)?.any { (old, new) -> findVcsEntryFields(new, key) != findVcsEntryFields(old, key) }
+            ?: true
     }
 
     fun wasBuildWorkingDirectoryEverManuallySet(componentId: UUID): Boolean =
-        postV8AuditRows(componentId)?.any { newValue -> findAll(newValue, "buildWorkingDirectory").any { it != null } }
+        postV8AuditRows(componentId)?.any { (old, new) -> findAll(new, "buildWorkingDirectory") != findAll(old, "buildWorkingDirectory") }
             ?: true
 
-    /** Every UPDATE/RENAME `newValue` snapshot for [componentId] since V8 ran, or `null` when V8's
-     * own timestamp is unknown (caller then fails closed). */
-    private fun postV8AuditRows(componentId: UUID): List<Map<String, Any?>?>? {
+    /** Every UPDATE/RENAME (oldValue, newValue) snapshot pair for [componentId] since V8 ran, or
+     * `null` when V8's own timestamp is unknown (caller then fails closed). */
+    private fun postV8AuditRows(componentId: UUID): List<Pair<Map<String, Any?>?, Map<String, Any?>?>>? {
         val since = v8Timestamp.v8AppliedAt() ?: return null
         return auditLogRepository
             .findByEntityTypeAndEntityIdAndChangedAtAfterAndActionIn(
@@ -85,8 +81,22 @@ class PlacementEditHistory(
                 componentId.toString(),
                 since,
                 listOf("UPDATE", "RENAME"),
-            ).map { it.newValue }
+            ).map { it.oldValue to it.newValue }
     }
+
+    /** Every (checkoutDirectory, sourcePath) pair of a `vcsEntries` element matching [key] found
+     * anywhere in the (arbitrarily nested map/list) JSON tree — a component snapshot carries at
+     * most one (the base row's, or one override row's; never both in the same audit event). */
+    private fun findVcsEntryFields(
+        node: Any?,
+        key: String,
+    ): List<Pair<Any?, Any?>> =
+        findAll(node, "vcsEntries").flatMap { entries ->
+            (entries as? List<*>).orEmpty().mapNotNull { entry ->
+                val row = entry as? Map<*, *> ?: return@mapNotNull null
+                if (repoKey(row["vcsPath"] as? String) == key) row["checkoutDirectory"] to row["sourcePath"] else null
+            }
+        }
 
     /** Every value found anywhere in the (arbitrarily nested map/list) JSON tree under [key]. */
     private fun findAll(
