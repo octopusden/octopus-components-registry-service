@@ -41,6 +41,10 @@ enum class PlacementDiffRowStatus {
 data class PlacementEntryDiff(
     val name: String,
     val vcsPath: String,
+    val branch: String?,
+    val tag: String?,
+    val hotfixBranch: String?,
+    val repositoryType: String?,
     val currentCheckoutDirectory: String?,
     val currentSourcePath: String?,
     val derivedCheckoutDirectory: String?,
@@ -90,8 +94,11 @@ class TeamcityPlacementDiffService(
 ) {
     private val log = KotlinLogging.logger {}
 
-    fun runDiff(): PlacementDiffResult {
+    /** [componentIds] restricts the walk to those components — used by Sync to re-derive just the
+     * rows it is about to apply, against the same rules the original Diff used. */
+    fun runDiff(componentIds: Set<UUID>? = null): PlacementDiffResult {
         val rows = componentConfigurationRepository.findAllNonArchivedRowsWithVcsEntries()
+            .filter { componentIds == null || it.component.id in componentIds }
         val byComponent = rows.groupBy { it.component }
         val result = mutableListOf<PlacementRowDiff>()
         for ((component, componentRows) in byComponent) {
@@ -122,7 +129,7 @@ class TeamcityPlacementDiffService(
 
         if (chain is ChainOutcome.Error) {
             if (!inScope(entries, row.buildWorkingDirectory, derivedCd = null, derivedBwd = null)) return null
-            return toRowDiff(component, componentId, row, rowLabel, placementEntries, PlacementDiffRowStatus.TC_ERROR, emptyMap(), null, listOf(chain.message), emptyList())
+            return toRowDiff(component, componentId, row, rowLabel, entries, PlacementDiffRowStatus.TC_ERROR, emptyMap(), null, listOf(chain.message), emptyList())
         }
         chain as ChainOutcome.Ok
         val repoKeys = placementEntries.map { repoKey(it.vcsPath) }.toSet()
@@ -138,7 +145,7 @@ class TeamcityPlacementDiffService(
             componentId,
             row,
             rowLabel,
-            placementEntries,
+            entries,
             status,
             derivation.perEntry,
             derivation.buildWorkingDirectory,
@@ -188,12 +195,15 @@ class TeamcityPlacementDiffService(
         }
     }
 
+    /** [entries] are the row's raw entities (not [PlacementRegistryEntry]) so branch/tag/hotfixBranch
+     * survive into the diff — Sync rebuilds a full replacement [VcsEntryRequest] from this, and those
+     * fields would otherwise be silently cleared on write. */
     private fun toRowDiff(
         component: ComponentEntity,
         componentId: UUID,
         row: ComponentConfigurationEntity,
         rowLabel: String,
-        entries: List<PlacementRegistryEntry>,
+        entries: List<VcsSettingsEntryEntity>,
         status: PlacementDiffRowStatus,
         derivedPerEntry: Map<Int, PlacementValue>,
         derivedBwd: String?,
@@ -212,8 +222,12 @@ class TeamcityPlacementDiffService(
                 PlacementEntryDiff(
                     name = e.name,
                     vcsPath = e.vcsPath,
-                    currentCheckoutDirectory = e.currentCheckoutDirectory,
-                    currentSourcePath = e.currentSourcePath,
+                    branch = e.branch,
+                    tag = e.tag,
+                    hotfixBranch = e.hotfixBranch,
+                    repositoryType = e.repositoryType,
+                    currentCheckoutDirectory = e.checkoutDirectory,
+                    currentSourcePath = e.sourcePath,
                     derivedCheckoutDirectory = derived?.checkoutDirectory,
                     derivedSourcePath = derived?.sourcePath,
                 )
