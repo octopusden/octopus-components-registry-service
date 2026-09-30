@@ -22,7 +22,6 @@ import org.octopusden.octopus.infrastructure.teamcity.client.dto.TeamcityPropert
 import org.octopusden.octopus.infrastructure.teamcity.client.dto.TeamcityVcsRoot
 import org.octopusden.octopus.infrastructure.teamcity.client.dto.TeamcityVcsRootEntries
 import org.octopusden.octopus.infrastructure.teamcity.client.dto.TeamcityVcsRootEntry
-import java.time.Instant
 import java.util.UUID
 import org.octopusden.octopus.infrastructure.teamcity.client.dto.TeamcityProject as ExternalTeamcityProject
 
@@ -157,14 +156,13 @@ class TeamcityPlacementDiffServiceTest {
     private fun editHistory(vararg rows: AuditLogEntity): PlacementEditHistory {
         val auditLogRepository = mock<AuditLogRepository>()
         whenever(
-            auditLogRepository.findByEntityTypeAndEntityIdAndChangedAtAfterAndActionIn(
-                org.mockito.kotlin.any(),
+            auditLogRepository.findByEntityTypeAndEntityIdAndActionInOrderByChangedAtDesc(
                 org.mockito.kotlin.any(),
                 org.mockito.kotlin.any(),
                 org.mockito.kotlin.any(),
             ),
         ).thenReturn(rows.toList())
-        return PlacementEditHistory(auditLogRepository) { Instant.EPOCH }
+        return PlacementEditHistory(auditLogRepository)
     }
 
     private fun service(

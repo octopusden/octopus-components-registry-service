@@ -7,140 +7,145 @@ import org.mockito.kotlin.mock
 import org.mockito.kotlin.whenever
 import org.octopusden.octopus.components.registry.server.entity.AuditLogEntity
 import org.octopusden.octopus.components.registry.server.repository.AuditLogRepository
-import java.time.Instant
 import java.util.UUID
 
+/**
+ * Provenance rule (owner review): a placement field is manual only if its LAST audited change is a
+ * real user write that is NOT tagged as a sync (`PlacementEditHistory.SYNC_CHANGE_COMMENT_PREFIX`).
+ * A field with no audit record at all — a null value, a V8 back-fill, a never-touched V9 BWD — is
+ * non-manual: nothing has ever "really" changed it. A value last written by Sync itself is also
+ * non-manual, so a re-Diff after a Sync can resolve again instead of getting stuck on its own write.
+ */
 class PlacementEditHistoryTest {
     private val auditLogRepository = mock<AuditLogRepository>()
     private val componentId: UUID = UUID.randomUUID()
-    private val v8AppliedAt = Instant.parse("2026-06-01T00:00:00Z")
+    private val appVcsPath = "ssh://h/prj/app.git"
 
-    private fun history(v8At: Instant? = v8AppliedAt) = PlacementEditHistory(auditLogRepository) { v8At }
+    private fun history() = PlacementEditHistory(auditLogRepository)
 
-    /** [rows] are (oldValue, newValue) pairs — the real audit shape: both captured by the same
-     * snapshot function, one before the patch and one after. */
-    private fun stubRows(vararg rows: Pair<Map<String, Any?>, Map<String, Any?>>) {
+    private fun vcsSnapshot(
+        cd: String?,
+        sp: String?,
+        bwd: String? = null,
+        vcsPath: String = appVcsPath,
+    ) = mapOf(
+        "vcsEntries" to listOf(mapOf("vcsPath" to vcsPath, "checkoutDirectory" to cd, "sourcePath" to sp)),
+        "buildWorkingDirectory" to bwd,
+    )
+
+    private fun row(
+        old: Map<String, Any?>?,
+        new: Map<String, Any?>?,
+        changeComment: String? = null,
+    ) = AuditLogEntity(
+        entityType = "Component",
+        entityId = componentId.toString(),
+        action = "UPDATE",
+        oldValue = old,
+        newValue = new,
+        changeComment = changeComment,
+    )
+
+    /** Rows in NEWEST-FIRST order, as the repository query returns them. */
+    private fun stub(vararg rows: AuditLogEntity) {
         whenever(
-            auditLogRepository.findByEntityTypeAndEntityIdAndChangedAtAfterAndActionIn(
+            auditLogRepository.findByEntityTypeAndEntityIdAndActionInOrderByChangedAtDesc(
                 "Component",
                 componentId.toString(),
-                v8AppliedAt,
                 listOf("UPDATE", "RENAME"),
             ),
-        ).thenReturn(
-            rows.map { (old, new) ->
-                AuditLogEntity(
-                    entityType = "Component",
-                    entityId = componentId.toString(),
-                    action = "UPDATE",
-                    oldValue = old,
-                    newValue = new,
-                )
-            },
-        )
-    }
-
-    private fun vcsEntriesSnapshot(
-        vcsPath: String,
-        checkoutDirectory: String?,
-        sourcePath: String?,
-    ) = mapOf("vcsEntries" to listOf(mapOf("vcsPath" to vcsPath, "checkoutDirectory" to checkoutDirectory, "sourcePath" to sourcePath)))
-
-    @Test
-    fun `never touched since V8 is not a manual edit`() {
-        stubRows()
-        assertFalse(history().wasEverManuallyPlaced(componentId, "ssh://h/prj/app.git"))
+        ).thenReturn(rows.toList())
     }
 
     @Test
-    fun `a base-row vcsEntries snapshot that sets a checkout directory for this repository is a manual edit`() {
-        stubRows(
-            vcsEntriesSnapshot("ssh://h/PRJ/App.git", checkoutDirectory = null, sourcePath = null) to
-                vcsEntriesSnapshot("ssh://h/PRJ/App.git", checkoutDirectory = "app", sourcePath = null),
-        )
-        assertTrue(history().wasEverManuallyPlaced(componentId, "ssh://h/prj/app.git"))
+    fun `no audit row at all is non-manual (a first import over a null value)`() {
+        stub()
+        assertFalse(history().isManuallyPlaced(componentId, appVcsPath))
+        assertFalse(history().isBuildWorkingDirectoryManuallySet(componentId, appVcsPath))
     }
 
     @Test
-    fun `a manual clear back to root is a manual edit, not silently re-syncable`() {
-        // The regression this guards: checking only newValue (never oldValue) would see the clear's
-        // all-null newValue and conclude "never set", letting Sync write TeamCity's value straight
-        // back over a deliberate clear.
-        stubRows(
-            vcsEntriesSnapshot("ssh://h/prj/app.git", checkoutDirectory = "app", sourcePath = null) to
-                vcsEntriesSnapshot("ssh://h/prj/app.git", checkoutDirectory = null, sourcePath = null),
-        )
-        assertTrue(history().wasEverManuallyPlaced(componentId, "ssh://h/prj/app.git"))
+    fun `an audit row present but never changing this repository is non-manual (V8's silent backfill)`() {
+        // V8's raw-SQL backfill left no audit row of its own; an unrelated real edit still
+        // snapshots the current state into both oldValue and newValue identically for this repo,
+        // since neither side of that edit touched it.
+        stub(row(vcsSnapshot(cd = "app", sp = null, bwd = "app"), vcsSnapshot(cd = "app", sp = null, bwd = "app")))
+        assertFalse(history().isManuallyPlaced(componentId, appVcsPath))
+        assertFalse(history().isBuildWorkingDirectoryManuallySet(componentId, appVcsPath))
     }
 
     @Test
-    fun `an unrelated field changing in the same row is not a manual edit of this repository`() {
-        val unchanged = vcsEntriesSnapshot("ssh://h/prj/app.git", checkoutDirectory = "app", sourcePath = null)
-        stubRows(unchanged to unchanged)
-        assertFalse(history().wasEverManuallyPlaced(componentId, "ssh://h/prj/app.git"))
+    fun `the last change being a real untagged user write is manual`() {
+        stub(row(vcsSnapshot(null, null), vcsSnapshot("app", null)))
+        assertTrue(history().isManuallyPlaced(componentId, appVcsPath))
+    }
+
+    @Test
+    fun `the last change being sync-tagged is not manual even though the value changed (resolved after a sync)`() {
+        stub(row(vcsSnapshot(null, null), vcsSnapshot("app", null), changeComment = "sync from TeamCity (job=diff-1)"))
+        assertFalse(history().isManuallyPlaced(componentId, appVcsPath))
+    }
+
+    @Test
+    fun `TeamCity changing after a sync still resolves on re-diff (only the LAST change is looked at)`() {
+        // Newest first: the user's edit is now further back than the sync that followed it, so the
+        // sync (tagged) is what decides.
+        val userEdit = row(vcsSnapshot(null, null), vcsSnapshot("app", null))
+        val sync = row(vcsSnapshot("app", null), vcsSnapshot("app2", null), changeComment = "sync from TeamCity (job=diff-2)")
+        stub(sync, userEdit)
+        assertFalse(history().isManuallyPlaced(componentId, appVcsPath))
+    }
+
+    @Test
+    fun `a user edit after a sync is manual again`() {
+        val sync = row(vcsSnapshot("app", null), vcsSnapshot("app2", null), changeComment = "sync from TeamCity (job=diff-2)")
+        val userEdit = row(vcsSnapshot("app2", null), vcsSnapshot("custom", null))
+        stub(userEdit, sync)
+        assertTrue(history().isManuallyPlaced(componentId, appVcsPath))
     }
 
     @Test
     fun `a snapshot for a different repository does not flag this one`() {
-        val other = vcsEntriesSnapshot("ssh://h/prj/other.git", checkoutDirectory = null, sourcePath = null) to
-            vcsEntriesSnapshot("ssh://h/prj/other.git", checkoutDirectory = "other", sourcePath = null)
-        stubRows(other)
-        assertFalse(history().wasEverManuallyPlaced(componentId, "ssh://h/prj/app.git"))
+        stub(
+            row(
+                vcsSnapshot(null, null, vcsPath = "ssh://h/prj/other.git"),
+                vcsSnapshot("other", null, vcsPath = "ssh://h/prj/other.git"),
+            ),
+        )
+        assertFalse(history().isManuallyPlaced(componentId, appVcsPath))
     }
 
     @Test
-    fun `a vcs-settings override row created under fieldOverride markerChildren is a manual edit`() {
-        val created = mapOf(
+    fun `a vcs-settings override-row snapshot is found under fieldOverride markerChildren`() {
+        fun overrideSnapshot(
+            cd: String?,
+            bwd: String?,
+        ) = mapOf(
             "fieldOverride[vcs.settings]" to mapOf(
                 "markerChildren" to mapOf(
-                    "vcsEntries" to listOf(
-                        mapOf("vcsPath" to "ssh://h/prj/app.git", "checkoutDirectory" to null, "sourcePath" to "core"),
-                    ),
-                    "buildWorkingDirectory" to "core/app",
+                    "vcsEntries" to listOf(mapOf("vcsPath" to appVcsPath, "checkoutDirectory" to cd, "sourcePath" to null)),
+                    "buildWorkingDirectory" to bwd,
                 ),
             ),
         )
-        stubRows(emptyMap<String, Any?>() to created)
-        assertTrue(history().wasEverManuallyPlaced(componentId, "ssh://h/prj/app.git"))
-        assertTrue(history().wasBuildWorkingDirectoryEverManuallySet(componentId))
+        stub(row(overrideSnapshot(null, null), overrideSnapshot("core", "core/app")))
+        assertTrue(history().isManuallyPlaced(componentId, appVcsPath))
+        assertTrue(history().isBuildWorkingDirectoryManuallySet(componentId, appVcsPath))
     }
 
     @Test
-    fun `build working directory is untouched when it stays null across a row that changes something else`() {
-        val unchanged = mapOf("buildWorkingDirectory" to null)
-        stubRows(unchanged to unchanged)
-        assertFalse(history().wasBuildWorkingDirectoryEverManuallySet(componentId))
-    }
-
-    @Test
-    fun `an unreadable V8 timestamp fails closed as manual`() {
-        assertTrue(history(v8At = null).wasEverManuallyPlaced(componentId, "ssh://h/prj/app.git"))
-        assertTrue(history(v8At = null).wasBuildWorkingDirectoryEverManuallySet(componentId))
-    }
-
-    @Test
-    fun `a value the Sync job itself last wrote is not a manual edit (owner review finding 2, RED)`() {
-        // PR #510 review: today ANY post-V8 change is "manual", including one written by Sync
-        // itself — so a component TeamCity changes again right after a Sync can never resolve on
-        // the next Diff; it is permanently stuck reporting MANUAL_EDIT against its own prior Sync.
-        // The fix: a change tagged as coming from Sync must not count as a manual edit.
-        val syncWrite = AuditLogEntity(
-            entityType = "Component",
-            entityId = componentId.toString(),
-            action = "UPDATE",
-            oldValue = vcsEntriesSnapshot("ssh://h/prj/app.git", checkoutDirectory = null, sourcePath = null),
-            newValue = vcsEntriesSnapshot("ssh://h/prj/app.git", checkoutDirectory = "app", sourcePath = null),
-            changeComment = "sync from TeamCity (job abc-123)",
-        )
-        whenever(
-            auditLogRepository.findByEntityTypeAndEntityIdAndChangedAtAfterAndActionIn(
-                "Component",
-                componentId.toString(),
-                v8AppliedAt,
-                listOf("UPDATE", "RENAME"),
+    fun `build working directory provenance is scoped to the section mentioning this vcsPath`() {
+        // A component with two vcs.settings rows: this audit row is for the OTHER row (a different
+        // vcsPath); its BWD change must not flag the row we're asking about.
+        fun otherRowSnapshot(bwd: String?) = mapOf(
+            "fieldOverride[vcs.settings]" to mapOf(
+                "markerChildren" to mapOf(
+                    "vcsEntries" to listOf(mapOf("vcsPath" to "ssh://h/prj/other.git", "checkoutDirectory" to null, "sourcePath" to null)),
+                    "buildWorkingDirectory" to bwd,
+                ),
             ),
-        ).thenReturn(listOf(syncWrite))
-
-        assertFalse(history().wasEverManuallyPlaced(componentId, "ssh://h/prj/app.git"))
+        )
+        stub(row(otherRowSnapshot(null), otherRowSnapshot("changed-for-other-row")))
+        assertFalse(history().isBuildWorkingDirectoryManuallySet(componentId, appVcsPath))
     }
 }
