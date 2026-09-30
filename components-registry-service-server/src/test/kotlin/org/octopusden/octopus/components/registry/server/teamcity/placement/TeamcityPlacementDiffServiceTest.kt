@@ -440,7 +440,12 @@ class TeamcityPlacementDiffServiceTest {
     @Test
     fun `a marker (vcs_settings) row is reported OUTSIDE_SCOPE, never derived (spec-conformance finding 1, RED)`() {
         val comp = component()
-        val row = ComponentConfigurationEntity(id = UUID.randomUUID(), component = comp, rowType = "MARKER", overriddenAttribute = "vcs.settings")
+        val row = ComponentConfigurationEntity(
+            id = UUID.randomUUID(),
+            component = comp,
+            rowType = "MARKER",
+            overriddenAttribute = "vcs.settings",
+        )
         row.vcsEntries += VcsSettingsEntryEntity(componentConfiguration = row, name = "main", vcsPath = appId, sortOrder = 0)
         val bt = compileBuildType("compileA", roots = listOf(appId to "+:. => app"))
         val svc = service(listOf(row), mapOf(comp.id!! to listOf("P")), FakeEnrichedTcProjectFetcher(mapOf("P" to project(bt))))

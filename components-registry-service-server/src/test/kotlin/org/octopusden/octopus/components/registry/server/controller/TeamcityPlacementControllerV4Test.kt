@@ -130,7 +130,7 @@ class TeamcityPlacementControllerV4Test {
     }
 
     @Test
-    fun `a new Diff replaces the latest result -- the old diffId is then refused while reports reflect the new one (spec-conformance finding 4 coverage)`() {
+    fun `a new Diff replaces the latest result -- the old diffId is refused while reports reflect the new one (finding 4)`() {
         val d1 = completedDiff("D1")
         whenever(diffJobService.current()).thenReturn(d1)
         assertEquals(d1.result, controller.getReportJson().body)
