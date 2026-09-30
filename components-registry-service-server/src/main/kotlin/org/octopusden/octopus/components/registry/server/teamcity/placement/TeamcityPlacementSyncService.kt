@@ -186,7 +186,14 @@ class TeamcityPlacementSyncService(
         return row.entries.flatMap { e ->
             listOfNotNull(
                 if (e.derivedCheckoutDirectory != e.currentCheckoutDirectory) {
-                    PlacementFieldChange(row.componentKey, row.rowLabel, e.name, "checkoutDirectory", e.currentCheckoutDirectory, e.derivedCheckoutDirectory)
+                    PlacementFieldChange(
+                        row.componentKey,
+                        row.rowLabel,
+                        e.name,
+                        "checkoutDirectory",
+                        e.currentCheckoutDirectory,
+                        e.derivedCheckoutDirectory,
+                    )
                 } else {
                     null
                 },
