@@ -3278,7 +3278,7 @@ response shape), `ArchiveReadinessNoRegressionTest` (read-only — no write side
 **Status:** ✅ Tested
 
 **Motivation:**
-Bug: legacy explicit+external WHISKEY components (e.g. `CARDS`, `DM`) define no maven GAV,
+Bug: legacy explicit+external WHISKEY components define no maven GAV,
 docker image or package coordinate. Every PATCH carrying `baseConfiguration` (e.g. a Java
 version change) and every field-override write re-ran the ≥1-coordinate rule against that
 untouched data and failed with `400 distribution: an explicit+external component must define
