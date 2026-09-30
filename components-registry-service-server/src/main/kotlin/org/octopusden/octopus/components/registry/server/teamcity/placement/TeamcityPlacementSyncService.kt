@@ -77,7 +77,9 @@ class TeamcityPlacementSyncService(
                 }
                 rowOutcomes += PlacementRowSyncOutcome(row.configurationRowId, row.rowLabel, outcome)
             }
-            val componentKey = componentRows.firstOrNull()?.componentKey ?: snapshotByRow.values.firstOrNull { it.componentId == componentId }?.componentKey ?: componentId.toString()
+            val componentKey = componentRows.firstOrNull()?.componentKey
+                ?: snapshotByRow.values.firstOrNull { it.componentId == componentId }?.componentKey
+                ?: componentId.toString()
             components += PlacementComponentSyncOutcome(componentId, componentKey, rowOutcomes)
         }
 
@@ -98,7 +100,9 @@ class TeamcityPlacementSyncService(
         } catch (
             @Suppress("TooGenericExceptionCaught") e: Exception,
         ) {
-            log.warn(e) { "TeamCity placement sync: failed to write row ${freshRow.configurationRowId} of component '${freshRow.componentKey}'" }
+            log.warn(e) {
+                "TeamCity placement sync: failed to write row ${freshRow.configurationRowId} of component '${freshRow.componentKey}'"
+            }
             "failed: ${e.message ?: e::class.simpleName}"
         }
     }
@@ -144,7 +148,10 @@ class TeamcityPlacementSyncService(
                 componentId,
                 row.configurationRowId,
                 FieldOverrideUpdateRequest(
-                    markerChildren = MarkerChildrenPayload(vcsEntries = vcsEntries, buildWorkingDirectory = row.derivedBuildWorkingDirectory),
+                    markerChildren = MarkerChildrenPayload(
+                        vcsEntries = vcsEntries,
+                        buildWorkingDirectory = row.derivedBuildWorkingDirectory,
+                    ),
                 ),
             )
         }

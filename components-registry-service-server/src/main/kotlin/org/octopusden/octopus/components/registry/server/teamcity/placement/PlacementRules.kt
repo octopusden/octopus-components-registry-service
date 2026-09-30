@@ -2,7 +2,7 @@ package org.octopusden.octopus.components.registry.server.teamcity.placement
 
 import java.util.Locale
 
-/**
+/*
  * ONB-002: pure derivation of VCS root placement (Checkout Directory / Source Path / Build
  * Working Directory, ADR-001) from a component's TeamCity compile build configurations.
  *
@@ -13,10 +13,10 @@ import java.util.Locale
  * brief reads only the linked projects' compile build types. Dropping the release fallback also
  * drops Python's `release-only` status; what Python called `partial` (a row where every compile
  * configuration agrees on SOME entries but never attaches at least one entry at all) folds into
- * [PlacementRowStatus.UNEXPRESSIBLE] here — both mean "cannot be safely applied", and the per-entry
+ * PlacementRowStatus.UNEXPRESSIBLE here — both mean "cannot be safely applied", and the per-entry
  * `notes` still say which entry is missing.
  *
- * No framework dependency on purpose: this is exercised entirely by [PlacementRulesTest] with
+ * No framework dependency on purpose: this is exercised entirely by PlacementRulesTest with
  * plain JUnit, one case per ported Python test.
  */
 
@@ -91,7 +91,11 @@ fun repoKey(url: String?): String {
     var u = (url ?: "").trim().lowercase(Locale.ROOT).trimEnd('/')
     u = Regex("""\.git/?$""").replace(u, "")
     u = u.replace(':', '/')
-    return u.split('/').filter { it.isNotEmpty() }.takeLast(2).joinToString("/")
+    return u
+        .split('/')
+        .filter { it.isNotEmpty() }
+        .takeLast(2)
+        .joinToString("/")
 }
 
 /**
@@ -120,7 +124,9 @@ fun parseCheckoutRule(rules: String?): PlacementValue? {
 /** Outcome of parsing `WORK_DIR`: a resolved (possibly root) path, or not expressible at all. */
 sealed interface WorkDirParse {
     /** `value == null` means the checkout root. */
-    data class Path(val value: String?) : WorkDirParse
+    data class Path(
+        val value: String?,
+    ) : WorkDirParse
 
     object Unexpressible : WorkDirParse
 }
@@ -187,7 +193,8 @@ fun derive(input: DeriveInput): PlacementDerivation {
 
     if (input.outsideRuledConfigCounts.isNotEmpty()) {
         notes += "configurations on other templates attach roots with checkout rules: " +
-            input.outsideRuledConfigCounts.entries.sortedBy { it.key }
+            input.outsideRuledConfigCounts.entries
+                .sortedBy { it.key }
                 .joinToString(", ") { "`${it.key}` (${it.value} roots)" } + "; not derived"
     }
 

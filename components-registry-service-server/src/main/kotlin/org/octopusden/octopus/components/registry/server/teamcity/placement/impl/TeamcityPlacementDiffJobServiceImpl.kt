@@ -69,7 +69,14 @@ class TeamcityPlacementDiffJobServiceImpl(
     override fun current(): TeamcityPlacementDiffJobState? = lifecycle.current()
 
     private fun buildCandidate(jobId: String): TeamcityPlacementDiffJobState =
-        TeamcityPlacementDiffJobState(id = jobId, state = JobState.RUNNING, startedAt = Instant.now(), finishedAt = null, result = null, errorMessage = null)
+        TeamcityPlacementDiffJobState(
+            id = jobId,
+            state = JobState.RUNNING,
+            startedAt = Instant.now(),
+            finishedAt = null,
+            result = null,
+            errorMessage = null,
+        )
 
     private fun runDiff(
         jobId: String,
@@ -99,7 +106,9 @@ class TeamcityPlacementDiffJobServiceImpl(
             @Suppress("TooGenericExceptionCaught") e: Throwable,
         ) {
             LOG.error("TeamCity placement diff job {} FAILED", jobId, e)
-            lifecycle.update(jobId) { current -> current.copy(state = JobState.FAILED, finishedAt = Instant.now(), errorMessage = e.message ?: e::class.java.simpleName) }
+            lifecycle.update(jobId) { current ->
+                current.copy(state = JobState.FAILED, finishedAt = Instant.now(), errorMessage = e.message ?: e::class.java.simpleName)
+            }
             serviceEventRecorder.recordFinish(
                 type = ServiceEventType.TEAMCITY_PLACEMENT_DIFF,
                 source = ServiceEventSource.CRS,

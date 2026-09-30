@@ -61,10 +61,17 @@ class TeamcityPlacementSyncServiceTest {
         componentManagementService: ComponentManagementService = mock(),
     ) = TeamcityPlacementSyncService(diffService, componentManagementService) to componentManagementService
 
+    /** A [TeamcityPlacementDiffService] mock whose re-derivation (Sync always re-derives before
+     * writing) returns exactly [rows] for this test's componentId. */
+    private fun diffServiceReturning(rows: List<PlacementRowDiff>) =
+        mock<TeamcityPlacementDiffService> {
+            whenever(it.runDiff(setOf(componentId))).thenReturn(PlacementDiffResult(Instant.now(), rows))
+        }
+
     @Test
     fun `a resolved row unchanged since the diff is applied through the base PATCH`() {
         val diffRow = row(PlacementDiffRowStatus.RESOLVED)
-        val diffService = mock<TeamcityPlacementDiffService> { whenever(it.runDiff(setOf(componentId))).thenReturn(PlacementDiffResult(Instant.now(), listOf(diffRow))) }
+        val diffService = diffServiceReturning(listOf(diffRow))
         val (svc, cms) = service(diffService)
         val detail = mock<ComponentDetailResponse>()
         whenever(detail.version).thenReturn(5L)
@@ -87,41 +94,59 @@ class TeamcityPlacementSyncServiceTest {
     fun `a row whose fresh re-derivation differs from the diff snapshot is skipped`() {
         val snapshotRow = row(PlacementDiffRowStatus.RESOLVED, rowId = UUID.randomUUID())
         val freshRow = snapshotRow.copy(entries = snapshotRow.entries.map { it.copy(derivedCheckoutDirectory = "different") })
-        val diffService = mock<TeamcityPlacementDiffService> { whenever(it.runDiff(setOf(componentId))).thenReturn(PlacementDiffResult(Instant.now(), listOf(freshRow))) }
+        val diffService = diffServiceReturning(listOf(freshRow))
         val (svc, cms) = service(diffService)
 
         val result = svc.sync(setOf(componentId), PlacementDiffResult(Instant.now(), listOf(snapshotRow)), "alice")
 
         assertEquals(0, result.applied)
         assertEquals(1, result.skipped)
-        assertEquals("skipped: changed since diff", result.components.single().rows.single().outcome)
+        assertEquals(
+            "skipped: changed since diff",
+            result.components
+                .single()
+                .rows
+                .single()
+                .outcome,
+        )
         verify(cms, org.mockito.kotlin.never()).updateComponent(any(), any())
     }
 
     @Test
     fun `a manual-edit row is skipped, never written`() {
         val diffRow = row(PlacementDiffRowStatus.MANUAL_EDIT)
-        val diffService = mock<TeamcityPlacementDiffService> { whenever(it.runDiff(setOf(componentId))).thenReturn(PlacementDiffResult(Instant.now(), listOf(diffRow))) }
+        val diffService = diffServiceReturning(listOf(diffRow))
         val (svc, cms) = service(diffService)
 
         val result = svc.sync(setOf(componentId), PlacementDiffResult(Instant.now(), listOf(diffRow)), "alice")
 
         assertEquals(0, result.applied)
-        assertEquals("skipped: manual_edit", result.components.single().rows.single().outcome)
+        assertEquals(
+            "skipped: manual_edit",
+            result.components
+                .single()
+                .rows
+                .single()
+                .outcome,
+        )
         verify(cms, org.mockito.kotlin.never()).updateComponent(any(), any())
     }
 
     @Test
     fun `a vcs-settings override row is written through updateFieldOverride, not the base PATCH`() {
         val diffRow = row(PlacementDiffRowStatus.RESOLVED, rowLabel = "vcs.settings", derivedBwd = "app")
-        val diffService = mock<TeamcityPlacementDiffService> { whenever(it.runDiff(setOf(componentId))).thenReturn(PlacementDiffResult(Instant.now(), listOf(diffRow))) }
+        val diffService = diffServiceReturning(listOf(diffRow))
         val (svc, cms) = service(diffService)
 
         val result = svc.sync(setOf(componentId), PlacementDiffResult(Instant.now(), listOf(diffRow)), "alice")
 
         assertEquals(1, result.applied)
         val captor = argumentCaptor<FieldOverrideUpdateRequest>()
-        verify(cms).updateFieldOverride(org.mockito.kotlin.eq(componentId), org.mockito.kotlin.eq(diffRow.configurationRowId), captor.capture())
+        verify(cms).updateFieldOverride(
+            org.mockito.kotlin.eq(componentId),
+            org.mockito.kotlin.eq(diffRow.configurationRowId),
+            captor.capture(),
+        )
         assertEquals("app", captor.firstValue.markerChildren!!.buildWorkingDirectory)
         verify(cms, org.mockito.kotlin.never()).updateComponent(any(), any())
     }
@@ -129,13 +154,20 @@ class TeamcityPlacementSyncServiceTest {
     @Test
     fun `a failing write is counted and reported without aborting the rest`() {
         val diffRow = row(PlacementDiffRowStatus.RESOLVED)
-        val diffService = mock<TeamcityPlacementDiffService> { whenever(it.runDiff(setOf(componentId))).thenReturn(PlacementDiffResult(Instant.now(), listOf(diffRow))) }
+        val diffService = diffServiceReturning(listOf(diffRow))
         val (svc, cms) = service(diffService)
         whenever(cms.getComponent(componentId)).thenThrow(RuntimeException("boom"))
 
         val result = svc.sync(setOf(componentId), PlacementDiffResult(Instant.now(), listOf(diffRow)), "alice")
 
         assertEquals(1, result.failed)
-        assertEquals("failed: boom", result.components.single().rows.single().outcome)
+        assertEquals(
+            "failed: boom",
+            result.components
+                .single()
+                .rows
+                .single()
+                .outcome,
+        )
     }
 }
