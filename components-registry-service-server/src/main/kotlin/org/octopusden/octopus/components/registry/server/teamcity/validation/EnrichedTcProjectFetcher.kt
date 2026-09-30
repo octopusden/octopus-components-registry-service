@@ -69,12 +69,20 @@ class CachingEnrichedTcProjectFetcher(
         // Every buildType node must list the DTO's non-nullable fields or Jackson throws on missing
         // `name`. Mirrors the sync's PROJECT_FIELDS, plus steps.
         private const val BUILD_TYPE_REQUIRED = "id,name,projectId,projectName,href"
+
+        // ONB-002 (TeamCity placement Diff/Sync): each build type's attached VCS roots and their
+        // checkout rules, so TeamcityPlacementDiffService can derive Checkout Directory / Source
+        // Path / Build Working Directory without a second TC call. Additive only — every existing
+        // consumer of this cache (TeamcityValidationService) ignores the extra field.
+        private const val VCS_ROOT_ENTRIES =
+            "vcs-root-entries(vcs-root-entry(checkout-rules,vcs-root(id,properties(property(name,value)))))"
         const val FIELDS =
             "project(id,name,webUrl,href," +
                 "parameters(property(name,value))," +
                 "buildTypes(buildType($BUILD_TYPE_REQUIRED,paused,templateFlag," +
                 "parameters(property(name,value))," +
                 "template($BUILD_TYPE_REQUIRED),templates(buildType($BUILD_TYPE_REQUIRED))," +
-                "steps(step(id,name,type,disabled,inherited,properties(property(name,value)))))))"
+                "steps(step(id,name,type,disabled,inherited,properties(property(name,value))))," +
+                "$VCS_ROOT_ENTRIES)))"
     }
 }

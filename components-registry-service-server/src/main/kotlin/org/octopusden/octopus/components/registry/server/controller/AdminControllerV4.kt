@@ -312,6 +312,8 @@ class AdminControllerV4(
                 MigrationLifecycleGate.JobKind.HISTORY -> "history-migration-running"
                 MigrationLifecycleGate.JobKind.TC_RESYNC -> "tc-resync-running"
                 MigrationLifecycleGate.JobKind.TC_VALIDATION -> "tc-validation-running"
+                MigrationLifecycleGate.JobKind.TC_PLACEMENT_DIFF -> "tc-placement-diff-running"
+                MigrationLifecycleGate.JobKind.TC_PLACEMENT_SYNC -> "tc-placement-sync-running"
             }
         return ResponseEntity.status(HttpStatus.CONFLICT).body(
             MigrationConflictResponse(
