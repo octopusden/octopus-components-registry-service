@@ -192,4 +192,20 @@ class TeamcityPlacementSyncServiceTest {
         assertEquals("skipped: changed since diff", outcome.outcome)
         verify(cms, org.mockito.kotlin.never()).updateComponent(any(), any())
     }
+
+    @Test
+    fun `sync forces a live TeamCity read before re-deriving, never trusting the fetch cache`() {
+        // Without this, a re-derivation inside the cache's TTL window could compare against the
+        // exact same (now stale) response the original Diff read, defeating "changed since diff".
+        val diffRow = row(PlacementDiffRowStatus.RESOLVED)
+        val diffService = diffServiceReturning(listOf(diffRow))
+        val (svc, cms) = service(diffService)
+        val detail = mock<ComponentDetailResponse>()
+        whenever(detail.version).thenReturn(1L)
+        whenever(cms.getComponent(componentId)).thenReturn(detail)
+
+        svc.sync(setOf(componentId), PlacementDiffResult(Instant.now(), listOf(diffRow)), "alice")
+
+        verify(diffService).invalidateTeamcityCache()
+    }
 }
