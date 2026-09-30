@@ -31,8 +31,8 @@ enum class PlacementDiffRowStatus {
     IN_SYNC,
 
     /** Derivation resolved and differs from the current value, but the derived values would fail
-     * the SAME v4 write validation a human PATCH runs (see [org.octopusden.octopus.components.registry.server.util.VcsPlacementValidator]) —
-     * never offered to Sync. The validation message is in the row's `notes`. */
+     * the SAME v4 write validation a human PATCH runs — see `util.VcsPlacementValidator`. Never
+     * offered to Sync. The validation message is in the row's `notes`. */
     INVALID,
 
     /** The component's linked TeamCity project(s) could not be read; see the row's notes for why. */
