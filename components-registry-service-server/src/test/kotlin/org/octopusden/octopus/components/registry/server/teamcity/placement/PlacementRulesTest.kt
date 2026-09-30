@@ -83,14 +83,18 @@ private fun compileConfig(
 
 class DeriveTest {
     @Test
-    fun `one build type attaching the same repository twice with disagreeing rules is unexpressible`() {
+    fun `one build type attaching the same repository twice with disagreeing rules is a conflict (spec-conformance finding 2, RED)`() {
         // Regression: a naive last-wins map (Map.associate) over vcsRootEntries would silently
         // pick whichever rule happened to sort last, hiding this as a resolvable placement.
+        // Spec-conformance review: a genuine disagreement (two DIFFERENT resolvable
+        // interpretations of the same repository, attached twice in one build type) is CONFLICT,
+        // the same as two build types disagreeing with each other -- UNEXPRESSIBLE is reserved for
+        // a rule/WORK_DIR SHAPE that can't be parsed at all (a remap, several rules, `%VAR%`).
         val gateway = "ssh://h/prj/app-two.git"
         val app = "ssh://h/prj/app-one.git"
         val bt = compileConfig(gateway to "", app to "+:. => app-one", app to "+:. => other-name")
         val outcome = derive(DeriveInput(ENTRIES, listOf(bt), 0, emptyMap()))
-        assertEquals(PlacementRowStatus.UNEXPRESSIBLE, outcome.status)
+        assertEquals(PlacementRowStatus.CONFLICT, outcome.status)
     }
 
     @Test
