@@ -2626,6 +2626,9 @@
       },
       "PlacementDiffResult" : {
         "properties" : {
+          "diffId" : {
+            "type" : "string"
+          },
           "generatedAt" : {
             "format" : "date-time",
             "type" : "string"

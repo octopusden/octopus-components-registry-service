@@ -32,7 +32,8 @@ refresh it with `./gradlew :components-registry-service-server:generateOpenApiDo
     409 on a same-kind attach or a cross-kind conflict with another admin job, same shape as every
     other admin job (`TeamcityPlacementDiffJobResponse`, `kind: "job"`).
   - `GET /diff/report.json` / `.../report.html` / `.../report.csv` — the latest completed run's
-    rows (`PlacementDiffResult`), readable by anyone who can view components (no `IMPORT_DATA`
+    rows (`PlacementDiffResult`, whose `diffId` names the Diff run — the id a Sync request must
+    send), readable by anyone who can view components (no `IMPORT_DATA`
     needed for the report itself). 404 until a Diff has completed at least once. Per row: status
     (`RESOLVED`, `INVALID`, `CONFLICT`, `UNEXPRESSIBLE`, `NO_CHAIN`, `OUTSIDE_TEMPLATES`,
     `COMPILE_PAUSED`, `MANUAL_EDIT`, `IN_SYNC`, `TC_ERROR`, `OUTSIDE_SCOPE`), current and derived
