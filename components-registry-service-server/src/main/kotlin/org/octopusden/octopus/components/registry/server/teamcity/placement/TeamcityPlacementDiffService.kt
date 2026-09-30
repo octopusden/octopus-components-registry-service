@@ -240,22 +240,29 @@ class TeamcityPlacementDiffService(
         // Owner review finding 4 (ADR-002 decision 3): RESOLVED requires the derived values to
         // ALSO pass the same validation a real v4 write runs — not just PlacementRules.checkRules'
         // narrower pure-derivation check (Checkout Directory duplicates/reserved names only, never
-        // entry names or Source Path shape). Per ADR-001 decision 4, a placed entry's name becomes
-        // its Checkout Directory on write; an unplaced entry keeps its current (kept) name.
+        // entry names or Source Path shape). Names are derived by the SAME rule the real write uses
+        // (VcsPlacementValidator.deriveNames — owner review finding 4 hardening): building the
+        // candidate as `derived.checkoutDirectory ?: e.name`, with no exclusion/fallback, could flag
+        // a row INVALID that a real write would accept (an unplaced entry's kept name colliding with
+        // a new Checkout Directory falls back to "main", not a validation failure).
         val invalidMessage = runCatching {
+            val checkoutDirectories = rawEntries.indices.map { i -> derivation.perEntry[i]?.checkoutDirectory }
+            val names = VcsPlacementValidator.deriveNames(
+                rawEntries,
+                rawEntries.indices.map { i -> Triple(rawEntries[i].vcsPath, rawEntries[i].repositoryType, checkoutDirectories[i]) },
+            )
             val candidateEntries = rawEntries.mapIndexed { i, e ->
-                val derived = derivation.perEntry[i]
                 VcsSettingsEntryEntity(
                     componentConfiguration = e.componentConfiguration,
-                    name = derived?.checkoutDirectory ?: e.name,
+                    name = names[i],
                     vcsPath = e.vcsPath,
                     branch = e.branch,
                     tag = e.tag,
                     hotfixBranch = e.hotfixBranch,
                     repositoryType = e.repositoryType,
                     sortOrder = i,
-                    sourcePath = derived?.sourcePath,
-                    checkoutDirectory = derived?.checkoutDirectory,
+                    sourcePath = derivation.perEntry[i]?.sourcePath,
+                    checkoutDirectory = checkoutDirectories[i],
                 )
             }
             VcsPlacementValidator.validateVcsPlacement(candidateEntries)

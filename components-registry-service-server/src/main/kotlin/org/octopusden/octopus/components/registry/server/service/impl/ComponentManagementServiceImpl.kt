@@ -2734,30 +2734,18 @@ class ComponentManagementServiceImpl(
         entries: List<VcsEntryRequest>,
     ) {
         entries.forEach { req -> req.repositoryType?.let { validateRepositoryType(it) } }
-        // Names are derived, never taken from the request: an entry with a checkout directory is named by
-        // it; one without keeps the name of the row's previous entry on the same repository, preferring a
-        // previous entry that was at the root, then the lowest sort order (vcsEntries has no @OrderBy); a
-        // kept name that is now another entry's checkout directory, or none, gives main.
-        val newDirectories = entries
-            .mapNotNull {
-                it.checkoutDirectory
-                    ?.trim()
-                    ?.ifEmpty { null }
-                    ?.lowercase()
-            }.toSet()
-        val previousNames =
-            config.vcsEntries
-                .sortedWith(compareBy({ it.checkoutDirectory != null }, { it.sortOrder }))
-                .distinctBy { VcsPlacementValidator.repositoryKey(it.vcsPath, it.repositoryType) }
-                .associate { VcsPlacementValidator.repositoryKey(it.vcsPath, it.repositoryType) to it.name }
-                .filterValues { it.lowercase() !in newDirectories }
+        // Name derivation (ADR-001 decision 4) is shared with the TeamCity placement Diff job's
+        // INVALID check — see VcsPlacementValidator.deriveNames' kdoc for the rule.
+        val checkoutDirectories = entries.map { it.checkoutDirectory?.trim()?.ifEmpty { null } }
+        val names = VcsPlacementValidator.deriveNames(
+            config.vcsEntries.toList(),
+            entries.mapIndexed { index, req -> Triple(req.vcsPath, req.repositoryType, checkoutDirectories[index]) },
+        )
         val replacement =
             entries.mapIndexed { index, req ->
-                val checkoutDirectory = req.checkoutDirectory?.trim()?.ifEmpty { null }
-                val previousName = previousNames[VcsPlacementValidator.repositoryKey(req.vcsPath, req.repositoryType)]
                 VcsSettingsEntryEntity(
                     componentConfiguration = config,
-                    name = checkoutDirectory ?: previousName ?: "main",
+                    name = names[index],
                     vcsPath = req.vcsPath,
                     branch = req.branch,
                     tag = req.tag,
@@ -2765,7 +2753,7 @@ class ComponentManagementServiceImpl(
                     repositoryType = req.repositoryType,
                     sortOrder = index,
                     sourcePath = req.sourcePath?.trim()?.ifEmpty { null },
-                    checkoutDirectory = checkoutDirectory,
+                    checkoutDirectory = checkoutDirectories[index],
                 )
             }
         VcsPlacementValidator.validateVcsPlacement(replacement)
