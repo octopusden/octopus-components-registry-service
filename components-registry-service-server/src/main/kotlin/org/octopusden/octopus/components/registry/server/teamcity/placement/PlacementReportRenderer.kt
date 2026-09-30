@@ -1,9 +1,11 @@
 package org.octopusden.octopus.components.registry.server.teamcity.placement
 
+import org.springframework.web.util.HtmlUtils
+
 /**
- * Renders a [PlacementDiffResult] as a human-readable HTML report or a CSV export — the two
- * download formats the design brief asks for alongside the JSON the Portal table consumes
- * directly. Pure functions, no framework dependency; the controller sets the content type.
+ * Renders a [PlacementDiffResult] / [PlacementSyncResult] as a human-readable HTML report or a CSV
+ * export — the download formats the design brief asks for alongside the JSON the Portal table
+ * consumes directly. Pure functions; the controller sets the content type.
  */
 object PlacementReportRenderer {
     private val csvSpecialChars = charArrayOf(',', '"', '\n', '\r')
@@ -119,10 +121,5 @@ object PlacementReportRenderer {
         return if (needsQuoting) "\"${value.replace("\"", "\"\"")}\"" else value
     }
 
-    private fun esc(value: String): String =
-        value
-            .replace("&", "&amp;")
-            .replace("<", "&lt;")
-            .replace(">", "&gt;")
-            .replace("\"", "&quot;")
+    private fun esc(value: String): String = HtmlUtils.htmlEscape(value)
 }
