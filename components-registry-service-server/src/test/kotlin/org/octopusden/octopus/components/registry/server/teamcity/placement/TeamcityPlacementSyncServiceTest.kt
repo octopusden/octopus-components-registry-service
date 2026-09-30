@@ -170,4 +170,26 @@ class TeamcityPlacementSyncServiceTest {
                 .outcome,
         )
     }
+
+    @Test
+    fun `a selected snapshot row that no longer appears in the fresh re-derivation is reported, not silently dropped`() {
+        // Regression: iterating only the fresh rows would drop this row from the result entirely
+        // (no outcome, no counter) if the component fell out of scope entirely on re-derivation —
+        // e.g. its TeamCity link disappeared, or every entry stopped needing anything.
+        val diffRow = row(PlacementDiffRowStatus.RESOLVED)
+        val diffService = diffServiceReturning(emptyList())
+        val (svc, cms) = service(diffService)
+
+        val result = svc.sync(setOf(componentId), PlacementDiffResult(Instant.now(), listOf(diffRow)), "alice")
+
+        assertEquals(0, result.applied)
+        assertEquals(1, result.skipped)
+        val outcome = result.components
+            .single()
+            .rows
+            .single()
+        assertEquals(diffRow.configurationRowId, outcome.configurationRowId)
+        assertEquals("skipped: changed since diff", outcome.outcome)
+        verify(cms, org.mockito.kotlin.never()).updateComponent(any(), any())
+    }
 }
