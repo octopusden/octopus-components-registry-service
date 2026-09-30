@@ -29,6 +29,39 @@ object VcsPlacementValidator {
     ): String = if (RepositoryType.valueOf(repositoryType ?: "GIT").isCaseSensitive) vcsPath else vcsPath.lowercase()
 
     /**
+     * ADR-001 decision 4 name-derivation rule, shared (owner review of PR #510, finding 4
+     * hardening) between a real v4 write (`ComponentManagementServiceImpl.replaceVcsEntries`) and
+     * the TeamCity placement Diff job's INVALID check — both must derive a row's candidate names
+     * the SAME way, or Diff can flag a row INVALID that the real write would actually accept: an
+     * unplaced entry's kept name that collides with a NEW checkout directory is excluded and falls
+     * back to `"main"` rather than failing.
+     *
+     * Names are derived, never taken from the request: an entry with a checkout directory is named
+     * by it; one without keeps the name of the row's previous entry on the same repository
+     * (preferring a previous entry that was at the root, then the lowest sort order); a kept name
+     * that is now another entry's checkout directory, or none, gives `"main"`.
+     *
+     * [currentEntries] is the row's stored entries (the "kept name" side, unchanged by this call);
+     * [incoming] is, in order, each new entry's `(vcsPath, repositoryType, checkoutDirectory)` —
+     * `checkoutDirectory` already trimmed and blank-normalized to `null` by the caller. Returns one
+     * name per [incoming] entry, same order.
+     */
+    fun deriveNames(
+        currentEntries: List<VcsSettingsEntryEntity>,
+        incoming: List<Triple<String, String?, String?>>,
+    ): List<String> {
+        val newDirectories = incoming.mapNotNull { (_, _, cd) -> cd?.lowercase() }.toSet()
+        val previousNames = currentEntries
+            .sortedWith(compareBy({ it.checkoutDirectory != null }, { it.sortOrder }))
+            .distinctBy { repositoryKey(it.vcsPath, it.repositoryType) }
+            .associate { repositoryKey(it.vcsPath, it.repositoryType) to it.name }
+            .filterValues { it.lowercase() !in newDirectories }
+        return incoming.map { (vcsPath, repositoryType, checkoutDirectory) ->
+            checkoutDirectory ?: previousNames[repositoryKey(vcsPath, repositoryType)] ?: "main"
+        }
+    }
+
+    /**
      * ONB-001 placement rules over a row's final VCS entries: each entry is checked out under its
      * checkout directory, which is also its name, and at most one entry has none (it is checked out at
      * the checkout root). The first failure is a 400 `vcsEntries[<i>].<field>: <reason>`.
