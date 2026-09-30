@@ -10,11 +10,11 @@ import org.octopusden.octopus.components.registry.server.service.MigrationLifecy
 import org.octopusden.octopus.components.registry.server.teamcity.placement.PlacementDiffResult
 import org.octopusden.octopus.components.registry.server.teamcity.placement.PlacementSyncResult
 import org.octopusden.octopus.components.registry.server.teamcity.placement.TeamcityPlacementSyncService
-import java.time.Instant
 import org.springframework.core.task.SimpleAsyncTaskExecutor
 import org.springframework.security.authentication.TestingAuthenticationToken
 import org.springframework.security.core.Authentication
 import org.springframework.security.core.context.SecurityContextHolder
+import java.time.Instant
 import java.util.UUID
 import java.util.concurrent.CompletableFuture
 import java.util.concurrent.TimeUnit
