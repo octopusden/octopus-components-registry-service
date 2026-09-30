@@ -115,7 +115,7 @@ class TeamcityPlacementSyncJobServiceImpl(
             )
             try {
                 val latestDiff = diffJobService.current()?.result
-                val result = syncService.sync(componentIds.toSet(), latestDiff, triggeredBy)
+                val result = syncService.sync(componentIds.toSet(), latestDiff, jobId, triggeredBy)
                 lifecycle.update(jobId) { current -> current.copy(state = JobState.COMPLETED, finishedAt = Instant.now(), result = result) }
                 LOG.info(
                     "TeamCity placement sync job {} COMPLETED: requested={}, applied={}, skipped={}, failed={}",
