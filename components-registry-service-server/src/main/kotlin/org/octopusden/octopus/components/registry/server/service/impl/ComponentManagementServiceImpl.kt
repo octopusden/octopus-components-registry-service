@@ -3424,7 +3424,7 @@ class ComponentManagementServiceImpl(
      *    `distributionExplicit && distributionExternal`, at least one of GAV
      *    (maven artifact), docker image, or DEB/RPM package must be defined on
      *    some configuration row. Not applied when the BASE build system is
-     *    WHISKEY: legacy WHISKEY components (e.g. CARDS, DM) define no GAV / docker /
+     *    WHISKEY: legacy WHISKEY components define no GAV / docker /
      *    package coordinate, and the rule must not block editing them.
      *  - **groupId supported prefix** (#10): every maven `groupPattern` element
      *    must start with one of the env-configured `supportedGroupIds`.
