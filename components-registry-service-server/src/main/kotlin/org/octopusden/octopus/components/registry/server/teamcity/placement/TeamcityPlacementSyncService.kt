@@ -23,6 +23,17 @@ data class PlacementComponentSyncOutcome(
     val rows: List<PlacementRowSyncOutcome>,
 )
 
+/** One written field's rollback trace (owner review finding 6): [root] is the affected VCS entry's
+ * name for `checkoutDirectory` / `sourcePath`, or `""` for the row-level `buildWorkingDirectory`. */
+data class PlacementFieldChange(
+    val componentKey: String,
+    val rowLabel: String,
+    val root: String,
+    val field: String,
+    val before: String?,
+    val after: String?,
+)
+
 data class PlacementSyncResult(
     val triggeredBy: String,
     val requested: Int,
@@ -30,6 +41,7 @@ data class PlacementSyncResult(
     val skipped: Int,
     val failed: Int,
     val components: List<PlacementComponentSyncOutcome>,
+    val fieldChanges: List<PlacementFieldChange> = emptyList(),
 )
 
 /**
@@ -56,6 +68,7 @@ class TeamcityPlacementSyncService(
     fun sync(
         componentIds: Set<UUID>,
         latestDiff: PlacementDiffResult?,
+        jobId: String,
         triggeredBy: String,
     ): PlacementSyncResult {
         val snapshotByRow = latestDiff?.rows.orEmpty().associateBy { it.configurationRowId }
@@ -68,6 +81,7 @@ class TeamcityPlacementSyncService(
             diffService.runDiff(componentIds).rows
         }
         val components = mutableListOf<PlacementComponentSyncOutcome>()
+        val fieldChanges = mutableListOf<PlacementFieldChange>()
         var applied = 0
         var skipped = 0
         var failed = 0
@@ -84,10 +98,10 @@ class TeamcityPlacementSyncService(
             for (rowId in rowIds) {
                 val freshRow = freshRowsById[rowId]
                 val rowLabel = freshRow?.rowLabel ?: snapshotByRow[rowId]?.rowLabel ?: "unknown"
-                val outcome = if (freshRow != null) {
-                    applyOrSkip(componentId, freshRow, snapshotByRow[rowId])
+                val (outcome, changes) = if (freshRow != null) {
+                    applyOrSkip(componentId, freshRow, snapshotByRow[rowId], jobId)
                 } else {
-                    "skipped: changed since diff"
+                    "skipped: changed since diff" to emptyList()
                 }
                 when {
                     outcome == "applied" -> applied++
@@ -95,6 +109,7 @@ class TeamcityPlacementSyncService(
                     else -> skipped++
                 }
                 rowOutcomes += PlacementRowSyncOutcome(rowId, rowLabel, outcome)
+                fieldChanges += changes
             }
             val componentKey = freshRowsById.values.firstOrNull()?.componentKey
                 ?: snapshotRowsForComponent.firstOrNull()?.componentKey
@@ -103,41 +118,43 @@ class TeamcityPlacementSyncService(
         }
 
         log.info { "TeamCity placement sync: requested=${componentIds.size}, applied=$applied, skipped=$skipped, failed=$failed" }
-        return PlacementSyncResult(triggeredBy, componentIds.size, applied, skipped, failed, components)
+        return PlacementSyncResult(triggeredBy, componentIds.size, applied, skipped, failed, components, fieldChanges)
     }
 
     private fun applyOrSkip(
         componentId: UUID,
         freshRow: PlacementRowDiff,
         snapshotRow: PlacementRowDiff?,
-    ): String {
+        jobId: String,
+    ): Pair<String, List<PlacementFieldChange>> {
         // ADR-002 decisions 4/8 (owner review finding 5): marker (per-range `vcs.settings`) rows
         // are report-only in this version -- Diff shows and classifies them, but Sync never
         // writes one, whatever its status or selection. Checked first, ahead of every other
         // outcome, so a marker row is never reported "changed since diff" or a validation status
         // either -- it is always, unconditionally, report-only.
-        if (freshRow.rowLabel != BASE_ROW_LABEL) return "skipped: report-only (per-range row)"
-        if (snapshotRow == null || snapshotRow != freshRow) return "skipped: changed since diff"
-        if (freshRow.status != PlacementDiffRowStatus.RESOLVED) return "skipped: ${freshRow.status.name.lowercase()}"
+        if (freshRow.rowLabel != BASE_ROW_LABEL) return "skipped: report-only (per-range row)" to emptyList()
+        if (snapshotRow == null || snapshotRow != freshRow) return "skipped: changed since diff" to emptyList()
+        if (freshRow.status != PlacementDiffRowStatus.RESOLVED) return "skipped: ${freshRow.status.name.lowercase()}" to emptyList()
         return try {
-            applyRow(componentId, freshRow)
-            "applied"
+            "applied" to applyRow(componentId, freshRow, jobId)
         } catch (
             @Suppress("TooGenericExceptionCaught") e: Exception,
         ) {
             log.warn(e) {
                 "TeamCity placement sync: failed to write row ${freshRow.configurationRowId} of component '${freshRow.componentKey}'"
             }
-            "failed: ${e.message ?: e::class.simpleName}"
+            "failed: ${e.message ?: e::class.simpleName}" to emptyList()
         }
     }
 
     /** Always a BASE row here — a marker (per-range `vcs.settings`) row never reaches this point;
-     * see the report-only check in [applyOrSkip]. */
+     * see the report-only check in [applyOrSkip]. Returns the field-level before/after trace (owner
+     * review finding 6) for every field that actually changed. */
     private fun applyRow(
         componentId: UUID,
         row: PlacementRowDiff,
-    ) {
+        jobId: String,
+    ): List<PlacementFieldChange> {
         val vcsEntries = row.entries.map {
             VcsEntryRequest(
                 vcsPath = it.vcsPath,
@@ -160,8 +177,38 @@ class TeamcityPlacementSyncService(
                     // write always sets the fully-resolved value, so root is "" here, never null.
                     buildWorkingDirectory = row.derivedBuildWorkingDirectory ?: "",
                 ),
-                changeComment = "sync from TeamCity",
+                // The fixed provenance tag PlacementEditHistory keys on, plus THIS Sync run's own
+                // id — so an audit row it writes can be told apart from any other Sync run's, and
+                // a rollback (technical-design.md §6.8) can select exactly this run's writes.
+                changeComment = "${PlacementEditHistory.SYNC_CHANGE_COMMENT_PREFIX} (job $jobId)",
             ),
+        )
+        return row.entries.flatMap { e ->
+            listOfNotNull(
+                if (e.derivedCheckoutDirectory != e.currentCheckoutDirectory) {
+                    PlacementFieldChange(row.componentKey, row.rowLabel, e.name, "checkoutDirectory", e.currentCheckoutDirectory, e.derivedCheckoutDirectory)
+                } else {
+                    null
+                },
+                if (e.derivedSourcePath != e.currentSourcePath) {
+                    PlacementFieldChange(row.componentKey, row.rowLabel, e.name, "sourcePath", e.currentSourcePath, e.derivedSourcePath)
+                } else {
+                    null
+                },
+            )
+        } + listOfNotNull(
+            if (row.derivedBuildWorkingDirectory != row.currentBuildWorkingDirectory) {
+                PlacementFieldChange(
+                    row.componentKey,
+                    row.rowLabel,
+                    "",
+                    "buildWorkingDirectory",
+                    row.currentBuildWorkingDirectory,
+                    row.derivedBuildWorkingDirectory,
+                )
+            } else {
+                null
+            },
         )
     }
 
