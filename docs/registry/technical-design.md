@@ -442,75 +442,95 @@ the one-off `placement_import.py` used to seed ADR-001 rev. 3, scoped to compile
 only (`CDGradleBuild` / `CDJavaMavenBuild`, non-paused; no `CDRelease` / `CdReleaseCandidateNew`
 fallback).
 
-- **Diff (read-only):** `TeamcityPlacementDiffService` walks every non-archived component's
-  configuration rows (base or `vcs.settings` override) with VCS entries and at least one
-  `version_line`-linked TeamCity project (never re-searched by `COMPONENT_NAME`), reads each
-  linked project's compile build types via `EnrichedTcProjectFetcher` (extended with
-  `vcs-root-entries(checkout-rules, vcs-root url)`, additive to the shared cache TeamCity
-  validation also uses), and derives per-row placement with `PlacementRules.derive` — the same
-  rules as the Python one-off: match a TeamCity root to a registry entry by its FULL canonical URL
-  (`util.VcsUrlCanonicalizer` — scheme ignored, **host included**, Git-case-insensitive, `.git`
-  stripped; the retired Python one-off, and this feature's own first version, kept only the last
-  two path segments, silently matching same-named repositories across different TeamCity hosts —
-  fixed by owner review), turn its checkout rule into Checkout Directory / Source Path, and
-  `WORK_DIR` minus the checkout-dir prefix into the Build Working Directory; a value counts only
-  when every compile configuration attaching that repository agrees.
-  - **Scope:** multi-root rows always; a single-root row only when a Checkout Directory or a
-    non-root Build Working Directory exists on either side (current or derived) — a lone root
-    needing nothing never appears, not even as "in sync" (keeps single-root Checkout Directories,
-    which would rename `main` in the escrow export, out of scope per ADR-001).
+- **Diff (read-only):** `TeamcityPlacementDiffService` walks every component's configuration rows
+  (base or `vcs.settings` override) that carry VCS entries — `ComponentConfigurationRepository
+  .findAllRowsWithVcsEntries` fetches archived components too (spec-conformance review), so their
+  rows can be reported instead of silently omitted — reads each linked project's compile build
+  types via `EnrichedTcProjectFetcher` (extended with `vcs-root-entries(checkout-rules, vcs-root
+  url)`, additive to the shared cache TeamCity validation also uses), and derives per-row placement
+  with `PlacementRules.derive` — the same rules as the Python one-off: match a TeamCity root to a
+  registry entry by its FULL canonical URL (`util.VcsUrlCanonicalizer` — scheme ignored, **host
+  included**, Git-case-insensitive, `.git` stripped; the retired Python one-off, and this feature's
+  own first version, kept only the last two path segments, silently matching same-named
+  repositories across different TeamCity hosts — fixed by owner review), turn its checkout rule
+  into Checkout Directory / Source Path, and `WORK_DIR` minus the checkout-dir prefix into the
+  Build Working Directory; a value counts only when every compile configuration attaching that
+  repository agrees. A repository attached twice within ONE build type with two different
+  RESOLVABLE interpretations is a `CONFLICT` (spec-conformance review) — the same classification
+  two DIFFERENT build types disagreeing already get — not `UNEXPRESSIBLE`; a lone unparseable rule
+  (or several attachments that all agree on being unparseable) is still `UNEXPRESSIBLE`.
+  - **Scope:** an archived component's rows, and marker (per-range `vcs.settings`) rows, are always
+    `OUTSIDE_SCOPE` (spec-conformance review) — never derived, never subject to the filter below,
+    always reported. For a BASE row of a non-archived component: multi-root rows always; a
+    single-root row only when a Checkout Directory or a non-root Build Working Directory exists on
+    either side (current or derived) — a lone root needing nothing never appears, not even as "in
+    sync" (keeps single-root Checkout Directories, which would rename `main` in the escrow export,
+    out of scope per ADR-001).
   - **Status per row:** `RESOLVED` (apply-able), `INVALID`, `CONFLICT`, `UNEXPRESSIBLE`,
     `NO_CHAIN`, `OUTSIDE_TEMPLATES`, `COMPILE_PAUSED`, `MANUAL_EDIT`, `IN_SYNC`, `TC_ERROR` (a
     TeamCity fetch failure; a 403 is recognised and reported as "no permission to read VCS root
-    entries" rather than a raw exception).
-  - **`INVALID` (owner review):** a derivation that resolves and differs from the current value is
-    downgraded from `RESOLVED` to `INVALID`, never offered to Sync, when the derived values would
-    themselves fail the SAME validation a real v4 write runs —
+    entries" rather than a raw exception), `OUTSIDE_SCOPE` (a marker row, or any row of an archived
+    component).
+  - **`UNEXPRESSIBLE` vs `INVALID` (spec-conformance review):** `UNEXPRESSIBLE` is now narrow —
+    only a checkout-rule or `WORK_DIR` SHAPE that `PlacementRules` can't parse at all (a remap,
+    several rules on one entry, `%VAR%`). `PlacementRules.checkRules`, which used to re-implement
+    CRS validation (root uniqueness, reserved/duplicate Checkout Directory names, Build Working
+    Directory rules) at the pure-engine layer and pre-empt the check below from ever running for
+    those cases, is deleted. A derivation that resolves and differs from the current value is
+    downgraded from `RESOLVED` to `INVALID`, never offered to Sync, when the derived values parse
+    fine but themselves fail the SAME validation a real v4 write runs —
     `util.VcsPlacementValidator.validateVcsPlacement` / `validateBuildWorkingDirectory`, extracted
-    out of `ComponentManagementServiceImpl` so the rule lives in exactly one place and Diff can run
-    it against a candidate (never persisted) entry list before anything is written. The candidate's
-    per-entry `name` follows ADR-001 decision 4: a placed entry (has a derived Checkout Directory)
-    is named by it, matching what a real write would set; an unplaced entry keeps its CURRENT
-    registry name. This catches, beyond what the pure engine's own `PlacementRules.checkRules`
-    already covers (Checkout Directory duplicates/reserved names): a Source Path shape violation
-    (e.g. a derived `../outside`, which a checkout rule can express but the write path rejects),
-    and a name collision between an unplaced root's kept name and another root's derived Checkout
-    Directory. The validation message is recorded in the row's `notes`.
+    out of `ComponentManagementServiceImpl` so the rule lives in exactly one place, and this is now
+    the ONLY place it runs. The candidate's per-entry `name` is derived by the SAME rule the real
+    write uses (`VcsPlacementValidator.deriveNames`, also shared, owner-review hardening): a placed
+    entry (has a derived Checkout Directory) is named by it; an unplaced entry keeps its CURRENT
+    registry name UNLESS that name collides with a new Checkout Directory, in which case it falls
+    back to `"main"` exactly as a real write would — so this candidate construction never flags a
+    row `INVALID` that the real write would actually accept. The validation message is recorded in
+    the row's `notes`.
   - **Manual edit vs Sync-or-never-touched (`PlacementEditHistory`, owner review):** a placement
-    field (a repository's Checkout Directory / Source Path, or the row's Build Working Directory)
-    is overwritable — reported `RESOLVED`, not downgraded — in exactly two cases: no `audit_log` row
-    has EVER changed it (it is still null, or holds the ADR-001 `V8__` migration's raw-SQL
-    back-fill, which bypassed the app and so left no audit row either way), or the LAST audit row
-    that changed it carries the Sync job's own `"sync from TeamCity"` tag (see below) in
-    `change_comment`. It is `MANUAL_EDIT` only when the last change is a real user write that does
-    NOT carry that tag. `PlacementEditHistory` walks a component's audit rows newest-first (no
-    time-window / V8-timestamp gate needed: V8's back-fill left no row regardless of a cutoff, so
-    scoping by one added nothing) and stops at the first row whose `(oldValue, newValue)` snapshot
-    actually differs for that field — catching a set, a re-point, AND a manual clear to null alike.
-    This is what lets a component be re-synced after TeamCity changes again: the FIRST version of
-    this rule treated any post-`V8__` change as manual, including Sync's own prior write, so a
-    component synced once could never resolve `RESOLVED` again even after a legitimate further
-    TeamCity change — fixed by owner review. An unreadable audit query still fails closed (the
-    exception propagates; nothing here swallows it into "not manual").
+    field — a repository's Checkout Directory or Source Path (tracked INDEPENDENTLY of each other,
+    owner-review hardening: `isCheckoutDirectoryManuallySet` / `isSourcePathManuallySet`, so a Sync
+    write that touches only one field can never "launder" an earlier manual edit of the other on
+    the same entry), or the row's Build Working Directory — is overwritable — reported `RESOLVED`,
+    not downgraded — in exactly two cases: no `audit_log` row has EVER changed it (it is still
+    null, or holds the ADR-001 `V8__` migration's raw-SQL back-fill, which bypassed the app and so
+    left no audit row either way), or the LAST audit row that changed it carries the Sync job's own
+    `"sync from TeamCity"` tag (see below) in `change_comment`. It is `MANUAL_EDIT` only when the
+    last change to THAT field is a real user write that does NOT carry that tag.
+    `PlacementEditHistory` walks a component's audit rows newest-first (no time-window /
+    V8-timestamp gate needed: V8's back-fill left no row regardless of a cutoff, so scoping by one
+    added nothing) and stops at the first row whose `(oldValue, newValue)` snapshot actually
+    differs for that ONE field — catching a set, a re-point, AND a manual clear to null alike. This
+    is what lets a component be re-synced after TeamCity changes again: the FIRST version of this
+    rule treated any post-`V8__` change as manual, including Sync's own prior write, so a component
+    synced once could never resolve `RESOLVED` again even after a legitimate further TeamCity
+    change — fixed by owner review. An unreadable audit query still fails closed (the exception
+    propagates; nothing here swallows it into "not manual").
   - **Result** is in-memory only, the latest completed run, held by the job service, and carries
     this run's own id (`TeamcityPlacementDiffJobState.id`) — see Sync's `diffId` below.
 - **Sync:** requires the id of the Diff run it acts on (`diffId`) and applies the selected component
   ids' `RESOLVED` rows from THAT run. `TeamcityPlacementControllerV4` refuses the whole request with
   `409` — before the async job is even submitted, so nothing is written and no component is
-  individually skipped — when `diffId` does not match `TeamcityPlacementDiffJobService.current()`'s
-  id: Diff keeps no history, so a Sync must always act on the result the caller actually looked at,
-  never on one a later Diff has since replaced. Given a current `diffId`,
-  `TeamcityPlacementSyncService` re-reads TeamCity/the registry and re-derives before writing; a row
-  whose fresh derivation differs from the Diff snapshot is skipped ("changed since diff") rather
-  than applied blind. A marker (per-range `vcs.settings`) row is report-only in this version
-  (owner review; ADR-002 decisions 4/8) — Diff still shows and classifies it, but Sync never writes
-  one, whatever its status: its outcome is always `"skipped: report-only (per-range row)"`. Every
-  other write goes through `ComponentManagementService`'s base-row `updateComponent` —
-  `changeComment = "sync from TeamCity (job <jobId>)"`, this Sync run's OWN id appended to the fixed
-  tag `PlacementEditHistory.isManuallyPlaced` keys on (owner review: earlier versions used a bare,
-  untagged-by-run string, which the provenance rule above could not use to identify a re-syncable
-  write, and which carried no rollback grouping key either). The triggering user's `SecurityContext`
-  reaches the write despite running on a different pool thread via
+  individually skipped — when `diffId` does not match the latest COMPLETED
+  `TeamcityPlacementDiffJobService.current()`'s id (a `diffId` matching a still-RUNNING Diff, whose
+  `result` is still null, is refused the same way): Diff keeps no history, so a Sync must always act
+  on the result the caller actually looked at, never on one a later Diff has since replaced. The
+  exact `PlacementDiffResult` read for that check is passed straight through into the async job
+  (owner-review hardening) — never re-fetched once the work actually runs, closing a TOCTOU window
+  where a new Diff completing in between could let Sync silently act on an unvalidated result.
+  Given a current `diffId`, `TeamcityPlacementSyncService` re-reads TeamCity/the registry and
+  re-derives before writing; a row whose fresh derivation differs from the Diff snapshot is skipped
+  ("changed since diff") rather than applied blind. A row that is `OUTSIDE_SCOPE` (a marker
+  per-range `vcs.settings` row, or any row of an archived component) is never written whatever its
+  selection: its outcome is always `"skipped: outside scope"` (spec-conformance review; ADR-002
+  decisions 4/8). Every other write goes through `ComponentManagementService`'s base-row
+  `updateComponent` — `changeComment = "sync from TeamCity (job <jobId>)"`, this Sync run's OWN id
+  appended to the fixed tag `PlacementEditHistory.isCheckoutDirectoryManuallySet` /
+  `isSourcePathManuallySet` / `isBuildWorkingDirectoryManuallySet` key on (owner review: earlier
+  versions used a bare, untagged-by-run string, which the provenance rule above could not use to
+  identify a re-syncable write, and which carried no rollback grouping key either). The triggering
+  user's `SecurityContext` reaches the write despite running on a different pool thread via
   `org.springframework.security.task.DelegatingSecurityContextTaskExecutor` wrapping
   `migrationExecutor` (owner review simplification: replaces a hand-rolled
   capture-on-caller-thread / set-on-worker-thread / clear-in-finally with the standard Spring
