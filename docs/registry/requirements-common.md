@@ -89,6 +89,7 @@
 | SYS-094 | `GET /service/status` exposes `configRevision` — an opaque composite cache-actuality token `"[gitRevision].[maxId].[count]"` built from the VCS revision plus the max-id and row-count aggregates of the non-`git-history` `audit_log` rows, so a consumer can detect DB-side config changes while `versionControlRevision` is frozen; `null` without the database layer (no-db / Git-based installs) | Medium | integration-test + context-load test | ✅ Tested |
 | SYS-095 | Component-key format is enforced on **create and rename only**: `[a-z][a-z0-9-]*`, or the lowercased effective `clientCode` (its underscores included) as a **leading** prefix followed by end-of-key or `-` plus the same kebab tail; `_` is legal nowhere else, and a component whose effective `clientCode` is absent/blank may carry none. Existing keys are never re-validated (legacy uppercase / dotted / underscored keys keep saving) and the DSL import path is unaffected | High | unit-test | ✅ Tested |
 | SYS-096 | `GET /components/{idOrName}/archive-readiness` — read-only pre-flight for the archive/delete flow, gated by the same authorization as `deleteComponent` (`ACCESS_COMPONENTS` + `canDeleteComponent`); resolves by id or name identically to `getComponent`; returns one entry per external target (VCS repository, TeamCity project, Jira open issues, Jira project) with outcome `COMPLETED`/`NOT_COMPLETED`/`UNKNOWN`, a reason for the latter two, and a `reasonKind` classifying what an `UNKNOWN` entry needs; `ready` is false iff any entry is `NOT_COMPLETED` or `UNKNOWN` | High | unit + integration-test | ✅ Tested |
+| SYS-097 | The explicit+external "≥1 distribution coordinate" rule is not applied when the component's **BASE** build system is `WHISKEY` (case-insensitive; per-range build-system overrides are ignored). Applies on create, component PATCH and the `/field-overrides` endpoints; non-WHISKEY explicit+external components still require a coordinate, including after being switched off WHISKEY | High | integration-test | ✅ Tested |
 
 ---
 
@@ -3269,3 +3270,46 @@ response shape), `ArchiveReadinessNoRegressionTest` (read-only — no write side
 `ArchiveReadinessAssemblerTest` (entry assembly and verdict), `RepositoryCheckerTest`,
 `TeamcityCheckerTest`, `JiraIssuesCheckerTest`, `JiraProjectCheckerTest`, `LivenessProbeTest`,
 `SharingHelperTest`.
+
+### SYS-097: WHISKEY components are exempt from the explicit+external ≥1-coordinate rule
+
+**Priority:** High
+**Test layer:** integration-test
+**Status:** ✅ Tested
+
+**Motivation:**
+Bug: legacy explicit+external WHISKEY components (e.g. `CARDS`, `DM`) define no maven GAV,
+docker image or package coordinate. Every PATCH carrying `baseConfiguration` (e.g. a Java
+version change) and every field-override write re-ran the ≥1-coordinate rule against that
+untouched data and failed with `400 distribution: an explicit+external component must define
+at least one distribution coordinate`, so these components could not be edited at all.
+
+**Description:**
+- The ≥1-coordinate rule (explicit+external → at least one maven artifact, docker image or
+  package on some configuration row) is **not applied** when the component's effective BASE
+  build system is `WHISKEY`.
+- "BASE build system" is the `build_system` of the component's `BASE` configuration row,
+  compared case-insensitively — the same resolution as the `skipCommitCheck` / WHISKEY rule.
+  Per-range `build.buildSystem` overrides (e.g. `ESCROW_NOT_SUPPORTED` on a legacy range) do
+  not affect the exemption.
+- The exemption lives in the shared malformed-input check, so it covers `POST /components`,
+  `PATCH /components/{id}` and `POST` / `PATCH /components/{id}/field-overrides` alike.
+- Non-WHISKEY explicit+external components are unchanged: they still require a coordinate.
+  Switching a coordinate-less explicit+external component off WHISKEY is rejected.
+- The archived ≠ explicit+external rule and all other checks are unchanged.
+
+**Acceptance:**
+1. `POST /components` explicit+external, BASE `buildSystem` `WHISKEY`, no coordinate → 2xx.
+2. `PATCH /components/{id}` changing a base-config scalar on such a component → 2xx.
+3. `POST /components/{id}/field-overrides` on such a component → 2xx.
+4. `PATCH /components/{id}` switching such a component's BASE `buildSystem` to `MAVEN` →
+   400 (`distribution coordinate`).
+5. `POST /components` explicit+external, BASE `buildSystem` `MAVEN`, no coordinate → 400
+   (unchanged).
+
+**Test method:** `CrossComponentValidationTest` —
+`` `SYS-097 create explicit-external WHISKEY without coordinate is accepted` `` (1),
+`` `SYS-097 base-config patch on explicit-external WHISKEY without coordinate is accepted` `` (2),
+`` `SYS-097 field-override create on explicit-external WHISKEY without coordinate is accepted` `` (3),
+`` `SYS-097 switching explicit-external without coordinate off WHISKEY is rejected` `` (4),
+`create_explicitExternal_noCoordinate_badRequest` (5, pre-existing).
