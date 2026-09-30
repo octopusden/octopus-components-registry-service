@@ -2597,7 +2597,9 @@ class ComponentManagementServiceImpl(
         }
         request.buildWorkingDirectory?.let { config.buildWorkingDirectory = it.trim().ifEmpty { null } }
         request.vcsEntries?.let { replaceVcsEntries(config, it) }
-            ?: request.buildWorkingDirectory?.let { VcsPlacementValidator.validateBuildWorkingDirectory(config.vcsEntries, config.buildWorkingDirectory) }
+            ?: request.buildWorkingDirectory?.let {
+                VcsPlacementValidator.validateBuildWorkingDirectory(config.vcsEntries, config.buildWorkingDirectory)
+            }
         request.mavenArtifacts?.let { replaceMavenArtifacts(config, it) }
         request.fileUrlArtifacts?.let { replaceFileUrlArtifacts(config, it) }
         request.dockerImages?.let { replaceDockerImages(config, it) }
@@ -2698,7 +2700,9 @@ class ComponentManagementServiceImpl(
         // null = unchanged, blank = clear (V4_SCALAR_CLEAR_SEMANTICS).
         patch.buildWorkingDirectory?.let { config.buildWorkingDirectory = it.trim().ifEmpty { null } }
         patch.vcsEntries?.let { replaceVcsEntries(config, it) }
-            ?: patch.buildWorkingDirectory?.let { VcsPlacementValidator.validateBuildWorkingDirectory(config.vcsEntries, config.buildWorkingDirectory) }
+            ?: patch.buildWorkingDirectory?.let {
+                VcsPlacementValidator.validateBuildWorkingDirectory(config.vcsEntries, config.buildWorkingDirectory)
+            }
         patch.mavenArtifacts?.let { replaceMavenArtifacts(config, it) }
         patch.fileUrlArtifacts?.let { replaceFileUrlArtifacts(config, it) }
         patch.dockerImages?.let { replaceDockerImages(config, it) }
@@ -2739,9 +2743,10 @@ class ComponentManagementServiceImpl(
         val replacement =
             entries.mapIndexed { index, req ->
                 val checkoutDirectory = req.checkoutDirectory?.trim()?.ifEmpty { null }
+                val previousName = previousNames[VcsPlacementValidator.repositoryKey(req.vcsPath, req.repositoryType)]
                 VcsSettingsEntryEntity(
                     componentConfiguration = config,
-                    name = checkoutDirectory ?: previousNames[VcsPlacementValidator.repositoryKey(req.vcsPath, req.repositoryType)] ?: "main",
+                    name = checkoutDirectory ?: previousName ?: "main",
                     vcsPath = req.vcsPath,
                     branch = req.branch,
                     tag = req.tag,
@@ -2757,7 +2762,6 @@ class ComponentManagementServiceImpl(
         config.vcsEntries.clear()
         config.vcsEntries.addAll(replacement)
     }
-
 
     private fun replaceMavenArtifacts(
         config: ComponentConfigurationEntity,

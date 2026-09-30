@@ -137,14 +137,17 @@ class PlacementEditHistoryTest {
     fun `build working directory provenance is scoped to the section mentioning this vcsPath`() {
         // A component with two vcs.settings rows: this audit row is for the OTHER row (a different
         // vcsPath); its BWD change must not flag the row we're asking about.
-        fun otherRowSnapshot(bwd: String?) = mapOf(
-            "fieldOverride[vcs.settings]" to mapOf(
-                "markerChildren" to mapOf(
-                    "vcsEntries" to listOf(mapOf("vcsPath" to "ssh://h/prj/other.git", "checkoutDirectory" to null, "sourcePath" to null)),
-                    "buildWorkingDirectory" to bwd,
+        fun otherRowSnapshot(bwd: String?) =
+            mapOf(
+                "fieldOverride[vcs.settings]" to mapOf(
+                    "markerChildren" to mapOf(
+                        "vcsEntries" to listOf(
+                            mapOf("vcsPath" to "ssh://h/prj/other.git", "checkoutDirectory" to null, "sourcePath" to null),
+                        ),
+                        "buildWorkingDirectory" to bwd,
+                    ),
                 ),
-            ),
-        )
+            )
         stub(row(otherRowSnapshot(null), otherRowSnapshot("changed-for-other-row")))
         assertFalse(history().isBuildWorkingDirectoryManuallySet(componentId, appVcsPath))
     }
