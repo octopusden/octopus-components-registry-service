@@ -8,6 +8,7 @@ import org.springframework.web.util.HtmlUtils
  * consumes directly. Pure functions; the controller sets the content type.
  */
 object PlacementReportRenderer {
+    private const val ROOT_LABEL = "(root)"
     private val csvSpecialChars = charArrayOf(',', '"', '\n', '\r')
     private val csvFormulaChars = charArrayOf('=', '+', '-', '@', '\t', '\r')
 
@@ -15,8 +16,9 @@ object PlacementReportRenderer {
         val rowsHtml = result.rows.joinToString("\n") { row ->
             val entriesHtml = row.entries.joinToString("<br/>") { e ->
                 "${esc(e.name)} (${esc(e.vcsPath)}): " +
-                    "<code>${esc(e.currentCheckoutDirectory ?: "(root)")}</code> / <code>${esc(e.currentSourcePath ?: "—")}</code>" +
-                    " &rarr; <code>${esc(e.derivedCheckoutDirectory ?: "(root)")}</code> / <code>${esc(e.derivedSourcePath ?: "—")}</code>"
+                    "<code>${esc(e.currentCheckoutDirectory ?: ROOT_LABEL)}</code> / <code>${esc(e.currentSourcePath ?: "—")}</code>" +
+                    " &rarr; <code>${esc(e.derivedCheckoutDirectory ?: ROOT_LABEL)}</code>" +
+                    " / <code>${esc(e.derivedSourcePath ?: "—")}</code>"
             }
             """
             |<tr class="status-${esc(row.status.name.lowercase())}">
@@ -25,8 +27,8 @@ object PlacementReportRenderer {
             |  <td>${esc(row.rowLabel)}</td>
             |  <td>${esc(row.status.name)}</td>
             |  <td>$entriesHtml</td>
-            |  <td><code>${esc(row.currentBuildWorkingDirectory ?: "(root)")}</code> &rarr; <code>${esc(
-                row.derivedBuildWorkingDirectory ?: "(root)",
+            |  <td><code>${esc(row.currentBuildWorkingDirectory ?: ROOT_LABEL)}</code> &rarr; <code>${esc(
+                row.derivedBuildWorkingDirectory ?: ROOT_LABEL,
             )}</code></td>
             |  <td>${row.sourceBuildTypeIds.joinToString(", ") { esc(it) }}</td>
             |  <td>${row.notes.joinToString("<br/>") { esc(it) }}</td>
