@@ -121,7 +121,10 @@ class TeamcityPlacementDiffServiceTest {
     private val appId = "ssh://h/prj/app-one.git"
     private val gatewayId = "ssh://h/prj/app-two.git"
 
-    private fun component(key: String = "comp-one"): ComponentEntity = ComponentEntity(id = UUID.randomUUID(), componentKey = key)
+    private fun component(
+        key: String = "comp-one",
+        archived: Boolean = false,
+    ): ComponentEntity = ComponentEntity(id = UUID.randomUUID(), componentKey = key, archived = archived)
 
     private fun multiRootRow(
         component: ComponentEntity,
@@ -172,7 +175,7 @@ class TeamcityPlacementDiffServiceTest {
         editHistory: PlacementEditHistory = editHistory(),
     ): TeamcityPlacementDiffService {
         val configRepo = mock<ComponentConfigurationRepository>()
-        whenever(configRepo.findAllNonArchivedRowsWithVcsEntries()).thenReturn(rows)
+        whenever(configRepo.findAllRowsWithVcsEntries()).thenReturn(rows)
         val versionLineRepo = mock<VersionLineRepository>()
         projectIdsByComponent.forEach { (id, projects) ->
             whenever(versionLineRepo.findDistinctTeamcityProjectIdsByComponentId(id)).thenReturn(projects)
@@ -432,5 +435,33 @@ class TeamcityPlacementDiffServiceTest {
         val diff = svc.runDiff().rows.single()
         assertEquals(PlacementDiffRowStatus.INVALID, diff.status)
         assertTrue(diff.notes.any { it.contains("main") })
+    }
+
+    @Test
+    fun `a marker (vcs_settings) row is reported OUTSIDE_SCOPE, never derived (spec-conformance finding 1, RED)`() {
+        val comp = component()
+        val row = ComponentConfigurationEntity(id = UUID.randomUUID(), component = comp, rowType = "MARKER", overriddenAttribute = "vcs.settings")
+        row.vcsEntries += VcsSettingsEntryEntity(componentConfiguration = row, name = "main", vcsPath = appId, sortOrder = 0)
+        val bt = compileBuildType("compileA", roots = listOf(appId to "+:. => app"))
+        val svc = service(listOf(row), mapOf(comp.id!! to listOf("P")), FakeEnrichedTcProjectFetcher(mapOf("P" to project(bt))))
+
+        val diff = svc.runDiff().rows.single()
+        assertEquals(PlacementDiffRowStatus.OUTSIDE_SCOPE, diff.status)
+        assertEquals("vcs.settings", diff.rowLabel)
+        // Never derived: no TeamCity-chain-informed value is offered for a report-only row.
+        assertNull(diff.entries.single().derivedCheckoutDirectory)
+    }
+
+    @Test
+    fun `an archived component's row is reported OUTSIDE_SCOPE instead of omitted (spec-conformance finding 1, RED)`() {
+        // No TeamCity project link is stubbed at all: an archived component's row must not need
+        // one -- it is OUTSIDE_SCOPE unconditionally, without ever consulting the chain.
+        val comp = component(archived = true)
+        val row = multiRootRow(comp)
+        val svc = service(listOf(row), emptyMap(), FakeEnrichedTcProjectFetcher())
+
+        val diff = svc.runDiff().rows.single()
+        assertEquals(PlacementDiffRowStatus.OUTSIDE_SCOPE, diff.status)
+        assertTrue(diff.notes.any { it.contains("archived") })
     }
 }
