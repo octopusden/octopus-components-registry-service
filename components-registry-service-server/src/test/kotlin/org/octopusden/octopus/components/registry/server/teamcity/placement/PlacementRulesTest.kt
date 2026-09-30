@@ -151,12 +151,18 @@ class DeriveTest {
     }
 
     @Test
-    fun `two roots at the checkout root is unexpressible`() {
+    fun `two roots at the checkout root resolves at the pure-engine layer (spec-conformance finding 3, RED)`() {
+        // Spec-conformance review: UNEXPRESSIBLE is only for rule/WORK_DIR SHAPES that can't be
+        // parsed (remaps, several rules, %VAR%). "Two roots at the checkout root" is a CRS
+        // VALIDATION rule (VcsPlacementValidator.validateVcsPlacement's rootEntry check), not a
+        // shape problem -- both roots parse cleanly to PlacementValue(null, null) each. The pure
+        // engine now resolves it; TeamcityPlacementDiffService's own VcsPlacementValidator check
+        // downgrades it to INVALID (see TeamcityPlacementDiffServiceTest).
         val gateway = "ssh://h/prj/app-two.git"
         val app = "ssh://h/prj/app-one.git"
         val c = compileConfig(gateway to "", app to "")
         val outcome = derive(DeriveInput(ENTRIES, listOf(c), 0, emptyMap()))
-        assertEquals(PlacementRowStatus.UNEXPRESSIBLE, outcome.status)
+        assertEquals(PlacementRowStatus.RESOLVED, outcome.status)
     }
 
     @Test
@@ -177,12 +183,15 @@ class DeriveTest {
     }
 
     @Test
-    fun `every root in a checkout directory without a build working directory is unexpressible`() {
+    fun `every root in a checkout directory without a build working directory resolves at the pure-engine layer (spec-conformance finding 3, RED)`() {
+        // Same reasoning as the "two roots at the checkout root" case above: "every root has a
+        // Checkout Directory but WORK_DIR is the checkout root" is a CRS validation rule
+        // (VcsPlacementValidator.validateBuildWorkingDirectory), not an unparseable shape.
         val gateway = "ssh://h/prj/app-two.git"
         val app = "ssh://h/prj/app-one.git"
         val c = compileConfig(gateway to "+:. => gw", app to "+:. => app")
         val outcome = derive(DeriveInput(ENTRIES, listOf(c), 0, emptyMap()))
-        assertEquals(PlacementRowStatus.UNEXPRESSIBLE, outcome.status)
+        assertEquals(PlacementRowStatus.RESOLVED, outcome.status)
     }
 
     @Test
@@ -202,12 +211,4 @@ class DeriveTest {
         assertEquals("core/mapper", outcome.buildWorkingDirectory)
     }
 
-    @Test
-    fun `check rules catches a build working directory outside every placed root`() {
-        val result = mapOf(0 to PlacementValue("a", null), 1 to PlacementValue("b", null))
-        assertEquals(true, checkRules(ENTRIES, result, "c/x").isNotEmpty())
-        assertEquals(true, checkRules(ENTRIES, result, "a/x").isEmpty())
-        // case-sensitive, as the registry itself compares the value
-        assertEquals(true, checkRules(ENTRIES, result, "A/x").isNotEmpty())
-    }
 }
