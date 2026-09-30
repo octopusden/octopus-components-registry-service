@@ -10,7 +10,6 @@ import org.mockito.kotlin.whenever
 import org.octopusden.octopus.components.registry.server.dto.v4.BaseConfigurationRequest
 import org.octopusden.octopus.components.registry.server.dto.v4.ComponentDetailResponse
 import org.octopusden.octopus.components.registry.server.dto.v4.ComponentUpdateRequest
-import org.octopusden.octopus.components.registry.server.dto.v4.FieldOverrideUpdateRequest
 import org.octopusden.octopus.components.registry.server.service.ComponentManagementService
 import java.time.Instant
 import java.util.UUID
@@ -133,21 +132,27 @@ class TeamcityPlacementSyncServiceTest {
     }
 
     @Test
-    fun `a vcs-settings override row is written through updateFieldOverride, not the base PATCH`() {
+    fun `a resolved marker row is report-only and is never written (owner review finding 5, RED)`() {
+        // ADR-002 decision 4/8 (owner review): marker (per-range `vcs.settings`) rows are
+        // report-only in this version -- Diff still shows them, but Sync must never write one,
+        // even when it is RESOLVED and selected.
         val diffRow = row(PlacementDiffRowStatus.RESOLVED, rowLabel = "vcs.settings", derivedBwd = "app")
         val diffService = diffServiceReturning(listOf(diffRow))
         val (svc, cms) = service(diffService)
 
         val result = svc.sync(setOf(componentId), PlacementDiffResult(Instant.now(), listOf(diffRow)), "alice")
 
-        assertEquals(1, result.applied)
-        val captor = argumentCaptor<FieldOverrideUpdateRequest>()
-        verify(cms).updateFieldOverride(
-            org.mockito.kotlin.eq(componentId),
-            org.mockito.kotlin.eq(diffRow.configurationRowId),
-            captor.capture(),
+        assertEquals(0, result.applied)
+        assertEquals(1, result.skipped)
+        assertEquals(
+            "skipped: report-only (per-range row)",
+            result.components
+                .single()
+                .rows
+                .single()
+                .outcome,
         )
-        assertEquals("app", captor.firstValue.markerChildren!!.buildWorkingDirectory)
+        verify(cms, org.mockito.kotlin.never()).updateFieldOverride(any(), any(), any())
         verify(cms, org.mockito.kotlin.never()).updateComponent(any(), any())
     }
 
