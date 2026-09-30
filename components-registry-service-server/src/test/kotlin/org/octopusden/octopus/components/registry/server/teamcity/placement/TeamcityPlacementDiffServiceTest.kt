@@ -331,10 +331,11 @@ class TeamcityPlacementDiffServiceTest {
     }
 
     @Test
-    fun `a single-root row whose derived checkout directory has no build working directory is unexpressible`() {
-        // Same shape without WORK_DIR: still in scope (a derived CD exists), but ADR-001's own
-        // rule (checkRules) rejects it — every root has a Checkout Directory, so a Build Working
-        // Directory is required, and none was derived.
+    fun `a single-root row whose derived checkout directory has no build working directory is invalid (spec-conformance finding 3, RED)`() {
+        // Same shape without WORK_DIR: still in scope (a derived CD exists), but ADR-001's rule --
+        // every root has a Checkout Directory, so a Build Working Directory is required, and none
+        // was derived -- is a CRS VALIDATION rule (VcsPlacementValidator.validateBuildWorkingDirectory),
+        // not an unparseable rule shape, so this is INVALID, not UNEXPRESSIBLE.
         val comp = component()
         val row = ComponentConfigurationEntity(id = UUID.randomUUID(), component = comp, rowType = "BASE")
         row.vcsEntries += VcsSettingsEntryEntity(componentConfiguration = row, name = "main", vcsPath = appId, sortOrder = 0)
@@ -342,13 +343,30 @@ class TeamcityPlacementDiffServiceTest {
         val svc = service(listOf(row), mapOf(comp.id!! to listOf("P")), FakeEnrichedTcProjectFetcher(mapOf("P" to project(bt))))
 
         assertEquals(
-            PlacementDiffRowStatus.UNEXPRESSIBLE,
+            PlacementDiffRowStatus.INVALID,
             svc
                 .runDiff()
                 .rows
                 .single()
                 .status,
         )
+    }
+
+    @Test
+    fun `two roots at the checkout root is invalid, not unexpressible (spec-conformance finding 3, RED)`() {
+        // "At most one root at the checkout root" is a CRS validation rule
+        // (VcsPlacementValidator.validateVcsPlacement's rootEntry check), not a rule-shape problem
+        // -- both roots parse cleanly, they just conflict with each other under CRS's own rules.
+        val comp = component()
+        // A current value that differs from the (checkout-root) derivation, so the row isn't
+        // trivially IN_SYNC before the INVALID check is even reached.
+        val row = multiRootRow(comp, currentGatewayCd = "old-value")
+        val bt = compileBuildType("compileA", roots = listOf(gatewayId to "", appId to ""))
+        val svc = service(listOf(row), mapOf(comp.id!! to listOf("P")), FakeEnrichedTcProjectFetcher(mapOf("P" to project(bt))))
+
+        val diff = svc.runDiff().rows.single()
+        assertEquals(PlacementDiffRowStatus.INVALID, diff.status)
+        assertTrue(diff.notes.any { it.contains("checkout root") })
     }
 
     @Test
