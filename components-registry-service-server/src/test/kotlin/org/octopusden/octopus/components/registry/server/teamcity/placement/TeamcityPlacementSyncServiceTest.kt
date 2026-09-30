@@ -110,6 +110,23 @@ class TeamcityPlacementSyncServiceTest {
     }
 
     @Test
+    fun `an unrelated edit between Diff and Sync does not skip the row, the write uses the fresh version (Codex re-review, RED)`() {
+        // Only the version moved (e.g. a description edit): the fresh re-derivation is otherwise
+        // identical, so the row is still safe to apply, locked on the version read with it.
+        val snapshotRow = row(PlacementDiffRowStatus.RESOLVED, componentVersion = 4L)
+        val freshRow = snapshotRow.copy(componentVersion = 6L)
+        val diffService = diffServiceReturning(listOf(freshRow))
+        val (svc, cms) = service(diffService)
+
+        val result = svc.sync(setOf(componentId), PlacementDiffResult(Instant.now(), listOf(snapshotRow)), "job-42", "alice")
+
+        assertEquals(1, result.applied)
+        val captor = argumentCaptor<ComponentUpdateRequest>()
+        verify(cms).updateComponent(org.mockito.kotlin.eq(componentId), captor.capture())
+        assertEquals(6L, captor.firstValue.version)
+    }
+
+    @Test
     fun `an applied row's before and after values are recorded per field (owner review finding 6, RED)`() {
         val diffRow = row(PlacementDiffRowStatus.RESOLVED, derivedBwd = "app/build")
         val diffService = diffServiceReturning(listOf(diffRow))
