@@ -166,24 +166,17 @@ private fun scanCompileConfigs(input: DeriveInput): CompileConfigScan {
             bt.vcsRootEntries.groupBy({ repoKey(it.url) }, { parseCheckoutRule(it.checkoutRules) })
         var hit = false
         entries.forEachIndexed { i, row ->
-            val key = repoKey(row.vcsPath)
-            val parsedRules = attached[key]
-            if (parsedRules != null) {
-                hit = true
-                if (parsedRules.any { it == null }) {
-                    // ANY unparseable rule for this repo in this build type is a SHAPE problem —
-                    // stays UNEXPRESSIBLE regardless of what else attaches the same repository
-                    // (Codex second-pass finding: a null parse must not be treated as just another
-                    // "distinct value" that a resolvable duplicate could turn into a CONFLICT).
-                    unexpressible.add(i)
-                } else {
-                    val distinct = parsedRules.filterNotNull().toSet()
-                    if (distinct.size > 1) {
-                        conflictingWithinBuildType.add(i)
-                    } else {
-                        perEntrySeen.getOrPut(i) { mutableSetOf() }.add(distinct.single())
-                    }
-                }
+            val parsedRules = attached[repoKey(row.vcsPath)] ?: return@forEachIndexed
+            hit = true
+            val distinct = parsedRules.filterNotNull().toSet()
+            when {
+                // ANY unparseable rule for this repo in this build type is a SHAPE problem —
+                // stays UNEXPRESSIBLE regardless of what else attaches the same repository
+                // (Codex second-pass finding: a null parse must not be treated as just another
+                // "distinct value" that a resolvable duplicate could turn into a CONFLICT).
+                parsedRules.any { it == null } -> unexpressible.add(i)
+                distinct.size > 1 -> conflictingWithinBuildType.add(i)
+                else -> perEntrySeen.getOrPut(i) { mutableSetOf() }.add(distinct.single())
             }
         }
         if (hit) workDirSeen.add(parseWorkDir(bt.workDir))
