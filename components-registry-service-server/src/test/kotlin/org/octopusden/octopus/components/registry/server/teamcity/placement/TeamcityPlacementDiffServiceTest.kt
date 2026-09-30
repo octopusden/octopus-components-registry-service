@@ -299,6 +299,24 @@ class TeamcityPlacementDiffServiceTest {
     }
 
     @Test
+    fun `a single-root row with a derived source path only, no checkout directory, is in scope`() {
+        // ADR-001 allows a lone root with an empty Checkout Directory but a non-empty Source Path
+        // (a monorepo subdirectory with no rename): `+:mapper` -> PlacementValue(null, "mapper").
+        // Regression: the scope filter only looked at Checkout Directory / Build Working
+        // Directory, silently dropping this row (no CD, no BWD needed since the root is taken).
+        val comp = component()
+        val row = ComponentConfigurationEntity(id = UUID.randomUUID(), component = comp, rowType = "BASE")
+        row.vcsEntries += VcsSettingsEntryEntity(componentConfiguration = row, name = "main", vcsPath = appId, sortOrder = 0)
+        val bt = compileBuildType("compileA", roots = listOf(appId to "+:mapper"))
+        val svc = service(listOf(row), mapOf(comp.id!! to listOf("P")), FakeEnrichedTcProjectFetcher(mapOf("P" to project(bt))))
+
+        val diff = svc.runDiff().rows.single()
+        assertEquals(PlacementDiffRowStatus.RESOLVED, diff.status)
+        assertEquals("mapper", diff.entries.single().derivedSourcePath)
+        assertNull(diff.entries.single().derivedCheckoutDirectory)
+    }
+
+    @Test
     fun `a single-root row with a derived checkout directory is in scope`() {
         // ADR-001: a lone root with a Checkout Directory leaves the checkout root empty, so a
         // Build Working Directory is required — the row derives fully only when WORK_DIR sets one.
