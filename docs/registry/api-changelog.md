@@ -23,6 +23,27 @@ refresh it with `./gradlew :components-registry-service-server:generateOpenApiDo
   usernames currently assigned to at least one component the v4 list shows (blank values excluded), as
   `List<String>` like `/meta/owners`. They list the values the existing `?releaseManager=` and
   `?securityChampion=` filters can match; each list holds only its own role.
+- **TeamCity placement Diff/Sync admin endpoints (ONB-002).** New surface under
+  `rest/api/4/admin/teamcity-placement`, merging right after the VCS entry placement fields below
+  (it reads and writes `sourcePath`/`checkoutDirectory`/`buildWorkingDirectory`):
+  - `POST /diff` / `GET /diff/job` — start (`IMPORT_DATA`) and poll a read-only run that derives
+    each component's VCS placement from its linked TeamCity project(s)' compile build
+    configurations and compares it to the registry's current values. 202 on a freshly-started run,
+    409 on a same-kind attach or a cross-kind conflict with another admin job, same shape as every
+    other admin job (`TeamcityPlacementDiffJobResponse`, `kind: "job"`).
+  - `GET /diff/report.json` / `.../report.html` / `.../report.csv` — the latest completed run's
+    rows (`PlacementDiffResult`), readable by anyone who can view components (no `IMPORT_DATA`
+    needed for the report itself). 404 until a Diff has completed at least once. Per row: status
+    (`RESOLVED`, `CONFLICT`, `UNEXPRESSIBLE`, `NO_CHAIN`, `OUTSIDE_TEMPLATES`, `COMPILE_PAUSED`,
+    `MANUAL_EDIT`, `IN_SYNC`, `TC_ERROR`), current and derived Checkout Directory / Source Path per
+    VCS entry, current and derived Build Working Directory, the source TeamCity build type ids, and
+    human-readable notes.
+  - `POST /sync` (`IMPORT_DATA`, body `{"componentIds": [...]}`) / `GET /sync/job` — applies the
+    latest Diff's `RESOLVED` rows for the given components, re-deriving first and skipping any row
+    that changed since the Diff snapshot. Writes go through the same v4 write path a human PATCH
+    uses (`changeComment: "sync from TeamCity"` on a base-row write); a value the ADR-001 `V8__`
+    migration set automatically is overwritten, a value set by a real edit never is.
+
 - **VCS entry placement (`sourcePath`, `checkoutDirectory`), Build Working Directory and derived
   names.** `VcsEntryRequest` / `VcsEntryResponse` (base configuration and `vcs.settings` marker rows
   alike) gain two optional fields: `sourcePath`, the repository directory that belongs to the

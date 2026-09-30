@@ -435,6 +435,63 @@ IO edges; the module stays `server → component-validation` (one-way dependency
   [upgrade note](deployment/tc-validation-upgrade-note.md) for required values and the coordinated
   deploy requirement with components-management-portal.
 
+### 6.8 TeamCity placement Diff/Sync (ONB-002)
+Two jobs that reconcile a component's VCS placement (ADR-001: Checkout Directory, Source Path,
+Build Working Directory) against its linked TeamCity project(s)' actual chains — a Kotlin port of
+the one-off `placement_import.py` used to seed ADR-001 rev. 3, scoped to compile configurations
+only (`CDGradleBuild` / `CDJavaMavenBuild`, non-paused; no `CDRelease` / `CdReleaseCandidateNew`
+fallback).
+
+- **Diff (read-only):** `TeamcityPlacementDiffService` walks every non-archived component's
+  configuration rows (base or `vcs.settings` override) with VCS entries and at least one
+  `version_line`-linked TeamCity project (never re-searched by `COMPONENT_NAME`), reads each
+  linked project's compile build types via `EnrichedTcProjectFetcher` (extended with
+  `vcs-root-entries(checkout-rules, vcs-root url)`, additive to the shared cache TeamCity
+  validation also uses), and derives per-row placement with `PlacementRules.derive` — the same
+  rules as the Python one-off: match a TeamCity root to a registry entry by URL (host/scheme/case
+  agnostic, `.git` ignored), turn its checkout rule into Checkout Directory / Source Path, and
+  `WORK_DIR` minus the checkout-dir prefix into the Build Working Directory; a value counts only
+  when every compile configuration attaching that repository agrees.
+  - **Scope:** multi-root rows always; a single-root row only when a Checkout Directory or a
+    non-root Build Working Directory exists on either side (current or derived) — a lone root
+    needing nothing never appears, not even as "in sync" (keeps single-root Checkout Directories,
+    which would rename `main` in the escrow export, out of scope per ADR-001).
+  - **Status per row:** `RESOLVED` (apply-able), `CONFLICT`, `UNEXPRESSIBLE`, `NO_CHAIN`,
+    `OUTSIDE_TEMPLATES`, `COMPILE_PAUSED`, `MANUAL_EDIT`, `IN_SYNC`, `TC_ERROR` (a TeamCity fetch
+    failure; a 403 is recognised and reported as "no permission to read VCS root entries" rather
+    than a raw exception).
+  - **Manual edit vs V8-auto (`PlacementEditHistory`):** the ADR-001 `V8__` migration set
+    `checkout_directory = name` via raw SQL, bypassing the app entirely — no `audit_log` row exists
+    for it. A real edit always goes through `ComponentManagementServiceImpl`, which re-publishes the
+    row's full current state as the audit event's `newValue` snapshot. So: if a repository's
+    checkout/source path (or the row's Build Working Directory) appears in ANY audit snapshot
+    recorded after V8's own `flyway_schema_history.installed_on` timestamp, a real save touched
+    it since — the value cannot be assumed to still be V8's guess, and `RESOLVED` is downgraded to
+    `MANUAL_EDIT` (not overwritten). Deliberately biased toward false positives (a re-save of the
+    identical value still counts): that costs Sync a row it could have safely touched, never a
+    clobbered edit. An unreadable V8 timestamp fails closed as manual.
+  - **Result** is in-memory only, the latest completed run, held by the job service.
+- **Sync:** applies the selected component ids' `RESOLVED` rows from the latest Diff.
+  `TeamcityPlacementSyncService` re-reads TeamCity/the registry and re-derives before writing; a
+  row whose fresh derivation differs from the Diff snapshot is skipped ("changed since diff")
+  rather than applied blind. Every write goes through `ComponentManagementService` — the base row's
+  `vcsEntries` + `buildWorkingDirectory` via `updateComponent` (`changeComment = "sync from
+  TeamCity"`), a `vcs.settings` override row via `updateFieldOverride` (no `changeComment` field
+  exists on that request today, so an override-row sync is attributed to the triggering user but
+  not labelled). The triggering user's `SecurityContext` is captured on the request thread and
+  restored for the whole background run, since the plain `migrationExecutor` does not propagate it
+  and `changed_by` is resolved from it at write time.
+- **Jobs and permissions:** `TeamcityPlacementDiffJobService` / `-SyncJobService` follow the same
+  `AsyncJobLifecycle` + `MigrationLifecycleGate` pattern as resync/validation (`TC_PLACEMENT_DIFF`
+  / `TC_PLACEMENT_SYNC` job kinds; 202-then-poll; same-kind attach; cross-kind 409). Unlike every
+  other admin job, the Diff's report is readable by anyone who can view components
+  (`ACCESS_COMPONENTS`, `PermissionEvaluator.canViewComponents()`) — only the two run endpoints and
+  Sync entirely require `IMPORT_DATA`; `TeamcityPlacementControllerV4` is a dedicated controller
+  because a single class-level `@PreAuthorize` cannot express that split.
+- **Endpoints (`rest/api/4/admin/teamcity-placement`):** `POST /diff`, `GET /diff/job`, `GET
+  /diff/report.{json,html,csv}` (JSON for the Portal table; HTML/CSV as downloads), `POST /sync`
+  (body `{componentIds}`), `GET /sync/job`.
+
 ## 7. Data Migration
 
 ### 7.1 Migration Strategy: Component-Source Routing
