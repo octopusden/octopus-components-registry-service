@@ -1,6 +1,7 @@
 package org.octopusden.octopus.components.registry.server.teamcity.placement
 
 import mu.KotlinLogging
+import com.fasterxml.jackson.annotation.JsonIgnore
 import org.octopusden.octopus.components.registry.server.config.ConditionalOnDatabaseEnabled
 import org.octopusden.octopus.components.registry.server.entity.ComponentConfigurationEntity
 import org.octopusden.octopus.components.registry.server.entity.ComponentEntity
@@ -74,6 +75,10 @@ data class PlacementRowDiff(
     val derivedBuildWorkingDirectory: String?,
     val sourceBuildTypeIds: List<String>,
     val notes: List<String>,
+    /** The component's optimistic-lock version as read together with this row; Sync writes with it.
+     * Internal only: not part of the report API. */
+    @get:JsonIgnore
+    val componentVersion: Long = 0,
 )
 
 data class PlacementDiffResult(
