@@ -157,14 +157,23 @@ fun derive(input: DeriveInput): PlacementDerivation {
     val workDirSeen = mutableSetOf<WorkDirParse>()
 
     for (bt in input.compileConfigs) {
-        val attached = bt.vcsRootEntries.associate { repoKey(it.url) to it.checkoutRules }
+        // Keyed by ALL checkout rules seen for that repo in this one build type (not just the
+        // last), so a build type attaching the same repository twice with disagreeing rules is
+        // caught as unexpressible below rather than silently resolved from whichever rule
+        // associate() happened to keep.
+        val attached: Map<String, List<String?>> = bt.vcsRootEntries.groupBy({ repoKey(it.url) }, { it.checkoutRules })
         var hit = false
         entries.forEachIndexed { i, row ->
             val key = repoKey(row.vcsPath)
-            if (attached.containsKey(key)) {
+            val rules = attached[key]
+            if (rules != null) {
                 hit = true
-                val parsed = parseCheckoutRule(attached[key])
-                if (parsed == null) unexpressible.add(i) else perEntrySeen.getOrPut(i) { mutableSetOf() }.add(parsed)
+                if (rules.toSet().size > 1) {
+                    unexpressible.add(i)
+                } else {
+                    val parsed = parseCheckoutRule(rules.first())
+                    if (parsed == null) unexpressible.add(i) else perEntrySeen.getOrPut(i) { mutableSetOf() }.add(parsed)
+                }
             }
         }
         if (hit) workDirSeen.add(parseWorkDir(bt.workDir))
