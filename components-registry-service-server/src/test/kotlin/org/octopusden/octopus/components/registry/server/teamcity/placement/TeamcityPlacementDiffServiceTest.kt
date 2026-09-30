@@ -350,4 +350,49 @@ class TeamcityPlacementDiffServiceTest {
                 .status,
         )
     }
+
+    @Test
+    fun `a derived source path outside the row is invalid (owner review finding 4, RED)`() {
+        // `+:../outside` parses to a plain Source Path of "../outside" (parseCheckoutRule has no
+        // opinion on its shape) -- but the SAME v4 write path a human PATCH uses rejects a
+        // Source Path containing "..", so this must be reported INVALID, not RESOLVED.
+        val comp = component()
+        val row = ComponentConfigurationEntity(id = UUID.randomUUID(), component = comp, rowType = "BASE")
+        row.vcsEntries += VcsSettingsEntryEntity(componentConfiguration = row, name = "main", vcsPath = appId, sortOrder = 0)
+        val bt = compileBuildType("compileA", roots = listOf(appId to "+:../outside"))
+        val svc = service(listOf(row), mapOf(comp.id!! to listOf("P")), FakeEnrichedTcProjectFetcher(mapOf("P" to project(bt))))
+
+        val diff = svc.runDiff().rows.single()
+        assertEquals(PlacementDiffRowStatus.INVALID, diff.status)
+        assertTrue(diff.notes.any { it.contains("sourcePath", ignoreCase = true) })
+    }
+
+    @Test
+    fun `a kept name colliding with another root's derived checkout directory is invalid (owner review finding 4, RED)`() {
+        // "app-one" is derived as the APP root's Checkout Directory (and, per ADR-001 decision
+        // 4, becomes its name on write); the GATEWAY root is unplaced (no rule attaches it), so it
+        // keeps its CURRENT registry name -- which here already happens to be "app-one". A real
+        // v4 write would reject this exact collision (`vcsEntries[i].checkoutDirectory: ... already
+        // the name of ...`), so Diff must report it INVALID, not RESOLVED.
+        val comp = component()
+        val row = ComponentConfigurationEntity(id = UUID.randomUUID(), component = comp, rowType = "BASE")
+        row.vcsEntries += VcsSettingsEntryEntity(
+            componentConfiguration = row,
+            name = "app-one",
+            vcsPath = gatewayId,
+            sortOrder = 0,
+        )
+        row.vcsEntries += VcsSettingsEntryEntity(
+            componentConfiguration = row,
+            name = "app-one-original",
+            vcsPath = appId,
+            sortOrder = 1,
+        )
+        val bt = compileBuildType("compileA", roots = listOf(gatewayId to "", appId to "+:. => app-one"))
+        val svc = service(listOf(row), mapOf(comp.id!! to listOf("P")), FakeEnrichedTcProjectFetcher(mapOf("P" to project(bt))))
+
+        val diff = svc.runDiff().rows.single()
+        assertEquals(PlacementDiffRowStatus.INVALID, diff.status)
+        assertTrue(diff.notes.any { it.contains("app-one") })
+    }
 }
