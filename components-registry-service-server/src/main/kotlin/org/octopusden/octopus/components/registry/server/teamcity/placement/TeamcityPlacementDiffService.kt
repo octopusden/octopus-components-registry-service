@@ -97,14 +97,15 @@ class TeamcityPlacementDiffService(
     /** [componentIds] restricts the walk to those components — used by Sync to re-derive just the
      * rows it is about to apply, against the same rules the original Diff used. */
     fun runDiff(componentIds: Set<UUID>? = null): PlacementDiffResult {
-        val rows = componentConfigurationRepository.findAllNonArchivedRowsWithVcsEntries()
+        val rows = componentConfigurationRepository
+            .findAllNonArchivedRowsWithVcsEntries()
             .filter { componentIds == null || it.component.id in componentIds }
         val byComponent = rows.groupBy { it.component }
         val result = mutableListOf<PlacementRowDiff>()
         for ((component, componentRows) in byComponent) {
-            val componentId = component.id ?: continue
-            val projectIds = versionLineRepository.findDistinctTeamcityProjectIdsByComponentId(componentId)
-            if (projectIds.isEmpty()) continue // no TeamCity link: nothing to diff against
+            val componentId = component.id
+            val projectIds = componentId?.let { versionLineRepository.findDistinctTeamcityProjectIdsByComponentId(it) }.orEmpty()
+            if (componentId == null || projectIds.isEmpty()) continue // no id, or no TeamCity link: nothing to diff against
             val chain = fetchChain(component, projectIds)
             for (row in componentRows) {
                 diffRow(component, componentId, row, chain)?.let(result::add)
@@ -129,14 +130,27 @@ class TeamcityPlacementDiffService(
 
         if (chain is ChainOutcome.Error) {
             if (!inScope(entries, row.buildWorkingDirectory, derivedCd = null, derivedBwd = null)) return null
-            return toRowDiff(component, componentId, row, rowLabel, entries, PlacementDiffRowStatus.TC_ERROR, emptyMap(), null, listOf(chain.message), emptyList())
+            return toRowDiff(
+                component,
+                componentId,
+                row,
+                rowLabel,
+                entries,
+                PlacementDiffRowStatus.TC_ERROR,
+                emptyMap(),
+                null,
+                listOf(chain.message),
+                emptyList(),
+            )
         }
         chain as ChainOutcome.Ok
         val repoKeys = placementEntries.map { repoKey(it.vcsPath) }.toSet()
         val outsideCounts = chain.nonCompileRuled.filterValues { it.first.any { key -> key in repoKeys } }.mapValues { it.value.second }
         val derivation = derive(DeriveInput(placementEntries, chain.compileConfigs, chain.pausedCompileCount, outsideCounts))
 
-        val derivedCdForScope = derivation.perEntry.values.firstOrNull()?.checkoutDirectory
+        val derivedCdForScope = derivation.perEntry.values
+            .firstOrNull()
+            ?.checkoutDirectory
         if (!inScope(entries, row.buildWorkingDirectory, derivedCdForScope, derivation.buildWorkingDirectory)) return null
 
         val (status, extraNotes) = finalizeStatus(componentId, placementEntries, row.buildWorkingDirectory, derivation)
@@ -189,7 +203,8 @@ class TeamcityPlacementDiffService(
         val manualEntry = differingEntries.any { i -> placementEditHistory.wasEverManuallyPlaced(componentId, entries[i].vcsPath) }
         val manualBwd = bwdDiffers && placementEditHistory.wasBuildWorkingDirectoryEverManuallySet(componentId)
         return if (manualEntry || manualBwd) {
-            PlacementDiffRowStatus.MANUAL_EDIT to listOf("the registry's current value was set by a real edit, not the V8 migration; not overwritten")
+            PlacementDiffRowStatus.MANUAL_EDIT to
+                listOf("the registry's current value was set by a real edit, not the V8 migration; not overwritten")
         } else {
             PlacementDiffRowStatus.RESOLVED to emptyList()
         }
@@ -269,7 +284,9 @@ class TeamcityPlacementDiffService(
                 @Suppress("TooGenericExceptionCaught") e: Exception,
             ) {
                 val message = describeTeamcityError(e, projectId)
-                log.warn(e) { "TeamCity placement diff: failed to read project '$projectId' for component '${component.componentKey}': $message" }
+                log.warn(e) {
+                    "TeamCity placement diff: failed to read project '$projectId' for component '${component.componentKey}': $message"
+                }
                 return ChainOutcome.Error(message)
             }
         }
@@ -277,7 +294,12 @@ class TeamcityPlacementDiffService(
         var pausedCompile = 0
         val nonCompileRuled = mutableMapOf<String, Pair<Set<String>, Int>>()
         for (bt in buildTypes) {
-            val templateIds = (bt.templates?.buildTypes.orEmpty().map { it.id } + listOfNotNull(bt.template?.id)).toSet()
+            val templateIds = (
+                bt.templates
+                    ?.buildTypes
+                    .orEmpty()
+                    .map { it.id } + listOfNotNull(bt.template?.id)
+            ).toSet()
             val isCompile = templateIds.any { it in COMPILE_TEMPLATE_IDS }
             val paused = bt.paused == true
             if (isCompile) {
@@ -287,16 +309,36 @@ class TeamcityPlacementDiffService(
                     compile += TcCompileConfig(
                         buildTypeId = bt.id,
                         vcsRootEntries = bt.vcsRoots?.entries.orEmpty().map { e ->
-                            TcVcsRootEntry(url = e.vcsRoot.properties?.properties.orEmpty().firstOrNull { it.name == "url" }?.value, checkoutRules = e.checkoutRules)
+                            TcVcsRootEntry(
+                                url = e.vcsRoot.properties
+                                    ?.properties
+                                    .orEmpty()
+                                    .firstOrNull { it.name == "url" }
+                                    ?.value,
+                                checkoutRules = e.checkoutRules,
+                            )
                         },
-                        workDir = bt.parameters?.properties.orEmpty().firstOrNull { it.name == "WORK_DIR" }?.value,
+                        workDir = bt.parameters
+                            ?.properties
+                            .orEmpty()
+                            .firstOrNull { it.name == "WORK_DIR" }
+                            ?.value,
                     )
                 }
             } else if (!paused) {
-                val ruledKeys = bt.vcsRoots?.entries.orEmpty()
+                val ruledKeys = bt.vcsRoots
+                    ?.entries
+                    .orEmpty()
                     .filter { !it.checkoutRules.isNullOrBlank() }
-                    .map { e -> repoKey(e.vcsRoot.properties?.properties.orEmpty().firstOrNull { it.name == "url" }?.value) }
-                    .toSet()
+                    .map { e ->
+                        repoKey(
+                            e.vcsRoot.properties
+                                ?.properties
+                                .orEmpty()
+                                .firstOrNull { it.name == "url" }
+                                ?.value,
+                        )
+                    }.toSet()
                 if (ruledKeys.isNotEmpty()) {
                     nonCompileRuled[bt.id] = ruledKeys to (bt.vcsRoots?.entries?.size ?: 0)
                 }

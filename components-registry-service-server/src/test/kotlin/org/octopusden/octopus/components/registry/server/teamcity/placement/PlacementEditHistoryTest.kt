@@ -25,7 +25,9 @@ class PlacementEditHistoryTest {
                 v8AppliedAt,
                 listOf("UPDATE", "RENAME"),
             ),
-        ).thenReturn(newValues.map { AuditLogEntity(entityType = "Component", entityId = componentId.toString(), action = "UPDATE", newValue = it) })
+        ).thenReturn(
+            newValues.map { AuditLogEntity(entityType = "Component", entityId = componentId.toString(), action = "UPDATE", newValue = it) },
+        )
     }
 
     @Test
@@ -49,7 +51,11 @@ class PlacementEditHistoryTest {
     @Test
     fun `a snapshot for a different repository does not flag this one`() {
         stubRows(
-            mapOf("vcsEntries" to listOf(mapOf("vcsPath" to "ssh://h/prj/other.git", "checkoutDirectory" to "other", "sourcePath" to null))),
+            mapOf(
+                "vcsEntries" to listOf(
+                    mapOf("vcsPath" to "ssh://h/prj/other.git", "checkoutDirectory" to "other", "sourcePath" to null),
+                ),
+            ),
         )
         assertFalse(history().wasEverManuallyPlaced(componentId, "ssh://h/prj/app.git"))
     }
@@ -60,7 +66,9 @@ class PlacementEditHistoryTest {
             mapOf(
                 "fieldOverride[vcs.settings]" to mapOf(
                     "markerChildren" to mapOf(
-                        "vcsEntries" to listOf(mapOf("vcsPath" to "ssh://h/prj/app.git", "checkoutDirectory" to null, "sourcePath" to "core")),
+                        "vcsEntries" to listOf(
+                            mapOf("vcsPath" to "ssh://h/prj/app.git", "checkoutDirectory" to null, "sourcePath" to "core"),
+                        ),
                         "buildWorkingDirectory" to "core/app",
                     ),
                 ),

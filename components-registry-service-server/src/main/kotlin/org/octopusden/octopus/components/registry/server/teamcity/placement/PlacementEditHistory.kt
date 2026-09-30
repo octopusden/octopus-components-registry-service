@@ -22,10 +22,11 @@ class JdbcV8MigrationTimestampProvider(
 ) : V8MigrationTimestampProvider {
     override fun v8AppliedAt(): Instant? =
         runCatching {
-            jdbcTemplate.queryForObject(
-                "SELECT installed_on FROM flyway_schema_history WHERE version = '8'",
-                java.sql.Timestamp::class.java,
-            )?.toInstant()
+            jdbcTemplate
+                .queryForObject(
+                    "SELECT installed_on FROM flyway_schema_history WHERE version = '8'",
+                    java.sql.Timestamp::class.java,
+                )?.toInstant()
         }.getOrNull()
 }
 
