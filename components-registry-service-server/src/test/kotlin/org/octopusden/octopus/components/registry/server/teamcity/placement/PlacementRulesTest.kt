@@ -98,6 +98,20 @@ class DeriveTest {
     }
 
     @Test
+    fun `one resolvable rule plus one unparseable rule for the same repo is still unexpressible (Codex finding, RED)`() {
+        // Codex second-pass finding: distinguishing CONFLICT from UNEXPRESSIBLE by "how many
+        // DISTINCT parsed values" alone treats a null (unparseable) parse as just another distinct
+        // value, so one resolvable rule + one shape the engine can't parse at all became CONFLICT.
+        // A genuinely unparseable rule is a SHAPE problem regardless of what else is attached --
+        // it must stay UNEXPRESSIBLE even when another attachment of the same repo is resolvable.
+        val gateway = "ssh://h/prj/app-two.git"
+        val app = "ssh://h/prj/app-one.git"
+        val bt = compileConfig(gateway to "", app to "+:. => app-one", app to "+:a => b") // "+:a => b" is a remap: unparseable
+        val outcome = derive(DeriveInput(ENTRIES, listOf(bt), 0, emptyMap()))
+        assertEquals(PlacementRowStatus.UNEXPRESSIBLE, outcome.status)
+    }
+
+    @Test
     fun `the same repository attached twice with textually different but equivalent rules still resolves`() {
         // `+:mapper` and `+:mapper => mapper` both parse to the same PlacementValue (Source Path
         // "mapper", checkout root) — comparing raw rule text would flag this as a false conflict.
