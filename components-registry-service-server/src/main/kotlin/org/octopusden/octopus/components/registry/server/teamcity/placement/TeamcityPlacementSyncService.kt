@@ -59,7 +59,14 @@ class TeamcityPlacementSyncService(
         triggeredBy: String,
     ): PlacementSyncResult {
         val snapshotByRow = latestDiff?.rows.orEmpty().associateBy { it.configurationRowId }
-        val fresh = if (componentIds.isEmpty()) emptyList() else diffService.runDiff(componentIds).rows
+        // Force a live TeamCity read for this safety re-derivation — see invalidateTeamcityCache's
+        // kdoc for why a cache-served "fresh" derivation would defeat "changed since diff".
+        val fresh = if (componentIds.isEmpty()) {
+            emptyList()
+        } else {
+            diffService.invalidateTeamcityCache()
+            diffService.runDiff(componentIds).rows
+        }
         val components = mutableListOf<PlacementComponentSyncOutcome>()
         var applied = 0
         var skipped = 0
