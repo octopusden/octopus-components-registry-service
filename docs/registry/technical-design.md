@@ -505,7 +505,9 @@ fallback).
     left no audit row either way), or the LAST audit row that changed it carries the Sync job's own
     `"sync from TeamCity"` tag (see below) in `change_comment`. It is `MANUAL_EDIT` only when the
     last change to THAT field is a real user write that does NOT carry that tag.
-    `PlacementEditHistory` walks a component's audit rows newest-first (no time-window /
+    `PlacementEditHistory` walks a component's `CREATE`, `UPDATE` and `RENAME` audit rows
+    newest-first (a value set at creation is a human choice too: `CREATE` has no `oldValue`, so a
+    non-null field in its `newValue` counts as a change; the Git import writes no audit row) (no time-window /
     V8-timestamp gate needed: V8's back-fill left no row regardless of a cutoff, so scoping by one
     added nothing) and stops at the first row whose `(oldValue, newValue)` snapshot actually
     differs for that ONE field — catching a set, a re-point, AND a manual clear to null alike. This
@@ -528,7 +530,11 @@ fallback).
   where a new Diff completing in between could let Sync silently act on an unvalidated result.
   Given a current `diffId`, `TeamcityPlacementSyncService` re-reads TeamCity/the registry and
   re-derives before writing; a row whose fresh derivation differs from the Diff snapshot is skipped
-  ("changed since diff") rather than applied blind. A row that is `OUTSIDE_SCOPE` (a marker
+  ("changed since diff") rather than applied blind. The write carries the component `version` read
+  together with the fresh derivation (`PlacementRowDiff.componentVersion`, not in the report API),
+  so a manual edit between the re-derivation and the write fails the optimistic lock (outcome
+  `failed`) instead of being overwritten; an edit between the Diff and the Sync already makes the
+  row "changed since diff". A row that is `OUTSIDE_SCOPE` (a marker
   per-range `vcs.settings` row, or any row of an archived component) is never written whatever its
   selection: its outcome is always `"skipped: outside scope"` (spec-conformance review; ADR-002
   decisions 4/8). Every other write goes through `ComponentManagementService`'s base-row
