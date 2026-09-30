@@ -37,6 +37,10 @@ enum class PlacementDiffRowStatus {
 
     /** The component's linked TeamCity project(s) could not be read; see the row's notes for why. */
     TC_ERROR,
+
+    /** A marker (per-range `vcs.settings`) row, or a row of an archived component — never derived,
+     * never selectable for Sync (spec-conformance review of #510, finding 1). */
+    OUTSIDE_SCOPE,
     ;
 
     companion object {
@@ -78,16 +82,20 @@ data class PlacementDiffResult(
 )
 
 /**
- * ONB-002: the read-only TeamCity -> CRS VCS-placement Diff. Walks every non-archived
- * component's configuration rows that carry VCS entries and have a TeamCity link, derives their
- * placement from the linked project(s)' compile build configurations ([derive]), and classifies
- * each row against the registry's current values.
+ * ONB-002: the read-only TeamCity -> CRS VCS-placement Diff. Walks every component's
+ * configuration rows that carry VCS entries, derives their placement from the linked project(s)'
+ * compile build configurations ([derive]), and classifies each row against the registry's current
+ * values. An archived component's rows, and marker (per-range `vcs.settings`) rows, are always
+ * reported `OUTSIDE_SCOPE` (spec-conformance review of #510, finding 1) — never derived, never
+ * selectable for Sync — rather than silently omitted (archived) or run through the full pipeline
+ * only to be report-only anyway (marker).
  *
- * Scope (design brief): multi-root rows; single-root rows where TeamCity derives (or the registry
- * already carries) a non-root Checkout Directory; single-root rows with a non-default Build
- * Working Directory (current or derived). A single-root row with nothing on either side (no
- * Checkout Directory, checkout-root Build Working Directory) is out of scope entirely — ADR-001
- * keeps single-root Checkout Directories out of the escrow-facing `main` name — and never appears
+ * Scope (design brief, BASE rows of a non-archived component only): multi-root rows; single-root
+ * rows where TeamCity derives (or the registry already carries) a non-root Checkout Directory;
+ * single-root rows with a non-default Build Working Directory (current or derived). A single-root
+ * row with nothing on either side (no Checkout Directory, checkout-root Build Working Directory)
+ * is out of scope entirely — ADR-001 keeps single-root Checkout Directories out of the
+ * escrow-facing `main` name — and never appears
  * in the result, not even as "in sync".
  */
 @ConditionalOnDatabaseEnabled
@@ -116,14 +124,22 @@ class TeamcityPlacementDiffService(
      * rows it is about to apply, against the same rules the original Diff used. */
     fun runDiff(componentIds: Set<UUID>? = null): PlacementDiffResult {
         val rows = componentConfigurationRepository
-            .findAllNonArchivedRowsWithVcsEntries()
+            .findAllRowsWithVcsEntries()
             .filter { componentIds == null || it.component.id in componentIds }
         val byComponent = rows.groupBy { it.component }
         val result = mutableListOf<PlacementRowDiff>()
         for ((component, componentRows) in byComponent) {
-            val componentId = component.id
-            val projectIds = componentId?.let { versionLineRepository.findDistinctTeamcityProjectIdsByComponentId(it) }.orEmpty()
-            if (componentId == null || projectIds.isEmpty()) continue // no id, or no TeamCity link: nothing to diff against
+            val componentId = component.id ?: continue
+            if (component.archived) {
+                // OUTSIDE_SCOPE unconditionally (spec-conformance finding 1) — never consults the
+                // chain at all, so no TeamCity project link is needed for an archived component.
+                for (row in componentRows) {
+                    diffRow(component, componentId, row, chain = null)?.let(result::add)
+                }
+                continue
+            }
+            val projectIds = versionLineRepository.findDistinctTeamcityProjectIdsByComponentId(componentId).orEmpty()
+            if (projectIds.isEmpty()) continue // no TeamCity link: nothing to diff against
             val chain = fetchChain(component, projectIds)
             for (row in componentRows) {
                 diffRow(component, componentId, row, chain)?.let(result::add)
@@ -133,18 +149,56 @@ class TeamcityPlacementDiffService(
         return PlacementDiffResult(Instant.now(), result)
     }
 
+    /** [chain] is `null` only for an archived component's row, whose OUTSIDE_SCOPE classification
+     * never touches it (see [runDiff]). */
     private fun diffRow(
         component: ComponentEntity,
         componentId: UUID,
         row: ComponentConfigurationEntity,
-        chain: ChainOutcome,
+        chain: ChainOutcome?,
     ): PlacementRowDiff? {
         val entries = row.vcsEntries.sortedBy { it.sortOrder }
         if (entries.isEmpty()) return null
         val placementEntries = entries.map {
             PlacementRegistryEntry(it.name, it.vcsPath, it.repositoryType, it.sourcePath, it.checkoutDirectory)
         }
-        val rowLabel = row.overriddenAttribute ?: "BASE"
+        val rowLabel = row.overriddenAttribute ?: BASE_ROW_LABEL
+
+        // Spec-conformance finding 1: OUTSIDE_SCOPE unconditionally, always reported (bypasses the
+        // single-root inScope() filter below too), never derived. An archived component's row
+        // reaches here with chain == null; a marker row's own component may still be non-archived
+        // (chain != null), in which case it's simply never consulted.
+        if (component.archived) {
+            return toRowDiff(
+                component,
+                componentId,
+                row,
+                rowLabel,
+                entries,
+                PlacementDiffRowStatus.OUTSIDE_SCOPE,
+                emptyMap(),
+                null,
+                listOf("component is archived"),
+                emptyList(),
+            )
+        }
+        if (rowLabel != BASE_ROW_LABEL) {
+            return toRowDiff(
+                component,
+                componentId,
+                row,
+                rowLabel,
+                entries,
+                PlacementDiffRowStatus.OUTSIDE_SCOPE,
+                emptyMap(),
+                null,
+                listOf("marker (per-range) row: report-only, never synced"),
+                emptyList(),
+            )
+        }
+        // Never null past this point: only the archived branch above is ever called with chain ==
+        // null, and it already returned.
+        checkNotNull(chain) { "chain must be resolved for a non-archived BASE row" }
 
         if (chain is ChainOutcome.Error) {
             if (!inScope(entries, row.buildWorkingDirectory, derivedCd = null, derivedSp = null, derivedBwd = null)) return null
@@ -448,5 +502,7 @@ class TeamcityPlacementDiffService(
     private companion object {
         /** ADR-001: the only two chain templates whose build carries `WORK_DIR` / checkout placement. */
         val COMPILE_TEMPLATE_IDS = setOf("CDGradleBuild", "CDJavaMavenBuild")
+
+        const val BASE_ROW_LABEL = "BASE"
     }
 }
