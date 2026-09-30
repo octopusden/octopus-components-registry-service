@@ -161,6 +161,11 @@ The legacy v2 VCS settings carry `sourcePath` / `checkoutDirectory` per root
 supplies the version's entries, all omitted when empty, so a component without them serves the same
 v2 JSON as before. The Groovy DSL mode and the as-code export do not carry them.
 
+**Deriving these fields from an existing TeamCity chain (ONB-002).** `rest/api/4/admin/teamcity-placement`
+offers a read-only Diff that compares a component's linked TeamCity project(s)' compile build
+chains against these fields, and a Sync that writes the resolved rows through this same validated
+path (never direct SQL) — see [technical-design.md §6.8](technical-design.md#68-teamcity-placement-diffsync-onb-002).
+
 #### Intentional legacy-validation relaxations
 
 - `displayName` is **nullable** + UNIQUE at the DB layer. It is stored **verbatim** from the DSL —
