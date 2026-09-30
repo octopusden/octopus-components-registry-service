@@ -615,22 +615,22 @@ class CrossComponentValidationTest {
     }
 
     @Test
-    @DisplayName("CREATE: explicit+external WHISKEY component with NO distribution coordinate → 2xx")
-    fun create_explicitExternalWhiskey_noCoordinate_ok() {
+    @DisplayName("SYS-097: CREATE explicit+external WHISKEY component with NO distribution coordinate → 2xx")
+    fun `SYS-097 create explicit-external WHISKEY without coordinate is accepted`() {
         createExplicitExternalWhiskeyWithoutCoordinate(sfx())
     }
 
     @Test
-    @DisplayName("PATCH: base-config edit on an explicit+external WHISKEY component with no coordinate → 2xx")
-    fun patch_baseConfig_onExplicitExternalWhiskeyWithoutCoordinate_ok() {
+    @DisplayName("SYS-097: PATCH base-config on an explicit+external WHISKEY component with no coordinate → 2xx")
+    fun `SYS-097 base-config patch on explicit-external WHISKEY without coordinate is accepted`() {
         val (id, version) = createExplicitExternalWhiskeyWithoutCoordinate(sfx())
         patchComponent(id, """{"version":$version,"baseConfiguration":{"build":{"buildFilePath":"pom.xml"}}}""")
             .andExpect(status().is2xxSuccessful)
     }
 
     @Test
-    @DisplayName("POST field-override on an explicit+external WHISKEY component with no coordinate → 2xx")
-    fun postFieldOverride_onExplicitExternalWhiskeyWithoutCoordinate_ok() {
+    @DisplayName("SYS-097: POST field-override on an explicit+external WHISKEY component with no coordinate → 2xx")
+    fun `SYS-097 field-override create on explicit-external WHISKEY without coordinate is accepted`() {
         val (id, _) = createExplicitExternalWhiskeyWithoutCoordinate(sfx())
         mvc
             .perform(
@@ -642,8 +642,8 @@ class CrossComponentValidationTest {
     }
 
     @Test
-    @DisplayName("PATCH: switching an explicit+external component with no coordinate off WHISKEY → 400")
-    fun patch_switchOffWhiskey_explicitExternalWithoutCoordinate_badRequest() {
+    @DisplayName("SYS-097: PATCH switching an explicit+external component with no coordinate off WHISKEY → 400")
+    fun `SYS-097 switching explicit-external without coordinate off WHISKEY is rejected`() {
         val (id, version) = createExplicitExternalWhiskeyWithoutCoordinate(sfx())
         patchComponent(id, """{"version":$version,"baseConfiguration":{"build":{"buildSystem":"MAVEN"}}}""")
             .andExpect(status().isBadRequest)
