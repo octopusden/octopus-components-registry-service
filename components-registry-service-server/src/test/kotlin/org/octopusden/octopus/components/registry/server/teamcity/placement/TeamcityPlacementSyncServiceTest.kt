@@ -76,7 +76,7 @@ class TeamcityPlacementSyncServiceTest {
         whenever(detail.version).thenReturn(5L)
         whenever(cms.getComponent(componentId)).thenReturn(detail)
 
-        val result = svc.sync(setOf(componentId), PlacementDiffResult(Instant.now(), listOf(diffRow)), "alice")
+        val result = svc.sync(setOf(componentId), PlacementDiffResult(Instant.now(), listOf(diffRow)), "job-42", "alice")
 
         assertEquals(1, result.applied)
         assertEquals(0, result.skipped)
@@ -84,9 +84,34 @@ class TeamcityPlacementSyncServiceTest {
         val captor = argumentCaptor<ComponentUpdateRequest>()
         verify(cms).updateComponent(org.mockito.kotlin.eq(componentId), captor.capture())
         assertEquals(5L, captor.firstValue.version)
-        assertEquals("sync from TeamCity", captor.firstValue.changeComment)
+        // Owner review finding 6 (rollback trace): the Sync job's own id rides in the audit
+        // change_comment, alongside the fixed provenance tag PlacementEditHistory keys on.
+        assertEquals("sync from TeamCity (job job-42)", captor.firstValue.changeComment)
+        assertEquals(true, captor.firstValue.changeComment!!.startsWith(PlacementEditHistory.SYNC_CHANGE_COMMENT_PREFIX))
         assertEquals("app", (captor.firstValue.baseConfiguration as BaseConfigurationRequest).vcsEntries!!.single().checkoutDirectory)
         assertEquals("", captor.firstValue.baseConfiguration!!.buildWorkingDirectory) // root, cleared explicitly
+    }
+
+    @Test
+    fun `an applied row's before and after values are recorded per field (owner review finding 6, RED)`() {
+        val diffRow = row(PlacementDiffRowStatus.RESOLVED, derivedBwd = "app/build")
+        val diffService = diffServiceReturning(listOf(diffRow))
+        val (svc, cms) = service(diffService)
+        val detail = mock<ComponentDetailResponse>()
+        whenever(detail.version).thenReturn(5L)
+        whenever(cms.getComponent(componentId)).thenReturn(detail)
+
+        val result = svc.sync(setOf(componentId), PlacementDiffResult(Instant.now(), listOf(diffRow)), "job-42", "alice")
+
+        val cdChange = result.fieldChanges.single { it.field == "checkoutDirectory" }
+        assertEquals("comp-one", cdChange.componentKey)
+        assertEquals("BASE", cdChange.rowLabel)
+        assertEquals("main", cdChange.root)
+        assertEquals(null, cdChange.before)
+        assertEquals("app", cdChange.after)
+        val bwdChange = result.fieldChanges.single { it.field == "buildWorkingDirectory" }
+        assertEquals(null, bwdChange.before)
+        assertEquals("app/build", bwdChange.after)
     }
 
     @Test
@@ -96,7 +121,7 @@ class TeamcityPlacementSyncServiceTest {
         val diffService = diffServiceReturning(listOf(freshRow))
         val (svc, cms) = service(diffService)
 
-        val result = svc.sync(setOf(componentId), PlacementDiffResult(Instant.now(), listOf(snapshotRow)), "alice")
+        val result = svc.sync(setOf(componentId), PlacementDiffResult(Instant.now(), listOf(snapshotRow)), "job-42", "alice")
 
         assertEquals(0, result.applied)
         assertEquals(1, result.skipped)
@@ -117,7 +142,7 @@ class TeamcityPlacementSyncServiceTest {
         val diffService = diffServiceReturning(listOf(diffRow))
         val (svc, cms) = service(diffService)
 
-        val result = svc.sync(setOf(componentId), PlacementDiffResult(Instant.now(), listOf(diffRow)), "alice")
+        val result = svc.sync(setOf(componentId), PlacementDiffResult(Instant.now(), listOf(diffRow)), "job-42", "alice")
 
         assertEquals(0, result.applied)
         assertEquals(
@@ -140,7 +165,7 @@ class TeamcityPlacementSyncServiceTest {
         val diffService = diffServiceReturning(listOf(diffRow))
         val (svc, cms) = service(diffService)
 
-        val result = svc.sync(setOf(componentId), PlacementDiffResult(Instant.now(), listOf(diffRow)), "alice")
+        val result = svc.sync(setOf(componentId), PlacementDiffResult(Instant.now(), listOf(diffRow)), "job-42", "alice")
 
         assertEquals(0, result.applied)
         assertEquals(1, result.skipped)
@@ -163,7 +188,7 @@ class TeamcityPlacementSyncServiceTest {
         val (svc, cms) = service(diffService)
         whenever(cms.getComponent(componentId)).thenThrow(RuntimeException("boom"))
 
-        val result = svc.sync(setOf(componentId), PlacementDiffResult(Instant.now(), listOf(diffRow)), "alice")
+        val result = svc.sync(setOf(componentId), PlacementDiffResult(Instant.now(), listOf(diffRow)), "job-42", "alice")
 
         assertEquals(1, result.failed)
         assertEquals(
@@ -185,7 +210,7 @@ class TeamcityPlacementSyncServiceTest {
         val diffService = diffServiceReturning(emptyList())
         val (svc, cms) = service(diffService)
 
-        val result = svc.sync(setOf(componentId), PlacementDiffResult(Instant.now(), listOf(diffRow)), "alice")
+        val result = svc.sync(setOf(componentId), PlacementDiffResult(Instant.now(), listOf(diffRow)), "job-42", "alice")
 
         assertEquals(0, result.applied)
         assertEquals(1, result.skipped)
@@ -209,7 +234,7 @@ class TeamcityPlacementSyncServiceTest {
         whenever(detail.version).thenReturn(1L)
         whenever(cms.getComponent(componentId)).thenReturn(detail)
 
-        svc.sync(setOf(componentId), PlacementDiffResult(Instant.now(), listOf(diffRow)), "alice")
+        svc.sync(setOf(componentId), PlacementDiffResult(Instant.now(), listOf(diffRow)), "job-42", "alice")
 
         verify(diffService).invalidateTeamcityCache()
     }
