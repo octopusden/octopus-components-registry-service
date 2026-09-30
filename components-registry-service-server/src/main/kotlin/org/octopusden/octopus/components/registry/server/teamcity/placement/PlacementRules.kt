@@ -1,7 +1,6 @@
 package org.octopusden.octopus.components.registry.server.teamcity.placement
 
 import org.octopusden.octopus.components.registry.server.util.VcsUrlCanonicalizer
-import java.util.Locale
 
 /*
  * ONB-002: pure derivation of VCS root placement (Checkout Directory / Source Path / Build
@@ -79,9 +78,6 @@ private val CHECKOUT_DIRECTORY_PATTERN = Regex("[A-Za-z0-9_][A-Za-z0-9._-]*")
 private val PATH_SEGMENT_PATTERN = Regex("[A-Za-z0-9._-]+")
 private const val CHECKOUT_DIR_VAR = "%teamcity.build.checkoutDir%"
 private val CHECKOUT_RULE_PATTERN = Regex("""^\+:\s*(\S+?)(?:\s*=>\s*(\S+))?$""")
-
-/** Reserved Checkout Directory names ADR-001 keeps out of the repository (compared ignoring case). */
-val RESERVED_CHECKOUT_DIRECTORIES: Set<String> = setOf("report-templates", "sonar-config", "target", "sonar-report")
 
 /**
  * Matches a TeamCity VCS root URL to a registry `vcsPath` by their FULL canonical form (scheme
@@ -236,46 +232,5 @@ fun derive(input: DeriveInput): PlacementDerivation {
         else -> PlacementRowStatus.UNEXPRESSIBLE // Python's "partial": some entry never attached anywhere known.
     }
 
-    var finalNotes: List<String> = notes
-    if (status == PlacementRowStatus.RESOLVED) {
-        val problems = checkRules(entries, result, bwd)
-        if (problems.isNotEmpty()) {
-            status = PlacementRowStatus.UNEXPRESSIBLE
-            finalNotes = notes + problems
-        }
-    }
-    return PlacementDerivation(status, result, bwd, finalNotes)
-}
-
-/**
- * The ADR-001 rev. 3 registry rules a derived (or edited) placement must satisfy: at most one root
- * at the checkout root, distinct Checkout Directories (case-insensitively), none reserved, and a
- * Build Working Directory that starts inside a placed root (or the row has a root at the checkout
- * root). Port of `placement_import.py`'s `check_rules`.
- */
-fun checkRules(
-    entries: List<PlacementRegistryEntry>,
-    result: Map<Int, PlacementValue>,
-    bwd: String?,
-): List<String> {
-    val problems = mutableListOf<String>()
-    val atRoot = result.filterValues { it.checkoutDirectory == null }.keys.map { entries[it].name }
-    if (atRoot.size > 1) problems += "more than one root at the checkout root: $atRoot"
-    val directories = result.values.mapNotNull { it.checkoutDirectory }
-    if (directories.map { it.lowercase(Locale.ROOT) }.toSet().size != directories.size) {
-        problems += "duplicate Checkout Directory"
-    }
-    if (directories.any { it.lowercase(Locale.ROOT) in RESERVED_CHECKOUT_DIRECTORIES }) {
-        problems += "reserved Checkout Directory"
-    }
-    if (bwd == null && atRoot.isEmpty()) {
-        problems += "every root has a Checkout Directory but WORK_DIR is the checkout root"
-    }
-    if (bwd != null) {
-        val first = bwd.substringBefore('/')
-        if (first !in directories && atRoot.isEmpty()) {
-            problems += "Build Working Directory '$bwd' is outside every placed root"
-        }
-    }
-    return problems
+    return PlacementDerivation(status, result, bwd, notes)
 }
