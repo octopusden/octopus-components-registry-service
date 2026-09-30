@@ -95,6 +95,25 @@ object PlacementReportRenderer {
         return lines.joinToString("\r\n") + "\r\n"
     }
 
+    /** Rollback trace (owner review finding 6 / ADR-002 decision 5): one row per field a Sync run
+     * actually wrote, before and after -- what an operator rolling back that run reads to restore
+     * each field's prior value (technical-design.md §6.8, "Rolling back a Sync"). */
+    fun toSyncReportCsv(result: PlacementSyncResult): String {
+        val header = listOf("componentKey", "rowLabel", "root", "field", "before", "after")
+        val lines = mutableListOf(header.joinToString(",") { csvCell(it) })
+        for (change in result.fieldChanges) {
+            lines += listOf(
+                change.componentKey,
+                change.rowLabel,
+                change.root,
+                change.field,
+                change.before.orEmpty(),
+                change.after.orEmpty(),
+            ).joinToString(",") { csvCell(it) }
+        }
+        return lines.joinToString("\r\n") + "\r\n"
+    }
+
     private fun csvCell(value: String): String {
         val needsQuoting = value.any { it in csvSpecialChars }
         return if (needsQuoting) "\"${value.replace("\"", "\"\"")}\"" else value
