@@ -76,7 +76,7 @@ class TeamcityPlacementControllerV4(
             .body(PlacementReportRenderer.toCsv(report))
     }
 
-    private fun latestReport(): PlacementDiffResult? = diffJobService.current()?.result
+    private fun latestReport(): PlacementDiffResult? = diffJobService.current()?.let { state -> state.result?.copy(diffId = state.id) }
 
     /**
      * Applies the latest Diff's resolved rows for [request]'s component ids ("select all
