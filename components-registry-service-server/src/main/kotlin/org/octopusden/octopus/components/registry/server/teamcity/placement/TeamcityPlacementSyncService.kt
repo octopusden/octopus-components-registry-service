@@ -66,19 +66,31 @@ class TeamcityPlacementSyncService(
         var failed = 0
 
         for (componentId in componentIds) {
-            val componentRows = fresh.filter { it.componentId == componentId }
+            val freshRowsById = fresh.filter { it.componentId == componentId }.associateBy { it.configurationRowId }
+            val snapshotRowsForComponent = snapshotByRow.values.filter { it.componentId == componentId }
+            // The union of both sides: a snapshot row absent from the fresh re-derivation (out of
+            // scope now, its component's TeamCity link gone, ...) is still reported — as "changed
+            // since diff", same as one that re-derived differently — instead of silently vanishing
+            // from the result with no outcome and no counter incremented at all.
+            val rowIds = (freshRowsById.keys + snapshotRowsForComponent.map { it.configurationRowId }).distinct()
             val rowOutcomes = mutableListOf<PlacementRowSyncOutcome>()
-            for (row in componentRows) {
-                val outcome = applyOrSkip(componentId, row, snapshotByRow[row.configurationRowId])
+            for (rowId in rowIds) {
+                val freshRow = freshRowsById[rowId]
+                val rowLabel = freshRow?.rowLabel ?: snapshotByRow[rowId]?.rowLabel ?: "unknown"
+                val outcome = if (freshRow != null) {
+                    applyOrSkip(componentId, freshRow, snapshotByRow[rowId])
+                } else {
+                    "skipped: changed since diff"
+                }
                 when {
                     outcome == "applied" -> applied++
                     outcome.startsWith("failed") -> failed++
                     else -> skipped++
                 }
-                rowOutcomes += PlacementRowSyncOutcome(row.configurationRowId, row.rowLabel, outcome)
+                rowOutcomes += PlacementRowSyncOutcome(rowId, rowLabel, outcome)
             }
-            val componentKey = componentRows.firstOrNull()?.componentKey
-                ?: snapshotByRow.values.firstOrNull { it.componentId == componentId }?.componentKey
+            val componentKey = freshRowsById.values.firstOrNull()?.componentKey
+                ?: snapshotRowsForComponent.firstOrNull()?.componentKey
                 ?: componentId.toString()
             components += PlacementComponentSyncOutcome(componentId, componentKey, rowOutcomes)
         }
