@@ -108,4 +108,18 @@ class TeamcityPlacementControllerV4(
         val state = syncJobService.current() ?: return ResponseEntity.notFound().build()
         return ResponseEntity.ok(TeamcityPlacementSyncJobResponse.from(state))
     }
+
+    /** The latest Sync run's rollback trace (owner review finding 6 / ADR-002 decision 5): one row
+     * per field it wrote, before and after. 404 until a Sync has completed at least once. Same
+     * `IMPORT_DATA` gate as the rest of Sync -- this is what Sync wrote, not a public report. */
+    @GetMapping("/sync/report.csv")
+    @PreAuthorize("@permissionEvaluator.canImport()")
+    fun getSyncReportCsv(): ResponseEntity<String> {
+        val result = syncJobService.current()?.result ?: return ResponseEntity.notFound().build()
+        return ResponseEntity
+            .ok()
+            .header(HttpHeaders.CONTENT_TYPE, "text/csv;charset=UTF-8")
+            .header(HttpHeaders.CONTENT_DISPOSITION, "attachment; filename=teamcity-placement-sync.csv")
+            .body(PlacementReportRenderer.toSyncReportCsv(result))
+    }
 }
