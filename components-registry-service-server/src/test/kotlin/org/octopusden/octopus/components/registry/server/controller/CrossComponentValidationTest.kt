@@ -601,7 +601,7 @@ class CrossComponentValidationTest {
 
     // ───────── #6 exemption: WHISKEY components need no distribution coordinate ─────
 
-    /** Explicit+external WHISKEY component with NO distribution coordinate (CARDS / DM shape). */
+    /** Explicit+external WHISKEY component with NO distribution coordinate (legacy shape). */
     private fun createExplicitExternalWhiskeyWithoutCoordinate(s: String): Pair<String, Long> {
         val resp =
             postCreate(
