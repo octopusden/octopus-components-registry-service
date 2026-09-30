@@ -533,8 +533,9 @@ fallback).
   ("changed since diff") rather than applied blind. The write carries the component `version` read
   together with the fresh derivation (`PlacementRowDiff.componentVersion`, not in the report API),
   so a manual edit between the re-derivation and the write fails the optimistic lock (outcome
-  `failed`) instead of being overwritten; an edit between the Diff and the Sync already makes the
-  row "changed since diff". A row that is `OUTSIDE_SCOPE` (a marker
+  `failed`) instead of being overwritten. The version is not part of the "changed since diff"
+  comparison: an edit between the Diff and the Sync that changes the row (placement, branch, tag)
+  already shows up in the fresh derivation, and an unrelated one must not skip it. A row that is `OUTSIDE_SCOPE` (a marker
   per-range `vcs.settings` row, or any row of an archived component) is never written whatever its
   selection: its outcome is always `"skipped: outside scope"` (spec-conformance review; ADR-002
   decisions 4/8). Every other write goes through `ComponentManagementService`'s base-row
