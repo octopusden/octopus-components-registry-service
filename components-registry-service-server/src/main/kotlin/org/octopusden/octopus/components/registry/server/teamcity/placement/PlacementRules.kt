@@ -166,14 +166,19 @@ fun derive(input: DeriveInput): PlacementDerivation {
             val parsedRules = attached[key]
             if (parsedRules != null) {
                 hit = true
-                val distinct = parsedRules.toSet()
-                val resolved = distinct.singleOrNull()
-                if (distinct.size > 1) {
-                    conflictingWithinBuildType.add(i)
-                } else if (resolved == null) {
+                if (parsedRules.any { it == null }) {
+                    // ANY unparseable rule for this repo in this build type is a SHAPE problem —
+                    // stays UNEXPRESSIBLE regardless of what else attaches the same repository
+                    // (Codex second-pass finding: a null parse must not be treated as just another
+                    // "distinct value" that a resolvable duplicate could turn into a CONFLICT).
                     unexpressible.add(i)
                 } else {
-                    perEntrySeen.getOrPut(i) { mutableSetOf() }.add(resolved)
+                    val distinct = parsedRules.filterNotNull().toSet()
+                    if (distinct.size > 1) {
+                        conflictingWithinBuildType.add(i)
+                    } else {
+                        perEntrySeen.getOrPut(i) { mutableSetOf() }.add(distinct.single())
+                    }
                 }
             }
         }
