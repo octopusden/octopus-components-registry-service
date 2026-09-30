@@ -183,7 +183,7 @@ class DeriveTest {
     }
 
     @Test
-    fun `every root in a checkout directory without a build working directory resolves at the pure-engine layer (spec-conformance finding 3, RED)`() {
+    fun `every root in a CD without a build working directory resolves at the pure-engine layer (finding 3, RED)`() {
         // Same reasoning as the "two roots at the checkout root" case above: "every root has a
         // Checkout Directory but WORK_DIR is the checkout root" is a CRS validation rule
         // (VcsPlacementValidator.validateBuildWorkingDirectory), not an unparseable shape.
@@ -210,5 +210,4 @@ class DeriveTest {
         assertEquals(mapOf(0 to PlacementValue("core", null), 1 to PlacementValue("feature", null)), outcome.perEntry)
         assertEquals("core/mapper", outcome.buildWorkingDirectory)
     }
-
 }
