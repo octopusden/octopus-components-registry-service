@@ -7,9 +7,10 @@ import org.mockito.kotlin.anyOrNull
 import org.mockito.kotlin.mock
 import org.mockito.kotlin.whenever
 import org.octopusden.octopus.components.registry.server.service.MigrationLifecycleGate
+import org.octopusden.octopus.components.registry.server.teamcity.placement.PlacementDiffResult
 import org.octopusden.octopus.components.registry.server.teamcity.placement.PlacementSyncResult
-import org.octopusden.octopus.components.registry.server.teamcity.placement.TeamcityPlacementDiffJobService
 import org.octopusden.octopus.components.registry.server.teamcity.placement.TeamcityPlacementSyncService
+import java.time.Instant
 import org.springframework.core.task.SimpleAsyncTaskExecutor
 import org.springframework.security.authentication.TestingAuthenticationToken
 import org.springframework.security.core.Authentication
@@ -37,17 +38,15 @@ class TeamcityPlacementSyncJobServiceImplTest {
                 observedAuth.complete(SecurityContextHolder.getContext().authentication)
                 PlacementSyncResult("alice", 0, 0, 0, 0, emptyList())
             }
-            val diffJobService = mock<TeamcityPlacementDiffJobService>()
             // A REAL background thread, unlike the inline SyncTaskExecutor most job-service tests
             // use -- this is the one property that actually exercises SecurityContext propagation.
             val service = TeamcityPlacementSyncJobServiceImpl(
                 syncService,
-                diffJobService,
                 SimpleAsyncTaskExecutor(),
                 MigrationLifecycleGate(),
             )
 
-            service.startAsync("alice", listOf(UUID.randomUUID()))
+            service.startAsync("alice", listOf(UUID.randomUUID()), PlacementDiffResult(Instant.now(), emptyList()))
 
             assertEquals(auth, observedAuth.get(5, TimeUnit.SECONDS))
         } finally {

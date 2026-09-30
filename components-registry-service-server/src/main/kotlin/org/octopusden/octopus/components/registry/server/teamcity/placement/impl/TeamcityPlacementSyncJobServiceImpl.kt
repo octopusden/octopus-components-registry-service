@@ -10,8 +10,8 @@ import org.octopusden.octopus.components.registry.server.service.ServiceEventRec
 import org.octopusden.octopus.components.registry.server.service.ServiceEventSource
 import org.octopusden.octopus.components.registry.server.service.ServiceEventStatus
 import org.octopusden.octopus.components.registry.server.service.ServiceEventType
+import org.octopusden.octopus.components.registry.server.teamcity.placement.PlacementDiffResult
 import org.octopusden.octopus.components.registry.server.teamcity.placement.StartPlacementSyncResult
-import org.octopusden.octopus.components.registry.server.teamcity.placement.TeamcityPlacementDiffJobService
 import org.octopusden.octopus.components.registry.server.teamcity.placement.TeamcityPlacementSyncJobService
 import org.octopusden.octopus.components.registry.server.teamcity.placement.TeamcityPlacementSyncJobState
 import org.octopusden.octopus.components.registry.server.teamcity.placement.TeamcityPlacementSyncService
@@ -28,7 +28,6 @@ import java.util.concurrent.RejectedExecutionException
 @Service
 class TeamcityPlacementSyncJobServiceImpl(
     private val syncService: TeamcityPlacementSyncService,
-    private val diffJobService: TeamcityPlacementDiffJobService,
     @Qualifier("migrationExecutor") executor: TaskExecutor,
     lifecycleGate: MigrationLifecycleGate,
     private val serviceEventRecorder: ServiceEventRecorder = NoOpServiceEventRecorder,
@@ -61,12 +60,13 @@ class TeamcityPlacementSyncJobServiceImpl(
     override fun startAsync(
         triggeredBy: String,
         componentIds: List<UUID>,
+        latestDiff: PlacementDiffResult,
     ): StartPlacementSyncResult {
         val outcome =
             try {
                 lifecycle.claimAndSubmit(
                     buildCandidate = ::buildCandidate,
-                    work = { jobId -> runSync(jobId, triggeredBy, componentIds) },
+                    work = { jobId -> runSync(jobId, triggeredBy, componentIds, latestDiff) },
                 )
             } catch (rejected: RejectedExecutionException) {
                 serviceEventRecorder.recordInstant(
@@ -101,6 +101,7 @@ class TeamcityPlacementSyncJobServiceImpl(
         jobId: String,
         triggeredBy: String,
         componentIds: List<UUID>,
+        latestDiff: PlacementDiffResult,
     ) {
         serviceEventRecorder.recordStart(
             type = ServiceEventType.TEAMCITY_PLACEMENT_SYNC,
@@ -110,7 +111,6 @@ class TeamcityPlacementSyncJobServiceImpl(
             summary = "TeamCity placement sync running",
         )
         try {
-            val latestDiff = diffJobService.current()?.result
             val result = syncService.sync(componentIds.toSet(), latestDiff, jobId, triggeredBy)
             lifecycle.update(jobId) { current -> current.copy(state = JobState.COMPLETED, finishedAt = Instant.now(), result = result) }
             LOG.info(
