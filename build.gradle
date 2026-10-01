@@ -415,10 +415,14 @@ configure(subprojects) {
             }
             // Dev builds to Artifactory, for a TeamCity that resolves the candidate from there
             // ([2.0] Validate Git-based Components Registry). Exists only where ARTIFACTORY_URL is
-            // set, and only `publishAllPublicationsToArtifactoryRepository` uploads to it; this
-            // repository's own [1.0] does not run that task.
+            // set, and there `publish` goes to Artifactory alone, as under the former
+            // octopus-release-management: GitHub Packages has no credentials on TeamCity. This
+            // repository's own [1.0] does not publish at all.
             def artifactoryUrl = System.getenv('ARTIFACTORY_URL')
             if (artifactoryUrl) {
+                tasks.withType(PublishToMavenRepository).configureEach { t ->
+                    t.onlyIf('ARTIFACTORY_URL is set: Artifactory only') { t.repository.name == 'Artifactory' }
+                }
                 def toRelease = (findProperty('publishToReleaseRepository') ?: System.getenv('publishToReleaseRepository')) == 'true'
                 repositories {
                     maven {
