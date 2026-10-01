@@ -169,15 +169,15 @@ object id10CompileUtAuto : BuildType({
             -Pokd.cluster-domain=%OKD_APPS_DOMAIN_DEV%
             -Pokd.project=%OKD_F1_TEST_PROJECT%
         """.trimIndent())
-        // [1.0] compiles, runs unit + H2/MOCK smoke + static quality, publishes artifacts to
-        // mavenLocal and pushes the image — one step, so the image carries [1.0]'s OWN version
-        // (no cross-config propagation). Nothing downstream reads Maven artifacts from this
-        // build: every later config takes the docker image. `build` also runs the fat-jar FT
-        // (dockerPushImage depends on it, so it gates the push) and :…-automation:test (depends
-        // on ocCreate -> dockerPushImage, so it deploys the just-pushed image). Only the heavy
-        // @Tag("integration") DB suite is split out, to [2.1] (excluded from build/check by the
-        // gradle tag filter).
-        param("GRADLE_TASK", "clean build publishToMavenLocal dockerPushImage")
+        // [1.0] compiles, runs unit + H2/MOCK smoke + static quality and pushes the image — one
+        // step, so the image carries [1.0]'s OWN version (no cross-config propagation). It
+        // publishes no Maven artifacts: the active downstream configs take the docker image
+        // (the paused [2.0] still expects them in the dev repository). `build` also runs the
+        // fat-jar FT (dockerPushImage depends on it, so it gates the push) and
+        // :…-automation:test (depends on ocCreate -> dockerPushImage, so it deploys the
+        // just-pushed image). Only the heavy @Tag("integration") DB suite is split out, to [2.1]
+        // (excluded from build/check by the gradle tag filter).
+        param("GRADLE_TASK", "clean build dockerPushImage")
         param("COMPONENTS_REGISTRY_BRANCH", "master")
     }
 
@@ -1445,6 +1445,9 @@ object id20ValidateComponentsRegistryProductionDataAuto : BuildType({
     id("20ValidateComponentsRegistryProductionDataAuto")
     name = "[2.0] Validate Git-based Components Registry [AUTO]"
 
+    // Resolves the [1.0] candidate (components-registry-service.version=%BUILD_NUMBER%) from the
+    // dev repository, and [1.0] no longer publishes there (Gradle 9 dropped
+    // octopus-release-management). Unpausing needs a publishing path for [1.0] first.
     paused = true
 
     artifactRules = "%COMPONENTS_REGISTRY_CHECKOUT_DIR% => %COMPONENTS_REGISTRY_CHECKOUT_DIR%"

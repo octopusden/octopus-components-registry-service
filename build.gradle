@@ -897,9 +897,8 @@ gradle.projectsEvaluated {
 
     // Part A.7: gate publish + image push on the server fat-jar FT. dockerPushImage HARD-depends
     // on the FT — an image is never pushed without a validated boot jar. Maven publish is only
-    // ORDERED after the FT (mustRunAfter): when the FT is part of the same invocation — as in
-    // CI [1.0] (`clean build publish dockerPushImage`, where dockerPushImage pulls in the FT) —
-    // default fail-fast aborts before any publish. A standalone `publish`/`publishToMavenLocal` is
+    // ORDERED after the FT (mustRunAfter): when the FT is part of the same invocation, default
+    // fail-fast aborts before any publish. A standalone `publish`/`publishToMavenLocal` is
     // deliberately NOT forced to run the (slow) fat-jar FT.
     def serverFt = project(':components-registry-service-server').tasks.named('integrationTest')
     project(':components-registry-service-server').tasks.named('dockerPushImage').configure {
