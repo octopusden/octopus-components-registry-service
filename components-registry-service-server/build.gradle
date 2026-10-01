@@ -257,6 +257,11 @@ pitest {
     testSourceSets = [sourceSets.test]
 
     threads = 4
+    // gradle-pitest-plugin 1.19 passes the minions' classpath in a file by default. The Kotlin JSR223
+    // script engine the DSL tests evaluate through builds its compilation classpath from the JVM's
+    // java.class.path, which is then empty of the application classes, so those tests fail before any
+    // mutation. Keep the classpath on the command line, as plugin 1.15 did.
+    useClasspathFile = false
     // Stable output path so a report can be diffed run to run; PIT's default appends a timestamp.
     timestampedReports = false
     outputFormats = ['HTML', 'XML']
