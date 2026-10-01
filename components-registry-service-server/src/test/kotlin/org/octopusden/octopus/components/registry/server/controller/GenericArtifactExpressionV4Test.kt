@@ -26,9 +26,10 @@ import java.nio.file.Paths
  * SYS-098-EXPR: expression support on the v4 generic-artifact write path.
  *
  * Verifies that:
- *  - a templated path `releases/foo/${'$'}{version}/foo.tar.gz` is accepted and stored verbatim.
+ *  - all six allowed placeholders (`${'$'}{version}`, `${'$'}{major}`, `${'$'}{minor}`,
+ *    `${'$'}{service}`, `${'$'}{fix}`, `${'$'}{build}`) are accepted.
  *  - a disallowed placeholder (e.g. `${'$'}{unknownProp}`) is rejected with 400.
- *  - a SpEL RCE payload (e.g. `${'$'}{T(java.lang.Runtime).getRuntime().exec('id')}`) is rejected with 400.
+ *  - a SpEL static-method call (e.g. `${'$'}{T(java.lang.String).valueOf(123)}`) is rejected with 400.
  *  - a plain literal path is still accepted (regression guard).
  *  - a comma in a single path item is rejected with 400.
  *  - a dot-only segment is rejected with 400.
@@ -200,6 +201,30 @@ class GenericArtifactExpressionV4Test {
                 ),
         )
         result.andExpect(status().isBadRequest)
+    }
+
+    // -------------------------------------------------------------------------
+    // SYS-098-EXPR-007: all six allowed placeholders accepted
+    // -------------------------------------------------------------------------
+
+    @Test
+    @DisplayName(
+        "SYS-098-EXPR-007: POST component with all six allowed placeholders " +
+            "(\${version}, \${major}, \${minor}, \${service}, \${fix}, \${build}) → 2xx",
+    )
+    fun `SYS-098-EXPR-007 all six allowed placeholders accepted`() {
+        val result = mvc.perform(
+            post("/rest/api/4/components")
+                .with(adminJwt())
+                .contentType(MediaType.APPLICATION_JSON)
+                .content(
+                    componentBody(
+                        "ga-expr-007",
+                        "releases/\${major}/\${minor}/\${service}/\${fix}/\${build}/\${version}/file.tar.gz",
+                    ),
+                ),
+        )
+        result.andExpect(status().is2xxSuccessful)
     }
 
     // -------------------------------------------------------------------------
