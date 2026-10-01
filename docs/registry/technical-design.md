@@ -605,8 +605,8 @@ is never published/pushed.
 **TeamCity build chain** (`.teamcity/settings.kts`):
 
 ```
-[1.0] Compile & UT [AUTO]   gradle `clean build dockerPushImage`
-   │     compile + unit + smoke + static quality + image (~10 min). `build` also
+[1.0] Compile & UT [AUTO]   gradle `clean build publish dockerPushImage`
+   │     compile + unit + smoke + static quality + publish + image (~10 min). `build` also
    │     pulls the fat-jar FT (dockerPushImage depends on it → gates the push) and
    │     automation:test (depends on ocCreate → dockerPushImage). Heavy @Tag("integration")
    │     DB tests excluded by tag. The image carries [1.0]'s OWN build number (no cross-
