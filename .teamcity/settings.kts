@@ -169,13 +169,15 @@ object id10CompileUtAuto : BuildType({
             -Pokd.cluster-domain=%OKD_APPS_DOMAIN_DEV%
             -Pokd.project=%OKD_F1_TEST_PROJECT%
         """.trimIndent())
-        // [1.0] compiles, runs unit + H2/MOCK smoke + static quality, publishes artifacts and
-        // pushes the image — one step, so the image carries [1.0]'s OWN version (no cross-config
-        // propagation). `build` also runs the fat-jar FT (dockerPushImage depends on it, so it
-        // gates the push) and :…-automation:test (depends on ocCreate -> dockerPushImage, so it
-        // deploys the just-pushed image). Only the heavy @Tag("integration") DB suite is split
-        // out, to [2.1] (excluded from build/check by the gradle tag filter).
-        param("GRADLE_TASK", "clean build publish dockerPushImage")
+        // [1.0] compiles, runs unit + H2/MOCK smoke + static quality, publishes artifacts to
+        // mavenLocal and pushes the image — one step, so the image carries [1.0]'s OWN version
+        // (no cross-config propagation). Nothing downstream reads Maven artifacts from this
+        // build: every later config takes the docker image. `build` also runs the fat-jar FT
+        // (dockerPushImage depends on it, so it gates the push) and :…-automation:test (depends
+        // on ocCreate -> dockerPushImage, so it deploys the just-pushed image). Only the heavy
+        // @Tag("integration") DB suite is split out, to [2.1] (excluded from build/check by the
+        // gradle tag filter).
+        param("GRADLE_TASK", "clean build publishToMavenLocal dockerPushImage")
         param("COMPONENTS_REGISTRY_BRANCH", "master")
     }
 
