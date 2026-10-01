@@ -9,7 +9,6 @@ buildscript {
 
 plugins {
     id 'io.github.gradle-nexus.publish-plugin'
-    id 'org.octopusden.octopus-publishing'        apply false
     id 'org.octopusden.octopus-quality'
     id 'org.sonarqube'
     id 'jacoco'
@@ -22,13 +21,6 @@ plugins {
     id 'signing'
     id 'org.asciidoctor.jvm.convert' version '4.0.5'
     id 'com.platformlib.gradle-wrapper' version '0.2.6'
-}
-
-// Artifactory publishing for the TeamCity chain, where ARTIFACTORY_URL is set. Only there: the
-// plugin disables every PublishToMavenRepository task of a module with maven-publish, including
-// the Sonatype ones the GitHub release uploads to Central with.
-if (System.getenv('ARTIFACTORY_URL') ?: findProperty('artifactoryUrl')) {
-    apply plugin: 'org.octopusden.octopus-publishing'
 }
 
 // Modules published to Maven Central — an allowlist, so a module that is not listed is not
@@ -416,6 +408,26 @@ configure(subprojects) {
                             developer {
                                 id.set("octopus")
                                 name.set("octopus")
+                            }
+                        }
+                    }
+                }
+            }
+            // Dev builds to Artifactory, for a TeamCity that resolves the candidate from there
+            // ([2.0] Validate Git-based Components Registry). Exists only where ARTIFACTORY_URL is
+            // set, and only `publishAllPublicationsToArtifactoryRepository` uploads to it; this
+            // repository's own [1.0] does not run that task.
+            def artifactoryUrl = System.getenv('ARTIFACTORY_URL')
+            if (artifactoryUrl) {
+                def toRelease = (findProperty('publishToReleaseRepository') ?: System.getenv('publishToReleaseRepository')) == 'true'
+                repositories {
+                    maven {
+                        name = 'Artifactory'
+                        url = uri("${artifactoryUrl - ~/\/+$/ - ~/\/artifactory$/}/artifactory/${toRelease ? 'rnd-maven-release-local' : 'rnd-maven-dev-local'}")
+                        if (System.getenv('ARTIFACTORY_DEPLOYER_USERNAME')) {
+                            credentials {
+                                username = System.getenv('ARTIFACTORY_DEPLOYER_USERNAME')
+                                password = System.getenv('ARTIFACTORY_DEPLOYER_PASSWORD')
                             }
                         }
                     }
@@ -905,9 +917,8 @@ gradle.projectsEvaluated {
 
     // Part A.7: gate publish + image push on the server fat-jar FT. dockerPushImage HARD-depends
     // on the FT — an image is never pushed without a validated boot jar. Maven publish is only
-    // ORDERED after the FT (mustRunAfter): when the FT is part of the same invocation — as in
-    // CI [1.0] (`clean build publish dockerPushImage`, where dockerPushImage pulls in the FT) —
-    // default fail-fast aborts before any publish. A standalone `publish`/`publishToMavenLocal` is
+    // ORDERED after the FT (mustRunAfter): when the FT is part of the same invocation, default
+    // fail-fast aborts before any publish. A standalone `publish`/`publishToMavenLocal` is
     // deliberately NOT forced to run the (slow) fat-jar FT.
     def serverFt = project(':components-registry-service-server').tasks.named('integrationTest')
     project(':components-registry-service-server').tasks.named('dockerPushImage').configure {
