@@ -105,7 +105,7 @@ internal fun project(vararg buildTypes: TeamcityBuildType): ExternalTeamcityProj
     )
 
 /** Fixed responses/exceptions per project id; no caching/TTL behaviour needed for these tests. */
-private class FakeEnrichedTcProjectFetcher(
+internal class FakeEnrichedTcProjectFetcher(
     private val projects: Map<String, ExternalTeamcityProject?> = emptyMap(),
     private val errors: Map<String, Exception> = emptyMap(),
 ) : EnrichedTcProjectFetcher {
