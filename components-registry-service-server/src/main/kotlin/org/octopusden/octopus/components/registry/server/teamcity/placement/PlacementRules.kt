@@ -273,4 +273,19 @@ data class VcsRootsComparison(
 fun compareVcsRoots(
     registryVcsPaths: List<String>,
     compileConfigs: List<TcCompileConfig>,
-): VcsRootsComparison = VcsRootsComparison(emptyList(), emptyList())
+): VcsRootsComparison {
+    // No compile configuration: nothing to compare against (the Diff reports that as NO_CHAIN etc.).
+    if (compileConfigs.isEmpty()) return VcsRootsComparison(emptyList(), emptyList())
+    val registryKeys = registryVcsPaths.map { repoKey(it) }.toSet()
+    val attached = compileConfigs.flatMap { cc -> cc.vcsRootEntries.map { it.url to cc.buildTypeId } }
+    val attachedKeys = attached.map { repoKey(it.first) }.toSet()
+    val extra = attached
+        .filter { repoKey(it.first) !in registryKeys }
+        .groupBy({ repoKey(it.first) }, { it })
+        .values
+        .map { group -> ExtraVcsRoot(repoDisplayName(group.first().first), group.map { it.second }.distinct()) }
+    return VcsRootsComparison(extra, registryVcsPaths.filter { repoKey(it) !in attachedKeys })
+}
+
+/** `group/repo` — the last two path segments of the canonical URL, for messages. */
+fun repoDisplayName(url: String?): String = repoKey(url).split('/').takeLast(2).joinToString("/")
