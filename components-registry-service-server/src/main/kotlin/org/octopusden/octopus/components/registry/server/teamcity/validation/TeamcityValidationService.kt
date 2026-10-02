@@ -58,7 +58,7 @@ class TeamcityValidationService(
                 val project = mapper.toModel(external)
                 val rootsFinding =
                     registryPaths[projectId]?.let {
-                        VcsRootsValidation.check(it, compileConfigsOf(external.buildTypes?.buildTypes.orEmpty()))
+                        VcsRootsValidation.check(projectId, it, compileConfigsOf(external.buildTypes?.buildTypes.orEmpty()))
                     }
                 val issues =
                     (validators.validate(project) + listOfNotNull(rootsFinding))
