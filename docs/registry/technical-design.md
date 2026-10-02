@@ -417,10 +417,16 @@ IO edges; the module stays `server → component-validation` (one-way dependency
   default 30 min), decoupled from the existing sync engine. The cache is invalidated whenever a
   TeamCity sync completes, so a post-sync validation run never serves a pre-sync snapshot.
 - **Registry-aware rule:** `VCS_ROOTS_DIFFER_FROM_REGISTRY` (`WARNING`) needs registry data, so it
-  is evaluated by `TeamcityValidationService` (`VcsRootsValidation`), not by a module validator: it
-  compares the BASE-row VCS paths of the project's live linked components with the roots of the
-  project's compile configurations (`compareVcsRoots`, shared with the placement Diff) and reports
-  extra and missing roots by `group/repo` and build configuration id.
+  is evaluated by `TeamcityValidationService` (`VcsRootsValidation`), not by a module validator.
+  The unit of comparison is the **component**, exactly as in the placement Diff: for each
+  non-archived component linked to the validated project, its BASE-row VCS paths are compared
+  (`compareVcsRoots`, shared with the Diff) with the compile configurations of ALL the projects that
+  component is linked to, so a shared project and a component spanning several projects give the
+  same verdict as the Diff. Extra and missing roots are reported by `group/repo` and build
+  configuration id, naming the component. The store keeps one row per `(project, type)`, so several
+  components' findings are merged into one message. If a component has no compile configuration at
+  all, nothing is compared (the Diff reports `NO_CHAIN` for it); if one of its other projects cannot
+  be read, the component is skipped rather than reported from a partial view.
 - **Persist (`V7__add_teamcity_validation.sql`):** `teamcity_validation (project_id, type, status,
   message, updated_at)`, PK `(project_id, type)`. Only WARNING/ERROR are stored (OK/NOT_APPLICABLE
   are not); **latest-only** — each run replaces that project's rows via a bulk delete + insert (not
