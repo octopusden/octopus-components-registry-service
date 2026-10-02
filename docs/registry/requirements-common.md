@@ -97,6 +97,7 @@
 | SYS-102 | TeamCity checkout layout Diff/Sync (`/admin/teamcity-checkout-layout`): Diff is a read-only report over the BASE rows of non-archived components; Sync writes only the `RESOLVED` rows of the last completed Diff (named by `diffId`, else 409 `checkout-layout-diff-stale`) through the normal v4 write path, tagged `sync from TeamCity (job <id>)`, a prefix user writes cannot set; single-root `CONFLICT`/`UNEXPRESSIBLE` rows are always reported; VCS roots that the component's own compile configurations attach but the registry lacks yield `ROOTS_MISMATCH` and the `VCS_ROOTS_DIFFER_FROM_REGISTRY` validation warning | High | unit + integration-test | ✅ Tested |
 | SYS-103 | `ClassicComponentsRegistryServiceClient` takes the retry policy for retryable failures (503, I/O errors) from its caller (`Retryer` constructor parameter); without one it keeps the default of 5 attempts, backoff 100 ms – 1 s (`defaultRetryer()`); the policy is per request, so one call exhausting it does not shorten the next | Medium | unit-test | ✅ Tested |
 | SYS-104 | Component flag `autoRelease` (default false), DB and v4 only: create/update requests, summary/detail responses, `?autoRelease=` list filter, field-config visibility/editability; an admin-started TeamCity resync turns it on (never off) when every linked release line has a finish-build trigger and nobody has changed the flag; the weekly cron only with `teamcity.sync.auto-release-on-cron` | Medium | unit + integration-test | ✅ Tested |
+| SYS-105 | `POST /rest/api/4/components/{idOrName}/distribution/preview` resolves, for a concrete version, which source each `distribution.*` marker path takes — `BASE`, `OVERRIDE` (one matching range) or `CONFLICT` (several) — over a **candidate** override set and candidate supported versions sent by the caller (omitted = saved state), with the resolver's own containment, ordering and coverage-gate semantics; a version outside coverage answers `supported=false`, not 404; unparseable override ranges never match and are listed per path; read-only, `ACCESS_COMPONENTS` | High | unit + integration-test | 🔲 Planned |
 
 ---
 
@@ -3738,3 +3739,57 @@ releases may be started without a person.
 (`SYS-104 finish-build trigger means auto release`, `SYS-104 no auto release otherwise`),
 `TeamcitySyncServiceTest` (`SYS-104 resync turns autoRelease on`, `SYS-104 resync never turns autoRelease off`,
 `SYS-104 the weekly cron leaves autoRelease alone by default`), `AuditLogRepositoryAutoReleaseChangeTest`.
+
+### SYS-105: Distribution preview over a candidate override set
+
+**Priority:** High
+**Test layer:** unit + integration-test
+**Status:** 🔲 Planned
+
+**Motivation:**
+The Portal's Distribution tab needs to answer "for version X, which artifacts
+does this component publish, and from which range?" while the user is editing
+overrides that are not saved yet. Answering it client-side would duplicate the
+resolver's version ordering, which handles qualified versions (`1.2-0003`,
+`2.1.0-RC1`, `1.0.0-SNAPSHOT`) that a client mirror would get wrong. A stateless
+endpoint that applies the resolver's own rules to the caller's candidate state
+keeps a single implementation.
+
+**Description:**
+`POST /rest/api/4/components/{idOrName}/distribution/preview`, resolving the
+component exactly as `getComponent` does. Request:
+`{ version, fieldOverrides?, supportedVersions? }` — `fieldOverrides` is the same
+`FieldOverrideUpsertRequest` list a component PATCH sends; `supportedVersions` is
+`{ all, ranges }`. An omitted field means the saved state. Nothing is persisted.
+
+For the version, using the same `NumericVersionFactory` / `VersionRangeFactory`
+beans as resolution at read time:
+1. **Coverage** — the rule `toResolvedEscrowModuleConfig` applies (MIG-042): with
+   no restriction every version is supported; otherwise the version must lie in
+   a supported range, and a blank or unparseable supported range counts as
+   covering. Outside coverage the response is `supported=false` with no paths.
+2. **Per marker path** (`distribution.*`, every family the resolver knows) —
+   candidate overrides on that attribute whose range contains the version.
+   None → `BASE`; exactly one → `OVERRIDE`; more than one → `CONFLICT`. A
+   candidate set has not been through write validation, so overlap is reported
+   rather than resolved positionally. `matchedRanges` lists the matching ranges.
+3. An override range that does not parse never matches (as on the resolve
+   path) and is listed in that path's `unevaluableRanges`.
+
+Response: `{ version, supported, paths: [{ attribute, source, matchedRanges,
+unevaluableRanges }] }`. Children are not echoed: the caller sent them.
+
+**Acceptance criteria:**
+1. No covering override → `BASE`; one → `OVERRIDE` with its range; several →
+   `CONFLICT` with all of them. Paths are independent.
+2. A version outside candidate coverage → `supported=false`; no restriction, or
+   an unparseable supported range, → supported.
+3. An unparseable override range never matches and is listed in
+   `unevaluableRanges`.
+4. Qualified versions are ordered as at read time (`1.2-0003` lies in `[1.2,1.3)`).
+5. Omitted `fieldOverrides` / `supportedVersions` use the saved state; for a
+   saved component the verdict agrees with `GET .../versions/{v}/distribution`.
+6. A version with no numeric component → `400`; unknown component → `404`;
+   unauthenticated → `401`; a caller without `ACCESS_COMPONENTS` → `403`.
+
+**Test method:** _filled in on implementation._
