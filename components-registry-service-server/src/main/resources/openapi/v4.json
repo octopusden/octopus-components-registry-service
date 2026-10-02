@@ -3244,7 +3244,8 @@
               "MANUAL_EDIT",
               "IN_SYNC",
               "INVALID",
-              "TC_ERROR"
+              "TC_ERROR",
+              "ROOTS_MISMATCH"
             ],
             "type" : "string"
           },
