@@ -75,6 +75,21 @@ interface ComponentConfigurationRepository : JpaRepository<ComponentConfiguratio
         versionRange: String,
         rowType: String,
     ): ComponentConfigurationEntity?
+
+    /**
+     * Every configuration row (BASE or `vcs.settings` override) of ANY component, archived
+     * included, that carries at least one VCS entry — the population `TeamcityPlacementDiffService`
+     * walks; the service keeps only BASE rows of non-archived components. `JOIN FETCH` avoids a lazy-init
+     * exception outside a transaction; `DISTINCT` because the fetch joins a to-many collection.
+     */
+    @Query(
+        "SELECT DISTINCT cfg FROM ComponentConfigurationEntity cfg " +
+            "JOIN FETCH cfg.component comp " +
+            "LEFT JOIN FETCH cfg.vcsEntries " +
+            "WHERE cfg.id IN " +
+            "(SELECT v.componentConfiguration.id FROM VcsSettingsEntryEntity v)",
+    )
+    fun findAllRowsWithVcsEntries(): List<ComponentConfigurationEntity>
 }
 
 /** Row projection for effective jira-pair computation (see `computeEffectiveJiraPairs`). */

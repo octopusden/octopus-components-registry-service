@@ -10,6 +10,9 @@ import org.octopusden.octopus.components.registry.core.exceptions.RMSRegisteredV
 import org.octopusden.octopus.components.registry.core.exceptions.RMSUnavailableException
 import org.octopusden.octopus.components.registry.core.exceptions.RepositoryNotPreparedException
 import org.octopusden.octopus.components.registry.server.config.PayloadTooLargeException
+import org.octopusden.octopus.components.registry.server.dto.v4.MigrationConflictResponse
+import org.octopusden.octopus.components.registry.server.service.MigrationConflictException
+import org.octopusden.octopus.components.registry.server.service.MigrationLifecycleGate
 import org.slf4j.Logger
 import org.slf4j.LoggerFactory
 import org.springframework.http.HttpEntity
@@ -111,6 +114,35 @@ class ControllerExceptionHandler {
     fun crossComponentConflictExceptionHandler(e: CrossComponentConflictException): HttpEntity<ErrorResponse> {
         log.warn(e.localizedMessage)
         return HttpEntity(ErrorResponse(e.localizedMessage, ErrorCodes.UNIQUENESS_VIOLATION))
+    }
+
+    /**
+     * Cross-kind admin-job gate conflicts (`MigrationLifecycleGate`) — global so it covers every
+     * controller whose jobs share the gate (components/history migration, TeamCity resync/
+     * validation, TeamCity placement Diff/Sync), not just the one that happened to throw. A
+     * same-kind conflict is NOT routed through an exception at all — `startAsync` returns
+     * `isNewlyStarted=false` with the existing job state so the SPA can attach.
+     */
+    @ExceptionHandler(MigrationConflictException::class)
+    fun migrationConflictExceptionHandler(e: MigrationConflictException): ResponseEntity<MigrationConflictResponse> {
+        val code =
+            when (e.active.kind) {
+                MigrationLifecycleGate.JobKind.COMPONENTS -> "components-migration-running"
+                MigrationLifecycleGate.JobKind.HISTORY -> "history-migration-running"
+                MigrationLifecycleGate.JobKind.TC_RESYNC -> "tc-resync-running"
+                MigrationLifecycleGate.JobKind.TC_VALIDATION -> "tc-validation-running"
+                MigrationLifecycleGate.JobKind.TC_PLACEMENT_DIFF -> "tc-placement-diff-running"
+                MigrationLifecycleGate.JobKind.TC_PLACEMENT_SYNC -> "tc-placement-sync-running"
+            }
+        log.warn(e.localizedMessage)
+        return ResponseEntity.status(HttpStatus.CONFLICT).body(
+            MigrationConflictResponse(
+                code = code,
+                message = e.message ?: "Cross-kind migration conflict",
+                activeKind = e.active.kind.name,
+                activeJobId = e.active.jobId,
+            ),
+        )
     }
 
     /** A build parameters write disagrees with RMS's registered ACTUAL value — 409, same family as the other conflict handlers above. */
