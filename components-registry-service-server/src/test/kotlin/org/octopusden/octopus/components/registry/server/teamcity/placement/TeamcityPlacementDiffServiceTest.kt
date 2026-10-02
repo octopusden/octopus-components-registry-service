@@ -479,7 +479,8 @@ class TeamcityPlacementDiffServiceTest {
     }
 
     @Test
-    fun `a marker (vcs_settings) row is reported OUTSIDE_SCOPE, never derived (spec-conformance finding 1, RED)`() {
+    fun `a version-range override (vcs_settings marker) row is left out of the Diff (owner decision, RED)`() {
+        // Only the current (base) configuration is diffed; version ranges are not touched.
         val comp = component()
         val row = ComponentConfigurationEntity(
             id = UUID.randomUUID(),
@@ -491,11 +492,7 @@ class TeamcityPlacementDiffServiceTest {
         val bt = compileBuildType("compileA", roots = listOf(appId to "+:. => app"))
         val svc = service(listOf(row), mapOf(comp.id!! to listOf("P")), FakeEnrichedTcProjectFetcher(mapOf("P" to project(bt))))
 
-        val diff = svc.runDiff().rows.single()
-        assertEquals(PlacementDiffRowStatus.OUTSIDE_SCOPE, diff.status)
-        assertEquals("vcs.settings", diff.rowLabel)
-        // Never derived: no TeamCity-chain-informed value is offered for a report-only row.
-        assertNull(diff.entries.single().derivedCheckoutDirectory)
+        assertTrue(svc.runDiff().rows.isEmpty())
     }
 
     @Test
