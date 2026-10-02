@@ -6,6 +6,7 @@ import org.octopusden.octopus.components.registry.server.entity.TeamcityValidati
 import org.octopusden.octopus.components.registry.server.repository.ComponentConfigurationRepository
 import org.octopusden.octopus.components.registry.server.repository.TeamcityValidationRepository
 import org.octopusden.octopus.components.registry.server.repository.VersionLineRepository
+import org.octopusden.octopus.components.registry.server.teamcity.placement.compileConfigsOf
 import org.octopusden.octopus.validation.core.Status
 import org.octopusden.octopus.validation.dto.teamcity.TemplateCatalog
 import org.octopusden.octopus.validation.validators.TeamCityValidators
@@ -38,6 +39,8 @@ class TeamcityValidationService(
         val knownProjectIds = versionLineRepository.findDistinctLinkedProjectIdsSafely()
         log.info { "TC validation starting: ${knownProjectIds.size} project ids in scope" }
 
+        val registryPaths = registryVcsPathsByProject(knownProjectIds)
+
         var succeeded = 0
         var failed = 0
         var projectsWithIssues = 0
@@ -53,9 +56,12 @@ class TeamcityValidationService(
                     continue
                 }
                 val project = mapper.toModel(external)
+                val rootsFinding =
+                    registryPaths[projectId]?.let {
+                        VcsRootsValidation.check(it, compileConfigsOf(external.buildTypes?.buildTypes.orEmpty()))
+                    }
                 val issues =
-                    validators
-                        .validate(project)
+                    (validators.validate(project) + listOfNotNull(rootsFinding))
                         .filter { it.status == Status.WARNING || it.status == Status.ERROR }
                 replaceFindings(projectId, issues)
                 succeeded++
@@ -115,6 +121,21 @@ class TeamcityValidationService(
             transactionTemplate.executeWithoutResult { teamcityValidationRepository.deleteByProjectIdIn(removed) }
         }
         return removed.size
+    }
+
+    /** Project id -> the BASE-row VCS paths of the live components linked to it (empty map entry = nothing to compare). */
+    private fun registryVcsPathsByProject(projectIds: Set<String>): Map<String, List<String>> {
+        val pathsByComponent =
+            componentConfigurationRepository
+                .findAllRowsWithVcsEntries()
+                .filter { !it.component.archived && it.overriddenAttribute == null }
+                .groupBy({ it.component.id }, { row -> row.vcsEntries.map { it.vcsPath } })
+                .mapValues { it.value.flatten() }
+        return versionLineRepository
+            .findByProjectIdsWithComponent(projectIds)
+            .groupBy({ it.teamcityProject.projectId }, { pathsByComponent[it.component.id].orEmpty() })
+            .mapValues { (_, paths) -> paths.flatten().distinct() }
+            .filterValues { it.isNotEmpty() }
     }
 
     private fun VersionLineRepository.findDistinctLinkedProjectIdsSafely(): Set<String> =
