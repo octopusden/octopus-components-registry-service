@@ -65,10 +65,16 @@ interface ComponentRepository :
      * whitespace-only row, which would otherwise surface as an unselectable
      * blank chip in the picker. Values are projected and ordered trimmed for the
      * same reason, so a padded row cannot surface as a near-duplicate option.
+     *
+     * The fake-self-link predicate mirrors the always-on exclusion in
+     * `ComponentManagementServiceImpl.buildSpecification`: the v4 list never shows
+     * such a stub, so a username held only by one would be a dead option.
      */
     @Query(
         "SELECT DISTINCT TRIM(rm.username) FROM ComponentEntity c JOIN c.releaseManagers rm " +
+            "LEFT JOIN c.componentGroup g " +
             "WHERE TRIM(rm.username) <> '' " +
+            "AND (g IS NULL OR NOT (g.isFake = true AND g.groupKey = c.componentKey)) " +
             "ORDER BY TRIM(rm.username)",
     )
     fun findDistinctReleaseManagers(): List<String>
@@ -84,7 +90,9 @@ interface ComponentRepository :
      */
     @Query(
         "SELECT DISTINCT TRIM(sc.username) FROM ComponentEntity c JOIN c.securityChampions sc " +
+            "LEFT JOIN c.componentGroup g " +
             "WHERE TRIM(sc.username) <> '' " +
+            "AND (g IS NULL OR NOT (g.isFake = true AND g.groupKey = c.componentKey)) " +
             "ORDER BY TRIM(sc.username)",
     )
     fun findDistinctSecurityChampions(): List<String>

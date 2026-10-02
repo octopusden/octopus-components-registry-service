@@ -1556,7 +1556,7 @@ Mirrors SYS-040 (labels) / SYS-042 (system): a filter change plus a companion in
 6. Blank / interleaved-blank / dedupe / whitespace-trim normalisation matches the other multi-value filters (`?clientCode=`, `?clientCode=,,`, `?clientCode=A,A`).
 7. `GET /meta/client-codes` / `/meta/jira-project-keys` / `/meta/parent-component-names` / `/meta/group-keys` each return 200 + a sorted, duplicate-free JSON array of in-use values, never 404, regardless of DB state.
 8. `/meta/parent-component-names` lists only component keys actually referenced as a parent; `/meta/group-keys` lists only group keys with ≥1 member.
-9. `GET /meta/release-managers` / `/meta/security-champions` each return 200 + a sorted, duplicate-free array of in-use usernames; a user who is only a release manager never appears in `/meta/security-champions`, and vice versa.
+9. `GET /meta/release-managers` / `/meta/security-champions` each return 200 + a sorted, duplicate-free array of in-use usernames; a user who is only a release manager never appears in `/meta/security-champions`, and vice versa; a username held only by a hidden fake self-linked aggregator stub appears in neither.
 
 **Test method:** `ListComponentsExtendedFiltersTest` (the `clientCode` / `jiraProjectKey` / `parentComponentName` / `groupKey` cases updated to exact-IN + a multi-value case) and `MetaInUseOptionsEndpointsTest` (the six endpoints).
 
