@@ -9,7 +9,6 @@ buildscript {
 
 plugins {
     id 'io.github.gradle-nexus.publish-plugin'
-    id 'org.octopusden.octopus-release-management'
     id 'org.octopusden.octopus-quality'
     id 'org.sonarqube'
     id 'jacoco'
@@ -20,7 +19,7 @@ plugins {
     id 'io.gitlab.arturbosch.detekt'              apply false
     id 'org.jlleitschuh.gradle.ktlint'            apply false
     id 'signing'
-    id 'org.asciidoctor.jvm.convert' version '3.3.2'
+    id 'org.asciidoctor.jvm.convert' version '4.0.5'
     id 'com.platformlib.gradle-wrapper' version '0.2.6'
 }
 
@@ -31,6 +30,9 @@ plugins {
 //   components-registry-service-server, components-registry-cli — deployables (docker image on
 //     ghcr / built locally per the CLI README);
 //   components-registry-compat-test — internal harness;
+//   test-common — this repository's own test data. Its only non-empty artifact is the
+//     test-fixtures jar, which the client, light-client and server tests use as
+//     `testFixtures(project(':test-common'))`, so it needs no publication;
 //   component-validation — pure validation library with no external consumer yet. The server
 //     depends on it as `project(':component-validation')`, which needs no publication, and it has
 //     never been on Central (it was added after the last release). Publishing it would start
@@ -54,7 +56,6 @@ def centralPublishedProjects = [
         ':components-registry-service-client',
         ':components-registry-service-light-client',
         ':components-registry-service-core',
-        ':test-common',
         ':components-registry-automation',
 ] as Set
 
@@ -78,10 +79,9 @@ octopusQuality {
             ':components-registry-api|mavenJava|org.octopusden.octopus.infrastructure:components-registry-api|[jar, jar:javadoc, jar:sources]',
             ':components-registry-automation|mavenJava|org.octopusden.octopus.components.registry.automation:components-registry-automation|[jar, jar:all, jar:javadoc, jar:sources, zip:metarunners]',
             ':components-registry-dsl|mavenJava|org.octopusden.octopus.infrastructure:components-registry-dsl|[jar, jar:javadoc, jar:sources]',
-            ':components-registry-service-client|mavenJava|org.octopusden.octopus.infrastructure:components-registry-service-client|[jar, jar:javadoc, jar:sources, jar:test-fixtures]',
+            ':components-registry-service-client|mavenJava|org.octopusden.octopus.infrastructure:components-registry-service-client|[jar, jar:javadoc, jar:sources]',
             ':components-registry-service-core|mavenJava|org.octopusden.octopus.infrastructure:components-registry-service-core|[jar, jar:javadoc, jar:sources]',
-            ':components-registry-service-light-client|mavenJava|org.octopusden.octopus.infrastructure:components-registry-service-light-client|[jar, jar:javadoc, jar:sources, jar:test-fixtures]',
-            ':test-common|mavenJava|org.octopusden.octopus.infrastructure:test-common|[jar, jar:javadoc, jar:sources, jar:test-fixtures]',
+            ':components-registry-service-light-client|mavenJava|org.octopusden.octopus.infrastructure:components-registry-service-light-client|[jar, jar:javadoc, jar:sources]',
         ] as Set)
     }
     // NOTE: in octopus-quality 2.5.2 `excludeProjects` maps ONLY to coverage exclusion
@@ -255,6 +255,8 @@ configure(subprojects) {
             testImplementation "org.junit.jupiter:junit-jupiter-params"
             testImplementation "junit:junit:4.12"
             testRuntimeOnly "org.junit.vintage:junit-vintage-engine"
+            // Gradle no longer puts the JUnit Platform launcher on the test runtime classpath itself.
+            testRuntimeOnly "org.junit.platform:junit-platform-launcher"
         }
 
         compileKotlin {
@@ -265,8 +267,22 @@ configure(subprojects) {
             kotlinOptions.jvmTarget = "21"
         }
 
-        sourceCompatibility = 21
-        targetCompatibility = 21
+        // The Kotlin Gradle plugin (kotlin-plugin.version) is newer than the Kotlin runtime these
+        // modules ship with and run on (kotlin.version). Hold the compiler to the runtime's level so
+        // the bytecode and metadata stay what consumers of the published modules can read, and no
+        // call can reach a stdlib API newer than the stdlib on the classpath.
+        kotlin {
+            // Version the plugin gives kotlin-stdlib / kotlin-reflect and its own constraints on them;
+            // it defaults to the plugin's version, which would leak into the published POMs/modules.
+            coreLibrariesVersion = project['kotlin.version']
+            compilerOptions {
+                languageVersion = org.jetbrains.kotlin.gradle.dsl.KotlinVersion.KOTLIN_1_9
+                apiVersion = org.jetbrains.kotlin.gradle.dsl.KotlinVersion.KOTLIN_1_9
+            }
+        }
+
+        java.sourceCompatibility = 21
+        java.targetCompatibility = 21
     }
 
     afterEvaluate {
@@ -392,6 +408,30 @@ configure(subprojects) {
                             developer {
                                 id.set("octopus")
                                 name.set("octopus")
+                            }
+                        }
+                    }
+                }
+            }
+            // Dev builds to Artifactory, for a TeamCity that resolves the candidate from there
+            // ([2.0] Validate Git-based Components Registry). Exists only where ARTIFACTORY_URL is
+            // set, and there `publish` goes to Artifactory alone, as under the former
+            // octopus-release-management: GitHub Packages has no credentials on TeamCity. This
+            // repository's own [1.0] does not publish at all.
+            def artifactoryUrl = System.getenv('ARTIFACTORY_URL')
+            if (artifactoryUrl) {
+                tasks.withType(PublishToMavenRepository).configureEach { t ->
+                    t.onlyIf('ARTIFACTORY_URL is set: Artifactory only') { t.repository.name == 'Artifactory' }
+                }
+                def toRelease = (findProperty('publishToReleaseRepository') ?: System.getenv('publishToReleaseRepository')) == 'true'
+                repositories {
+                    maven {
+                        name = 'Artifactory'
+                        url = uri("${artifactoryUrl - ~/\/+$/ - ~/\/artifactory$/}/artifactory/${toRelease ? 'rnd-maven-release-local' : 'rnd-maven-dev-local'}")
+                        if (System.getenv('ARTIFACTORY_DEPLOYER_USERNAME')) {
+                            credentials {
+                                username = System.getenv('ARTIFACTORY_DEPLOYER_USERNAME')
+                                password = System.getenv('ARTIFACTORY_DEPLOYER_PASSWORD')
                             }
                         }
                     }
@@ -881,9 +921,8 @@ gradle.projectsEvaluated {
 
     // Part A.7: gate publish + image push on the server fat-jar FT. dockerPushImage HARD-depends
     // on the FT — an image is never pushed without a validated boot jar. Maven publish is only
-    // ORDERED after the FT (mustRunAfter): when the FT is part of the same invocation — as in
-    // CI [1.0] (`clean build publish dockerPushImage`, where dockerPushImage pulls in the FT) —
-    // default fail-fast aborts before any publish. A standalone `publish`/`publishToMavenLocal` is
+    // ORDERED after the FT (mustRunAfter): when the FT is part of the same invocation, default
+    // fail-fast aborts before any publish. A standalone `publish`/`publishToMavenLocal` is
     // deliberately NOT forced to run the (slow) fat-jar FT.
     def serverFt = project(':components-registry-service-server').tasks.named('integrationTest')
     project(':components-registry-service-server').tasks.named('dockerPushImage').configure {

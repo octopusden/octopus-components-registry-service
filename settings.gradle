@@ -3,19 +3,19 @@ import java.util.zip.CRC32
 //
 pluginManagement {
     plugins {
-        id 'io.github.gradle-nexus.publish-plugin'      version '1.1.0'
-        id 'org.octopusden.octopus-release-management'  version settings['octopus-release-management.version']
-        id 'org.springframework.boot'                   version settings['spring-boot.version']
-        id 'org.jetbrains.kotlin.jvm'                   version settings['kotlin.version']
-        id 'org.jetbrains.kotlin.plugin.spring'         version settings['kotlin.version']
-        id 'org.jetbrains.kotlin.plugin.jpa'            version settings['kotlin.version']
+        id 'io.github.gradle-nexus.publish-plugin'      version '2.0.0'
+        id 'org.springframework.boot'                   version settings['spring-boot-plugin.version']
+        id 'org.jetbrains.kotlin.jvm'                   version settings['kotlin-plugin.version']
+        id 'org.jetbrains.kotlin.plugin.spring'         version settings['kotlin-plugin.version']
+        id 'org.jetbrains.kotlin.plugin.jpa'            version settings['kotlin-plugin.version']
+        id 'org.jetbrains.kotlin.plugin.serialization'  version settings['kotlin-plugin.version']
         id 'info.solidsoft.pitest'                      version settings['pitest-plugin.version']
         id 'io.gitlab.arturbosch.detekt'                version settings['detekt.version']
         id 'org.jlleitschuh.gradle.ktlint'              version settings['ktlint-gradle.version']
         id 'org.octopusden.octopus-quality'             version '3.1.0'
         id 'org.sonarqube'                              version '7.5.0.8588'
         id 'com.bmuschko.docker-java-application'       version settings['gradle-docker-plugin.version']
-        id 'com.github.johnrengelman.shadow'            version '8.1.1'
+        id 'com.gradleup.shadow'                        version '9.6.1'
         id 'org.octopusden.octopus.oc-template'         version settings['octopus-oc-template.version']
     }
     repositories {

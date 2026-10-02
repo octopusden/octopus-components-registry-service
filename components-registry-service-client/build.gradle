@@ -2,11 +2,10 @@
 plugins {
     id 'org.springframework.boot'
     id 'org.jetbrains.kotlin.plugin.spring'
-    id 'java-test-fixtures'
 }
 
-sourceCompatibility = 1.8
-targetCompatibility = 1.8
+java.sourceCompatibility = 1.8
+java.targetCompatibility = 1.8
 
 compileKotlin {
     kotlinOptions.jvmTarget = "1.8"
