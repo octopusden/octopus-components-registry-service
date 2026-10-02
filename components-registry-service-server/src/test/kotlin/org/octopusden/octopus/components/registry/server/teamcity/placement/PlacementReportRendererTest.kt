@@ -53,7 +53,7 @@ class PlacementReportRendererTest {
             configurationRowId = UUID.randomUUID(),
             versionRange = "(,0),[0,)",
             rowLabel = "BASE",
-            status = PlacementDiffRowStatus.OUTSIDE_SCOPE,
+            status = PlacementDiffRowStatus.CONFLICT,
             entries = listOf(
                 PlacementEntryDiff(
                     name = "main",

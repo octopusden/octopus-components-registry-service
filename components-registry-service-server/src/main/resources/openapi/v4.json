@@ -3244,8 +3244,7 @@
               "MANUAL_EDIT",
               "IN_SYNC",
               "INVALID",
-              "TC_ERROR",
-              "OUTSIDE_SCOPE"
+              "TC_ERROR"
             ],
             "type" : "string"
           },

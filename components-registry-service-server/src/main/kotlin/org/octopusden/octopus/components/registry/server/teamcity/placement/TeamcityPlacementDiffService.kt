@@ -39,9 +39,6 @@ enum class PlacementDiffRowStatus {
     /** The component's linked TeamCity project(s) could not be read; see the row's notes for why. */
     TC_ERROR,
 
-    /** A marker (per-range `vcs.settings`) row, or a row of an archived component — never derived,
-     * never selectable for Sync (spec-conformance review of #510, finding 1). */
-    OUTSIDE_SCOPE,
     ;
 
     companion object {
@@ -92,10 +89,9 @@ data class PlacementDiffResult(
  * ONB-002: the read-only TeamCity -> CRS VCS-placement Diff. Walks every component's
  * configuration rows that carry VCS entries, derives their placement from the linked project(s)'
  * compile build configurations ([derive]), and classifies each row against the registry's current
- * values. An archived component's rows, and marker (per-range `vcs.settings`) rows, are always
- * reported `OUTSIDE_SCOPE` (spec-conformance review of #510, finding 1) — never derived, never
- * selectable for Sync — rather than silently omitted (archived) or run through the full pipeline
- * only to be report-only anyway (marker).
+ * values. Only the current (BASE) configuration of a non-archived component is diffed (owner
+ * decision after the first QA run): archived components and version-range (`vcs.settings` marker)
+ * rows are left out entirely.
  *
  * Scope (design brief, BASE rows of a non-archived component only): multi-root rows; single-root
  * rows where TeamCity derives (or the registry already carries) a non-root Checkout Directory;
@@ -133,6 +129,7 @@ class TeamcityPlacementDiffService(
         val rows = componentConfigurationRepository
             .findAllRowsWithVcsEntries()
             .filter { componentIds == null || it.component.id in componentIds }
+            .filter { !it.component.archived && it.overriddenAttribute == null }
         val byComponent = rows.groupBy { it.component }
         val result = byComponent.flatMap { (component, componentRows) -> diffComponent(component, componentRows) }
         log.info { "TeamCity placement diff: ${result.size} row(s) in scope across ${byComponent.size} linked component(s)" }
@@ -144,67 +141,24 @@ class TeamcityPlacementDiffService(
         componentRows: List<ComponentConfigurationEntity>,
     ): List<PlacementRowDiff> {
         val componentId = component.id ?: return emptyList()
-        if (component.archived) {
-            // OUTSIDE_SCOPE unconditionally (spec-conformance finding 1) — never consults the
-            // chain at all, so no TeamCity project link is needed for an archived component.
-            return componentRows.mapNotNull { diffRow(component, componentId, it, chain = null) }
-        }
         val projectIds = versionLineRepository.findDistinctTeamcityProjectIdsByComponentId(componentId).orEmpty()
         if (projectIds.isEmpty()) return emptyList() // no TeamCity link: nothing to diff against
         val chain = fetchChain(component, projectIds)
         return componentRows.mapNotNull { diffRow(component, componentId, it, chain) }
     }
 
-    /** [chain] is `null` only for an archived component's row, whose OUTSIDE_SCOPE classification
-     * never touches it (see [runDiff]). */
     private fun diffRow(
         component: ComponentEntity,
         componentId: UUID,
         row: ComponentConfigurationEntity,
-        chain: ChainOutcome?,
+        chain: ChainOutcome,
     ): PlacementRowDiff? {
         val entries = row.vcsEntries.sortedBy { it.sortOrder }
         if (entries.isEmpty()) return null
         val placementEntries = entries.map {
             PlacementRegistryEntry(it.name, it.vcsPath, it.repositoryType, it.sourcePath, it.checkoutDirectory)
         }
-        val rowLabel = row.overriddenAttribute ?: BASE_ROW_LABEL
-
-        // Spec-conformance finding 1: OUTSIDE_SCOPE unconditionally, always reported (bypasses the
-        // single-root inScope() filter below too), never derived. An archived component's row
-        // reaches here with chain == null; a marker row's own component may still be non-archived
-        // (chain != null), in which case it's simply never consulted.
-        if (component.archived) {
-            return toRowDiff(
-                component,
-                componentId,
-                row,
-                rowLabel,
-                entries,
-                PlacementDiffRowStatus.OUTSIDE_SCOPE,
-                emptyMap(),
-                null,
-                listOf("component is archived"),
-                emptyList(),
-            )
-        }
-        if (rowLabel != BASE_ROW_LABEL) {
-            return toRowDiff(
-                component,
-                componentId,
-                row,
-                rowLabel,
-                entries,
-                PlacementDiffRowStatus.OUTSIDE_SCOPE,
-                emptyMap(),
-                null,
-                listOf("marker (per-range) row: report-only, never synced"),
-                emptyList(),
-            )
-        }
-        // Never null past this point: only the archived branch above is ever called with chain ==
-        // null, and it already returned.
-        checkNotNull(chain) { "chain must be resolved for a non-archived BASE row" }
+        val rowLabel = BASE_ROW_LABEL
 
         if (chain is ChainOutcome.Error) {
             // No scope filter: without the chain nothing is derived, so a dropped row would hide the error.
