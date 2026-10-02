@@ -207,7 +207,7 @@ class TeamcityPlacementDiffService(
         checkNotNull(chain) { "chain must be resolved for a non-archived BASE row" }
 
         if (chain is ChainOutcome.Error) {
-            if (!inScope(entries, row.buildWorkingDirectory, derivedCd = null, derivedSp = null, derivedBwd = null)) return null
+            // No scope filter: without the chain nothing is derived, so a dropped row would hide the error.
             return toRowDiff(
                 component,
                 componentId,
