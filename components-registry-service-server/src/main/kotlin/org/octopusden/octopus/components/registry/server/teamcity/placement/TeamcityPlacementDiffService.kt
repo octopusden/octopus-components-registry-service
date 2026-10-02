@@ -39,6 +39,10 @@ enum class PlacementDiffRowStatus {
     /** The component's linked TeamCity project(s) could not be read; see the row's notes for why. */
     TC_ERROR,
 
+    /** TeamCity's compile configurations attach VCS roots the registry does not list (e.g. a shared
+     * tooling repository). Never offered to Sync; the details are in TeamCity Validation. */
+    ROOTS_MISMATCH,
+
     ;
 
     companion object {
