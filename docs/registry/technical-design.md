@@ -416,6 +416,11 @@ IO edges; the module stays `server → component-validation` (one-way dependency
   configs + steps + template ancestry + parameters), short-TTL cached (`teamcity.validation.cache-ttl-minutes`,
   default 30 min), decoupled from the existing sync engine. The cache is invalidated whenever a
   TeamCity sync completes, so a post-sync validation run never serves a pre-sync snapshot.
+- **Registry-aware rule:** `VCS_ROOTS_DIFFER_FROM_REGISTRY` (`WARNING`) needs registry data, so it
+  is evaluated by `TeamcityValidationService` (`VcsRootsValidation`), not by a module validator: it
+  compares the BASE-row VCS paths of the project's live linked components with the roots of the
+  project's compile configurations (`compareVcsRoots`, shared with the placement Diff) and reports
+  extra and missing roots by `group/repo` and build configuration id.
 - **Persist (`V7__add_teamcity_validation.sql`):** `teamcity_validation (project_id, type, status,
   message, updated_at)`, PK `(project_id, type)`. Only WARNING/ERROR are stored (OK/NOT_APPLICABLE
   are not); **latest-only** — each run replaces that project's rows via a bulk delete + insert (not
@@ -478,6 +483,13 @@ fallback).
     TeamCity fetch failure; a 403 is recognised and reported as "no permission to read VCS root
     entries" rather than a raw exception; reported for every linked row, single-root ones too,
     since without the chain nothing is derived to decide scope).
+  - **`ROOTS_MISMATCH`:** `compareVcsRoots` (in `PlacementRules.kt`, using `repoKey`) compares the
+    row's registry VCS paths with the roots of the non-paused compile configurations. Roots TeamCity
+    attaches that the registry lacks (a shared tooling repository) make the row `ROOTS_MISMATCH`,
+    checked before scope, `INVALID` and derived-value checks; never `RESOLVED`, never synced. Roots
+    the registry lists but no compile configuration attaches keep the existing "not attached in any
+    chain configuration" note. The same function drives the TeamCity Validation finding
+    `VCS_ROOTS_DIFFER_FROM_REGISTRY` (§6.7).
   - **`UNEXPRESSIBLE` vs `INVALID` (spec-conformance review):** `UNEXPRESSIBLE` is now narrow —
     only a checkout-rule or `WORK_DIR` SHAPE that `PlacementRules` can't parse at all (a remap,
     several rules on one entry, `%VAR%`). `PlacementRules.checkRules`, which used to re-implement

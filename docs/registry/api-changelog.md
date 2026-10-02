@@ -36,7 +36,7 @@ refresh it with `./gradlew :components-registry-service-server:generateOpenApiDo
     send), readable by anyone who can view components (no `IMPORT_DATA`
     needed for the report itself). 404 until a Diff has completed at least once. Per row: status
     (`RESOLVED`, `INVALID`, `CONFLICT`, `UNEXPRESSIBLE`, `NO_CHAIN`, `OUTSIDE_TEMPLATES`,
-    `COMPILE_PAUSED`, `MANUAL_EDIT`, `IN_SYNC`, `TC_ERROR`), current and derived
+    `COMPILE_PAUSED`, `MANUAL_EDIT`, `IN_SYNC`, `TC_ERROR`, `ROOTS_MISMATCH`), current and derived
     Checkout Directory / Source Path per VCS entry, current and derived Build Working Directory,
     the source TeamCity build type ids, and human-readable notes. `INVALID`: the derived values
     parse fine but fail the SAME CRS validation a v4 write runs (Source Path shape, reserved/
@@ -46,6 +46,12 @@ refresh it with `./gradlew :components-registry-service-server:generateOpenApiDo
     several rules on one entry, `%VAR%`) — a value that parses but fails CRS validation is
     `INVALID` instead. A repository attached twice within ONE build type with two different
     RESOLVABLE rules is `CONFLICT` (same as two build types disagreeing), not `UNEXPRESSIBLE`.
+    `ROOTS_MISMATCH` (new): a BASE row whose compile configurations attach VCS roots the registry
+    does not list (typically a shared tooling repository); `notes` names the repository and build
+    type ids. Takes precedence over `INVALID` and the derived-value checks, is never `RESOLVED` and
+    never offered to Sync. The same comparison backs the new TeamCity Validation type
+    `VCS_ROOTS_DIFFER_FROM_REGISTRY` (severity `WARNING`; reports extra roots and registry roots no
+    compile configuration attaches), a new `type` value on `teamcity-validations` findings.
     Only the current (BASE) configuration of non-archived components is diffed; archived components
     and version-range (`vcs.settings`) rows are not in the report. Repository matching is by the full canonical VCS URL, host included
     (previously host-agnostic, a false-positive-match risk across TeamCity hosts).
