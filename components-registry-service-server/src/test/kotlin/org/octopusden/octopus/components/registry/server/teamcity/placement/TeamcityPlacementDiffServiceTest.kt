@@ -76,7 +76,7 @@ private fun bareBuildType(
     paused = paused,
 )
 
-private fun compileBuildType(
+internal fun compileBuildType(
     id: String,
     paused: Boolean = false,
     workDir: String? = null,
@@ -89,7 +89,7 @@ private fun compileBuildType(
     vcsRoots = TeamcityVcsRootEntries(roots.map { (url, rule) -> entry(url, rule) }),
 )
 
-private fun project(vararg buildTypes: TeamcityBuildType): ExternalTeamcityProject =
+internal fun project(vararg buildTypes: TeamcityBuildType): ExternalTeamcityProject =
     TeamcityProject(
         id = "P",
         name = "P",

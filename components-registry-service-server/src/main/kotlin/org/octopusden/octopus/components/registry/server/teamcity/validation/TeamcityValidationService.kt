@@ -3,6 +3,7 @@ package org.octopusden.octopus.components.registry.server.teamcity.validation
 import mu.KotlinLogging
 import org.octopusden.octopus.components.registry.server.config.ConditionalOnDatabaseEnabled
 import org.octopusden.octopus.components.registry.server.entity.TeamcityValidationEntity
+import org.octopusden.octopus.components.registry.server.repository.ComponentConfigurationRepository
 import org.octopusden.octopus.components.registry.server.repository.TeamcityValidationRepository
 import org.octopusden.octopus.components.registry.server.repository.VersionLineRepository
 import org.octopusden.octopus.validation.core.Status
@@ -20,6 +21,7 @@ import java.time.Instant
 @Service
 class TeamcityValidationService(
     private val versionLineRepository: VersionLineRepository,
+    private val componentConfigurationRepository: ComponentConfigurationRepository,
     private val teamcityValidationRepository: TeamcityValidationRepository,
     private val fetcher: EnrichedTcProjectFetcher,
     private val mapper: TeamcityProjectMapper,
