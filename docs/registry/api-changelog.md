@@ -27,8 +27,8 @@ refresh it with `./gradlew :components-registry-service-server:generateOpenApiDo
   means the saved state. Response `DistributionPreviewResponse { version, supported, paths }`, one
   `DistributionPathPreview { attribute, source, matchedRanges, unevaluableRanges }` per
   `distribution.*` family (`source` = `BASE` | `OVERRIDE` | `CONFLICT`); `paths` is `[]` when
-  `supported=false`. Ranges are echoed exactly as sent. Only a blank/non-numeric `version` is `400`
-  (`errorMessage` starts with `version`); candidate data never fails the request. Requires
+  `supported=false`. Ranges are echoed exactly as sent. Only a missing/blank/non-numeric `version` is `400`
+  (for blank/non-numeric, `errorMessage` starts with `version`); candidate data never fails the request. Requires
   `ACCESS_COMPONENTS` (no edit rights); unauthenticated → `401`, unknown component → `404`.
 - **TeamCity placement Diff/Sync renamed to checkout layout (SYS-102).** Endpoints move to
   `/admin/teamcity-checkout-layout/...`; `/admin/teamcity-placement/...` stays as a deprecated alias,

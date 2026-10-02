@@ -97,7 +97,7 @@
 | SYS-102 | TeamCity checkout layout Diff/Sync (`/admin/teamcity-checkout-layout`): Diff is a read-only report over the BASE rows of non-archived components; Sync writes only the `RESOLVED` rows of the last completed Diff (named by `diffId`, else 409 `checkout-layout-diff-stale`) through the normal v4 write path, tagged `sync from TeamCity (job <id>)`, a prefix user writes cannot set; single-root `CONFLICT`/`UNEXPRESSIBLE` rows are always reported; VCS roots that the component's own compile configurations attach but the registry lacks yield `ROOTS_MISMATCH` and the `VCS_ROOTS_DIFFER_FROM_REGISTRY` validation warning | High | unit + integration-test | ✅ Tested |
 | SYS-103 | `ClassicComponentsRegistryServiceClient` takes the retry policy for retryable failures (503, I/O errors) from its caller (`Retryer` constructor parameter); without one it keeps the default of 5 attempts, backoff 100 ms – 1 s (`defaultRetryer()`); the policy is per request, so one call exhausting it does not shorten the next | Medium | unit-test | ✅ Tested |
 | SYS-104 | Component flag `autoRelease` (default false), DB and v4 only: create/update requests, summary/detail responses, `?autoRelease=` list filter, field-config visibility/editability; an admin-started TeamCity resync turns it on (never off) when every linked release line has a finish-build trigger and nobody has changed the flag; the weekly cron only with `teamcity.sync.auto-release-on-cron` | Medium | unit + integration-test | ✅ Tested |
-| SYS-105 | `POST /rest/api/4/components/{idOrName}/distribution/preview` resolves, for a concrete version, which source each `distribution.*` marker path takes — `BASE`, `OVERRIDE` (one matching range) or `CONFLICT` (several) — over a **candidate** override set (when present it replaces the saved set entirely) and candidate supported versions sent by the caller (omitted = saved state), with the resolver's own containment, ordering and coverage-gate semantics; one path entry per family, ranges echoed exactly as sent; a version outside coverage answers `supported=false` with no paths, not 404; unparseable override ranges never match and are listed per path; only a non-numeric `version` is 400; read-only, `ACCESS_COMPONENTS` | High | unit + integration-test | ✅ Tested |
+| SYS-105 | `POST /rest/api/4/components/{idOrName}/distribution/preview` resolves, for a concrete version, which source each `distribution.*` marker path takes — `BASE`, `OVERRIDE` (one matching range) or `CONFLICT` (several) — over a **candidate** override set (when present it replaces the saved set entirely) and candidate supported versions sent by the caller (omitted = saved state), with the resolver's own containment, ordering and coverage-gate semantics; one path entry per family, ranges echoed exactly as sent; a version outside coverage answers `supported=false` with no paths, not 404; unparseable override ranges never match and are listed per path; only a missing, blank or non-numeric `version` is 400; read-only, `ACCESS_COMPONENTS` | High | unit + integration-test | ✅ Tested |
 
 ---
 
@@ -3791,8 +3791,10 @@ beans and the same shared containment helpers as resolution at read time
    byte-for-byte as it was sent (or stored); candidate ranges are evaluated in the
    normalised form a save would store, the echo is never normalised.
 
-Errors: the only `400` is a blank or non-numeric `version` (`errorMessage` starts
-with `version`). Candidate data never fails the request. Unknown component →
+Errors: the only `400` is a missing, blank or non-numeric `version` — a blank or
+non-numeric one answers an `errorMessage` starting with `version`; a body without
+`version` is rejected while it is read (`Malformed request body`). Candidate data
+never fails the request. Unknown component →
 `404`.
 
 Response: `{ version, supported, paths: [{ attribute, source, matchedRanges,
@@ -3803,7 +3805,9 @@ unevaluableRanges }] }`. Children are not echoed: the caller sent them.
    `CONFLICT` with all of them. Paths are independent; `paths` has exactly one
    entry per `distribution.*` family, and an empty child list is a normal
    `OVERRIDE`.
-2. A version outside candidate coverage → `supported=false`, `paths: []`; no
+2. A version outside candidate coverage (including one in the gap between two
+   supported ranges, or outside a bounded base range, which candidate
+   `supportedVersions` do not lift) → `supported=false`, `paths: []`; no
    restriction, or an unparseable supported range, → supported.
 3. A blank or unparseable override range never matches and is listed in
    `unevaluableRanges`.
@@ -3811,7 +3815,8 @@ unevaluableRanges }] }`. Children are not echoed: the caller sent them.
 5. Omitted `fieldOverrides` / `supportedVersions` use the saved state; present
    ones replace it entirely. For a saved component whose ranges are disjoint, the
    verdict agrees with `GET .../versions/{v}/distribution`.
-6. A blank or non-numeric version → `400` naming `version`; unknown component →
+6. A blank or non-numeric version → `400` naming `version`; a body without
+   `version` → `400`; unknown component →
    `404`; unauthenticated → `401`; a caller without `ACCESS_COMPONENTS` → `403`;
    a caller with `ACCESS_COMPONENTS` and no edit rights → `200`.
 7. `matchedRanges` / `unevaluableRanges` echo each range exactly as sent
@@ -3825,7 +3830,9 @@ unevaluableRanges }] }`. Children are not echoed: the caller sent them.
 `` `SYS-099 non-distribution entries are ignored` `` (1);
 `` `SYS-099 version outside coverage is unsupported` ``,
 `` `SYS-099 no restriction supports every version` ``,
-`` `SYS-099 unparseable supported range counts as covering` `` (2);
+`` `SYS-099 unparseable supported range counts as covering` ``,
+`` `SYS-099 bounded base bounds coverage` ``,
+`` `SYS-099 version in coverage gap is unsupported` `` (2);
 `` `SYS-099 unparseable override range is listed and never matches` `` (3);
 `` `SYS-099 qualified version lies in range` `` (4);
 `` `SYS-099 omitted fields use saved state` ``,
@@ -3838,5 +3845,6 @@ shared helpers `` `SYS-099 overrideRangeContains` ``, `` `SYS-099 coverageRangeC
 `` `SYS-099 preview evaluates candidate overrides` `` (1, 3, 7),
 `` `SYS-099 saved state agrees with distribution endpoint` `` (5),
 `` `SYS-099 candidate coverage replaces saved coverage` `` (2, 5),
-`` `SYS-099 non-numeric version is 400` ``, `` `SYS-099 unknown component is 404` ``,
+`` `SYS-099 non-numeric version is 400` ``, `` `SYS-099 missing version is 400` ``,
+`` `SYS-099 unknown component is 404` ``,
 `` `SYS-099 unauthenticated is 401` ``, `` `SYS-099 read permission is required and sufficient` `` (6).

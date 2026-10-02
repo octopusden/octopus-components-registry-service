@@ -32,9 +32,12 @@ class DistributionPreviewTest {
     private val maven = MarkerAttributes.DISTRIBUTION_MAVEN
     private val docker = MarkerAttributes.DISTRIBUTION_DOCKER
 
-    private fun component(vararg rows: Pair<String, Pair<String?, String>>): ComponentEntity {
+    private fun component(
+        vararg rows: Pair<String, Pair<String?, String>>,
+        baseRange: String = ALL_VERSIONS,
+    ): ComponentEntity {
         val c = ComponentEntity(id = UUID.randomUUID(), componentKey = "preview-test")
-        c.configurations.add(ComponentConfigurationEntity(component = c, versionRange = ALL_VERSIONS, rowType = "BASE"))
+        c.configurations.add(ComponentConfigurationEntity(component = c, versionRange = baseRange, rowType = "BASE"))
         rows.forEach { (rowType, attrAndRange) ->
             c.configurations.add(
                 ComponentConfigurationEntity(
@@ -225,6 +228,32 @@ class DistributionPreviewTest {
         val noOverrides = preview("1.2", overrides = emptyList(), coverage = null, entity = saved)
         assertEquals(DistributionPreviewSource.BASE, noOverrides.path(maven).source)
         assertTrue(preview("3.0", overrides = null, coverage = DistributionPreviewCoverage(all = true), entity = saved).supported)
+    }
+
+    @Test
+    @DisplayName("SYS-099: a bounded base with no presence rows bounds coverage, also under candidate supportedVersions")
+    fun `SYS-099 bounded base bounds coverage`() {
+        val saved = component(baseRange = "[1.0,2.0)")
+        assertTrue(preview("1.5", overrides = null, coverage = null, entity = saved).supported)
+        assertFalse(preview("2.5", overrides = null, coverage = null, entity = saved).supported)
+        // Candidate coverage replaces only the presence ranges; the saved bounded base still applies.
+        assertFalse(preview("2.5", coverage = DistributionPreviewCoverage(all = true), entity = saved).supported)
+        val widened = DistributionPreviewCoverage(ranges = listOf("[5.0,6.0)"))
+        assertTrue(preview("5.5", coverage = widened, entity = saved).supported)
+        assertTrue(preview("1.5", coverage = widened, entity = saved).supported)
+        assertFalse(preview("3.0", coverage = widened, entity = saved).supported)
+    }
+
+    @Test
+    @DisplayName("SYS-099: a version in the gap between two supported ranges is unsupported")
+    fun `SYS-099 version in coverage gap is unsupported`() {
+        val saved = component("RANGE_PRESENCE" to (null to "[1.0,2.0)"), "RANGE_PRESENCE" to (null to "[3.0,4.0)"))
+        assertFalse(preview("2.5", overrides = null, coverage = null, entity = saved).supported)
+        assertTrue(preview("3.5", overrides = null, coverage = null, entity = saved).supported)
+        val gap = DistributionPreviewCoverage(ranges = listOf("[1.0,2.0)", "[3.0,4.0)"))
+        val inGap = preview("2.5", coverage = gap)
+        assertFalse(inGap.supported)
+        assertEquals(emptyList<DistributionPathPreview>(), inGap.paths)
     }
 
     // ── AC6 (unit side): version validation ──────────────────────────────────

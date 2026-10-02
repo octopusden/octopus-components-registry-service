@@ -131,6 +131,14 @@ class DistributionPreviewApiTest {
     }
 
     @Test
+    @DisplayName("SYS-099: 400 for a body without version (malformed request body)")
+    fun `SYS-099 missing version is 400`() {
+        val c = seed()
+        val body = perform(c.id, """{"supportedVersions":{"all":true}}""", adminJwt(), status().isBadRequest)
+        assertEquals("Malformed request body", objectMapper.readTree(body)["errorMessage"].asText(), body)
+    }
+
+    @Test
     @DisplayName("SYS-099: 404 for an unknown component")
     fun `SYS-099 unknown component is 404`() {
         perform("no-such-component-${UUID.randomUUID()}", """{"version":"1.0"}""", adminJwt(), status().isNotFound)
