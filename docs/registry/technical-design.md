@@ -476,7 +476,8 @@ fallback).
   - **Status per row:** `RESOLVED` (apply-able), `INVALID`, `CONFLICT`, `UNEXPRESSIBLE`,
     `NO_CHAIN`, `OUTSIDE_TEMPLATES`, `COMPILE_PAUSED`, `MANUAL_EDIT`, `IN_SYNC`, `TC_ERROR` (a
     TeamCity fetch failure; a 403 is recognised and reported as "no permission to read VCS root
-    entries" rather than a raw exception), `OUTSIDE_SCOPE` (a marker row, or any row of an archived
+    entries" rather than a raw exception; reported for every linked row, single-root ones too,
+    since without the chain nothing is derived to decide scope), `OUTSIDE_SCOPE` (a marker row, or any row of an archived
     component).
   - **`UNEXPRESSIBLE` vs `INVALID` (spec-conformance review):** `UNEXPRESSIBLE` is now narrow —
     only a checkout-rule or `WORK_DIR` SHAPE that `PlacementRules` can't parse at all (a remap,
