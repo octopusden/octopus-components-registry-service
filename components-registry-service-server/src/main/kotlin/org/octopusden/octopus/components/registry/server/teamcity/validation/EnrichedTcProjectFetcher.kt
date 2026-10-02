@@ -73,9 +73,10 @@ class CachingEnrichedTcProjectFetcher(
         // ONB-002 (TeamCity placement Diff/Sync): each build type's attached VCS roots and their
         // checkout rules, so TeamcityPlacementDiffService can derive Checkout Directory / Source
         // Path / Build Working Directory without a second TC call. Additive only — every existing
-        // consumer of this cache (TeamcityValidationService) ignores the extra field.
+        // consumer of this cache (TeamcityValidationService) ignores the extra field. The entry's
+        // `id` and the root's `name`/`href` are non-null on the client DTOs, so they are requested too.
         private const val VCS_ROOT_ENTRIES =
-            "vcs-root-entries(vcs-root-entry(checkout-rules,vcs-root(id,properties(property(name,value)))))"
+            "vcs-root-entries(vcs-root-entry(id,checkout-rules,vcs-root(id,name,href,properties(property(name,value)))))"
         const val FIELDS =
             "project(id,name,webUrl,href," +
                 "parameters(property(name,value))," +
