@@ -37,6 +37,7 @@ import org.octopusden.octopus.infrastructure.teamcity.client.dto.TeamcityProject
 class VcsRootsValidationTest {
     private val app = "ssh://h/prj/app-one.git"
     private val tooling = "ssh://h/tools/shared-tooling.git"
+    private val appB = "ssh://h/prj/app-two.git"
 
     private fun config(
         id: String,
@@ -65,8 +66,6 @@ class VcsRootsValidationTest {
     fun `matching roots produce no finding`() {
         assertNull(VcsRootsValidation.check("comp-one", listOf(app), listOf(config("bt1", app))))
     }
-
-    private val appB = "ssh://h/prj/app-two.git"
 
     private fun comp(key: String) = ComponentEntity(id = UUID.randomUUID(), componentKey = key)
 
