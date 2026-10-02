@@ -50,6 +50,54 @@ interface ComponentRepository :
     fun findDistinctOwners(): List<String>
 
     /**
+     * Distinct release-manager usernames currently assigned to at least one
+     * component. Source for the `/meta/release-managers` dropdown — parity with
+     * [findDistinctOwners], but joined through the ordered
+     * `component_release_managers` child collection rather than a scalar column,
+     * since a component may carry several release managers.
+     *
+     * Joins from `ComponentEntity` (rather than living on a child-entity
+     * repository) to mirror [findDistinctJiraProjectKeys]; the child entities are
+     * parent-owned and have no repository of their own.
+     *
+     * `username` is a NOT NULL column, so only the non-blank guard is needed —
+     * defence-in-depth against migration drift or a direct DB write leaving a
+     * whitespace-only row, which would otherwise surface as an unselectable
+     * blank chip in the picker. Values are projected and ordered trimmed for the
+     * same reason, so a padded row cannot surface as a near-duplicate option.
+     *
+     * The fake-self-link predicate mirrors the always-on exclusion in
+     * `ComponentManagementServiceImpl.buildSpecification`: the v4 list never shows
+     * such a stub, so a username held only by one would be a dead option.
+     */
+    @Query(
+        "SELECT DISTINCT TRIM(rm.username) FROM ComponentEntity c JOIN c.releaseManagers rm " +
+            "LEFT JOIN c.componentGroup g " +
+            "WHERE TRIM(rm.username) <> '' " +
+            "AND (g IS NULL OR NOT (g.isFake = true AND g.groupKey = c.componentKey)) " +
+            "ORDER BY TRIM(rm.username)",
+    )
+    fun findDistinctReleaseManagers(): List<String>
+
+    /**
+     * Distinct security-champion usernames currently assigned to at least one
+     * component. Source for the `/meta/security-champions` dropdown; identical
+     * shape and rationale to [findDistinctReleaseManagers], against the
+     * `component_security_champions` child collection. Kept a separate query (not
+     * a shared one over both collections) because `?releaseManager=` and
+     * `?securityChampion=` are separate filters — a merged list would advertise
+     * dead options in both pickers.
+     */
+    @Query(
+        "SELECT DISTINCT TRIM(sc.username) FROM ComponentEntity c JOIN c.securityChampions sc " +
+            "LEFT JOIN c.componentGroup g " +
+            "WHERE TRIM(sc.username) <> '' " +
+            "AND (g IS NULL OR NOT (g.isFake = true AND g.groupKey = c.componentKey)) " +
+            "ORDER BY TRIM(sc.username)",
+    )
+    fun findDistinctSecurityChampions(): List<String>
+
+    /**
      * Distinct client codes currently in use on at least one component. Source for
      * the `/meta/client-codes` dropdown (SYS-046). Scalar `components.client_code`
      * column; same IS NOT NULL + non-blank defence as [findDistinctOwners].

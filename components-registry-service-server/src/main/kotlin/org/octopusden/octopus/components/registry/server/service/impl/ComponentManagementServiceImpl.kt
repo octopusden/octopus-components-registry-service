@@ -447,6 +447,12 @@ class ComponentManagementServiceImpl(
     // ============================================================
 
     @Transactional(readOnly = true)
+    override fun getDistinctReleaseManagers(): List<String> = componentRepository.findDistinctReleaseManagers()
+
+    @Transactional(readOnly = true)
+    override fun getDistinctSecurityChampions(): List<String> = componentRepository.findDistinctSecurityChampions()
+
+    @Transactional(readOnly = true)
     override fun getComponent(id: UUID): ComponentDetailResponse = toDetail(findComponentOr404(id))
 
     @Transactional(readOnly = true)
