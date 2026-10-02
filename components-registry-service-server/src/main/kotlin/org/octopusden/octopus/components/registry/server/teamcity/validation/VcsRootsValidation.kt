@@ -36,4 +36,8 @@ object VcsRootsValidation {
             "VCS roots differ from the registry ($componentKey): " + parts.joinToString("; "),
         )
     }
+
+    /** One finding for several components' findings (the store keeps one row per project and type). */
+    fun merge(findings: List<ValidationResult>): ValidationResult? =
+        findings.firstOrNull()?.copy(message = findings.joinToString(" | ") { it.message.orEmpty() })
 }
