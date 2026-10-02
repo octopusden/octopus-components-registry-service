@@ -293,4 +293,29 @@ class MetaInUseOptionsEndpointsTest {
             "fake aggregator $withChildKey with a real child must still appear; got $all"
         }
     }
+
+    @Test
+    @DisplayName("SYS-046: the people option lists exclude usernames held only by a hidden fake self-linked stub")
+    fun `SYS-046 meta people option lists exclude fake self-linked stubs`() {
+        // The v4 list always hides a fake aggregator stub self-linked to its own group
+        // (buildSpecification), so ?releaseManager= / ?securityChampion= never match it.
+        // A username held only by such a stub would be a dead option in the picker.
+        val stubKey = uniqueName("people_fakestub")
+        val stubRm = uniqueName("stubrm")
+        val stubSc = uniqueName("stubsc")
+        create(baseBody(stubKey, ""","releaseManager":["$stubRm"],"securityChampion":["$stubSc"]"""))
+        val stubGroup = componentGroupRepository.save(ComponentGroupEntity(groupKey = stubKey, isFake = true))
+        val stub = componentRepository.findByComponentKey(stubKey)!!
+        stub.componentGroup = stubGroup
+        componentRepository.save(stub)
+
+        val releaseManagers = metaList("/rest/api/4/components/meta/release-managers")
+        val securityChampions = metaList("/rest/api/4/components/meta/security-champions")
+        assert(!releaseManagers.contains(stubRm)) {
+            "RM $stubRm held only by hidden stub $stubKey must NOT appear; got $releaseManagers"
+        }
+        assert(!securityChampions.contains(stubSc)) {
+            "SC $stubSc held only by hidden stub $stubKey must NOT appear; got $securityChampions"
+        }
+    }
 }
