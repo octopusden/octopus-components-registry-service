@@ -280,6 +280,19 @@ class TeamcityPlacementDiffServiceTest {
     }
 
     @Test
+    fun `a TeamCity error on a single-root row is reported, not dropped (QA Diff, RED)`() {
+        // Without the chain nothing is derived, so the single-root scope filter can't tell whether
+        // the row is in scope; dropping it hid that most projects failed to read.
+        val comp = component()
+        val row = ComponentConfigurationEntity(id = UUID.randomUUID(), component = comp, rowType = "BASE")
+        row.vcsEntries += VcsSettingsEntryEntity(componentConfiguration = row, name = "main", vcsPath = appId, sortOrder = 0)
+        val svc =
+            service(listOf(row), mapOf(comp.id!! to listOf("P")), FakeEnrichedTcProjectFetcher(errors = mapOf("P" to RuntimeException("boom"))))
+
+        assertEquals(PlacementDiffRowStatus.TC_ERROR, svc.runDiff().rows.single().status)
+    }
+
+    @Test
     fun `a component with no TeamCity link is skipped entirely`() {
         val comp = component()
         val row = multiRootRow(comp)
