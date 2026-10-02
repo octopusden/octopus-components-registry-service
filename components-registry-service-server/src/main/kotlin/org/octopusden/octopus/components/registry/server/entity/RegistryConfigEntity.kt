@@ -19,10 +19,10 @@ import java.time.Instant
 @Table(name = "registry_config")
 class RegistryConfigEntity(
     @Id
-    @Column(name = "key", length = 255)
+    @Column(name = "\"key\"", length = 255)
     var key: String = "",
     @JdbcTypeCode(SqlTypes.JSON)
-    @Column(name = "value", columnDefinition = "TEXT", nullable = false)
+    @Column(name = "\"value\"", columnDefinition = "TEXT", nullable = false)
     var value: Map<String, Any?> = emptyMap(),
     @Column(name = "updated_by")
     var updatedBy: String? = null,

@@ -26,6 +26,7 @@ import org.octopusden.octopus.components.registry.server.entity.ComponentSourceE
 import org.octopusden.octopus.components.registry.server.entity.ComponentSystemEntity
 import org.octopusden.octopus.components.registry.server.entity.DistributionDockerImageEntity
 import org.octopusden.octopus.components.registry.server.entity.DistributionFileUrlArtifactEntity
+import org.octopusden.octopus.components.registry.server.entity.DistributionGenericArtifactEntity
 import org.octopusden.octopus.components.registry.server.entity.DistributionMavenArtifactEntity
 import org.octopusden.octopus.components.registry.server.entity.DistributionPackageEntity
 import org.octopusden.octopus.components.registry.server.entity.DistributionSecurityGroupEntity
@@ -1908,6 +1909,11 @@ class ImportServiceImpl(
                 attachPackages(row, overDist)
             }?.let { saved += it }
         }
+        if (genericArtifactsDiffer(baseDist, overDist)) {
+            saveMarkerRowWithChildren(component, versionRange, MarkerAttributes.DISTRIBUTION_GENERIC) { row ->
+                attachGenericArtifacts(row, overDist)
+            }?.let { saved += it }
+        }
 
         // Required tools override (junction rows need the config ID; handled inside).
         // Use the same effective base tools that were attached to the BASE row in
@@ -2013,6 +2019,7 @@ class ImportServiceImpl(
         attachFileUrlArtifacts(row, dist)
         attachDockerImages(row, dist)
         attachPackages(row, dist)
+        attachGenericArtifacts(row, dist)
     }
 
     private fun attachMavenArtifacts(
@@ -2113,6 +2120,24 @@ class ImportServiceImpl(
                     ),
                 )
             }
+        }
+    }
+
+    private fun attachGenericArtifacts(
+        row: ComponentConfigurationEntity,
+        dist: Distribution?,
+    ) {
+        val genericCsv = dist?.generic() ?: return
+        var sortOrder = 0
+        for (path in splitCsv(genericCsv)) {
+            if (path.isBlank()) continue
+            row.genericArtifacts.add(
+                DistributionGenericArtifactEntity(
+                    componentConfiguration = row,
+                    path = path,
+                    sortOrder = sortOrder++,
+                ),
+            )
         }
     }
 
@@ -2403,6 +2428,11 @@ class ImportServiceImpl(
         override: Distribution?,
     ): Boolean = base?.DEB() != override?.DEB() || base?.RPM() != override?.RPM()
 
+    private fun genericArtifactsDiffer(
+        base: Distribution?,
+        override: Distribution?,
+    ): Boolean = base?.generic() != override?.generic()
+
     private fun extractMavenGavs(gavCsv: String?): List<String> {
         gavCsv ?: return emptyList()
         return splitCsv(gavCsv).filter {
@@ -2690,19 +2720,6 @@ class ImportServiceImpl(
 }
 
 /**
- * Stable per-bean key set used to diff build-tool lists across base and override configs.
- * Extracted from `ImportServiceImpl` as a top-level `internal fun` so it can be unit-tested
- * directly without spinning up a Spring context.
- *
- * Key shape: `<beanType>:<settingsProperty>:<version>` (plus `:<edition>` for
- * `OracleDatabaseToolBean`). `settingsProperty` is part of the discriminator because two
- * beans of the same type/version that differ only in `settingsProperty` are semantically
- * distinct — without it, `emitMarkerOverrides` silently drops the override and the base
- * `settingsProperty` bleeds into the override range. `edition` is meaningful only for
- * Oracle (always null for the others).
- */
-
-/**
  * One would-be `distribution_maven_artifacts` row derived from the DSL, for the §6.0
  * uniqueness pre-pass. [origin] names the DSL source for the conflict message:
  * an explicit `distribution { GAV }` coordinate vs the component-level
@@ -2849,6 +2866,18 @@ internal fun computeDisplayNameDbCollisions(
         }.sorted()
 }
 
+/**
+ * Stable per-bean key set used to diff build-tool lists across base and override configs.
+ * Extracted from `ImportServiceImpl` as a top-level `internal fun` so it can be unit-tested
+ * directly without spinning up a Spring context.
+ *
+ * Key shape: `<beanType>:<settingsProperty>:<version>` (plus `:<edition>` for
+ * `OracleDatabaseToolBean`). `settingsProperty` is part of the discriminator because two
+ * beans of the same type/version that differ only in `settingsProperty` are semantically
+ * distinct — without it, `emitMarkerOverrides` silently drops the override and the base
+ * `settingsProperty` bleeds into the override range. `edition` is meaningful only for
+ * Oracle (always null for the others).
+ */
 internal fun buildBuildToolKeys(tools: Collection<BuildTool>?): Set<String> =
     tools
         ?.mapNotNull { tool ->

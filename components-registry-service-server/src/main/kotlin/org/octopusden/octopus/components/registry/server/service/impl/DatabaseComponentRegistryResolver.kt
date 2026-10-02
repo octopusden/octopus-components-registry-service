@@ -267,6 +267,7 @@ class DatabaseComponentRegistryResolver(
                     versionRanges.find { it.distribution != null }?.distribution?.DEB(),
                     versionRanges.find { it.distribution != null }?.distribution?.RPM(),
                     versionRanges.find { it.distribution != null }?.distribution?.docker(),
+                    versionRanges.find { it.distribution != null }?.distribution?.generic(),
                     versionRanges.find { it.distribution != null }?.distribution?.securityGroups ?: SecurityGroups(null),
                 )
             }

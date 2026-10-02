@@ -180,6 +180,16 @@ data class MavenArtifactResponse(
 )
 
 /**
+ * Mirror of v4.json `GenericArtifactResponse`. Required: id, path, sortOrder.
+ */
+@Serializable
+data class GenericArtifactResponse(
+    val id: String,
+    val path: String,
+    val sortOrder: Int,
+)
+
+/**
  * Mirror of v4.json `PackageResponse`. Required: id, packageName, packageType, sortOrder.
  */
 @Serializable
@@ -209,8 +219,8 @@ data class VcsEntryResponse(
  * Mirror of v4.json `ComponentConfigurationResponse` — one configuration row (BASE/override/marker)
  * of a component detail. `rowType` is the enum BASE|SCALAR_OVERRIDE|MARKER|RANGE_PRESENCE (String).
  *
- * Required per spec: buildToolBeans, dockerImages, fileUrlArtifacts, id, isSyntheticBase,
- * mavenArtifacts, packages, requiredTools, rowType, vcsEntries, versionRange.
+ * Required per spec: buildToolBeans, dockerImages, fileUrlArtifacts, genericArtifacts, id,
+ * isSyntheticBase, mavenArtifacts, packages, requiredTools, rowType, vcsEntries, versionRange.
  */
 @Serializable
 data class ComponentConfigurationResponse(
@@ -222,6 +232,7 @@ data class ComponentConfigurationResponse(
     val buildToolBeans: List<BuildToolBeanResponse>,
     val dockerImages: List<DockerImageResponse>,
     val fileUrlArtifacts: List<FileUrlArtifactResponse>,
+    val genericArtifacts: List<GenericArtifactResponse> = emptyList(),
     val mavenArtifacts: List<MavenArtifactResponse>,
     val packages: List<PackageResponse>,
     val vcsEntries: List<VcsEntryResponse>,

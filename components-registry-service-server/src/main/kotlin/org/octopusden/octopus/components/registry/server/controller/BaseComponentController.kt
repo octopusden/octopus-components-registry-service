@@ -156,6 +156,7 @@ abstract class BaseComponentController<T : Component> {
                     distribution?.RPM(),
                     SecurityGroupsDTO(distribution?.securityGroups?.read?.split(",") ?: emptyList()),
                     distribution?.docker(),
+                    distribution?.generic(),
                 )
             }
     }

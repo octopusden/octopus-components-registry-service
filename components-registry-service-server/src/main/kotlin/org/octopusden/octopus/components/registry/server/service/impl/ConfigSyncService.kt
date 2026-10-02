@@ -223,6 +223,7 @@ class ConfigSyncService(
                     dist.DEB?.let { put("DEB", it) }
                     dist.RPM?.let { put("RPM", it) }
                     dist.docker?.let { put("docker", it) }
+                    dist.generic?.let { put("generic", it) }
                     dist.securityGroups?.read?.let { put("securityGroups", mapOf("read" to it)) }
                 }.takeIf { it.isNotEmpty() }?.let { put("distribution", it) }
             }

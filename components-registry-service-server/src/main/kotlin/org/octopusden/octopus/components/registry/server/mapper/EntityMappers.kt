@@ -17,6 +17,7 @@ import org.octopusden.octopus.components.registry.server.entity.ComponentDocLink
 import org.octopusden.octopus.components.registry.server.entity.ComponentEntity
 import org.octopusden.octopus.components.registry.server.entity.DistributionDockerImageEntity
 import org.octopusden.octopus.components.registry.server.entity.DistributionFileUrlArtifactEntity
+import org.octopusden.octopus.components.registry.server.entity.DistributionGenericArtifactEntity
 import org.octopusden.octopus.components.registry.server.entity.DistributionMavenArtifactEntity
 import org.octopusden.octopus.components.registry.server.entity.DistributionPackageEntity
 import org.octopusden.octopus.components.registry.server.entity.DistributionSecurityGroupEntity
@@ -59,6 +60,7 @@ internal object MarkerAttributes {
     const val DISTRIBUTION_FILE_URL: String = "distribution.fileUrl"
     const val DISTRIBUTION_DOCKER: String = "distribution.docker"
     const val DISTRIBUTION_PACKAGES: String = "distribution.packages"
+    const val DISTRIBUTION_GENERIC: String = "distribution.generic"
     const val BUILD_REQUIRED_TOOLS: String = "build.requiredTools"
     const val BUILD_TOOLS: String = "build.buildTools"
 
@@ -82,6 +84,7 @@ internal object MarkerAttributes {
             DISTRIBUTION_FILE_URL,
             DISTRIBUTION_DOCKER,
             DISTRIBUTION_PACKAGES,
+            DISTRIBUTION_GENERIC,
             BUILD_REQUIRED_TOOLS,
             BUILD_TOOLS,
         )
@@ -764,6 +767,12 @@ private fun buildEscrowModuleConfig(
             markerOverrides = markerOverrides,
             baseChildren = base.packages.toList(),
         ) { it.packages.toList() }
+    val genericArtifacts =
+        pickMarkerChildren(
+            attribute = MarkerAttributes.DISTRIBUTION_GENERIC,
+            markerOverrides = markerOverrides,
+            baseChildren = base.genericArtifacts.toList(),
+        ) { it.genericArtifacts.toList() }
 
     val distribution =
         buildDistribution(
@@ -773,6 +782,7 @@ private fun buildEscrowModuleConfig(
             fileUrlArtifacts = fileUrlArtifacts,
             dockerImages = dockerImages,
             packages = packages,
+            genericArtifacts = genericArtifacts,
             securityGroups = component.securityGroups.toList(),
         )
     if (distribution != null) {
@@ -1150,6 +1160,7 @@ internal fun buildDistribution(
     fileUrlArtifacts: List<DistributionFileUrlArtifactEntity>,
     dockerImages: List<DistributionDockerImageEntity>,
     packages: List<DistributionPackageEntity>,
+    genericArtifacts: List<DistributionGenericArtifactEntity>,
     securityGroups: List<DistributionSecurityGroupEntity>,
 ): Distribution? {
     val gavStr = composeGavCsv(mavenArtifacts, fileUrlArtifacts)
@@ -1165,6 +1176,8 @@ internal fun buildDistribution(
         .joinToString(",") { it.packageName }
         .ifEmpty { null }
 
+    val genericStr = composeGenericCsv(genericArtifacts)
+
     val secReadGroups =
         securityGroups
             .filter { it.groupType == "read" }
@@ -1178,11 +1191,12 @@ internal fun buildDistribution(
             dockerStr != null ||
             debStr != null ||
             rpmStr != null ||
+            genericStr != null ||
             secGroups != null
 
     if (!anyContent) return null
 
-    return Distribution(explicit ?: true, external ?: false, gavStr, debStr, rpmStr, dockerStr, secGroups)
+    return Distribution(explicit ?: true, external ?: false, gavStr, debStr, rpmStr, dockerStr, genericStr, secGroups)
 }
 
 private fun composeGavCsv(
@@ -1225,6 +1239,11 @@ private fun composeDockerCsv(images: List<DistributionDockerImageEntity>): Strin
         sorted.joinToString(",") { e ->
             if (e.flavor.isNullOrBlank()) e.imageName else "${e.imageName}:${e.flavor}"
         }
+    return csv.ifEmpty { null }
+}
+
+private fun composeGenericCsv(generic: List<DistributionGenericArtifactEntity>): String? {
+    val csv = generic.sortedBy { it.sortOrder }.joinToString(",") { it.path }
     return csv.ifEmpty { null }
 }
 
