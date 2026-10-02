@@ -300,6 +300,24 @@ class TeamcityPlacementDiffServiceTest {
     }
 
     @Test
+    fun `a compile configuration attaching an extra tooling root is a roots mismatch, not invalid (RED)`() {
+        val comp = component()
+        val row = ComponentConfigurationEntity(id = UUID.randomUUID(), component = comp, rowType = "BASE")
+        row.vcsEntries += VcsSettingsEntryEntity(componentConfiguration = row, name = "main", vcsPath = appId, sortOrder = 0)
+        val bt = compileBuildType(
+            "compileA",
+            workDir = "%teamcity.build.checkoutDir%/shared-tooling",
+            roots = listOf(appId to "+:. => model", "ssh://h/tools/shared-tooling.git" to "+:. => shared-tooling"),
+        )
+        val svc = service(listOf(row), mapOf(comp.id!! to listOf("P")), FakeEnrichedTcProjectFetcher(mapOf("P" to project(bt))))
+
+        val diff = svc.runDiff().rows.single()
+
+        assertEquals(PlacementDiffRowStatus.ROOTS_MISMATCH, diff.status)
+        assertTrue(diff.notes.any { it.contains("VCS roots differ from the registry") && it.contains("tools/shared-tooling (compileA)") })
+    }
+
+    @Test
     fun `a component with no TeamCity link is skipped entirely`() {
         val comp = component()
         val row = multiRootRow(comp)
