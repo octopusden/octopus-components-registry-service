@@ -14,6 +14,7 @@ import org.octopusden.octopus.validation.validators.type.TeamCityValidationType
  */
 object VcsRootsValidation {
     fun check(
+        componentKey: String,
         registryVcsPaths: List<String>,
         compileConfigs: List<TcCompileConfig>,
     ): ValidationResult? {
@@ -32,7 +33,7 @@ object VcsRootsValidation {
         return ValidationResult(
             TeamCityValidationType.VCS_ROOTS_DIFFER_FROM_REGISTRY,
             Status.WARNING,
-            "VCS roots differ from the registry: " + parts.joinToString("; "),
+            "VCS roots differ from the registry ($componentKey): " + parts.joinToString("; "),
         )
     }
 }
