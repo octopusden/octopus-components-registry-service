@@ -183,8 +183,16 @@ class TeamcityPlacementDiffService(
         val mismatch = rootsMismatchNote(placementEntries, chain)
         if (mismatch != null) {
             return toRowDiff(
-                component, componentId, row, rowLabel, entries,
-                PlacementDiffRowStatus.ROOTS_MISMATCH, emptyMap(), null, listOf(mismatch), chain.sourceBuildTypeIds,
+                component,
+                componentId,
+                row,
+                rowLabel,
+                entries,
+                PlacementDiffRowStatus.ROOTS_MISMATCH,
+                emptyMap(),
+                null,
+                listOf(mismatch),
+                chain.sourceBuildTypeIds,
             )
         }
         val repoKeys = placementEntries.map { repoKey(it.vcsPath) }.toSet()
@@ -419,7 +427,11 @@ class TeamcityPlacementDiffService(
             if (bt.isCompile()) {
                 if (paused) pausedCompile++ else compile += bt.toCompileConfig()
             } else if (!paused) {
-                val ruledKeys = bt.vcsRootUrls().filter { !it.second.isNullOrBlank() }.map { repoKey(it.first) }.toSet()
+                val ruledKeys = bt
+                    .vcsRootUrls()
+                    .filter { !it.second.isNullOrBlank() }
+                    .map { repoKey(it.first) }
+                    .toSet()
                 if (ruledKeys.isNotEmpty()) {
                     nonCompileRuled[bt.id] = ruledKeys to (bt.vcsRoots?.entries?.size ?: 0)
                 }
