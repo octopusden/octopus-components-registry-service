@@ -499,15 +499,12 @@ class TeamcityPlacementDiffServiceTest {
     }
 
     @Test
-    fun `an archived component's row is reported OUTSIDE_SCOPE instead of omitted (spec-conformance finding 1, RED)`() {
-        // No TeamCity project link is stubbed at all: an archived component's row must not need
-        // one -- it is OUTSIDE_SCOPE unconditionally, without ever consulting the chain.
+    fun `an archived component is left out of the Diff entirely (QA Diff, owner decision, RED)`() {
+        // On QA, archived components made up 60% of the report and can never be synced.
         val comp = component(archived = true)
         val row = multiRootRow(comp)
-        val svc = service(listOf(row), emptyMap(), FakeEnrichedTcProjectFetcher())
+        val svc = service(listOf(row), mapOf(comp.id!! to listOf("P")), FakeEnrichedTcProjectFetcher())
 
-        val diff = svc.runDiff().rows.single()
-        assertEquals(PlacementDiffRowStatus.OUTSIDE_SCOPE, diff.status)
-        assertTrue(diff.notes.any { it.contains("archived") })
+        assertTrue(svc.runDiff().rows.isEmpty())
     }
 }
