@@ -257,3 +257,20 @@ private fun noCompileConfigDerivation(
         else ->
             PlacementDerivation(PlacementRowStatus.NO_CHAIN, result, bwd, notes + "no chain configuration found")
     }
+
+/** A repository a compile configuration attaches that the registry does not list, with the build types that attach it. */
+data class ExtraVcsRoot(
+    val repo: String,
+    val buildTypeIds: List<String>,
+)
+
+/** [extra]: attached in TeamCity, absent from the registry. [missing]: in the registry, attached by no compile configuration. */
+data class VcsRootsComparison(
+    val extra: List<ExtraVcsRoot>,
+    val missing: List<String>,
+)
+
+fun compareVcsRoots(
+    registryVcsPaths: List<String>,
+    compileConfigs: List<TcCompileConfig>,
+): VcsRootsComparison = VcsRootsComparison(emptyList(), emptyList())
