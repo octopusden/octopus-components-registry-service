@@ -43,7 +43,7 @@ object PlacementReportRenderer {
         |td, th { border: 1px solid #ccc; padding: 4px 8px; vertical-align: top; text-align: left; }
         |tr.status-resolved { background: #eaffea; }
         |tr.status-manual_edit { background: #fff6da; }
-        |tr.status-conflict, tr.status-unexpressible, tr.status-invalid, tr.status-tc_error { background: #ffecec; }
+        |tr.status-conflict, tr.status-unexpressible, tr.status-invalid, tr.status-tc_error, tr.status-roots_mismatch { background: #ffecec; }
         |tr.status-outside_scope { background: #f0f0f0; color: #777; }
         |</style>
         |</head><body>
