@@ -166,8 +166,8 @@ class MetaInUseOptionsEndpointsTest {
     }
 
     @Test
-    @DisplayName("GET /meta/release-managers returns sorted distinct in-use release managers")
-    fun `meta release-managers returns sorted distinct in-use values`() {
+    @DisplayName("SYS-046: GET /meta/release-managers returns sorted distinct in-use release managers")
+    fun `SYS-046 meta release-managers returns sorted distinct in-use values`() {
         val a = uniqueName("zrm")
         val b = uniqueName("arm")
         // A multi-RM component plus a second component reusing `a` — exercises
@@ -183,8 +183,8 @@ class MetaInUseOptionsEndpointsTest {
     }
 
     @Test
-    @DisplayName("GET /meta/security-champions returns sorted distinct in-use security champions")
-    fun `meta security-champions returns sorted distinct in-use values`() {
+    @DisplayName("SYS-046: GET /meta/security-champions returns sorted distinct in-use security champions")
+    fun `SYS-046 meta security-champions returns sorted distinct in-use values`() {
         val a = uniqueName("zsc")
         val b = uniqueName("asc")
         create(baseBody(uniqueName("sc_one"), ""","securityChampion":["$a","$b"]"""))
@@ -198,8 +198,8 @@ class MetaInUseOptionsEndpointsTest {
     }
 
     @Test
-    @DisplayName("the two people option lists stay separate dimensions (RM is not advertised as SC)")
-    fun `meta people option lists do not bleed across roles`() {
+    @DisplayName("SYS-046: the two people option lists stay separate dimensions (RM is not advertised as SC)")
+    fun `SYS-046 meta people option lists do not bleed across roles`() {
         // Guard against the copy-paste failure mode of wiring both endpoints to
         // the same child collection: a user who is ONLY an RM must never show up
         // in /meta/security-champions, and vice versa. `?releaseManager=` and

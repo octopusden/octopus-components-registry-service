@@ -1542,6 +1542,7 @@ Mirrors SYS-040 (labels) / SYS-042 (system): a filter change plus a companion in
    - `GET /rest/api/4/components/meta/jira-project-keys` → `ComponentRepository.findDistinctJiraProjectKeys()` (distinct `jira_project_key` over BASE configuration rows).
    - `GET /rest/api/4/components/meta/parent-component-names` → `ComponentRepository.findDistinctParentComponentNames()` (distinct `component_key` of components actually referenced as someone's parent — NOT the can-be-parent candidate set, which the editor parent picker uses via `?canBeParent=true`).
    - `GET /rest/api/4/components/meta/group-keys` → `ComponentGroupRepository.findDistinctGroupKeys()` (distinct `group_key` of groups that own ≥1 component, so no dead options).
+   - `GET /rest/api/4/components/meta/release-managers` / `GET /rest/api/4/components/meta/security-champions` → `ComponentManagementService.getDistinctReleaseManagers()` / `getDistinctSecurityChampions()` (distinct trimmed usernames over the ordered `releaseManagers` / `securityChampions` child collections). They back the existing `?releaseManager=` / `?securityChampion=` filters (SYS-056) and stay two lists: a merged one would advertise dead options in both pickers.
 
 **Preconditions:**
 - Caller has `ACCESS_COMPONENTS`.
@@ -1555,8 +1556,9 @@ Mirrors SYS-040 (labels) / SYS-042 (system): a filter change plus a companion in
 6. Blank / interleaved-blank / dedupe / whitespace-trim normalisation matches the other multi-value filters (`?clientCode=`, `?clientCode=,,`, `?clientCode=A,A`).
 7. `GET /meta/client-codes` / `/meta/jira-project-keys` / `/meta/parent-component-names` / `/meta/group-keys` each return 200 + a sorted, duplicate-free JSON array of in-use values, never 404, regardless of DB state.
 8. `/meta/parent-component-names` lists only component keys actually referenced as a parent; `/meta/group-keys` lists only group keys with ≥1 member.
+9. `GET /meta/release-managers` / `/meta/security-champions` each return 200 + a sorted, duplicate-free array of in-use usernames; a user who is only a release manager never appears in `/meta/security-champions`, and vice versa.
 
-**Test method:** `ListComponentsExtendedFiltersTest` (the `clientCode` / `jiraProjectKey` / `parentComponentName` / `groupKey` cases updated to exact-IN + a multi-value case) and `MetaInUseOptionsEndpointsTest` (the four endpoints).
+**Test method:** `ListComponentsExtendedFiltersTest` (the `clientCode` / `jiraProjectKey` / `parentComponentName` / `groupKey` cases updated to exact-IN + a multi-value case) and `MetaInUseOptionsEndpointsTest` (the six endpoints).
 
 **Out of scope:**
 - Converting the remaining extended scalars (`vcsPath`, `productionBranch`) to multi-value — they stay single-value `LIKE` (free-text search, not dropdown-backed).

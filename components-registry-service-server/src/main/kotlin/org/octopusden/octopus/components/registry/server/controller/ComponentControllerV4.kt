@@ -108,11 +108,11 @@ class ComponentControllerV4(
     // dimensions, so a merged list would advertise dead options in both pickers.
     @GetMapping("/meta/release-managers")
     @PreAuthorize("@permissionEvaluator.hasPermission('ACCESS_COMPONENTS')")
-    fun getDistinctReleaseManagers(): List<String> = componentRepository.findDistinctReleaseManagers()
+    fun getDistinctReleaseManagers(): List<String> = componentManagementService.getDistinctReleaseManagers()
 
     @GetMapping("/meta/security-champions")
     @PreAuthorize("@permissionEvaluator.hasPermission('ACCESS_COMPONENTS')")
-    fun getDistinctSecurityChampions(): List<String> = componentRepository.findDistinctSecurityChampions()
+    fun getDistinctSecurityChampions(): List<String> = componentManagementService.getDistinctSecurityChampions()
 
     // Employee picker lookup (Stage 2). The employee-service client exposes no
     // prefix search, so this is an exact-match probe of `search`: it returns a

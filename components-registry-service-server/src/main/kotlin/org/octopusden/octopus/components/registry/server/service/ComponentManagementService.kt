@@ -89,6 +89,12 @@ interface ComponentManagementService {
      * Informational only — see [ComponentEditorsResponse].
      */
     fun getEditors(idOrName: String): ComponentEditorsResponse
+
+    /** In-use release-manager usernames, sorted and distinct — the `/meta/release-managers` options. */
+    fun getDistinctReleaseManagers(): List<String>
+
+    /** In-use security-champion usernames, sorted and distinct — the `/meta/security-champions` options. */
+    fun getDistinctSecurityChampions(): List<String>
 }
 
 /** A rendered as-code document plus the canonical component key (for the filename). */

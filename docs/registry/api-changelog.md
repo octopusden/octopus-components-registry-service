@@ -18,6 +18,11 @@ refresh it with `./gradlew :components-registry-service-server:generateOpenApiDo
 
 ## Unreleased
 
+- **`GET /meta/release-managers` and `GET /meta/security-champions` added.** Two new
+  `ACCESS_COMPONENTS` endpoints return the sorted, distinct release-manager and security-champion
+  usernames currently assigned to at least one component (blank values excluded), as
+  `List<String>` like `/meta/owners`. They list the values the existing `?releaseManager=` and
+  `?securityChampion=` filters can match; each list holds only its own role.
 - **VCS entry placement (`sourcePath`, `checkoutDirectory`), Build Working Directory and derived
   names.** `VcsEntryRequest` / `VcsEntryResponse` (base configuration and `vcs.settings` marker rows
   alike) gain two optional fields: `sourcePath`, the repository directory that belongs to the

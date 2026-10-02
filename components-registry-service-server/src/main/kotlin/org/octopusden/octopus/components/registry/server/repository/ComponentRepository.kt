@@ -63,12 +63,13 @@ interface ComponentRepository :
      * `username` is a NOT NULL column, so only the non-blank guard is needed —
      * defence-in-depth against migration drift or a direct DB write leaving a
      * whitespace-only row, which would otherwise surface as an unselectable
-     * blank chip in the picker.
+     * blank chip in the picker. Values are projected and ordered trimmed for the
+     * same reason, so a padded row cannot surface as a near-duplicate option.
      */
     @Query(
-        "SELECT DISTINCT rm.username FROM ComponentEntity c JOIN c.releaseManagers rm " +
+        "SELECT DISTINCT TRIM(rm.username) FROM ComponentEntity c JOIN c.releaseManagers rm " +
             "WHERE TRIM(rm.username) <> '' " +
-            "ORDER BY rm.username",
+            "ORDER BY TRIM(rm.username)",
     )
     fun findDistinctReleaseManagers(): List<String>
 
@@ -82,9 +83,9 @@ interface ComponentRepository :
      * dead options in both pickers.
      */
     @Query(
-        "SELECT DISTINCT sc.username FROM ComponentEntity c JOIN c.securityChampions sc " +
+        "SELECT DISTINCT TRIM(sc.username) FROM ComponentEntity c JOIN c.securityChampions sc " +
             "WHERE TRIM(sc.username) <> '' " +
-            "ORDER BY sc.username",
+            "ORDER BY TRIM(sc.username)",
     )
     fun findDistinctSecurityChampions(): List<String>
 
