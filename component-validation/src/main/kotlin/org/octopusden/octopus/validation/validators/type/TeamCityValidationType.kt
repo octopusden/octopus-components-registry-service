@@ -2,7 +2,7 @@ package org.octopusden.octopus.validation.validators.type
 
 import org.octopusden.octopus.validation.core.ValidationType
 
-/** The seven TeamCity project questions. */
+/** The TeamCity project questions. */
 enum class TeamCityValidationType : ValidationType {
     /** Is any build configuration attached to default build template? */
     ATTACHED_TO_BUILD_TEMPLATE,
@@ -27,6 +27,12 @@ enum class TeamCityValidationType : ValidationType {
      * `%env.JAVA_HOME%` reference?
      */
     JAVA_HOME_NOT_FROM_ENV,
+
+    /**
+     * Do the compile build configurations attach VCS roots that differ from the component's registry
+     * roots? Needs registry data, so the server evaluates it (not a module validator).
+     */
+    VCS_ROOTS_DIFFER_FROM_REGISTRY,
     ;
 
     override val id get() = name
