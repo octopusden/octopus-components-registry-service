@@ -180,6 +180,13 @@ class TeamcityPlacementDiffService(
             )
         }
         chain as ChainOutcome.Ok
+        val mismatch = rootsMismatchNote(placementEntries, chain)
+        if (mismatch != null) {
+            return toRowDiff(
+                component, componentId, row, rowLabel, entries,
+                PlacementDiffRowStatus.ROOTS_MISMATCH, emptyMap(), null, listOf(mismatch), chain.sourceBuildTypeIds,
+            )
+        }
         val repoKeys = placementEntries.map { repoKey(it.vcsPath) }.toSet()
         val outsideCounts = chain.nonCompileRuled.filterValues { it.first.any { key -> key in repoKeys } }.mapValues { it.value.second }
         val derivation = derive(DeriveInput(placementEntries, chain.compileConfigs, chain.pausedCompileCount, outsideCounts))
@@ -207,6 +214,17 @@ class TeamcityPlacementDiffService(
             extraNotes + derivation.notes,
             chain.sourceBuildTypeIds,
         )
+    }
+
+    /** Same comparison TeamCity Validation reports ([compareVcsRoots]); only extra roots decide the status here. */
+    private fun rootsMismatchNote(
+        entries: List<PlacementRegistryEntry>,
+        chain: ChainOutcome.Ok,
+    ): String? {
+        val extra = compareVcsRoots(entries.map { it.vcsPath }, chain.compileConfigs).extra
+        if (extra.isEmpty()) return null
+        val attached = extra.joinToString(", ") { "${it.repo} (${it.buildTypeIds.joinToString(", ")})" }
+        return "VCS roots differ from the registry: TeamCity also attaches $attached — see TeamCity Validation"
     }
 
     /**
@@ -397,51 +415,11 @@ class TeamcityPlacementDiffService(
         var pausedCompile = 0
         val nonCompileRuled = mutableMapOf<String, Pair<Set<String>, Int>>()
         for (bt in buildTypes) {
-            val templateIds = (
-                bt.templates
-                    ?.buildTypes
-                    .orEmpty()
-                    .map { it.id } + listOfNotNull(bt.template?.id)
-            ).toSet()
-            val isCompile = templateIds.any { it in COMPILE_TEMPLATE_IDS }
             val paused = bt.paused == true
-            if (isCompile) {
-                if (paused) {
-                    pausedCompile++
-                } else {
-                    compile += TcCompileConfig(
-                        buildTypeId = bt.id,
-                        vcsRootEntries = bt.vcsRoots?.entries.orEmpty().map { e ->
-                            TcVcsRootEntry(
-                                url = e.vcsRoot.properties
-                                    ?.properties
-                                    .orEmpty()
-                                    .firstOrNull { it.name == "url" }
-                                    ?.value,
-                                checkoutRules = e.checkoutRules,
-                            )
-                        },
-                        workDir = bt.parameters
-                            ?.properties
-                            .orEmpty()
-                            .firstOrNull { it.name == "WORK_DIR" }
-                            ?.value,
-                    )
-                }
+            if (bt.isCompile()) {
+                if (paused) pausedCompile++ else compile += bt.toCompileConfig()
             } else if (!paused) {
-                val ruledKeys = bt.vcsRoots
-                    ?.entries
-                    .orEmpty()
-                    .filter { !it.checkoutRules.isNullOrBlank() }
-                    .map { e ->
-                        repoKey(
-                            e.vcsRoot.properties
-                                ?.properties
-                                .orEmpty()
-                                .firstOrNull { it.name == "url" }
-                                ?.value,
-                        )
-                    }.toSet()
+                val ruledKeys = bt.vcsRootUrls().filter { !it.second.isNullOrBlank() }.map { repoKey(it.first) }.toSet()
                 if (ruledKeys.isNotEmpty()) {
                     nonCompileRuled[bt.id] = ruledKeys to (bt.vcsRoots?.entries?.size ?: 0)
                 }
@@ -465,9 +443,6 @@ class TeamcityPlacementDiffService(
     }
 
     private companion object {
-        /** ADR-001: the only two chain templates whose build carries `WORK_DIR` / checkout placement. */
-        val COMPILE_TEMPLATE_IDS = setOf("CDGradleBuild", "CDJavaMavenBuild")
-
         const val BASE_ROW_LABEL = "BASE"
     }
 }
