@@ -286,10 +286,17 @@ class TeamcityPlacementDiffServiceTest {
         val comp = component()
         val row = ComponentConfigurationEntity(id = UUID.randomUUID(), component = comp, rowType = "BASE")
         row.vcsEntries += VcsSettingsEntryEntity(componentConfiguration = row, name = "main", vcsPath = appId, sortOrder = 0)
-        val svc =
-            service(listOf(row), mapOf(comp.id!! to listOf("P")), FakeEnrichedTcProjectFetcher(errors = mapOf("P" to RuntimeException("boom"))))
+        val fetcher = FakeEnrichedTcProjectFetcher(errors = mapOf("P" to RuntimeException("boom")))
+        val svc = service(listOf(row), mapOf(comp.id!! to listOf("P")), fetcher)
 
-        assertEquals(PlacementDiffRowStatus.TC_ERROR, svc.runDiff().rows.single().status)
+        assertEquals(
+            PlacementDiffRowStatus.TC_ERROR,
+            svc
+                .runDiff()
+                .rows
+                .single()
+                .status,
+        )
     }
 
     @Test
