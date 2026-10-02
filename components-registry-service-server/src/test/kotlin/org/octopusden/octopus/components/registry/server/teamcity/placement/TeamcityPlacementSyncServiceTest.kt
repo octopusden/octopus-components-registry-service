@@ -211,32 +211,6 @@ class TeamcityPlacementSyncServiceTest {
     }
 
     @Test
-    fun `an outside-scope row (marker or archived) is skipped, never written (spec-conformance finding 1, RED)`() {
-        // Spec-conformance review: Diff now reports marker (per-range `vcs.settings`) rows and
-        // archived components' rows with the dedicated OUTSIDE_SCOPE status (never RESOLVED or
-        // any other status) -- Sync must key its report-only skip on THAT status, not on rowLabel,
-        // so both cases are covered by the same check.
-        val diffRow = row(PlacementDiffRowStatus.OUTSIDE_SCOPE, rowLabel = "vcs.settings", derivedBwd = "app")
-        val diffService = diffServiceReturning(listOf(diffRow))
-        val (svc, cms) = service(diffService)
-
-        val result = svc.sync(setOf(componentId), PlacementDiffResult(Instant.now(), listOf(diffRow)), "job-42", "alice")
-
-        assertEquals(0, result.applied)
-        assertEquals(1, result.skipped)
-        assertEquals(
-            "skipped: outside scope",
-            result.components
-                .single()
-                .rows
-                .single()
-                .outcome,
-        )
-        verify(cms, org.mockito.kotlin.never()).updateFieldOverride(any(), any(), any())
-        verify(cms, org.mockito.kotlin.never()).updateComponent(any(), any())
-    }
-
-    @Test
     fun `a failing write is counted and reported without aborting the rest`() {
         val diffRow = row(PlacementDiffRowStatus.RESOLVED)
         val diffService = diffServiceReturning(listOf(diffRow))

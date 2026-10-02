@@ -54,10 +54,8 @@ data class PlacementSyncResult(
  * [ComponentManagementService] — the same validation, name-derivation and audit path a human PATCH
  * uses — never direct SQL. MANUAL_EDIT rows are never selected for write in the first place (they
  * are not RESOLVED), so [TeamcityPlacementDiffService.runDiff]'s own re-derivation is the single
- * place that decides overwrite safety; this service does not re-check it. A marker (per-range
- * `vcs.settings`) row, or a row of an archived component, is always `OUTSIDE_SCOPE` from Diff
- * (ADR-002 decisions 4/8; spec-conformance finding 1) and always reported "skipped: outside
- * scope", never written.
+ * place that decides overwrite safety; this service does not re-check it. Diff only carries BASE
+ * rows of non-archived components, so Sync never writes a version-range or archived row.
  */
 @ConditionalOnDatabaseEnabled
 @Service
@@ -129,12 +127,6 @@ class TeamcityPlacementSyncService(
         snapshotRow: PlacementRowDiff?,
         jobId: String,
     ): Pair<String, List<PlacementFieldChange>> {
-        // ADR-002 decisions 4/8 (owner review finding 5) + spec-conformance finding 1: a marker
-        // (per-range `vcs.settings`) row, or a row of an archived component, is always
-        // OUTSIDE_SCOPE from Diff -- Sync never writes either, whatever the selection. Checked
-        // first, ahead of every other outcome, so such a row is never reported "changed since
-        // diff" either -- it is always, unconditionally, out of scope.
-        if (freshRow.status == PlacementDiffRowStatus.OUTSIDE_SCOPE) return "skipped: outside scope" to emptyList()
         // The version is left out: an unrelated edit must not skip the row. The fresh derivation
         // already reflects every placement/branch change, and the write is locked on its version.
         if (snapshotRow == null || snapshotRow.copy(componentVersion = freshRow.componentVersion) != freshRow) {

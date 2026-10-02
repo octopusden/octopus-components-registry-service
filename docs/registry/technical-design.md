@@ -466,9 +466,9 @@ fallback).
   to classify it `INVALID` (Codex second-pass finding: those are CRS validation rules, not
   unparseable shapes — the exact pre-emption `PlacementRules.checkRules`'s deletion was meant to
   fix, re-introduced one function over).
-  - **Scope:** an archived component's rows, and marker (per-range `vcs.settings`) rows, are always
-    `OUTSIDE_SCOPE` (spec-conformance review) — never derived, never subject to the filter below,
-    always reported. For a BASE row of a non-archived component: multi-root rows always; a
+  - **Scope:** only the current (BASE) configuration of a non-archived component (owner decision
+    after the first QA run): archived components and version-range (`vcs.settings` marker) rows are
+    left out of the Diff entirely. Of those BASE rows: multi-root rows always; a
     single-root row only when a Checkout Directory or a non-root Build Working Directory exists on
     either side (current or derived) — a lone root needing nothing never appears, not even as "in
     sync" (keeps single-root Checkout Directories, which would rename `main` in the escrow export,
@@ -477,8 +477,7 @@ fallback).
     `NO_CHAIN`, `OUTSIDE_TEMPLATES`, `COMPILE_PAUSED`, `MANUAL_EDIT`, `IN_SYNC`, `TC_ERROR` (a
     TeamCity fetch failure; a 403 is recognised and reported as "no permission to read VCS root
     entries" rather than a raw exception; reported for every linked row, single-root ones too,
-    since without the chain nothing is derived to decide scope), `OUTSIDE_SCOPE` (a marker row, or any row of an archived
-    component).
+    since without the chain nothing is derived to decide scope).
   - **`UNEXPRESSIBLE` vs `INVALID` (spec-conformance review):** `UNEXPRESSIBLE` is now narrow —
     only a checkout-rule or `WORK_DIR` SHAPE that `PlacementRules` can't parse at all (a remap,
     several rules on one entry, `%VAR%`). `PlacementRules.checkRules`, which used to re-implement
@@ -536,10 +535,7 @@ fallback).
   so a manual edit between the re-derivation and the write fails the optimistic lock (outcome
   `failed`) instead of being overwritten. The version is not part of the "changed since diff"
   comparison: an edit between the Diff and the Sync that changes the row (placement, branch, tag)
-  already shows up in the fresh derivation, and an unrelated one must not skip it. A row that is `OUTSIDE_SCOPE` (a marker
-  per-range `vcs.settings` row, or any row of an archived component) is never written whatever its
-  selection: its outcome is always `"skipped: outside scope"` (spec-conformance review; ADR-002
-  decisions 4/8). Every other write goes through `ComponentManagementService`'s base-row
+  already shows up in the fresh derivation, and an unrelated one must not skip it. Every write goes through `ComponentManagementService`'s base-row
   `updateComponent` — `changeComment = "sync from TeamCity (job <jobId>)"`, this Sync run's OWN id
   appended to the fixed tag `PlacementEditHistory.isCheckoutDirectoryManuallySet` /
   `isSourcePathManuallySet` / `isBuildWorkingDirectoryManuallySet` key on (owner review: earlier
