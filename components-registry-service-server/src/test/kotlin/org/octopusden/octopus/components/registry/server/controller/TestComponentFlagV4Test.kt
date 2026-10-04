@@ -16,6 +16,7 @@ import org.junit.jupiter.api.Timeout
 import org.octopusden.cloud.commons.security.client.AuthServerClient
 import org.octopusden.octopus.components.registry.server.ComponentRegistryServiceApplication
 import org.octopusden.octopus.components.registry.server.support.adminJwt
+import org.octopusden.octopus.components.registry.server.support.editorJwt
 import org.springframework.beans.factory.annotation.Autowired
 import org.springframework.boot.test.autoconfigure.web.servlet.AutoConfigureMockMvc
 import org.springframework.boot.test.context.SpringBootTest
@@ -118,17 +119,32 @@ class TestComponentFlagV4Test {
         val summary = getJson("/rest/api/4/components?search=$test")["content"].single()
         assertTrue(summary["testComponent"].asBoolean())
 
-        // Legacy surface: emitted only when true (absent reads as false for every client).
+        // Legacy surface: always present, true or false.
         assertTrue(getJson("/rest/api/2/components/$test")["testComponent"].asBoolean())
-        assertFalse(getJson("/rest/api/2/components/$real").has("testComponent"))
+        assertFalse(getJson("/rest/api/2/components/$real")["testComponent"].asBoolean())
         val v3 = getJson("/rest/api/3/components").associateBy { it["component"]["id"].asText() }
         assertTrue(v3.getValue(test)["component"]["testComponent"].asBoolean())
-        assertFalse(v3.getValue(real)["component"].has("testComponent"))
+        assertFalse(v3.getValue(real)["component"]["testComponent"].asBoolean())
 
+        // The as-code view stays parseable by the legacy DSL, which has no such key.
         mvc
             .perform(get("/rest/api/4/components/$test/as-code").with(adminJwt()))
             .andExpect(status().isOk)
-            .andExpect { assertTrue(it.response.contentAsString.contains("testComponent = true")) }
+            .andExpect { assertFalse(it.response.contentAsString.contains("testComponent")) }
+    }
+
+    @Test
+    @DisplayName("SYS-099: the component's own editor can set testComponent without ARCHIVE_COMPONENTS")
+    fun `SYS-099 editor without archive permission can flag`() {
+        val detail = create(""""name":"${name("sys099-editor")}"""")
+        mvc
+            .perform(
+                patch("/rest/api/4/components/${detail["id"].asText()}")
+                    .with(editorJwt("owner1"))
+                    .contentType(MediaType.APPLICATION_JSON)
+                    .content("""{"version":${detail["version"].asLong()},"testComponent":true}"""),
+            ).andExpect(status().isOk)
+            .andExpect(jsonPath("$.testComponent").value(true))
     }
 
     @Test

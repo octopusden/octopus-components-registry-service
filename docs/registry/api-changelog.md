@@ -20,15 +20,17 @@ refresh it with `./gradlew :components-registry-service-server:generateOpenApiDo
 
 - **`testComponent` flag (SYS-099).** `ComponentSummaryResponse` and `ComponentDetailResponse` gain a
   required `testComponent: boolean`; `ComponentCreateRequest` (default `false`) and
-  `ComponentUpdateRequest` (`null` = unchanged) accept it. Changing it in a PATCH needs
-  `ARCHIVE_COMPONENTS`, like `archived`. `GET /components` gains `?testComponent=true|false`;
+  `ComponentUpdateRequest` (`null` = unchanged) accept it; changing it needs only the plain
+  component edit permission. `GET /components` gains `?testComponent=true|false`;
   without it test components are still listed. Create and PATCH return `400` when a non-test
   component would reference a test component as its parent (`parentComponentName: …`) or doc
   component (`docs: …`), or when a component that non-test components reference that way is
   flagged (`testComponent: …`); the message names both components. `warnings` carries an entry
   when the component has the `test-component` label but the flag is false. `GET
   /health/statistics` no longer counts test components. `V11__` flags every component labelled
-  `test-component`. The v1–v3 `Component` payloads carry `testComponent` only when it is true.
+  `test-component`. The v1–v3 `Component` payloads (list, detail, detailed component, v3 list,
+  find-by-artifact) always carry `testComponent`, read from the DB; the published `Component` DTO
+  now ignores unknown properties. The flag is not part of the legacy Groovy DSL or the as-code view.
 
 - **`GET /meta/release-managers` and `GET /meta/security-champions` added.** Two new
   `ACCESS_COMPONENTS` endpoints return the sorted, distinct release-manager and security-champion

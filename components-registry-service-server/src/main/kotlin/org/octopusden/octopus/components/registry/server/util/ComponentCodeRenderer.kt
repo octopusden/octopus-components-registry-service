@@ -352,7 +352,6 @@ class ComponentCodeRenderer(
         cb.str("clientCode", component.clientCode)
         cb.bool("solution", component.solution)
         cb.bool("archived", component.archived.takeIf { it })
-        cb.bool("testComponent", component.testComponent.takeIf { it })
         cb.bool("canBeParent", component.canBeParent.takeIf { it })
         cb.bool("releasesInDefaultBranch", component.releasesInDefaultBranch)
         cb.str("copyright", component.copyright)

@@ -1408,7 +1408,6 @@ class ImportServiceImpl(
         entity.productType = cfg.productType?.name
         entity.clientCode = cfg.clientCode
         entity.archived = cfg.archived
-        entity.testComponent = cfg.testComponent
         entity.solution = cfg.solution
         // CSV → ordered list happens HERE (the single split site). The accessor
         // does trim → drop blank → keep-first dedupe, so import only needs the

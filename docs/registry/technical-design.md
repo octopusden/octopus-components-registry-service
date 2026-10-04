@@ -321,7 +321,7 @@ Implemented in `WebSecurityConfig.kt` (extends `CloudCommonWebSecurityConfig` fr
 | Method | Required permission | Used on |
 |---|---|---|
 | `canEditComponent(idOrName)` | `ACCESS_COMPONENTS` **and** (owner/RM/SC membership **or** manager of the owner (SYS-063) **or** `EDIT_ANY_COMPONENT`) | `PATCH /components/{id}` (plain edit) and all field-override CRUD (`POST`/`PATCH`/`DELETE /{id}/field-overrides`). `POST /components` (create) uses `hasPermission('CREATE_COMPONENTS')` directly because no owner exists yet |
-| `canArchiveComponent(name)` | `ARCHIVE_COMPONENTS` | `PATCH /components/{id}` when `archived` or `testComponent` is in payload |
+| `canArchiveComponent(name)` | `ARCHIVE_COMPONENTS` | `PATCH /components/{id}` when `archived` is in payload |
 | `canRenameComponent(name)` | `RENAME_COMPONENTS` | `PATCH /components/{id}` when `name` is in payload |
 | `canDeleteComponent(name)` | `DELETE_COMPONENTS` | `DELETE /components/{id}` |
 | `canImport()` | `IMPORT_DATA` | class-level on `AdminControllerV4` (covers all admin endpoints incl. `/migrate`, `/migrate-history`, etc.) |
@@ -329,7 +329,7 @@ Implemented in `WebSecurityConfig.kt` (extends `CloudCommonWebSecurityConfig` fr
 
 The `PATCH /components/{id}` SpEL guard combines these (the path variable is a `UUID`; the helper takes `String`, so the SpEL passes `#id.toString()`):
 ```
-@PreAuthorize("@permissionEvaluator.hasPermission('ACCESS_COMPONENTS') and @permissionEvaluator.canEditComponent(#id.toString()) and (#request.archived == null or @permissionEvaluator.canArchiveComponent(#id.toString())) and (#request.testComponent == null or @permissionEvaluator.canArchiveComponent(#id.toString())) and (#request.name == null or @permissionEvaluator.canRenameComponent(#id.toString()))")
+@PreAuthorize("@permissionEvaluator.hasPermission('ACCESS_COMPONENTS') and @permissionEvaluator.canEditComponent(#id.toString()) and (#request.archived == null or @permissionEvaluator.canArchiveComponent(#id.toString())) and (#request.name == null or @permissionEvaluator.canRenameComponent(#id.toString()))")
 ```
 Plain edits use the ownership/admin predicate; archive/rename payloads fail closed with 403 for anyone without the extra permission.
 

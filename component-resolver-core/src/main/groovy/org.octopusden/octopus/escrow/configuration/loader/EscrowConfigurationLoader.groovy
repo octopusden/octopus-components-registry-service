@@ -59,7 +59,6 @@ import static org.octopusden.octopus.escrow.configuration.validation.GroovySlurp
 import static org.octopusden.octopus.escrow.configuration.validation.GroovySlurperConfigValidator.SECURITY_GROUPS_READ
 import static org.octopusden.octopus.escrow.configuration.validation.GroovySlurperConfigValidator.SUPPORTED_ATTRIBUTES
 import static org.octopusden.octopus.escrow.configuration.validation.GroovySlurperConfigValidator.TAG
-import static org.octopusden.octopus.escrow.configuration.validation.GroovySlurperConfigValidator.TEST_COMPONENT
 import static org.octopusden.octopus.escrow.configuration.validation.GroovySlurperConfigValidator.TOOLS
 import static org.octopusden.octopus.escrow.configuration.validation.GroovySlurperConfigValidator.VCS_SETTINGS
 import static org.octopusden.octopus.escrow.configuration.validation.GroovySlurperConfigValidator.VCS_URL
@@ -374,8 +373,7 @@ class EscrowConfigurationLoader {
                         moduleConfigItemName == VCS_SETTINGS ||
                         moduleConfigItemName == ESCROW ||
                         moduleConfigItemName == DOC ||
-                        moduleConfigItemName == LABELS ||
-                        moduleConfigItemName == TEST_COMPONENT
+                        moduleConfigItemName == LABELS
                 ) {
                     continue  //TODO: bad style
                 }
@@ -441,7 +439,6 @@ class EscrowConfigurationLoader {
                         escrow: escrow,
                         doc: doc,
                         archived: isArchived,
-                        testComponent: componentDefaultConfiguration.testComponent,
                         copyright: copyright,
                         labels: labels,
                 )
@@ -472,7 +469,6 @@ class EscrowConfigurationLoader {
                         escrow: componentDefaultConfiguration.escrow,
                         doc: componentDefaultConfiguration.doc,
                         archived: componentDefaultConfiguration.archived,
-                        testComponent: componentDefaultConfiguration.testComponent,
                         copyright: componentDefaultConfiguration.copyright,
                         labels: loadLabels(moduleConfigObject, componentDefaultConfiguration.labels),
                 )
@@ -1237,7 +1233,6 @@ class EscrowConfigurationLoader {
                 escrow: escrow,
                 doc: doc,
                 archived: isArchived,
-                testComponent: componentConfigObject.getOrDefault(TEST_COMPONENT, false),
                 copyright: copyright,
                 labels: labels,
         )

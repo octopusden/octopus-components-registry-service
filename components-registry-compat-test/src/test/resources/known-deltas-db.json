@@ -234,11 +234,11 @@
       "regressionTest": "VcsPlacementKnownDeltaTest.literal trace paths are suppressed"
     },
     {
-      "endpointPattern": "^GET /rest/api/[123]/components(/[^/]+(/versions/[^/]+)?)?$",
+      "endpointPattern": "^(GET /rest/api/[123]/components(/[^/]+(/versions/[^/]+)?)?|POST /rest/api/2/components/(find-by-artifact|findByArtifacts)|POST /rest/api/3/components/find-by-artifacts)$",
       "category": "STRUCTURAL_DIFF",
       "jsonPathPattern": "\\.testComponent$",
       "messagePattern": "KEY_MISSING_BASELINE at ",
-      "reason": "SYS-099 testComponent flag (2026-10): V11__ adds components.test_component and sets it on every component labelled `test-component`; the v1/v2/v3 Component DTO serializes testComponent NON_DEFAULT (only when true). The baseline has no flag, so a migrated candidate adds it on those components only. Matches the templated and the literal (trace-replay) paths of the component list, detail and detailed-version endpoints. Only an added field is suppressed (messagePattern KEY_MISSING_BASELINE); a dropped flag stays active on both layers. Typed layer: Comparators.buildAssertion forgives baseline-false -> true. See docs/registry/api-compat-deltas.md.",
+      "reason": "SYS-099 testComponent flag (2026-10): the v1/v2/v3 Component DTO (and its VersionedComponent / DetailedComponent subclasses) always serializes testComponent, so every component payload gains the key: false, or true for the components V11__ flagged from the `test-component` label. The baseline has no key. Matches the templated and the literal (trace-replay) paths of the component list, detail, detailed-version and find-by-artifact endpoints. Only an added key is suppressed (messagePattern KEY_MISSING_BASELINE); a dropped key stays active. Typed layer: both sides deserialize into the same DTO (absent = false), and Comparators.buildAssertion forgives baseline-false -> true. See docs/registry/api-compat-deltas.md.",
       "regressionTest": "TestComponentKnownDeltaTest"
     }
   ]

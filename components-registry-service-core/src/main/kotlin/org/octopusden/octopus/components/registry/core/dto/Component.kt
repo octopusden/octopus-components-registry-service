@@ -1,8 +1,11 @@
 package org.octopusden.octopus.components.registry.core.dto
 
-import com.fasterxml.jackson.annotation.JsonInclude
+import com.fasterxml.jackson.annotation.JsonIgnoreProperties
 import java.util.Objects
 
+// Tolerant reader: the bundled Feign client deserializes with a plain ObjectMapper
+// (FAIL_ON_UNKNOWN_PROPERTIES on), so a field the server adds later must not break it.
+@JsonIgnoreProperties(ignoreUnknown = true)
 abstract class Component(
     val id: String,
     val name: String?,
@@ -27,10 +30,6 @@ abstract class Component(
     var releaseManager: String? = null
     var distribution: DistributionDTO? = null
     var archived: Boolean = false
-
-    // Omitted when false: a client built against an older DTO with FAIL_ON_UNKNOWN_PROPERTIES
-    // (the default ObjectMapper) keeps reading every non-test component; absent reads as false.
-    @field:JsonInclude(JsonInclude.Include.NON_DEFAULT)
     var testComponent: Boolean = false
     var doc: DocDTO? = null
     var escrow: EscrowDTO? = null

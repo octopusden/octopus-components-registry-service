@@ -115,25 +115,6 @@ class EscrowConfigurationLoaderTest extends GroovyTestCase {
         assertTrue(expectedConfig.archived == escrowModuleConfig.archived)
     }
 
-    /** SYS-099: component-level `testComponent = true` reaches every version range; absent means false. */
-    @Test
-    void testTestComponentConfig() {
-        EscrowConfiguration configuration = loadConfiguration("single-module/testComponentConfig.groovy")
-        def testConfigurations = configuration.escrowModules.get(TEST_MODULE).moduleConfigurations
-        assert testConfigurations.size() == 2
-        assert testConfigurations.every { it.testComponent }
-        assert configuration.escrowModules.get("ccomponent").moduleConfigurations.every { !it.testComponent }
-    }
-
-    /** SYS-099: the flag is component-level only — a version-range section rejects it. */
-    @Test
-    void testTestComponentInVersionRangeIsRejected() {
-        def message = shouldFail(EscrowConfigurationException) {
-            loadConfiguration("invalid/testComponentInVersionRange.groovy")
-        }
-        assert message.contains("Unknown attribute 'testComponent'")
-    }
-
     @Test
     void testInvalidVcsPath() {
         shouldFail(EscrowConfigurationException) {

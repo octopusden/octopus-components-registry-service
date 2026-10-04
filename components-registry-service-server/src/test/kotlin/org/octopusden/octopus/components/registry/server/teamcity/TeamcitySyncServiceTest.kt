@@ -803,6 +803,8 @@ class TeamcitySyncServiceTest {
 
         override fun existsByParentComponentId(parentId: UUID): Boolean = components.any { it.parentComponent?.id == parentId }
 
+        override fun findTestComponentKeys(): List<String> = components.filter { it.testComponent }.map { it.componentKey }
+
         override fun findNonTestChildKeys(parentId: UUID): List<String> =
             components.filter { it.parentComponent?.id == parentId && !it.testComponent }.map { it.componentKey }
 

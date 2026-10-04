@@ -67,7 +67,5 @@ class DefaultConfigParameters {
     String copyright
 
     Set<String> labels
-
-    boolean testComponent
 }
 

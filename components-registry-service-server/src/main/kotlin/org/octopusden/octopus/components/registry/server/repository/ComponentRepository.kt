@@ -146,6 +146,10 @@ interface ComponentRepository :
     )
     fun existsByParentComponentId(parentId: UUID): Boolean
 
+    /** Keys of every component flagged `testComponent` (a handful; read per v1–v3 request). */
+    @Query("SELECT c.componentKey FROM ComponentEntity c WHERE c.testComponent = true")
+    fun findTestComponentKeys(): List<String>
+
     /** Keys of the non-test components whose parent is [parentId] (a real product may not sit under a test component). */
     @Query("SELECT c.componentKey FROM ComponentEntity c WHERE c.parentComponent.id = :parentId AND c.testComponent = false")
     fun findNonTestChildKeys(parentId: UUID): List<String>

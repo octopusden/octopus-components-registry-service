@@ -61,16 +61,23 @@ The compat-test exercises **API contracts**:
   VALUE_DIFF. Regression tests: `GitVsDbValidationTest` VAL-003a and `VcsPlacementKnownDeltaTest`.
   `known-deltas-git.json` stays empty: Git mode has no placement and no Build Working Directory.
 
-- **`testComponent` flag** (SYS-099, 2026-10) — the v1/v2/v3 `Component` DTO carries
-  `testComponent`, serialized only when true (`NON_DEFAULT`), so a non-test component's payload is
-  byte-identical and a client built against an older DTO keeps deserializing it. `V11__` flags the
-  components labelled `test-component`, so a migrated candidate adds `testComponent: true` on those
-  components in the component list / detail endpoints (v1, v2, v3 `component.`) and the
-  `DetailedComponent`. Raw layer: one STRUCTURAL_DIFF `known-deltas-db.json` entry pinned to
-  `\.testComponent$` and `KEY_MISSING_BASELINE`, matching templated and literal paths; a dropped flag
-  is not suppressed. Typed layer: `Comparators.buildAssertion` forgives exactly baseline-false →
-  true. Regression test: `TestComponentKnownDeltaTest`. `known-deltas-git.json` stays empty: the Git
-  DSL sets the flag only where `testComponent = true` is written, which no baseline component has.
+- **`testComponent` flag** (SYS-099, 2026-10) — the v1/v2/v3 `Component` DTO (and its
+  `VersionedComponent` / `DetailedComponent` subclasses) always serializes `testComponent`, read
+  from the DB whichever resolver serves the component: `false`, `true` for the components `V11__`
+  flagged from the `test-component` label, `false` without a DB. Every component payload therefore
+  gains the key — component list and detail (v1, v2, v3 `component.`), the `DetailedComponent`, and
+  find-by-artifact (`VersionedComponent`). This is the first additive delta that also reaches
+  **git mode**, by decision: the key is new API surface, not a resolver change. Raw layer: one
+  STRUCTURAL_DIFF entry in **both** `known-deltas-db.json` and `known-deltas-git.json`, pinned to
+  `\.testComponent$` and `KEY_MISSING_BASELINE`, matching templated and literal paths; a dropped key
+  is not suppressed. Typed layer: both sides deserialize into the same DTO (absent = false), and
+  `Comparators.buildAssertion` forgives exactly baseline-false → true. Regression test:
+  `TestComponentKnownDeltaTest` (both files). Older clients: the published `Component` DTO had no
+  `@JsonIgnoreProperties`, and the bundled Feign client's default mapper fails on unknown
+  properties, so a consumer on a released client version that uses that default mapper fails on the
+  new key; this release adds `@JsonIgnoreProperties(ignoreUnknown = true)` to `Component`. Consumers
+  that configure their own mapper with `FAIL_ON_UNKNOWN_PROPERTIES` off (e.g. Spring Boot's) are
+  unaffected, as they were by `labels` and `copyright`.
 
 **Operational metadata endpoints are explicitly excluded** from the compat surface:
 

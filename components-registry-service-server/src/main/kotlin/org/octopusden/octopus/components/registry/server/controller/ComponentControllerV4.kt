@@ -433,8 +433,7 @@ class ComponentControllerV4(
     ): ComponentEditorsResponse = componentManagementService.getEditors(idOrName)
 
     // Field-level gating: a plain edit requires component ownership (owner/RM/SC)
-    // or EDIT_ANY_COMPONENT; switching `archived` or `testComponent` (both take a component out of
-    // default views and consumer scopes) additionally requires
+    // or EDIT_ANY_COMPONENT; switching `archived` additionally requires
     // ARCHIVE_COMPONENTS, and changing `name` (rename) additionally requires
     // RENAME_COMPONENTS. These latter two permissions are currently granted only to
     // ROLE_ADMIN. When we split archive/rename into dedicated endpoints, this SpEL
@@ -444,7 +443,6 @@ class ComponentControllerV4(
         "@permissionEvaluator.hasPermission('ACCESS_COMPONENTS') " +
             "and @permissionEvaluator.canEditComponent(#id.toString()) " +
             "and (#request.archived == null or @permissionEvaluator.canArchiveComponent(#id.toString())) " +
-            "and (#request.testComponent == null or @permissionEvaluator.canArchiveComponent(#id.toString())) " +
             "and (#request.name == null or @permissionEvaluator.canRenameComponent(#id.toString()))",
     )
     fun updateComponent(

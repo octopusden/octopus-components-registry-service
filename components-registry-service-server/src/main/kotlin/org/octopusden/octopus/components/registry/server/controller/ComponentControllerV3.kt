@@ -10,6 +10,7 @@ import org.octopusden.octopus.components.registry.core.dto.Image
 import org.octopusden.octopus.components.registry.server.mapper.toDTO
 import org.octopusden.octopus.components.registry.server.service.ComponentRegistryResolver
 import org.octopusden.octopus.components.registry.server.service.CopyrightService
+import org.octopusden.octopus.components.registry.server.service.TestComponentKeys
 import org.springframework.core.io.Resource
 import org.springframework.http.HttpHeaders
 import org.springframework.http.MediaType
@@ -26,6 +27,7 @@ import org.springframework.web.bind.annotation.RestController
 class ComponentControllerV3(
     private val componentRegistryResolver: ComponentRegistryResolver,
     private val copyrightService: CopyrightService,
+    private val testComponentKeys: TestComponentKeys,
 ) {
     /**
      * Get all components.
@@ -34,8 +36,9 @@ class ComponentControllerV3(
     //  because version is not provided in this context
 
     @GetMapping(produces = [MediaType.APPLICATION_JSON_VALUE])
-    fun getAllComponents(): Collection<ComponentV3> =
-        componentRegistryResolver.getComponents().map { escrowModule ->
+    fun getAllComponents(): Collection<ComponentV3> {
+        val testKeys = testComponentKeys.get()
+        return componentRegistryResolver.getComponents().map { escrowModule ->
             // TODO Check/Discuss if display name and owner should be in escrowModule (not versioned part of Component)
             // ADR-018: component-level scalars from the resolved BASE representative (DB resolver). Legacy
             // in-memory loader leaves it null → fall back to the first owner-bearing config (DSL order there).
@@ -52,7 +55,7 @@ class ComponentControllerV3(
                     copyright = baseConfiguration.copyright
                     labels = baseConfiguration.labels?.toSet() ?: emptySet()
                     escrow = baseConfiguration.escrow?.toDTO()
-                    testComponent = baseConfiguration.testComponent
+                    testComponent = escrowModule.moduleName in testKeys
                 }
 
             ComponentV3(
@@ -61,6 +64,7 @@ class ComponentControllerV3(
                     .associate { it.versionRangeString to it.toVersionedComponent() },
             )
         }
+    }
 
     @PostMapping(
         "find-by-artifacts",
