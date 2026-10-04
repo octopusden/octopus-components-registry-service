@@ -52,6 +52,7 @@ class ComponentControllerV3(
                     copyright = baseConfiguration.copyright
                     labels = baseConfiguration.labels?.toSet() ?: emptySet()
                     escrow = baseConfiguration.escrow?.toDTO()
+                    testComponent = baseConfiguration.testComponent
                 }
 
             ComponentV3(

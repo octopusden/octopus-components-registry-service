@@ -23,6 +23,8 @@ class GroovySlurperConfigValidator {
     public static final String ESCROW = "escrow"
     public static final String DOC = "doc"
     public static final String LABELS = "labels"
+    // Component-level only: not in SUPPORTED_ATTRIBUTES, so Defaults and version-range sections reject it.
+    public static final String TEST_COMPONENT = "testComponent"
 
     private static final String FILE_PATTERN = "file:/.+"
     private static final String PROHIBITED_SYMBOLS = "\\\\\\s:|\\?\\*\"'<>\\+"
@@ -142,6 +144,10 @@ class GroovySlurperConfigValidator {
                     validateDoc(moduleConfigObject, "defaults", componentName)
                 } else if (attribute == LABELS) {
                     continue
+                } else if (attribute == TEST_COMPONENT) {
+                    if (!(configTypeObject.value instanceof Boolean)) {
+                        registerError("Incorrect value of attribute $attribute in module $componentName. Boolean expected")
+                    }
                 } else {
                     validateConfigSectionForUnknownAttributes(configTypeObject, componentName)
                 }

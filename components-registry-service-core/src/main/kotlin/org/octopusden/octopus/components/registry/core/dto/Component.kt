@@ -1,5 +1,6 @@
 package org.octopusden.octopus.components.registry.core.dto
 
+import com.fasterxml.jackson.annotation.JsonInclude
 import java.util.Objects
 
 abstract class Component(
@@ -26,6 +27,11 @@ abstract class Component(
     var releaseManager: String? = null
     var distribution: DistributionDTO? = null
     var archived: Boolean = false
+
+    // Omitted when false: a client built against an older DTO with FAIL_ON_UNKNOWN_PROPERTIES
+    // (the default ObjectMapper) keeps reading every non-test component; absent reads as false.
+    @field:JsonInclude(JsonInclude.Include.NON_DEFAULT)
+    var testComponent: Boolean = false
     var doc: DocDTO? = null
     var escrow: EscrowDTO? = null
     var copyright: String? = null
@@ -50,6 +56,7 @@ abstract class Component(
         if (releaseManager != other.releaseManager) return false
         if (distribution != other.distribution) return false
         if (archived != other.archived) return false
+        if (testComponent != other.testComponent) return false
         if (doc != other.doc) return false
         if (escrow != other.escrow) return false
         if (copyright != other.copyright) return false
@@ -71,6 +78,7 @@ abstract class Component(
         releaseManager,
         distribution,
         archived,
+        testComponent,
         doc,
         escrow,
         copyright,
@@ -81,6 +89,6 @@ abstract class Component(
     override fun toString(): String = "Component(id='$id', name=$name, componentOwner='$componentOwner', system=$system, " +
         "clientCode=$clientCode, releasesInDefaultBranch=$releasesInDefaultBranch, solution=$solution, " +
         "parentComponent=$parentComponent, securityChampion=$securityChampion, releaseManager=$releaseManager, " +
-        "distribution=$distribution, archived=$archived, doc=$doc, escrow=$escrow, copyright='$copyright' " +
+        "distribution=$distribution, archived=$archived, testComponent=$testComponent, doc=$doc, escrow=$escrow, copyright='$copyright' " +
         "labels=$labels)"
 }

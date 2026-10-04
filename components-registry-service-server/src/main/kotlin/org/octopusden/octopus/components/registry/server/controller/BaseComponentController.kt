@@ -135,6 +135,7 @@ abstract class BaseComponentController<T : Component> {
             solution = escrowModuleConfig.solution
             parentComponent = escrowModuleConfig.parentComponent
             archived = escrowModuleConfig.archived
+            testComponent = escrowModuleConfig.testComponent
             doc = escrowModuleConfig.doc?.toDTO()
             escrow = escrowModuleConfig.escrow?.toDTO()
             copyright = escrowModuleConfig.copyright

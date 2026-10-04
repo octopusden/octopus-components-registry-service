@@ -258,6 +258,7 @@ class ComponentControllerV4(
         @RequestParam(required = false) system: List<String>?,
         @RequestParam(required = false) productType: String?,
         @RequestParam(required = false) archived: Boolean?,
+        @RequestParam(required = false) testComponent: Boolean?,
         @RequestParam(required = false) search: String?,
         @RequestParam(required = false) owner: List<String>?,
         @RequestParam(required = false) releaseManager: List<String>?,
@@ -289,6 +290,7 @@ class ComponentControllerV4(
                 system = normalizeCsvParam(system),
                 productType = productType,
                 archived = archived,
+                testComponent = testComponent,
                 search = search,
                 owner = normalizeCsvParam(owner),
                 releaseManager = normalizeCsvParam(releaseManager),
@@ -431,7 +433,8 @@ class ComponentControllerV4(
     ): ComponentEditorsResponse = componentManagementService.getEditors(idOrName)
 
     // Field-level gating: a plain edit requires component ownership (owner/RM/SC)
-    // or EDIT_ANY_COMPONENT; switching `archived` additionally requires
+    // or EDIT_ANY_COMPONENT; switching `archived` or `testComponent` (both take a component out of
+    // default views and consumer scopes) additionally requires
     // ARCHIVE_COMPONENTS, and changing `name` (rename) additionally requires
     // RENAME_COMPONENTS. These latter two permissions are currently granted only to
     // ROLE_ADMIN. When we split archive/rename into dedicated endpoints, this SpEL
@@ -441,6 +444,7 @@ class ComponentControllerV4(
         "@permissionEvaluator.hasPermission('ACCESS_COMPONENTS') " +
             "and @permissionEvaluator.canEditComponent(#id.toString()) " +
             "and (#request.archived == null or @permissionEvaluator.canArchiveComponent(#id.toString())) " +
+            "and (#request.testComponent == null or @permissionEvaluator.canArchiveComponent(#id.toString())) " +
             "and (#request.name == null or @permissionEvaluator.canRenameComponent(#id.toString()))",
     )
     fun updateComponent(

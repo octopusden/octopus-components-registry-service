@@ -49,6 +49,10 @@ data class ComponentCreateRequest(
     val canBeParent: Boolean = false,
     @field:Schema(requiredMode = Schema.RequiredMode.NOT_REQUIRED)
     val archived: Boolean = false,
+    // A synthetic component (e.g. a CVELAB stand component). A non-test component may not
+    // reference a test one as its parent or doc component — rejected by the service.
+    @field:Schema(requiredMode = Schema.RequiredMode.NOT_REQUIRED)
+    val testComponent: Boolean = false,
     // Ordered multi-value (first = primary); canonicalized server-side
     // (trim → drop blank → keep-first dedupe).
     @field:Schema(requiredMode = Schema.RequiredMode.NOT_REQUIRED)

@@ -51,6 +51,7 @@ class ComponentHistorySnapshotSerializer {
         s["productType"] = cfg.productType?.name
         s["deprecated"] = cfg.isDeprecated
         s["archived"] = cfg.archived
+        s["testComponent"] = cfg.testComponent
         s["copyright"] = cfg.copyright
         s["labels"] = cfg.labels?.sorted()
         s["jiraConfiguration"] = toMap(cfg.jiraConfiguration)

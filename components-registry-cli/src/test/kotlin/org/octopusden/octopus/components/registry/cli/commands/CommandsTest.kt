@@ -106,6 +106,8 @@ class CommandsTest {
                 "g1",
                 "--archived",
                 "false",
+                "--test-component",
+                "false",
                 "--can-be-parent",
                 "true",
                 "--distribution-explicit",
@@ -144,6 +146,7 @@ class CommandsTest {
         assertTrue(q.contains("parentComponentName=root"), "parent must map to spec 'parentComponentName': $q")
         assertTrue(q.contains("groupKey=g1"))
         assertTrue(q.contains("archived=false"))
+        assertTrue(q.contains("testComponent=false"))
         assertTrue(q.contains("canBeParent=true"))
         assertTrue(q.contains("distributionExplicit=true"))
         assertTrue(q.contains("distributionExternal=false"))

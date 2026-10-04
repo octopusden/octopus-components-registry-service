@@ -18,6 +18,18 @@ refresh it with `./gradlew :components-registry-service-server:generateOpenApiDo
 
 ## Unreleased
 
+- **`testComponent` flag (SYS-099).** `ComponentSummaryResponse` and `ComponentDetailResponse` gain a
+  required `testComponent: boolean`; `ComponentCreateRequest` (default `false`) and
+  `ComponentUpdateRequest` (`null` = unchanged) accept it. Changing it in a PATCH needs
+  `ARCHIVE_COMPONENTS`, like `archived`. `GET /components` gains `?testComponent=true|false`;
+  without it test components are still listed. Create and PATCH return `400` when a non-test
+  component would reference a test component as its parent (`parentComponentName: …`) or doc
+  component (`docs: …`), or when a component that non-test components reference that way is
+  flagged (`testComponent: …`); the message names both components. `warnings` carries an entry
+  when the component has the `test-component` label but the flag is false. `GET
+  /health/statistics` no longer counts test components. `V11__` flags every component labelled
+  `test-component`. The v1–v3 `Component` payloads carry `testComponent` only when it is true.
+
 - **`GET /meta/release-managers` and `GET /meta/security-champions` added.** Two new
   `ACCESS_COMPONENTS` endpoints return the sorted, distinct release-manager and security-champion
   usernames currently assigned to at least one component the v4 list shows (blank values excluded), as

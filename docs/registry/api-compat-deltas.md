@@ -61,6 +61,17 @@ The compat-test exercises **API contracts**:
   VALUE_DIFF. Regression tests: `GitVsDbValidationTest` VAL-003a and `VcsPlacementKnownDeltaTest`.
   `known-deltas-git.json` stays empty: Git mode has no placement and no Build Working Directory.
 
+- **`testComponent` flag** (SYS-099, 2026-10) — the v1/v2/v3 `Component` DTO carries
+  `testComponent`, serialized only when true (`NON_DEFAULT`), so a non-test component's payload is
+  byte-identical and a client built against an older DTO keeps deserializing it. `V11__` flags the
+  components labelled `test-component`, so a migrated candidate adds `testComponent: true` on those
+  components in the component list / detail endpoints (v1, v2, v3 `component.`) and the
+  `DetailedComponent`. Raw layer: one STRUCTURAL_DIFF `known-deltas-db.json` entry pinned to
+  `\.testComponent$` and `KEY_MISSING_BASELINE`, matching templated and literal paths; a dropped flag
+  is not suppressed. Typed layer: `Comparators.buildAssertion` forgives exactly baseline-false →
+  true. Regression test: `TestComponentKnownDeltaTest`. `known-deltas-git.json` stays empty: the Git
+  DSL sets the flag only where `testComponent = true` is written, which no baseline component has.
+
 **Operational metadata endpoints are explicitly excluded** from the compat surface:
 
 - `GET /rest/api/2/components-registry/service/status` — read **only** by

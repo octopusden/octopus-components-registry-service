@@ -27,7 +27,7 @@ import static org.octopusden.octopus.escrow.configuration.validation.EscrowConfi
         "buildFilePath", "jiraConfiguration", "buildConfiguration", "deprecated", "vcsSettings",
         "distribution", "componentDisplayName", "componentOwner", "releaseManager", "securityChampion", "system",
         "clientCode", "releasesInDefaultBranch", "solution", "parentComponent", "octopusVersion", "escrow", "productType",
-        "doc", "archived", "copyright", "labels"])
+        "doc", "archived", "copyright", "labels", "testComponent"])
 @ToString(includeFields = true)
 class EscrowModuleConfig {
     private BuildSystem buildSystem
@@ -81,6 +81,9 @@ class EscrowModuleConfig {
     Escrow escrow
 
     ProductTypes productType
+
+    // Last so the @TupleConstructor positional order of the fields above is unchanged.
+    boolean testComponent
 
     BuildSystem getBuildSystem() {
         return buildSystem

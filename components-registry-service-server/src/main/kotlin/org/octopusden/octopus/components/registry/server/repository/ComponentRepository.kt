@@ -146,6 +146,20 @@ interface ComponentRepository :
     )
     fun existsByParentComponentId(parentId: UUID): Boolean
 
+    /** Keys of the non-test components whose parent is [parentId] (a real product may not sit under a test component). */
+    @Query("SELECT c.componentKey FROM ComponentEntity c WHERE c.parentComponent.id = :parentId AND c.testComponent = false")
+    fun findNonTestChildKeys(parentId: UUID): List<String>
+
+    /** Keys of the non-test components, other than [excludeComponentId], with a doc link to [docComponentKey]. */
+    @Query(
+        "SELECT DISTINCT c.componentKey FROM ComponentEntity c JOIN c.docLinks d " +
+            "WHERE d.docComponentKey = :docComponentKey AND c.testComponent = false AND c.id <> :excludeComponentId",
+    )
+    fun findNonTestDocReferrerKeys(
+        docComponentKey: String,
+        excludeComponentId: UUID,
+    ): List<String>
+
     /**
      * All components whose `componentGroup` is [groupId]. Used by migration cleanup
      * (§6.3) to unlink the members of a group that is no longer a true aggregator
@@ -191,7 +205,8 @@ interface ComponentRepository :
     // 685+ components are never loaded into memory. All exclude the FAKE-aggregator stub rows
     // (componentGroup is fake AND its groupKey == the row's own componentKey), matching the
     // always-on exclusion in `ComponentManagementServiceImpl.buildSpecification`, so the totals
-    // line up with the v4 component list.
+    // line up with the v4 component list. Test components are excluded too (synthetic stand data
+    // would distort the figures), so the totals line up with the list filtered `testComponent=false`.
     //
     // The group condition uses an explicit LEFT JOIN: referencing `c.componentGroup.isFake`
     // inline would force an INNER join and silently drop every group-less component (the common
@@ -199,10 +214,10 @@ interface ComponentRepository :
     // group-less components and real-aggregator members; only the self-linked fake aggregator
     // stub is excluded.
 
-    /** Count of regular (non-FAKE-aggregator) components. */
+    /** Count of regular (non-FAKE-aggregator, non-test) components. */
     @Query(
         "SELECT COUNT(c) FROM ComponentEntity c LEFT JOIN c.componentGroup g " +
-            "WHERE (g IS NULL OR NOT (g.isFake = true AND g.groupKey = c.componentKey))",
+            "WHERE c.testComponent = false AND (g IS NULL OR NOT (g.isFake = true AND g.groupKey = c.componentKey))",
     )
     fun countRegularComponents(): Long
 
@@ -210,7 +225,7 @@ interface ComponentRepository :
     @Query(
         "SELECT COUNT(c) FROM ComponentEntity c LEFT JOIN c.componentGroup g " +
             "WHERE c.archived = :archived " +
-            "AND (g IS NULL OR NOT (g.isFake = true AND g.groupKey = c.componentKey))",
+            "AND c.testComponent = false AND (g IS NULL OR NOT (g.isFake = true AND g.groupKey = c.componentKey))",
     )
     fun countRegularComponentsByArchived(archived: Boolean): Long
 
@@ -224,7 +239,7 @@ interface ComponentRepository :
         "SELECT c.componentOwner AS name, COUNT(c) AS count FROM ComponentEntity c LEFT JOIN c.componentGroup g " +
             "WHERE c.archived = false " +
             "AND c.componentOwner IS NOT NULL AND TRIM(c.componentOwner) <> '' " +
-            "AND (g IS NULL OR NOT (g.isFake = true AND g.groupKey = c.componentKey)) " +
+            "AND c.testComponent = false AND (g IS NULL OR NOT (g.isFake = true AND g.groupKey = c.componentKey)) " +
             "GROUP BY c.componentOwner",
     )
     fun countComponentsByOwner(): List<NameCountRow>
@@ -239,7 +254,7 @@ interface ComponentRepository :
         "SELECT rm.username AS name, COUNT(c) AS count FROM ComponentEntity c " +
             "JOIN c.releaseManagers rm LEFT JOIN c.componentGroup g " +
             "WHERE c.archived = false " +
-            "AND (g IS NULL OR NOT (g.isFake = true AND g.groupKey = c.componentKey)) " +
+            "AND c.testComponent = false AND (g IS NULL OR NOT (g.isFake = true AND g.groupKey = c.componentKey)) " +
             "GROUP BY rm.username",
     )
     fun countComponentsByReleaseManager(): List<NameCountRow>
@@ -249,7 +264,7 @@ interface ComponentRepository :
         "SELECT sc.username AS name, COUNT(c) AS count FROM ComponentEntity c " +
             "JOIN c.securityChampions sc LEFT JOIN c.componentGroup g " +
             "WHERE c.archived = false " +
-            "AND (g IS NULL OR NOT (g.isFake = true AND g.groupKey = c.componentKey)) " +
+            "AND c.testComponent = false AND (g IS NULL OR NOT (g.isFake = true AND g.groupKey = c.componentKey)) " +
             "GROUP BY sc.username",
     )
     fun countComponentsBySecurityChampion(): List<NameCountRow>
