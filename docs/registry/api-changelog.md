@@ -22,7 +22,12 @@ refresh it with `./gradlew :components-registry-service-server:generateOpenApiDo
   required `testComponent: boolean`; `ComponentCreateRequest` (default `false`) and
   `ComponentUpdateRequest` (`null` = unchanged) accept it; changing it needs only the plain
   component edit permission. `GET /components` gains `?testComponent=true|false`;
-  without it test components are still listed. Create and PATCH return `400` when a non-test
+  without it test components are still listed. `testComponent = true` needs a component key
+  matching one of the configured name patterns (default `^test-`, `^cvelab-`): a create or PATCH
+  that sets it, or a rename of a flagged component, with a non-matching key returns `400`
+  (`testComponent: …` / `name: …`, naming the key and the patterns); unflagging is always allowed.
+  New `GET /components/meta/test-component-name-patterns` (`ACCESS_COMPONENTS`) returns the active
+  patterns as `string[]`, e.g. `["^test-","^cvelab-"]`. Create and PATCH also return `400` when a non-test
   component would reference a test component as its parent (`parentComponentName: …`) or doc
   component (`docs: …`), or when a component that non-test components reference that way is
   flagged (`testComponent: …`); the message names both components. `warnings` carries an entry

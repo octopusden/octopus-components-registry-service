@@ -6,6 +6,7 @@ import org.apache.maven.artifact.versioning.DefaultArtifactVersion
 import org.octopusden.octopus.components.registry.core.exceptions.ComponentNameConflictException
 import org.octopusden.octopus.components.registry.core.exceptions.CrossComponentConflictException
 import org.octopusden.octopus.components.registry.core.exceptions.NotFoundException
+import org.octopusden.octopus.components.registry.server.config.ComponentsRegistryProperties
 import org.octopusden.octopus.components.registry.server.config.ConditionalOnDatabaseEnabled
 import org.octopusden.octopus.components.registry.server.dto.v4.BaseConfigurationRequest
 import org.octopusden.octopus.components.registry.server.dto.v4.BuildToolBeanRequest
@@ -182,6 +183,9 @@ class ComponentManagementServiceImpl(
     // Spring always registers the bean in production (RMSOverrideGate itself self-gates on
     // RMSProperties.enabled and a null RMSClient) — see RMSOverrideGate.
     private val rmsOverrideGate: RMSOverrideGate? = null,
+    // Defaulted (nullable) so unit tests constructing this service directly need no new wiring;
+    // Spring injects the bound properties in production. Null ⇒ no key may be flagged testComponent.
+    private val registryProperties: ComponentsRegistryProperties? = null,
 ) : ComponentManagementService {
     // ConfigHelper is constructed lazily because it touches the Spring
     // Environment on first access; mirrors the pattern used by
@@ -384,6 +388,7 @@ class ComponentManagementServiceImpl(
         // the person-field error first, so person validation runs ahead of the
         // malformed-input checks here.
         validatePersonFields(entity, runActiveCheck = true)
+        validateTestComponentName(entity, "testComponent")
         validateRequiredCopyright(entity)
         validateRequiredDisplayName(entity)
 
@@ -693,6 +698,10 @@ class ComponentManagementServiceImpl(
         request.solution?.let { if (!fieldConfigService.isHidden("component.solution")) entity.solution = it }
         request.archived?.let { entity.archived = it }
         request.testComponent?.let { entity.testComponent = it }
+        // Flagging, or renaming a flagged component, must keep the key inside the configured patterns.
+        if (request.testComponent == true || isRename) {
+            validateTestComponentName(entity, if (request.testComponent == true) "testComponent" else "name")
+        }
         // canBeParent: editability enforced above; `hidden` silently strips (consistent with
         // the other field-config-gated scalars). Structural invariants are validated below.
         request.canBeParent?.let { if (!fieldConfigService.isHidden("component.canBeParent")) entity.canBeParent = it }
@@ -3557,6 +3566,23 @@ class ComponentManagementServiceImpl(
         require(missingKey == null) {
             "docs: referenced doc component '$missingKey' does not exist " +
                 "(component '${entity.componentKey}')"
+        }
+    }
+
+    /**
+     * A test component's key must match a configured name pattern
+     * (`components-registry.test-components.name-patterns`, SYS-099) — 400, prefixed with [field].
+     * Unflagged components are not checked.
+     */
+    private fun validateTestComponentName(
+        entity: ComponentEntity,
+        field: String,
+    ) {
+        if (!entity.testComponent) return
+        val settings = registryProperties?.testComponents ?: ComponentsRegistryProperties.TestComponentsSettings()
+        require(settings.matches(entity.componentKey)) {
+            "$field: test component key '${entity.componentKey}' matches none of the test-component name patterns " +
+                "${settings.namePatterns}"
         }
     }
 

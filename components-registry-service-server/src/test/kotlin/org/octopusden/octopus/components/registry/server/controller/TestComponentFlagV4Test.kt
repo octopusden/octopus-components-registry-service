@@ -110,7 +110,7 @@ class TestComponentFlagV4Test {
     @Test
     @DisplayName("SYS-099: testComponent round-trips through v4 detail, summary, v2 and v3; others read false")
     fun `SYS-099 testComponent is returned by v4 v2 and v3`() {
-        val test = name("sys099-test")
+        val test = name("test-sys099")
         val real = name("sys099-real")
         assertTrue(create(""""name":"$test","testComponent":true""")["testComponent"].asBoolean())
         assertFalse(create(""""name":"$real"""")["testComponent"].asBoolean())
@@ -136,7 +136,7 @@ class TestComponentFlagV4Test {
     @Test
     @DisplayName("SYS-099: find-by-artifact results carry the component's testComponent flag")
     fun `SYS-099 find-by-artifact carries testComponent`() {
-        val test = name("sys099-fba-test")
+        val test = name("test-sys099-fba")
         val real = name("sys099-fba-real")
         val group = "org.octopusden.octopus.$test"
 
@@ -174,7 +174,7 @@ class TestComponentFlagV4Test {
     @Test
     @DisplayName("SYS-099: the component's own editor can set testComponent without ARCHIVE_COMPONENTS")
     fun `SYS-099 editor without archive permission can flag`() {
-        val detail = create(""""name":"${name("sys099-editor")}"""")
+        val detail = create(""""name":"${name("test-sys099-editor")}"""")
         mvc
             .perform(
                 patch("/rest/api/4/components/${detail["id"].asText()}")
@@ -186,9 +186,58 @@ class TestComponentFlagV4Test {
     }
 
     @Test
+    @DisplayName("SYS-099: testComponent = true needs a key matching the configured name patterns")
+    fun `SYS-099 flag requires a matching key`() {
+        val real = name("sys099-nomatch")
+        postCreate(""""name":"$real","testComponent":true""")
+            .andExpect(status().isBadRequest)
+            .andExpect(
+                jsonPath(
+                    "$.errorMessage",
+                ).value(allOf(containsString("testComponent:"), containsString("'$real'"), containsString("^test-"))),
+            )
+        // cvelab- is the second default pattern.
+        create(""""name":"${name("cvelab-sys099")}","testComponent":true""")
+
+        val detail = create(""""name":"$real"""")
+        patchComponent(detail, """"testComponent":true""")
+            .andExpect(status().isBadRequest)
+            .andExpect(jsonPath("$.errorMessage").value(containsString("'$real'")))
+    }
+
+    @Test
+    @DisplayName("SYS-099: renaming a test component out of the patterns is rejected; unflagging is always allowed")
+    fun `SYS-099 rename of a flagged component must keep a matching key`() {
+        val flagged = create(""""name":"${name("test-sys099-rename")}","testComponent":true""")
+        val outside = name("sys099-renamed")
+        patchComponent(flagged, """"name":"$outside"""")
+            .andExpect(status().isBadRequest)
+            .andExpect(jsonPath("$.errorMessage").value(allOf(containsString("name:"), containsString("'$outside'"))))
+
+        val inside = name("test-sys099-renamed")
+        val renamed = objectMapper.readTree(
+            patchComponent(flagged, """"name":"$inside"""")
+                .andExpect(status().isOk)
+                .andReturn()
+                .response.contentAsString,
+        )
+        // Unflagging together with a rename out of the patterns is fine: the rule binds only flagged components.
+        patchComponent(renamed, """"name":"$outside","testComponent":false""")
+            .andExpect(status().isOk)
+            .andExpect(jsonPath("$.testComponent").value(false))
+    }
+
+    @Test
+    @DisplayName("SYS-099: GET /meta/test-component-name-patterns returns the configured patterns")
+    fun `SYS-099 meta endpoint lists name patterns`() {
+        val patterns = getJson("/rest/api/4/components/meta/test-component-name-patterns").map { it.asText() }
+        assertEquals(listOf("^test-", "^cvelab-"), patterns)
+    }
+
+    @Test
     @DisplayName("SYS-099: list includes test components unless filtered with testComponent=false")
     fun `SYS-099 list filter on testComponent`() {
-        val prefix = name("sys099-list")
+        val prefix = name("test-sys099-list")
         create(""""name":"$prefix-t","testComponent":true""")
         create(""""name":"$prefix-r"""")
 
@@ -200,8 +249,8 @@ class TestComponentFlagV4Test {
     @Test
     @DisplayName("SYS-099: a real component may not use a test component as its parent (400 naming both)")
     fun `SYS-099 real component referencing test parent is rejected`() {
-        val parent = name("sys099-tparent")
-        val child = name("sys099-child")
+        val parent = name("test-sys099-parent")
+        val child = name("test-sys099-child")
         create(""""name":"$parent","testComponent":true,"canBeParent":true""")
 
         postCreate(""""name":"$child","parentComponentName":"$parent"""")
@@ -214,7 +263,7 @@ class TestComponentFlagV4Test {
     @Test
     @DisplayName("SYS-099: a real component may not use a test component as its doc component (400 naming both)")
     fun `SYS-099 real component referencing test doc component is rejected`() {
-        val doc = name("sys099-tdoc")
+        val doc = name("test-sys099-doc")
         val real = name("sys099-docuser")
         create(""""name":"$doc","testComponent":true""")
         val detail = create(""""name":"$real"""")
@@ -227,7 +276,7 @@ class TestComponentFlagV4Test {
     @Test
     @DisplayName("SYS-099: flagging a component that real components reference is rejected (400 naming both)")
     fun `SYS-099 flagging a referenced component is rejected`() {
-        val parent = name("sys099-parent")
+        val parent = name("test-sys099-refparent")
         val child = name("sys099-realchild")
         val parentDetail = create(""""name":"$parent","canBeParent":true""")
         create(""""name":"$child","parentComponentName":"$parent"""")
@@ -240,7 +289,7 @@ class TestComponentFlagV4Test {
     @Test
     @DisplayName("SYS-099: the test-component label without the flag yields a warning, not an error")
     fun `SYS-099 label without flag warns`() {
-        val labelled = create(""""name":"${name("sys099-label")}","labels":["test-component"]""")
+        val labelled = create(""""name":"${name("test-sys099-label")}","labels":["test-component"]""")
         assertTrue(labelled["warnings"].any { it.asText().contains("testComponent") }) { "warnings: ${labelled["warnings"]}" }
 
         patchComponent(labelled, """"testComponent":true""")
@@ -253,7 +302,7 @@ class TestComponentFlagV4Test {
     fun `SYS-099 health statistics exclude test components`() {
         val before = getJson("/rest/api/4/health/statistics")
         create(""""name":"${name("sys099-stat-r")}"""")
-        create(""""name":"${name("sys099-stat-t")}","testComponent":true""")
+        create(""""name":"${name("test-sys099-stat")}","testComponent":true""")
 
         val after = getJson("/rest/api/4/health/statistics")
         assertEquals(before["totalComponents"].asLong() + 1, after["totalComponents"].asLong())
