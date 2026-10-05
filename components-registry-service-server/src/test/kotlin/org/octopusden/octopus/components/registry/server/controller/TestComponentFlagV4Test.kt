@@ -6,6 +6,7 @@ import org.hamcrest.Matchers.allOf
 import org.hamcrest.Matchers.containsString
 import org.hamcrest.Matchers.hasItem
 import org.hamcrest.Matchers.not
+import org.hamcrest.Matchers.startsWith
 import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.Assertions.assertFalse
 import org.junit.jupiter.api.Assertions.assertTrue
@@ -194,7 +195,7 @@ class TestComponentFlagV4Test {
             .andExpect(
                 jsonPath(
                     "$.errorMessage",
-                ).value(allOf(containsString("testComponent:"), containsString("'$real'"), containsString("^test-"))),
+                ).value(allOf(startsWith("testComponent: "), containsString("'$real'"), containsString("^test-"))),
             )
         // cvelab- is the second default pattern.
         create(""""name":"${name("cvelab-sys099")}","testComponent":true""")
@@ -202,7 +203,8 @@ class TestComponentFlagV4Test {
         val detail = create(""""name":"$real"""")
         patchComponent(detail, """"testComponent":true""")
             .andExpect(status().isBadRequest)
-            .andExpect(jsonPath("$.errorMessage").value(containsString("'$real'")))
+            .andExpect(jsonPath("$.errorMessage").value(allOf(startsWith("testComponent: "), containsString("'$real'"))))
+            .andExpect(jsonPath("$.errorCode").doesNotExist())
     }
 
     @Test
@@ -212,7 +214,7 @@ class TestComponentFlagV4Test {
         val outside = name("sys099-renamed")
         patchComponent(flagged, """"name":"$outside"""")
             .andExpect(status().isBadRequest)
-            .andExpect(jsonPath("$.errorMessage").value(allOf(containsString("name:"), containsString("'$outside'"))))
+            .andExpect(jsonPath("$.errorMessage").value(allOf(startsWith("name: "), containsString("'$outside'"))))
 
         val inside = name("test-sys099-renamed")
         val renamed = objectMapper.readTree(
