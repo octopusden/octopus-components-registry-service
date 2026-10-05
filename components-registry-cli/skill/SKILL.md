@@ -89,7 +89,7 @@ Help: `crsctl --help` (or `crsctl help`) for the top level; `crsctl help <comman
 
 `components list` filters: `--search`, `--owner`*, `--system`*, `--product-type`, `--build-system`*,
 `--label`*, `--client-code`*, `--solution`, `--jira-project-key`*, `--jira-technical`, `--vcs-path`,
-`--production-branch`, `--parent`*, `--group-key`*, `--archived`, `--can-be-parent`,
+`--production-branch`, `--parent`*, `--group-key`*, `--archived`, `--test-component`, `--can-be-parent`,
 `--distribution-explicit`, `--distribution-external` (`*` = repeatable). Paging: `--page`, `--size`,
 `--sort` (e.g. `name,asc`), `--all`.
 

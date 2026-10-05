@@ -18,6 +18,26 @@ refresh it with `./gradlew :components-registry-service-server:generateOpenApiDo
 
 ## Unreleased
 
+- **`testComponent` flag (SYS-099).** `ComponentSummaryResponse` and `ComponentDetailResponse` gain a
+  required `testComponent: boolean`; `ComponentCreateRequest` (default `false`) and
+  `ComponentUpdateRequest` (`null` = unchanged) accept it; changing it needs only the plain
+  component edit permission. `GET /components` gains `?testComponent=true|false`;
+  without it test components are still listed. `testComponent = true` needs a component key
+  matching one of the configured name patterns (default `^test-`, `^cvelab-`): a create or PATCH
+  that sets it, or a rename of a flagged component, with a non-matching key returns `400`
+  (`testComponent: …` / `name: …`, naming the key and the patterns); unflagging is always allowed.
+  New `GET /components/meta/test-component-name-patterns` (`ACCESS_COMPONENTS`) returns the active
+  patterns as `string[]`, e.g. `["^test-","^cvelab-"]`. Create and PATCH also return `400` when a non-test
+  component would reference a test component as its parent (`parentComponentName: …`) or doc
+  component (`docs: …`), or when a component that non-test components reference that way is
+  flagged (`testComponent: …`); the message names both components. `warnings` carries an entry
+  when the component has the `test-component` label but the flag is false (the label is kept for
+  its readers; the flag is the source of truth). `GET /health/statistics` and
+  `GET /admin/teamcity-validations` (and `/summary`) no longer count test components. `V11__` flags
+  every component labelled `test-component` and keeps the label. The v1–v3 `Component` payloads (list, detail, detailed component, v3 list,
+  find-by-artifact) always carry `testComponent`, read from the DB; released clients ignore the new
+  key (their DTOs ignore unknown properties). The flag is not part of the legacy Groovy DSL or the as-code view.
+
 - **`GET /meta/release-managers` and `GET /meta/security-champions` added.** Two new
   `ACCESS_COMPONENTS` endpoints return the sorted, distinct release-manager and security-champion
   usernames currently assigned to at least one component the v4 list shows (blank values excluded), as

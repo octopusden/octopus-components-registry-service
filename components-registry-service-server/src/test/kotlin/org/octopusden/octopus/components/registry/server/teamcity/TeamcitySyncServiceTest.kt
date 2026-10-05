@@ -803,6 +803,19 @@ class TeamcitySyncServiceTest {
 
         override fun existsByParentComponentId(parentId: UUID): Boolean = components.any { it.parentComponent?.id == parentId }
 
+        override fun findTestComponentKeys(): List<String> = components.filter { it.testComponent }.map { it.componentKey }
+
+        override fun findNonTestChildKeys(parentId: UUID): List<String> =
+            components.filter { it.parentComponent?.id == parentId && !it.testComponent }.map { it.componentKey }
+
+        override fun findNonTestDocReferrerKeys(
+            docComponentKey: String,
+            excludeComponentId: UUID,
+        ): List<String> =
+            components
+                .filter { c -> c.id != excludeComponentId && !c.testComponent && c.docLinks.any { it.docComponentKey == docComponentKey } }
+                .map { it.componentKey }
+
         override fun findByComponentGroupId(groupId: UUID): List<ComponentEntity> = components.filter { it.componentGroup?.id == groupId }
 
         override fun findNonArchivedComponentVcsPaths(
@@ -829,7 +842,7 @@ class TeamcitySyncServiceTest {
         private fun isFakeAggregator(c: ComponentEntity): Boolean =
             c.componentGroup?.let { it.isFake && it.groupKey == c.componentKey } ?: false
 
-        private fun regularComponents(): List<ComponentEntity> = components.filterNot(::isFakeAggregator)
+        private fun regularComponents(): List<ComponentEntity> = components.filterNot { isFakeAggregator(it) || it.testComponent }
 
         private fun activeRegularComponents(): List<ComponentEntity> = regularComponents().filterNot { it.archived }
 

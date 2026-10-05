@@ -61,6 +61,25 @@ The compat-test exercises **API contracts**:
   VALUE_DIFF. Regression tests: `GitVsDbValidationTest` VAL-003a and `VcsPlacementKnownDeltaTest`.
   `known-deltas-git.json` stays empty: Git mode has no placement and no Build Working Directory.
 
+- **`testComponent` flag** (SYS-099, 2026-10) — the v1/v2/v3 `Component` DTO (and its
+  `VersionedComponent` / `DetailedComponent` subclasses) always serializes `testComponent`, read
+  from the DB whichever resolver serves the component: `false`, `true` for the components `V11__`
+  flagged from the `test-component` label, `false` without a DB. Every component payload therefore
+  gains the key — component list and detail (v1, v2, v3 `component.`), the `DetailedComponent`, and
+  find-by-artifact (`VersionedComponent`). This is the first additive delta that also reaches
+  **git mode**, by decision: the key is new API surface, not a resolver change. Raw layer: one
+  STRUCTURAL_DIFF entry in **both** `known-deltas-db.json` and `known-deltas-git.json`, pinned to
+  `\.testComponent$` and `KEY_MISSING_BASELINE`, matching templated and literal paths; a dropped key
+  is not suppressed. Typed layer: both sides deserialize into the same DTO (absent = false), and
+  `Comparators.buildAssertion` forgives exactly baseline-false → true. Regression test:
+  `TestComponentKnownDeltaTest` (both files). Released clients are unaffected: the concrete DTOs
+  the Feign client decodes (`ComponentV1`, `ComponentV2`, `ComponentV3`, `VersionedComponent`,
+  `DetailedComponent`) carry `@JsonIgnoreProperties(ignoreUnknown = true)` in the released
+  versions (e.g. 2.0.83, 3.0.2, 3.0.4), so they skip the new key even with the client's default
+  mapper, and the light client's DTOs ignore unknown properties too. A plain deploy is the rollout;
+  no feature flag is needed. The abstract `Component` base class carries the same annotation as
+  well, for any future subclass.
+
 **Operational metadata endpoints are explicitly excluded** from the compat surface:
 
 - `GET /rest/api/2/components-registry/service/status` — read **only** by

@@ -117,6 +117,8 @@ class ComponentEntity(
     var clientCode: String? = null,
     @Column(name = "archived", nullable = false)
     var archived: Boolean = false,
+    @Column(name = "test_component", nullable = false)
+    var testComponent: Boolean = false,
     @Column(name = "solution")
     var solution: Boolean? = null,
     // Batched via the class-level @BatchSize on the TARGET entities (ComponentEntity for

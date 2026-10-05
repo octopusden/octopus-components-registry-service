@@ -165,6 +165,7 @@ Identity + fields that never vary per version range.
 | `product_type` | VARCHAR(20) | nullable | App-validated against `ProductTypes` enum (PT_K/PT_C/PT_D_DB/PT_D) |
 | `client_code` | VARCHAR(255) | nullable | |
 | `archived` | BOOLEAN | NOT NULL DEFAULT false | |
+| `test_component` | BOOLEAN | NOT NULL DEFAULT false | Synthetic (test-stand) component, SYS-099. `V11__` sets it on components labelled `test-component`. A non-test component may not reference a test component as parent or doc component (service-layer rule). |
 | `solution` | BOOLEAN | nullable | |
 | `parent_component_id` | UUID | FK → components(id) | DSL `parentComponent = "X"` reference between peers |
 | `can_be_parent` | BOOLEAN | NOT NULL DEFAULT false | True when referenced as a `parentComponent` by ≥1 other component — i.e. eligible to be selected as a parent in the Portal picker. **NOT the same as an aggregator:** being a `parentComponent` target is a flat peer reference, whereas an aggregator owns a `components { }` block (§4.3); the two are independent. Seeded by import (Pass 2 sets `true` for DSL-referenced parents, never `false`) and editable via v4. Service invariants: a chosen parent must be `can_be_parent`; a `can_be_parent` component may not have a parent (single-level — a parent cannot have a parent, matching the DSL validator); `can_be_parent` may not be disabled while children still reference it. Grandfathered parent-of-parent rows are tolerated on no-op updates. The `?canBeParent=true` list filter backs the Portal parent picker. |

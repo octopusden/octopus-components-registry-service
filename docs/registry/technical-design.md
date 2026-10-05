@@ -131,10 +131,10 @@ DELETE /rest/api/4/components/{id}
   Behavior: Sets archived=true (soft delete)
   Auth:     DELETE_COMPONENTS
 
-GET    /rest/api/4/components?productType=&archived=&search=&owner=
+GET    /rest/api/4/components?productType=&archived=&testComponent=&search=&owner=
   Response: Page<ComponentSummaryResponse>
   Auth:     ACCESS_COMPONENTS
-  Filters:  productType, archived, search (name/displayName, ILIKE), owner (exact
+  Filters:  productType, archived, testComponent, search (name/displayName, ILIKE), owner (exact
             componentOwner). All independently optional, ANDed when combined.
             `system` is currently rejected with 400 (JPA Criteria + text[] gap).
   Contract: SYS-035 pins the owner filter (case-sensitive exact match).

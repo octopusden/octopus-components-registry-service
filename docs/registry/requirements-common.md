@@ -91,6 +91,7 @@
 | SYS-096 | `GET /components/{idOrName}/archive-readiness` — read-only pre-flight for the archive/delete flow, gated by the same authorization as `deleteComponent` (`ACCESS_COMPONENTS` + `canDeleteComponent`); resolves by id or name identically to `getComponent`; returns one entry per external target (VCS repository, TeamCity project, Jira open issues, Jira project) with outcome `COMPLETED`/`NOT_COMPLETED`/`UNKNOWN`, a reason for the latter two, and a `reasonKind` classifying what an `UNKNOWN` entry needs; `ready` is false iff any entry is `NOT_COMPLETED` or `UNKNOWN` | High | unit + integration-test | ✅ Tested |
 | SYS-097 | The explicit+external "≥1 distribution coordinate" rule is not applied when the component's **BASE** build system is `WHISKEY` (case-insensitive; per-range build-system overrides are ignored). Applies on create, component PATCH and the `/field-overrides` endpoints; non-WHISKEY explicit+external components still require a coordinate, including after being switched off WHISKEY | High | integration-test | ✅ Tested |
 | SYS-098 | A component configuration may declare one or more **generic HTTP-URL artifacts** under `distribution.generic`; each artifact is a path string stored verbatim in DB (V10 migration, table `distribution_generic_artifacts`). The path must match `GENERIC_ENTRY` regex (no dots-only segments, no commas, no traversal sequences); the only allowed `${…}` placeholders are `${version}`, `${major}`, `${minor}`, `${service}`, `${fix}`, and `${build}` — any other placeholder (including SpEL expressions such as `T(…).method()`) is rejected with 400. The `generic` field of `DistributionDTO` is the comma-joined CSV of paths sorted by `sort_order`; it is `null` when no artifacts are set (`@JsonInclude(NON_NULL)`) and silently ignored by older clients (`@JsonIgnoreProperties(ignoreUnknown = true)`) | High | unit + integration-test | ✅ Tested |
+| SYS-099 | A component carries a component-level boolean `testComponent` (default false; V11 sets it on components labelled `test-component`). v4 create/update/detail/summary expose it and the list accepts `?testComponent=`; without it test components are listed. v1/v2/v3 always carry it (read from the DB); released clients ignore the new key (their concrete DTOs ignore unknown properties). Setting it needs a key matching `components-registry.test-components.name-patterns` (default `^test-`, `^cvelab-`; served by `GET /meta/test-component-name-patterns`), also on rename of a flagged component (400). A non-test component may not reference a test component as parent or doc component (400 naming both); the `test-component` label stays for compatibility and a label without the flag only yields a write warning; health statistics and the TeamCity validation views exclude test components. The legacy Groovy DSL does not carry it | High | unit + integration-test | ✅ Tested |
 
 ---
 
@@ -2087,7 +2088,8 @@ downloading the whole list; CRS owns the data and can aggregate in SQL.
 `GET /rest/api/4/health/statistics` (new `HealthControllerV4`, same package and
 `@ConditionalOnDatabaseEnabled` level as `ComponentControllerV4`) returns:
 
-- `totalComponents: Long` — all non-FAKE-aggregator component rows.
+- `totalComponents: Long` — all non-FAKE-aggregator, non-test (SYS-099) component rows. Every
+  figure below excludes test components as well.
 - `activeComponents: Long` — the non-archived subset.
 - `componentsByOwner: Map<String, Long>` — count of ACTIVE (non-archived)
   components per `component_owner` (scalar column GROUP BY; null/blank owners excluded).
@@ -3316,3 +3318,85 @@ at least one distribution coordinate`, so these components could not be edited a
 `` `SYS-097 field-override create on explicit-external WHISKEY without coordinate is accepted` `` (3),
 `` `SYS-097 switching explicit-external without coordinate off WHISKEY is rejected` `` (4),
 `create_explicitExternal_noCoordinate_badRequest` (5, pre-existing).
+
+### SYS-099: First-class `testComponent` flag
+
+**Priority:** High
+**Test layer:** unit + integration-test
+**Status:** ✅ Tested
+
+**Motivation:**
+A "test component" (synthetic stand data such as the CVELAB components) was only the free-text
+label `test-component`: unvalidated, easy to mistype, and every consumer had to string-match it.
+Test components then leaked into data that must reflect real products (vulnerability scope,
+reports, portal lists, health statistics).
+
+**Description:**
+- `components.test_component BOOLEAN NOT NULL DEFAULT false` (`V11__`). The migration sets it on
+  every component that carries the `test-component` label; the label is kept.
+- v4: `ComponentCreateRequest.testComponent` (default false), `ComponentUpdateRequest.testComponent`
+  (null = unchanged; the plain component edit permission is enough — the flag is independent of
+  `archived`), `ComponentSummaryResponse.testComponent` and `ComponentDetailResponse.testComponent`.
+  `GET /components?testComponent=true|false` filters; without the parameter test components are
+  included (hiding them is a Portal default, not an API one).
+- v1/v2/v3: the `Component` DTO always carries `testComponent` (true or false), read from the DB
+  for every component whichever resolver serves it (no DB layer → false), including the
+  find-by-artifact results. Released clients ignore the new key: their concrete DTOs
+  (`ComponentV1`/`V2`/`V3`, `VersionedComponent`, `DetailedComponent`) already carry
+  `@JsonIgnoreProperties(ignoreUnknown = true)`, so a plain deploy is the rollout.
+- The flag lives only in the DB and the v4 API: the legacy Groovy DSL, its import and the as-code
+  view do not carry it.
+- Key rule: `testComponent = true` is allowed only when the component key matches one of the
+  regexes in `components-registry.test-components.name-patterns` (find semantics; default
+  `^test-`, `^cvelab-` in `application.yml`; service-config replaces the list per installation;
+  empty ⇒ no component can be flagged). Create with the flag, a PATCH that sets it, and a rename of
+  a flagged component to a non-matching key fail with 400 (`testComponent: …` / `name: …`) naming
+  the key and the patterns. Unflagging is always allowed. The flag is never derived from the key.
+  The active patterns are served read-only by `GET /rest/api/4/components/meta/test-component-name-patterns`
+  (`List<String>`, `ACCESS_COMPONENTS`). `V11__` flags by label, not by key; the labelled components
+  on QA all match `^test-`. A flagged component whose key matches no pattern (after a pattern
+  change) keeps its flag and stays editable; only flagging it again or renaming it is checked.
+- A non-test component may not reference a test component as its parent or doc component, and a
+  component that non-test components reference that way cannot become a test component: 400,
+  `parentComponentName: …` / `docs: …` / `testComponent: …`, naming both components. Checked on
+  create, and on update when the PATCH carries `testComponent`, `parentComponentName` or `docs`.
+- The flag is the source of truth. The `test-component` label is kept for compatibility — the
+  Sonar automation and other consumers read it — and is not removed by this requirement. A
+  label/flag mismatch is a warning, never an error: a create/update response carries a `warnings`
+  entry when the component has the label but `testComponent` is false. Removing the label is a
+  separate decision, to be taken only after its consumers read the flag.
+- `GET /health/statistics` excludes test components from every figure (SYS-057), and the TeamCity
+  validation list and summary (`GET /admin/teamcity-validations`, `.../summary`, SYS-092) leave out
+  findings that belong to test components.
+
+**Acceptance:**
+1. A component created with `testComponent = true` returns `true` from v4 detail and summary, and
+   `"testComponent": true` from v2 `GET /components/{name}` and v3 `GET /components`; a component
+   without the flag returns `false` on v4, v2 and v3.
+2. `?testComponent=false` excludes test components, `?testComponent=true` returns only them, and
+   no parameter returns both.
+3. A non-test component with a test parent or test doc component is rejected with 400 naming both;
+   flagging a component a non-test child references is rejected with 400 naming both; a test
+   component may sit under a test parent.
+4. The `test-component` label without the flag yields a warning, which disappears once the flag is set.
+5. Health statistics and the TeamCity validation list/summary do not count test components.
+6. `V11__` flags exactly the components labelled `test-component` and keeps every label.
+7. The component's own editor (plain edit permission, no `ARCHIVE_COMPONENTS`) can set the flag.
+8. The client's default mapper reads a v1/v2 component carrying `testComponent` and an unknown field.
+9. Flagging a non-matching key (create or PATCH) and renaming a flagged component to one are 400; unflagging
+   is allowed; `/meta/test-component-name-patterns` returns the configured list; a configured list replaces the defaults.
+
+**Test method:** `TestComponentFlagV4Test` —
+`` `SYS-099 testComponent is returned by v4 v2 and v3` ``, `` `SYS-099 find-by-artifact carries testComponent` `` (1),
+`` `SYS-099 list filter on testComponent` `` (2),
+`` `SYS-099 real component referencing test parent is rejected` ``,
+`` `SYS-099 real component referencing test doc component is rejected` ``,
+`` `SYS-099 flagging a referenced component is rejected` `` (3),
+`` `SYS-099 label without flag warns` `` (4),
+`` `SYS-099 health statistics exclude test components` `` (5);
+`TeamcityValidationQueryServiceTest.SYS-099 test components are excluded` (5);
+`V11TestComponentMigrationIntegrationTest` (6);
+`` `SYS-099 editor without archive permission can flag` `` (7);
+`ComponentUnknownPropertyTest` (8);
+`` `SYS-099 flag requires a matching key` ``, `` `SYS-099 rename of a flagged component must keep a matching key` ``,
+`` `SYS-099 meta endpoint lists name patterns` ``, `TestComponentNamePatternPropertyTest` (9).

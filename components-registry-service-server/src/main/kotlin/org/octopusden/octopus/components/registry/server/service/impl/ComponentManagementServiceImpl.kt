@@ -6,6 +6,7 @@ import org.apache.maven.artifact.versioning.DefaultArtifactVersion
 import org.octopusden.octopus.components.registry.core.exceptions.ComponentNameConflictException
 import org.octopusden.octopus.components.registry.core.exceptions.CrossComponentConflictException
 import org.octopusden.octopus.components.registry.core.exceptions.NotFoundException
+import org.octopusden.octopus.components.registry.server.config.ComponentsRegistryProperties
 import org.octopusden.octopus.components.registry.server.config.ConditionalOnDatabaseEnabled
 import org.octopusden.octopus.components.registry.server.dto.v4.BaseConfigurationRequest
 import org.octopusden.octopus.components.registry.server.dto.v4.BuildToolBeanRequest
@@ -182,6 +183,9 @@ class ComponentManagementServiceImpl(
     // Spring always registers the bean in production (RMSOverrideGate itself self-gates on
     // RMSProperties.enabled and a null RMSClient) — see RMSOverrideGate.
     private val rmsOverrideGate: RMSOverrideGate? = null,
+    // Defaulted (nullable) so unit tests constructing this service directly need no new wiring;
+    // Spring injects the bound properties in production. Null ⇒ no key may be flagged testComponent.
+    private val registryProperties: ComponentsRegistryProperties? = null,
 ) : ComponentManagementService {
     // ConfigHelper is constructed lazily because it touches the Spring
     // Environment on first access; mirrors the pattern used by
@@ -336,6 +340,7 @@ class ComponentManagementServiceImpl(
                 productType = stripIfHidden("component.productType", request.productType),
                 clientCode = stripIfHidden("component.clientCode", request.clientCode),
                 archived = request.archived,
+                testComponent = request.testComponent,
                 solution = stripIfHidden("component.solution", request.solution),
                 parentComponent = parent,
                 // R1: group = migration-derived aggregator membership only; never assigned via API.
@@ -383,6 +388,7 @@ class ComponentManagementServiceImpl(
         // the person-field error first, so person validation runs ahead of the
         // malformed-input checks here.
         validatePersonFields(entity, runActiveCheck = true)
+        validateTestComponentName(entity, "testComponent")
         validateRequiredCopyright(entity)
         validateRequiredDisplayName(entity)
 
@@ -408,6 +414,7 @@ class ComponentManagementServiceImpl(
         // flush so the queries exclude this component by its now-assigned id.
         validateCrossComponentIntegrity(saved)
         validateArtifactOwnershipIfChanged(saved) // self-skips when the create carried no ownership
+        validateTestComponentReferences(saved)
 
         // M:N junctions (no cascade — see ComponentEntity kdoc convention) must be
         // persisted via their own repositories AFTER the parent has an assigned id.
@@ -439,7 +446,9 @@ class ComponentManagementServiceImpl(
             changeComment = request.changeComment,
         )
 
-        return toDetail(saved).withVcsChainWarning(request.baseConfiguration?.writesVcs() == true, saved)
+        return toDetail(saved)
+            .withVcsChainWarning(request.baseConfiguration?.writesVcs() == true, saved)
+            .withTestComponentLabelWarning(saved)
     }
 
     // ============================================================
@@ -688,6 +697,11 @@ class ComponentManagementServiceImpl(
         }
         request.solution?.let { if (!fieldConfigService.isHidden("component.solution")) entity.solution = it }
         request.archived?.let { entity.archived = it }
+        request.testComponent?.let { entity.testComponent = it }
+        // Flagging, or renaming a flagged component, must keep the key inside the configured patterns.
+        if (request.testComponent == true || isRename) {
+            validateTestComponentName(entity, if (request.testComponent == true) "testComponent" else "name")
+        }
         // canBeParent: editability enforced above; `hidden` silently strips (consistent with
         // the other field-config-gated scalars). Structural invariants are validated below.
         request.canBeParent?.let { if (!fieldConfigService.isHidden("component.canBeParent")) entity.canBeParent = it }
@@ -902,6 +916,10 @@ class ComponentManagementServiceImpl(
             // not on an unrelated rename/baseConfig change (which must not 409 on pre-existing data).
             if (request.artifactIds != null) validateArtifactOwnershipIfChanged(saved)
         }
+        // Grandfathered like the checks above: only a PATCH touching the flag or a reference re-checks it.
+        if (request.testComponent != null || request.parentComponentName != null || request.docs != null) {
+            validateTestComponentReferences(saved)
+        }
 
         // Junctions — synced via their repositories after the parent flush so the
         // assigned ids (for newly-created rows) are visible.
@@ -971,7 +989,9 @@ class ComponentManagementServiceImpl(
             changeComment = request.changeComment,
         )
 
-        return toDetail(saved).withVcsChainWarning(request.baseConfiguration?.writesVcs() == true, saved)
+        return toDetail(saved)
+            .withVcsChainWarning(request.baseConfiguration?.writesVcs() == true, saved)
+            .withTestComponentLabelWarning(saved)
     }
 
     // ============================================================
@@ -3549,6 +3569,74 @@ class ComponentManagementServiceImpl(
         }
     }
 
+    /**
+     * A test component's key must match a configured name pattern
+     * (`components-registry.test-components.name-patterns`, SYS-099) — 400, prefixed with [field].
+     * Unflagged components are not checked.
+     */
+    private fun validateTestComponentName(
+        entity: ComponentEntity,
+        field: String,
+    ) {
+        if (!entity.testComponent) return
+        val settings = registryProperties?.testComponents ?: ComponentsRegistryProperties.TestComponentsSettings()
+        require(settings.matches(entity.componentKey)) {
+            "$field: test component key '${entity.componentKey}' matches none of the test-component name patterns " +
+                "${settings.namePatterns}"
+        }
+    }
+
+    /**
+     * Test data must never become part of a real product: a non-test component may not reference a
+     * test component as its parent or doc component (400, like the can-be-parent rule). Checked both
+     * ways — this component's own references, and, for a test component, the non-test components that
+     * already reference it. Runs post-flush, like [validateDocComponentExistence].
+     */
+    private fun validateTestComponentReferences(entity: ComponentEntity) {
+        val key = entity.componentKey
+        val violation =
+            if (entity.testComponent) {
+                val id = entity.id ?: return
+                val children = componentRepository.findNonTestChildKeys(id)
+                val docReferrers = componentRepository.findNonTestDocReferrerKeys(key, id)
+                when {
+                    children.isNotEmpty() ->
+                        "non-test component(s) ${children.sorted().joinToString { "'$it'" }} reference it as their parent"
+                    docReferrers.isNotEmpty() ->
+                        "non-test component(s) ${docReferrers.sorted().joinToString { "'$it'" }} reference it as their doc component"
+                    else -> null
+                }?.let { "testComponent: test component '$key' cannot be referenced by a real product: $it" }
+            } else {
+                val parent = entity.parentComponent
+                val docKeys =
+                    entity.docLinks
+                        .map { it.docComponentKey }
+                        .filterNot { it == key }
+                        .toSet()
+                val testDocKey =
+                    docKeys
+                        .takeIf { it.isNotEmpty() }
+                        ?.let { keys -> componentRepository.findByComponentKeyIn(keys).filter { it.testComponent } }
+                        ?.minOfOrNull { it.componentKey }
+                when {
+                    parent?.testComponent == true ->
+                        "parentComponentName: component '$key' is not a test component but references test component " +
+                            "'${parent.componentKey}' as its parent"
+                    testDocKey != null ->
+                        "docs: component '$key' is not a test component but references test component '$testDocKey' " +
+                            "as its doc component"
+                    else -> null
+                }
+            }
+        if (violation != null) throw IllegalArgumentException(violation)
+    }
+
+    /** The flag is the source of truth; the `test-component` label is kept for its readers, so a mismatch only warns. */
+    private fun ComponentDetailResponse.withTestComponentLabelWarning(entity: ComponentEntity): ComponentDetailResponse {
+        if (entity.testComponent || TEST_COMPONENT_LABEL !in labels) return this
+        return copy(warnings = warnings + TEST_COMPONENT_LABEL_WARNING)
+    }
+
     private fun isBaseBuildSystemWhiskey(entity: ComponentEntity): Boolean =
         entity.configurations
             .firstOrNull { it.rowType == ROW_TYPE_BASE }
@@ -4308,6 +4396,9 @@ class ComponentManagementServiceImpl(
         filter.archived?.let { archived ->
             spec = spec.and(Specification { root, _, cb -> cb.equal(root.get<Boolean>("archived"), archived) })
         }
+        filter.testComponent?.let { testComponent ->
+            spec = spec.and(Specification { root, _, cb -> cb.equal(root.get<Boolean>("testComponent"), testComponent) })
+        }
         // OR across selected owners — a component matches when its scalar
         // componentOwner column equals any of the listed values. No JOIN
         // (componentOwner is a column on ComponentEntity itself, not a
@@ -4586,6 +4677,7 @@ class ComponentManagementServiceImpl(
             "productType" to entity.productType,
             "clientCode" to entity.clientCode,
             "archived" to entity.archived,
+            "testComponent" to entity.testComponent,
             "solution" to entity.solution,
             "parentComponentName" to entity.parentComponent?.componentKey,
             "canBeParent" to entity.canBeParent,
@@ -4835,6 +4927,10 @@ class ComponentManagementServiceImpl(
 
         private const val VCS_CHAIN_MISMATCH_WARNING =
             "VCS entries changed; the TeamCity build chain no longer matches and must be recreated."
+
+        private const val TEST_COMPONENT_LABEL = "test-component"
+        private const val TEST_COMPONENT_LABEL_WARNING =
+            "Label 'test-component' is set but testComponent is false; set testComponent = true to mark a test component."
 
         // vcs_settings_entries.source_path / checkout_directory are VARCHAR(255).
         private const val MAX_PLACEMENT_LENGTH = 255

@@ -9,6 +9,7 @@ import org.octopusden.octopus.components.registry.core.dto.SecurityGroupsDTO
 import org.octopusden.octopus.components.registry.core.exceptions.NotFoundException
 import org.octopusden.octopus.components.registry.server.mapper.toDTO
 import org.octopusden.octopus.components.registry.server.service.ComponentRegistryResolver
+import org.octopusden.octopus.components.registry.server.service.TestComponentKeys
 import org.octopusden.octopus.escrow.configuration.model.EscrowModule
 import org.octopusden.octopus.escrow.configuration.model.EscrowModuleConfig
 import org.slf4j.Logger
@@ -24,6 +25,9 @@ abstract class BaseComponentController<T : Component> {
     @Autowired
     protected lateinit var componentRegistryResolver: ComponentRegistryResolver
 
+    @Autowired
+    protected lateinit var testComponentKeys: TestComponentKeys
+
     protected abstract val createComponentFunc: (escrowModule: EscrowModule) -> T
 
     // todo - consider removing the whole endpoint or just version specific fields, like docker,
@@ -35,6 +39,7 @@ abstract class BaseComponentController<T : Component> {
         @RequestParam("systems", required = false, defaultValue = "") systems: List<String>,
         @RequestParam("solution", required = false) solution: Boolean?,
     ): ComponentsDTO<T> {
+        val testKeys = testComponentKeys.get()
         val components =
             componentRegistryResolver
                 .getComponents()
@@ -68,7 +73,7 @@ abstract class BaseComponentController<T : Component> {
                         vcsPathEquals && buildSystemEquals && solutionEquals
                     }
                 }.map {
-                    createComponent(it)
+                    createComponent(it, testKeys)
                 }.filter { c ->
                     if (systems.isEmpty()) {
                         true
@@ -91,7 +96,7 @@ abstract class BaseComponentController<T : Component> {
         val escrowModule =
             componentRegistryResolver.getComponentById(component)
                 ?: throw NotFoundException("Component id $component is not found")
-        return createComponent(escrowModule)
+        return createComponent(escrowModule, testComponentKeys.get())
     }
 
     // DEPRECATED (2026-07, with the ADR-018 base-row amendment): the component-level distribution
@@ -120,7 +125,10 @@ abstract class BaseComponentController<T : Component> {
         )
 
     @Suppress("DEPRECATION") // sets the deprecated comma-joined RM/SC props on the legacy DTO for v1/v3 compatibility
-    private fun createComponent(escrowModule: EscrowModule): T =
+    private fun createComponent(
+        escrowModule: EscrowModule,
+        testKeys: Set<String>,
+    ): T =
         with(createComponentFunc(escrowModule)) {
             // ADR-018: component-level scalars come from the resolved BASE representative (set by the DB
             // resolver), NOT the version-sorted moduleConfigurations[0]. Legacy in-memory loader leaves
@@ -135,6 +143,7 @@ abstract class BaseComponentController<T : Component> {
             solution = escrowModuleConfig.solution
             parentComponent = escrowModuleConfig.parentComponent
             archived = escrowModuleConfig.archived
+            testComponent = escrowModule.moduleName in testKeys
             doc = escrowModuleConfig.doc?.toDTO()
             escrow = escrowModuleConfig.escrow?.toDTO()
             copyright = escrowModuleConfig.copyright

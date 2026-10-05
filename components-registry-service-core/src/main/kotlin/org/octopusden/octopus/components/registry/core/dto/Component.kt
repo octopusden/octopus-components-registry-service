@@ -1,7 +1,11 @@
 package org.octopusden.octopus.components.registry.core.dto
 
+import com.fasterxml.jackson.annotation.JsonIgnoreProperties
 import java.util.Objects
 
+// Tolerant reader. The concrete DTOs the Feign client decodes already ignore unknown properties;
+// this covers any future subclass, since the client's default ObjectMapper fails on them.
+@JsonIgnoreProperties(ignoreUnknown = true)
 abstract class Component(
     val id: String,
     val name: String?,
@@ -26,6 +30,7 @@ abstract class Component(
     var releaseManager: String? = null
     var distribution: DistributionDTO? = null
     var archived: Boolean = false
+    var testComponent: Boolean = false
     var doc: DocDTO? = null
     var escrow: EscrowDTO? = null
     var copyright: String? = null
@@ -50,6 +55,7 @@ abstract class Component(
         if (releaseManager != other.releaseManager) return false
         if (distribution != other.distribution) return false
         if (archived != other.archived) return false
+        if (testComponent != other.testComponent) return false
         if (doc != other.doc) return false
         if (escrow != other.escrow) return false
         if (copyright != other.copyright) return false
@@ -71,6 +77,7 @@ abstract class Component(
         releaseManager,
         distribution,
         archived,
+        testComponent,
         doc,
         escrow,
         copyright,
@@ -81,6 +88,6 @@ abstract class Component(
     override fun toString(): String = "Component(id='$id', name=$name, componentOwner='$componentOwner', system=$system, " +
         "clientCode=$clientCode, releasesInDefaultBranch=$releasesInDefaultBranch, solution=$solution, " +
         "parentComponent=$parentComponent, securityChampion=$securityChampion, releaseManager=$releaseManager, " +
-        "distribution=$distribution, archived=$archived, doc=$doc, escrow=$escrow, copyright='$copyright' " +
+        "distribution=$distribution, archived=$archived, testComponent=$testComponent, doc=$doc, escrow=$escrow, copyright='$copyright' " +
         "labels=$labels)"
 }

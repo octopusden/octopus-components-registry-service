@@ -131,6 +131,7 @@ Filters (repeatable ones may be passed multiple times):
 | `--parent <name>` | yes | Parent component name. |
 | `--group-key <key>` | yes | |
 | `--archived <true\|false>` | | |
+| `--test-component <true\|false>` | | Without it, test components are listed. |
 | `--can-be-parent <true\|false>` | | |
 | `--distribution-explicit <true\|false>` | | |
 | `--distribution-external <true\|false>` | | |
