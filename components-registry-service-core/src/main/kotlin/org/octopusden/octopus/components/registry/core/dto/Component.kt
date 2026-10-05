@@ -3,8 +3,8 @@ package org.octopusden.octopus.components.registry.core.dto
 import com.fasterxml.jackson.annotation.JsonIgnoreProperties
 import java.util.Objects
 
-// Tolerant reader: the bundled Feign client deserializes with a plain ObjectMapper
-// (FAIL_ON_UNKNOWN_PROPERTIES on), so a field the server adds later must not break it.
+// Tolerant reader. The concrete DTOs the Feign client decodes already ignore unknown properties;
+// this covers any future subclass, since the client's default ObjectMapper fails on them.
 @JsonIgnoreProperties(ignoreUnknown = true)
 abstract class Component(
     val id: String,

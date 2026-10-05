@@ -29,8 +29,8 @@ refresh it with `./gradlew :components-registry-service-server:generateOpenApiDo
   when the component has the `test-component` label but the flag is false. `GET
   /health/statistics` no longer counts test components. `V11__` flags every component labelled
   `test-component`. The v1–v3 `Component` payloads (list, detail, detailed component, v3 list,
-  find-by-artifact) always carry `testComponent`, read from the DB; the published `Component` DTO
-  now ignores unknown properties. The flag is not part of the legacy Groovy DSL or the as-code view.
+  find-by-artifact) always carry `testComponent`, read from the DB; released clients ignore the new
+  key (their DTOs ignore unknown properties). The flag is not part of the legacy Groovy DSL or the as-code view.
 
 - **`GET /meta/release-managers` and `GET /meta/security-champions` added.** Two new
   `ACCESS_COMPONENTS` endpoints return the sorted, distinct release-manager and security-champion

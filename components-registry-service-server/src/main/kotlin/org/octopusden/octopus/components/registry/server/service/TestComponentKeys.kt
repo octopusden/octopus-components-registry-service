@@ -1,5 +1,6 @@
 package org.octopusden.octopus.components.registry.server.service
 
+import org.octopusden.octopus.components.registry.core.dto.Component
 import org.octopusden.octopus.components.registry.server.repository.ComponentRepository
 import org.springframework.beans.factory.ObjectProvider
 import org.springframework.stereotype.Service
@@ -17,4 +18,10 @@ class TestComponentKeys(
     private val componentRepository: ComponentRepository? by lazy { componentRepositoryProvider.getIfAvailable() }
 
     fun get(): Set<String> = componentRepository?.findTestComponentKeys()?.toSet() ?: emptySet()
+
+    /** Sets `testComponent` on each of [components] (keyed by [Component.id]) from one read. */
+    fun mark(components: Iterable<Component>) {
+        val keys = get()
+        components.forEach { it.testComponent = it.id in keys }
+    }
 }

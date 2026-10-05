@@ -74,9 +74,10 @@ class ComponentControllerV3(
     fun findByArtifacts(
         @RequestBody artifacts: Set<ArtifactDependency>,
     ): ArtifactComponentsDTO {
+        val found = componentRegistryResolver.findComponentsByArtifact(artifacts)
+        testComponentKeys.mark(found.values.filterNotNull())
         val artifactComponents =
-            componentRegistryResolver
-                .findComponentsByArtifact(artifacts)
+            found
                 .entries
                 .map { (artifact, component) -> ArtifactComponentDTO(artifact, component) }
                 .toSet()

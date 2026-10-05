@@ -236,7 +236,7 @@ class ComponentControllerV2(
     @PostMapping("find-by-artifact")
     fun findComponentByArtifact(
         @RequestBody artifact: ArtifactDependency,
-    ): VersionedComponent = componentRegistryResolver.findComponentByArtifact(artifact)
+    ): VersionedComponent = componentRegistryResolver.findComponentByArtifact(artifact).also { testComponentKeys.mark(listOf(it)) }
 
     // todo - consider removing the whole endpoint or just version specific fields, like docker,
     //  because version is not provided in this context
@@ -252,6 +252,7 @@ class ComponentControllerV2(
             .findComponentsByArtifact(artifacts.toSet())
             .values
             .filterNotNull()
+            .also(testComponentKeys::mark)
 
     override var createComponentFunc: (EscrowModule) -> ComponentV2 = { escrowModule ->
         val moduleName = escrowModule.moduleName

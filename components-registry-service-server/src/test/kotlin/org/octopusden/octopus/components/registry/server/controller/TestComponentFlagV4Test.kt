@@ -134,6 +134,44 @@ class TestComponentFlagV4Test {
     }
 
     @Test
+    @DisplayName("SYS-099: find-by-artifact results carry the component's testComponent flag")
+    fun `SYS-099 find-by-artifact carries testComponent`() {
+        val test = name("sys099-fba-test")
+        val real = name("sys099-fba-real")
+        val group = "org.octopusden.octopus.$test"
+
+        fun ownership(artifact: String) = """"artifactIds":[{"groupPattern":"$group","mode":"EXPLICIT","artifactTokens":["$artifact"]}]"""
+        create(""""name":"$test","testComponent":true,${ownership("t-lib")}""")
+        create(""""name":"$real",${ownership("r-lib")}""")
+
+        fun post(
+            url: String,
+            body: String,
+        ): JsonNode =
+            objectMapper.readTree(
+                mvc
+                    .perform(post(url).with(adminJwt()).contentType(MediaType.APPLICATION_JSON).content(body))
+                    .andExpect(status().isOk)
+                    .andReturn()
+                    .response.contentAsString,
+            )
+
+        fun dep(artifact: String) = """{"group":"$group","name":"$artifact","version":"1.0"}"""
+
+        val single = post("/rest/api/2/components/find-by-artifact", dep("t-lib"))
+        assertEquals(test, single["id"].asText())
+        assertTrue(single["testComponent"].asBoolean())
+
+        val v2 = post("/rest/api/2/components/findByArtifacts", "[${dep("t-lib")},${dep("r-lib")}]")
+            .associate { it["id"].asText() to it["testComponent"].asBoolean() }
+        assertEquals(mapOf(test to true, real to false), v2)
+
+        val v3 = post("/rest/api/3/components/find-by-artifacts", "[${dep("t-lib")},${dep("r-lib")}]")["artifactComponents"]
+            .associate { it["component"]["id"].asText() to it["component"]["testComponent"].asBoolean() }
+        assertEquals(mapOf(test to true, real to false), v3)
+    }
+
+    @Test
     @DisplayName("SYS-099: the component's own editor can set testComponent without ARCHIVE_COMPONENTS")
     fun `SYS-099 editor without archive permission can flag`() {
         val detail = create(""""name":"${name("sys099-editor")}"""")

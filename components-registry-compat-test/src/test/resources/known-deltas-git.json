@@ -14,7 +14,7 @@
       "category": "STRUCTURAL_DIFF",
       "jsonPathPattern": "\\.testComponent$",
       "messagePattern": "KEY_MISSING_BASELINE at ",
-      "reason": "SYS-099 testComponent flag (2026-10), a deliberate additive API change that also reaches git mode: the v1/v2/v3 Component DTO always serializes testComponent, so every component payload gains the key (read from the DB whichever resolver serves the component: false, true where V11__ flagged the label; false without a DB). The baseline has no key. The Component DTO ignores unknown properties, so clients built from it tolerate the addition. Only an added key is suppressed (messagePattern KEY_MISSING_BASELINE); any other change on these endpoints stays active. See docs/registry/api-compat-deltas.md.",
+      "reason": "SYS-099 testComponent flag (2026-10), a deliberate additive API change that also reaches git mode: the v1/v2/v3 Component DTO always serializes testComponent, so every component payload gains the key (read from the DB whichever resolver serves the component: false, true where V11__ flagged the label; false without a DB). The baseline has no key. Released clients ignore the key: their concrete DTOs carry @JsonIgnoreProperties(ignoreUnknown = true). Only an added key is suppressed (messagePattern KEY_MISSING_BASELINE); any other change on these endpoints stays active. See docs/registry/api-compat-deltas.md.",
       "regressionTest": "TestComponentKnownDeltaTest"
     }
   ]

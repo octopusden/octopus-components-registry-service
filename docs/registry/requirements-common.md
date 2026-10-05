@@ -91,7 +91,7 @@
 | SYS-096 | `GET /components/{idOrName}/archive-readiness` — read-only pre-flight for the archive/delete flow, gated by the same authorization as `deleteComponent` (`ACCESS_COMPONENTS` + `canDeleteComponent`); resolves by id or name identically to `getComponent`; returns one entry per external target (VCS repository, TeamCity project, Jira open issues, Jira project) with outcome `COMPLETED`/`NOT_COMPLETED`/`UNKNOWN`, a reason for the latter two, and a `reasonKind` classifying what an `UNKNOWN` entry needs; `ready` is false iff any entry is `NOT_COMPLETED` or `UNKNOWN` | High | unit + integration-test | ✅ Tested |
 | SYS-097 | The explicit+external "≥1 distribution coordinate" rule is not applied when the component's **BASE** build system is `WHISKEY` (case-insensitive; per-range build-system overrides are ignored). Applies on create, component PATCH and the `/field-overrides` endpoints; non-WHISKEY explicit+external components still require a coordinate, including after being switched off WHISKEY | High | integration-test | ✅ Tested |
 | SYS-098 | A component configuration may declare one or more **generic HTTP-URL artifacts** under `distribution.generic`; each artifact is a path string stored verbatim in DB (V10 migration, table `distribution_generic_artifacts`). The path must match `GENERIC_ENTRY` regex (no dots-only segments, no commas, no traversal sequences); the only allowed `${…}` placeholders are `${version}`, `${major}`, `${minor}`, `${service}`, `${fix}`, and `${build}` — any other placeholder (including SpEL expressions such as `T(…).method()`) is rejected with 400. The `generic` field of `DistributionDTO` is the comma-joined CSV of paths sorted by `sort_order`; it is `null` when no artifacts are set (`@JsonInclude(NON_NULL)`) and silently ignored by older clients (`@JsonIgnoreProperties(ignoreUnknown = true)`) | High | unit + integration-test | ✅ Tested |
-| SYS-099 | A component carries a component-level boolean `testComponent` (default false; V11 sets it on components labelled `test-component`). v4 create/update/detail/summary expose it and the list accepts `?testComponent=`; without it test components are listed. v1/v2/v3 always carry it (read from the DB), and the v1–v3 `Component` DTO ignores unknown properties. A non-test component may not reference a test component as parent or doc component (400 naming both); the label without the flag yields a write warning; health statistics exclude test components. The legacy Groovy DSL does not carry it | High | unit + integration-test | ✅ Tested |
+| SYS-099 | A component carries a component-level boolean `testComponent` (default false; V11 sets it on components labelled `test-component`). v4 create/update/detail/summary expose it and the list accepts `?testComponent=`; without it test components are listed. v1/v2/v3 always carry it (read from the DB); released clients ignore the new key (their concrete DTOs ignore unknown properties). A non-test component may not reference a test component as parent or doc component (400 naming both); the label without the flag yields a write warning; health statistics exclude test components. The legacy Groovy DSL does not carry it | High | unit + integration-test | ✅ Tested |
 
 ---
 
@@ -3340,9 +3340,10 @@ reports, portal lists, health statistics).
   `GET /components?testComponent=true|false` filters; without the parameter test components are
   included (hiding them is a Portal default, not an API one).
 - v1/v2/v3: the `Component` DTO always carries `testComponent` (true or false), read from the DB
-  for every component whichever resolver serves it (no DB layer → false). The DTO is annotated
-  `@JsonIgnoreProperties(ignoreUnknown = true)`, so a client built from it tolerates fields added
-  later.
+  for every component whichever resolver serves it (no DB layer → false), including the
+  find-by-artifact results. Released clients ignore the new key: their concrete DTOs
+  (`ComponentV1`/`V2`/`V3`, `VersionedComponent`, `DetailedComponent`) already carry
+  `@JsonIgnoreProperties(ignoreUnknown = true)`, so a plain deploy is the rollout.
 - The flag lives only in the DB and the v4 API: the legacy Groovy DSL, its import and the as-code
   view do not carry it.
 - A non-test component may not reference a test component as its parent or doc component, and a
@@ -3369,7 +3370,7 @@ reports, portal lists, health statistics).
 8. The client's default mapper reads a v1/v2 component carrying `testComponent` and an unknown field.
 
 **Test method:** `TestComponentFlagV4Test` —
-`` `SYS-099 testComponent is returned by v4 v2 and v3` `` (1),
+`` `SYS-099 testComponent is returned by v4 v2 and v3` ``, `` `SYS-099 find-by-artifact carries testComponent` `` (1),
 `` `SYS-099 list filter on testComponent` `` (2),
 `` `SYS-099 real component referencing test parent is rejected` ``,
 `` `SYS-099 real component referencing test doc component is rejected` ``,

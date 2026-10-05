@@ -72,12 +72,13 @@ The compat-test exercises **API contracts**:
   `\.testComponent$` and `KEY_MISSING_BASELINE`, matching templated and literal paths; a dropped key
   is not suppressed. Typed layer: both sides deserialize into the same DTO (absent = false), and
   `Comparators.buildAssertion` forgives exactly baseline-false → true. Regression test:
-  `TestComponentKnownDeltaTest` (both files). Older clients: the published `Component` DTO had no
-  `@JsonIgnoreProperties`, and the bundled Feign client's default mapper fails on unknown
-  properties, so a consumer on a released client version that uses that default mapper fails on the
-  new key; this release adds `@JsonIgnoreProperties(ignoreUnknown = true)` to `Component`. Consumers
-  that configure their own mapper with `FAIL_ON_UNKNOWN_PROPERTIES` off (e.g. Spring Boot's) are
-  unaffected, as they were by `labels` and `copyright`.
+  `TestComponentKnownDeltaTest` (both files). Released clients are unaffected: the concrete DTOs
+  the Feign client decodes (`ComponentV1`, `ComponentV2`, `ComponentV3`, `VersionedComponent`,
+  `DetailedComponent`) carry `@JsonIgnoreProperties(ignoreUnknown = true)` in the released
+  versions (e.g. 2.0.83, 3.0.2, 3.0.4), so they skip the new key even with the client's default
+  mapper, and the light client's DTOs ignore unknown properties too. A plain deploy is the rollout;
+  no feature flag is needed. The abstract `Component` base class carries the same annotation as
+  well, for any future subclass.
 
 **Operational metadata endpoints are explicitly excluded** from the compat surface:
 
