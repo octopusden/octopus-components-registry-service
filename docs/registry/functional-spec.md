@@ -217,6 +217,31 @@ v2 JSON as before. The Groovy DSL mode and the as-code export do not carry them.
   escrow libraries are involved — it is a plain string builder). Surfaced in the Portal as the
   read-only **"As Code"** tab on the component page (syntax-highlighted, with Full/Resolved toggle).
 
+### 1.7 Search as Code (SYS-098)
+
+The DB-era replacement for grepping the Groovy DSL files: one text search over every component's
+FULL as-code view (§1.6), so artifact/group patterns, version ranges, VCS URLs, Jira keys, docker
+images, people and every other rendered field are found without a per-field filter.
+
+- **Endpoint**: `GET /rest/api/4/components/as-code/search` — auth `ACCESS_COMPONENTS`
+- **Params**: `q` (required, 2–200 chars after trim), `regex` (default `false`), `archived`
+  (omitted = both), `limit` (components, 1–1000, default 100), `maxMatchesPerComponent` (1–1000,
+  default 20).
+- **Matching**: line by line, case-insensitive substring; `regex=true` treats `q` as a
+  case-insensitive regular expression (bounded by a 2 s evaluation budget per request). The RMS
+  section of the as-code view is not searched.
+- **Output**: JSON `{query, regex, totalComponents, truncated, results[]}`; each result is
+  `{componentKey, archived, matchCount, matches[]}` (sorted by key), each match
+  `{line, text, path}` — the 1-based line in the FULL as-code view, the line without indentation,
+  and the enclosing block headers (e.g. the version range a match sits in).
+- **400** for an invalid `q` / `limit` / `maxMatchesPerComponent`, an invalid regex, or a regex over
+  the time budget.
+- **Freshness**: an edit is visible to the next search on every pod (the in-memory index is rebuilt
+  when the DB change stamp moves); writes that bypass both the component rows and the audit log are
+  picked up within 5 minutes.
+- **CLI**: `crsctl search <query> [--regex] [--archived true|false] [--limit N] [--max-matches N]`.
+- **Portal**: UI is a follow-up in the Portal repository.
+
 ## 2. Version Range Management
 
 Version overrides are **per-field**, not per-component-version. Each field in each parameter group (build, VCS, jira, distribution, escrow) can have its own independent set of version ranges.

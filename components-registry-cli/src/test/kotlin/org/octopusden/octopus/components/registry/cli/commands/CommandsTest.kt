@@ -64,6 +64,13 @@ private fun cli(exchange: QueueExchange) =
 
 private const val URL = "--crs-url=https://crs.example"
 
+/** Canned `/components/as-code/search` reply (SYS-098): 2 matching components, cut at limit=1. */
+private const val SEARCH_BODY =
+    """{"query":"ALPHA","regex":false,"totalComponents":2,"truncated":true,"results":[""" +
+        """{"componentKey":"alpha","archived":false,"matchCount":3,"matches":[""" +
+        """{"line":2,"text":"componentOwner = \"alpha-owner\"","path":["alpha"]},""" +
+        """{"line":8,"text":"projectKey = \"ALPHA\"","path":["alpha","\"[1.5,)\"","jira"]}]}]}"""
+
 class CommandsTest {
     @Test
     fun `components list maps filter options to spec query params`() {
@@ -519,5 +526,48 @@ class CommandsTest {
         )
         assertTrue(result.stdout.contains("alice"))
         assertTrue(result.stdout.contains("bob"))
+    }
+
+    @Test
+    fun `SYS-098 search maps options to query params and prints grep-shaped lines`() {
+        val ex = QueueExchange(listOf(200 to SEARCH_BODY))
+        val result =
+            cli(ex).test(
+                listOf(URL, "search", "ALPHA", "--regex", "--archived", "false", "--limit", "1", "--max-matches", "2"),
+            )
+        assertEquals(0, result.statusCode, result.stderr)
+        val uri = ex.requests.single().uri()
+        assertTrue(uri.path.endsWith("/components/as-code/search"), uri.path)
+        val q = uri.rawQuery
+        assertTrue(q.contains("q=ALPHA"), q)
+        assertTrue(q.contains("regex=true"), q)
+        assertTrue(q.contains("archived=false"), q)
+        assertTrue(q.contains("limit=1"), q)
+        assertTrue(q.contains("maxMatchesPerComponent=2"), q)
+        assertTrue(result.stdout.contains("alpha:2: componentOwner = \"alpha-owner\""), result.stdout)
+        assertTrue(result.stdout.contains("alpha:8: projectKey = \"ALPHA\"  [\"[1.5,)\" > jira]"), result.stdout)
+        assertTrue(result.stdout.contains("alpha: ... 1 more"), result.stdout)
+        assertTrue(result.stderr.contains("showing 1 of 2"), result.stderr)
+    }
+
+    @Test
+    fun `SYS-098 search without --regex omits the regex param`() {
+        val ex = QueueExchange(listOf(200 to SEARCH_BODY))
+        val result = cli(ex).test(listOf(URL, "search", "ALPHA"))
+        assertEquals(0, result.statusCode, result.stderr)
+        val q = ex.requests
+            .single()
+            .uri()
+            .rawQuery
+        assertTrue(!q.contains("regex"), q)
+    }
+
+    @Test
+    fun `SYS-098 search -o json emits the top-level array of matching components`() {
+        val ex = QueueExchange(listOf(200 to SEARCH_BODY))
+        val result = cli(ex).test(listOf(URL, "-o", "json", "search", "ALPHA"))
+        assertEquals(0, result.statusCode, result.stderr)
+        assertTrue(result.stdout.trimStart().startsWith("["), result.stdout)
+        assertTrue(result.stdout.contains("\"componentKey\": \"alpha\""), result.stdout)
     }
 }

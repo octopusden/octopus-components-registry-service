@@ -30,6 +30,7 @@ import org.octopusden.octopus.components.registry.cli.commands.ComponentsListCom
 import org.octopusden.octopus.components.registry.cli.commands.HelpCommand
 import org.octopusden.octopus.components.registry.cli.commands.LoginCommand
 import org.octopusden.octopus.components.registry.cli.commands.LogoutCommand
+import org.octopusden.octopus.components.registry.cli.commands.SearchCommand
 import org.octopusden.octopus.components.registry.cli.commands.WhoamiCommand
 import org.octopusden.octopus.components.registry.cli.commands.auditCommand
 import org.octopusden.octopus.components.registry.cli.commands.metaCommand
@@ -117,6 +118,7 @@ fun crsctl(
             ComponentAsCodeCommand(),
             ComponentOverridesCommand(),
         ),
+        SearchCommand(),
         metaCommand(),
         auditCommand(),
         WhoamiCommand(),

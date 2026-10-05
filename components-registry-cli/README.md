@@ -157,6 +157,26 @@ Fetch a component's full detail by id (UUID) or name. Anonymous.
 Print the component's as-code (Groovy-style) source verbatim. Output is raw `text/plain`; the
 `-o` format is not applied.
 
+### `search <QUERY>`
+
+Search the as-code text of **every** component (SYS-098) — the replacement for grepping the old
+Groovy DSL files: artifact/group patterns, version ranges, VCS URLs, Jira keys, docker images,
+people, … Case-insensitive substring; `--regex` treats the query as a case-insensitive regular
+expression. Options: `--archived <true|false>` (default: both), `--limit <n>` (components, server
+default 100), `--max-matches <n>` (lines per component, server default 20). Anonymous.
+
+Table output is grep-shaped, one line per match, with the enclosing block path when the match is
+nested (e.g. inside a version range):
+
+```
+my-component:12: groupId = "org.example.foo"
+my-component:31: projectKey = "FOO"  ["[2.0,)" > jira]
+my-component: ... 3 more
+```
+
+`-o json` emits a **JSON array** of `{componentKey, archived, matchCount, matches:[{line, text, path}]}`.
+When more components matched than `--limit`, a warning goes to STDERR.
+
 ### `component overrides <ID_OR_NAME>`
 
 List a component's field-overrides. The endpoint requires the component's UUID; if the argument is
@@ -215,7 +235,7 @@ a named, possibly nested command — e.g. `crsctl help components list`, `crsctl
 `crsctl` is built to be driven by scripts and AI agents.
 
 - **stdout** carries the result. With `-o json` it is stable, parseable JSON: a JSON **array** for
-  list-shaped commands (`components list`, `component overrides`, `meta *`, `audit *`), a single
+  list-shaped commands (`components list`, `component overrides`, `search`, `meta *`, `audit *`), a single
   JSON object for `component get` and `whoami` (with a token), and raw text for `component as-code`.
 - **stderr** carries a structured error object on failure, with a fixed shape:
 

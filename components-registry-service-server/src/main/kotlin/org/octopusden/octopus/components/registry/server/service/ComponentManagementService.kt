@@ -84,6 +84,13 @@ interface ComponentManagementService {
     ): RenderedComponentCode
 
     /**
+     * FULL as-code render of every component (archived included), sorted by component key —
+     * the corpus of the as-code text search (SYS-098). Same text as [renderComponentAsCode]
+     * minus the RMS section, which is RMS data rather than the component's own configuration.
+     */
+    fun renderAllComponentsAsCode(): List<RenderedComponentCode>
+
+    /**
      * The component's editors (componentOwner + ordered releaseManagers + securityChampions +
      * the owner's manager, SYS-063) for the Portal's read-only "who can edit" surface.
      * Informational only — see [ComponentEditorsResponse].
@@ -101,4 +108,5 @@ interface ComponentManagementService {
 data class RenderedComponentCode(
     val componentKey: String,
     val body: String,
+    val archived: Boolean = false,
 )
