@@ -3605,7 +3605,7 @@ class ComponentManagementServiceImpl(
         if (violation != null) throw IllegalArgumentException(violation)
     }
 
-    /** Migration aid while the `test-component` label convention is being replaced by the flag; see TD-024. */
+    /** The flag is the source of truth; the `test-component` label is kept for its readers, so a mismatch only warns. */
     private fun ComponentDetailResponse.withTestComponentLabelWarning(entity: ComponentEntity): ComponentDetailResponse {
         if (entity.testComponent || TEST_COMPONENT_LABEL !in labels) return this
         return copy(warnings = warnings + TEST_COMPONENT_LABEL_WARNING)

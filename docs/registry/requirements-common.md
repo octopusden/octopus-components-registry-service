@@ -91,7 +91,7 @@
 | SYS-096 | `GET /components/{idOrName}/archive-readiness` — read-only pre-flight for the archive/delete flow, gated by the same authorization as `deleteComponent` (`ACCESS_COMPONENTS` + `canDeleteComponent`); resolves by id or name identically to `getComponent`; returns one entry per external target (VCS repository, TeamCity project, Jira open issues, Jira project) with outcome `COMPLETED`/`NOT_COMPLETED`/`UNKNOWN`, a reason for the latter two, and a `reasonKind` classifying what an `UNKNOWN` entry needs; `ready` is false iff any entry is `NOT_COMPLETED` or `UNKNOWN` | High | unit + integration-test | ✅ Tested |
 | SYS-097 | The explicit+external "≥1 distribution coordinate" rule is not applied when the component's **BASE** build system is `WHISKEY` (case-insensitive; per-range build-system overrides are ignored). Applies on create, component PATCH and the `/field-overrides` endpoints; non-WHISKEY explicit+external components still require a coordinate, including after being switched off WHISKEY | High | integration-test | ✅ Tested |
 | SYS-098 | A component configuration may declare one or more **generic HTTP-URL artifacts** under `distribution.generic`; each artifact is a path string stored verbatim in DB (V10 migration, table `distribution_generic_artifacts`). The path must match `GENERIC_ENTRY` regex (no dots-only segments, no commas, no traversal sequences); the only allowed `${…}` placeholders are `${version}`, `${major}`, `${minor}`, `${service}`, `${fix}`, and `${build}` — any other placeholder (including SpEL expressions such as `T(…).method()`) is rejected with 400. The `generic` field of `DistributionDTO` is the comma-joined CSV of paths sorted by `sort_order`; it is `null` when no artifacts are set (`@JsonInclude(NON_NULL)`) and silently ignored by older clients (`@JsonIgnoreProperties(ignoreUnknown = true)`) | High | unit + integration-test | ✅ Tested |
-| SYS-099 | A component carries a component-level boolean `testComponent` (default false; V11 sets it on components labelled `test-component`). v4 create/update/detail/summary expose it and the list accepts `?testComponent=`; without it test components are listed. v1/v2/v3 always carry it (read from the DB); released clients ignore the new key (their concrete DTOs ignore unknown properties). A non-test component may not reference a test component as parent or doc component (400 naming both); the label without the flag yields a write warning; health statistics exclude test components. The legacy Groovy DSL does not carry it | High | unit + integration-test | ✅ Tested |
+| SYS-099 | A component carries a component-level boolean `testComponent` (default false; V11 sets it on components labelled `test-component`). v4 create/update/detail/summary expose it and the list accepts `?testComponent=`; without it test components are listed. v1/v2/v3 always carry it (read from the DB); released clients ignore the new key (their concrete DTOs ignore unknown properties). A non-test component may not reference a test component as parent or doc component (400 naming both); the `test-component` label stays for compatibility and a label without the flag only yields a write warning; health statistics and the TeamCity validation views exclude test components. The legacy Groovy DSL does not carry it | High | unit + integration-test | ✅ Tested |
 
 ---
 
@@ -3350,9 +3350,14 @@ reports, portal lists, health statistics).
   component that non-test components reference that way cannot become a test component: 400,
   `parentComponentName: …` / `docs: …` / `testComponent: …`, naming both components. Checked on
   create, and on update when the PATCH carries `testComponent`, `parentComponentName` or `docs`.
-- A create/update response carries a `warnings` entry when the component has the
-  `test-component` label but `testComponent` is false.
-- `GET /health/statistics` excludes test components from every figure (SYS-057).
+- The flag is the source of truth. The `test-component` label is kept for compatibility — the
+  Sonar automation and other consumers read it — and is not removed by this requirement. A
+  label/flag mismatch is a warning, never an error: a create/update response carries a `warnings`
+  entry when the component has the label but `testComponent` is false. Removing the label is a
+  separate decision, to be taken only after its consumers read the flag.
+- `GET /health/statistics` excludes test components from every figure (SYS-057), and the TeamCity
+  validation list and summary (`GET /admin/teamcity-validations`, `.../summary`, SYS-092) leave out
+  findings that belong to test components.
 
 **Acceptance:**
 1. A component created with `testComponent = true` returns `true` from v4 detail and summary, and
@@ -3364,9 +3369,9 @@ reports, portal lists, health statistics).
    flagging a component a non-test child references is rejected with 400 naming both; a test
    component may sit under a test parent.
 4. The `test-component` label without the flag yields a warning, which disappears once the flag is set.
-5. Health statistics do not count test components.
-6. `V11__` flags exactly the components labelled `test-component`.
-7. A component flagged by a non-owner editor (plain edit permission, no `ARCHIVE_COMPONENTS`) is accepted.
+5. Health statistics and the TeamCity validation list/summary do not count test components.
+6. `V11__` flags exactly the components labelled `test-component` and keeps every label.
+7. The component's own editor (plain edit permission, no `ARCHIVE_COMPONENTS`) can set the flag.
 8. The client's default mapper reads a v1/v2 component carrying `testComponent` and an unknown field.
 
 **Test method:** `TestComponentFlagV4Test` —
@@ -3377,6 +3382,7 @@ reports, portal lists, health statistics).
 `` `SYS-099 flagging a referenced component is rejected` `` (3),
 `` `SYS-099 label without flag warns` `` (4),
 `` `SYS-099 health statistics exclude test components` `` (5);
+`TeamcityValidationQueryServiceTest.SYS-099 test components are excluded` (5);
 `V11TestComponentMigrationIntegrationTest` (6);
 `` `SYS-099 editor without archive permission can flag` `` (7);
 `ComponentUnknownPropertyTest` (8).

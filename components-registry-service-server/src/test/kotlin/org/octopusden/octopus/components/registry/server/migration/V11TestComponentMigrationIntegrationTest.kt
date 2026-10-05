@@ -52,6 +52,12 @@ class V11TestComponentMigrationIntegrationTest {
                         }
                     }
                 assertEquals(mapOf("labelled" to true, "other-label" to false, "plain" to false), flags)
+                // The label stays for its readers (e.g. the Sonar automation).
+                val labelRows =
+                    conn.createStatement().use { st ->
+                        st.executeQuery("SELECT COUNT(*) FROM component_labels").use { rs -> rs.next().let { rs.getInt(1) } }
+                    }
+                assertEquals(3, labelRows)
             }
         }
     }

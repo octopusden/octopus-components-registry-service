@@ -26,9 +26,10 @@ refresh it with `./gradlew :components-registry-service-server:generateOpenApiDo
   component would reference a test component as its parent (`parentComponentName: …`) or doc
   component (`docs: …`), or when a component that non-test components reference that way is
   flagged (`testComponent: …`); the message names both components. `warnings` carries an entry
-  when the component has the `test-component` label but the flag is false. `GET
-  /health/statistics` no longer counts test components. `V11__` flags every component labelled
-  `test-component`. The v1–v3 `Component` payloads (list, detail, detailed component, v3 list,
+  when the component has the `test-component` label but the flag is false (the label is kept for
+  its readers; the flag is the source of truth). `GET /health/statistics` and
+  `GET /admin/teamcity-validations` (and `/summary`) no longer count test components. `V11__` flags
+  every component labelled `test-component` and keeps the label. The v1–v3 `Component` payloads (list, detail, detailed component, v3 list,
   find-by-artifact) always carry `testComponent`, read from the DB; released clients ignore the new
   key (their DTOs ignore unknown properties). The flag is not part of the legacy Groovy DSL or the as-code view.
 
