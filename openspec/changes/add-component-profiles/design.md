@@ -1,0 +1,184 @@
+## Context
+
+- ADR-016 delivers `field-config` and `component-defaults` from service-config:
+  `AdminConfigProperties` is a mutable `@ConfigurationProperties` bean that Spring Cloud rebinds
+  in place on `ContextRefresher.refresh()`; `ConfigRefreshListener` (DB mode only) then re-syncs
+  the `registry_config` cache.
+- `POST /rest/api/4/admin/reload-config` (`AdminControllerV4.reloadConfig`, `canImport()`) calls
+  `refresh()` and returns `{status, changedKeys}`; a `ConfigValidationException` from the sync
+  maps to 422.
+- `ComponentManagementServiceImpl.createComponent` validates the key (`validateComponentKey`),
+  uniqueness and the malformed-field rules (`validateMalformedFieldRules`) before the flush; the
+  profile check runs in the same place.
+- The create endpoint already requires `ACCESS_COMPONENTS` and `CREATE_COMPONENTS`.
+- The Portal holds the profile list and the solution key patterns itself; the registry has
+  neither.
+
+## Example
+
+The service-config subtree this change reads (the four profiles from the Portal today):
+
+```yaml
+components-registry:
+  component-profiles:
+    regular-external:
+      kind: regular
+      title: Regular external component
+      description: An ordinary component delivered to the client.
+      order: 10
+      classification: { external: true, explicit: ask }
+      rules:
+        name: { pattern: "^(?!.*(solution|dmp-bundle)).*$", message: "A regular component's key cannot contain solution or dmp-bundle. Choose the Solution or DMP Bundle profile." }
+    regular-internal:
+      kind: regular
+      title: Regular internal component
+      description: An ordinary component for internal use only.
+      order: 20
+      classification: { external: false, explicit: ask }
+      rules:
+        name: { pattern: "^(?!.*(solution|dmp-bundle)).*$", message: "A regular component's key cannot contain solution or dmp-bundle. Choose the Solution or DMP Bundle profile." }
+    solution:
+      kind: regular
+      title: Solution
+      description: A top-level component that groups and ships other components together.
+      order: 30
+      classification: { solution: true, external: true, explicit: true }
+      rules:
+        name: { pattern: "^[a-z][a-z0-9-]*-solution(-[a-z0-9-]+)?$", message: "A solution key contains -solution, e.g. payments-solution." }
+    dmp-bundle:
+      kind: regular
+      title: DMP Bundle
+      description: A bundle component, also a solution, shipped as one distribution.
+      order: 40
+      classification: { solution: true, external: true, explicit: true }
+      rules:
+        name: { pattern: "^[a-z][a-z0-9_-]*dmp-bundle[a-z0-9-]*$", message: "A DMP bundle key contains dmp-bundle, e.g. payments-dmp-bundle." }
+```
+
+Creates against it:
+
+| Request | Result |
+|---|---|
+| `name: payments`, `solution: true`, no `profile` | Accepted — no profile, checked as today |
+| `name: resolution-service`, `profile: regular-internal`, `distributionExternal: false` | 400 `name: A regular component's key cannot contain…` — the regular profile's rule |
+| `name: payments-solution`, `profile: solution`, solution/external/explicit `true` | Accepted |
+| `name: payments-dmp-bundle`, `profile: solution`, solution/external/explicit `true` | 400 `name: A solution key contains -solution…` — the Solution rule |
+| `name: payments-dmp-bundle`, `profile: dmp-bundle`, same classification | Accepted |
+| `name: tools`, `profile: solution`, `solution: false` | 400 `profile:` — classification differs |
+| `name: tools`, `profile: regular-external`, `distributionExternal: true`, `distributionExplicit: false` | Accepted — `explicit: ask` takes either |
+
+## Goals / Non-Goals
+
+**Goals:**
+- Profiles are data in service-config, reloadable without a restart; the profiles are never
+  half-applied.
+- The solution key rules are configuration: profile field rules, checked on a create that names
+  the profile.
+- The Portal can draw the start page and run the same checks from one call.
+
+**Non-Goals:**
+- Templates, the D&S restriction, the administrator read API — later changes reuse the catalog,
+  availability rule and path reader built here.
+- Re-checking existing components, or checking renames, solution-flag changes and creates without
+  a profile — those keep today's behavior.
+
+## Decisions
+
+### 1. Parse the raw subtree, not a typed properties bean
+
+- `ComponentProfilesSource` reads `components-registry.component-profiles` from the `Environment`
+  through `Binder` as a nested `Map<String, Any?>`; `ComponentProfileParser` turns it into
+  profiles plus a problem list.
+- A typed `@ConfigurationProperties` bean ignores unknown keys and stops at the first type error;
+  the requirement is to name every unknown key and every bad value.
+- The parser is pure: unit-tested without Spring. A binding test pins how YAML values arrive
+  (strings for numbers and booleans, nested maps for `classification` and `rules`).
+
+### 2. A validated snapshot, swapped whole
+
+- `ComponentProfileCatalog` holds an immutable `ProfileSnapshot` in an `AtomicReference`.
+- A load either replaces the whole snapshot or leaves it untouched: no `regular` profile or an
+  invalid one keeps every profile in use, including ones whose change was valid. A failed
+  template entry does not stop a load.
+- Spring rebinds the environment before anyone can validate it, so the catalog never reads the
+  environment on a request — only on load.
+- Readers (listing, create) take the snapshot once per call, so a reload mid-request cannot mix
+  two configurations.
+- The listing and the create check read the same snapshot, so the field rules the Portal gets are
+  exactly the rules a create with that profile is checked against.
+
+### 3. Startup fails loudly
+
+- The catalog loads in its initializer. Unreadable subtree, no `regular` profile or an invalid
+  one → `ComponentProfilesException` with every problem → the context does not start.
+- Works the same in no-db mode; the catalog does not touch the database.
+- The bundled `application.yml` carries no profiles — they are installation data, and a bundled
+  map could not be shrunk by service-config (Spring merges maps by key). Every test and dev
+  profile that starts the server gets a minimal profile set instead.
+
+### 4. Reload result
+
+- `ComponentProfilesRefreshListener` on `RefreshScopeRefreshedEvent` (all modes) asks the catalog
+  to reload and keeps the outcome; `reloadConfig` adds it to its response as `componentProfiles`:
+  `status` (`applied` | `failed`), `problems` (configuration-level) and `entries` (id, kind,
+  `live` | `failed`, problems).
+- A failed profile load answers 422 with `error: component-profiles` and the same body, matching
+  the existing `config-validation` 422.
+- A template entry is `failed` with "templates are not supported yet" and never blocks a load.
+
+### 5. Validation rules per entry
+
+- The spec's tables are the reference; the parser implements them as-is.
+- Id: lowercase letters, digits and `-`.
+- `kind`: `regular` or `template`; a template entry fails until the templates change.
+- Required: `kind`, `title`, `description`, `order` (whole number), `classification.external`
+  (`true`/`false`), `classification.explicit` (`true`/`false`/`ask`). Optional:
+  `classification.solution` (default `false`), `rules`.
+- `solution: true` requires `external: true` and `explicit: true` (`ask` is not enough).
+- `rules`: each key is one of the free-text create-request paths listed in the spec; each
+  value has exactly `pattern` (compiles) and `message` (non-blank).
+- Any other key → invalid, naming it. Every problem is collected, not just the first.
+
+### 6. Availability is one function
+
+- `ProfileAvailability.evaluate(profile, permissions) → usable | (unusable, reason)`.
+- In this change: usable when the user holds `CREATE_COMPONENTS`; reason otherwise "You do not
+  have permission to create components".
+- The listing and the create check both call it, so the D&S change edits one place.
+- The create endpoint already requires `CREATE_COMPONENTS`, so the 403 for an unusable profile is
+  not reachable in this change; it is tested with a stubbed availability.
+
+### 7. Profile on create
+
+- Order, after the existing key and uniqueness checks: unknown or non-`regular` id → 400
+  `profile: unknown profile '<id>'`; not usable → 403 with the reason; classification mismatch →
+  400 `profile: …` naming the differing flag; then each rule.
+- Classification match: `solution` against `request.solution`, `external` against
+  `distributionExternal`, `explicit` against `distributionExplicit` unless `ask`. An absent
+  request flag counts as `false`.
+- A rule failure is 400 prefixed with the rule's path, carrying the configured message.
+
+### 8. Reading a create-request path
+
+- `CreateRequestPaths.read(request, path) → String?` covers exactly the rule paths listed in the
+  spec. The same list validates rule keys on load.
+- An absent value is matched as `""`, so the pattern decides whether a field may be empty.
+- The templates change reuses it to name the parameters behind a failing field.
+
+## Out of Scope
+
+- See proposal. Technically: no new table, no migration, no change to `registry_config`.
+
+## Risks / Trade-offs
+
+- **A reload is not atomic across subtrees.** `field-config` and `component-defaults` are already
+  rebound when the profiles fail; only the profiles keep their previous snapshot. Accepted: the
+  existing subtrees already behave this way, and the response says which part failed.
+- **Startup depends on service-config.** A missing subtree stops CRS. Accepted: the requirement
+  prefers a loud failure to an empty start page; the rollout note orders the deploys.
+- **The key rules hold only for creates that name a profile.** An API create without `profile`, a
+  rename or a solution-flag change can still produce a key that breaks them. Accepted: it keeps
+  today's behavior for every existing client; enforcing them everywhere is a separate change.
+- Each accepted limitation above that outlives this change has a tech-debt record (tasks 6.5).
+- **Rule patterns are case-sensitive.** The regular profiles' rule rejects `solution` but not
+  `Solution`. Accepted: component keys are lower-case by `validateComponentKey`.
