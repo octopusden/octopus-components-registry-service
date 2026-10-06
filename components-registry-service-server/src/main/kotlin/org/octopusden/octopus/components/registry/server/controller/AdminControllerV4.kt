@@ -5,11 +5,13 @@ import io.swagger.v3.oas.annotations.media.Schema
 import io.swagger.v3.oas.annotations.responses.ApiResponse
 import io.swagger.v3.oas.annotations.responses.ApiResponses
 import org.octopusden.octopus.components.registry.server.config.ConditionalOnDatabaseEnabled
+import org.octopusden.octopus.components.registry.server.dto.v4.ComponentProfilesReloadResponse
 import org.octopusden.octopus.components.registry.server.dto.v4.HistoryMigrationJobResponse
 import org.octopusden.octopus.components.registry.server.dto.v4.MigrationConflictResponse
 import org.octopusden.octopus.components.registry.server.dto.v4.MigrationJobResponse
 import org.octopusden.octopus.components.registry.server.dto.v4.TeamcitySyncJobResponse
 import org.octopusden.octopus.components.registry.server.dto.v4.TeamcityValidationJobResponse
+import org.octopusden.octopus.components.registry.server.profile.ComponentProfileCatalog
 import org.octopusden.octopus.components.registry.server.security.CurrentUserResolver
 import org.octopusden.octopus.components.registry.server.service.BatchMigrationResult
 import org.octopusden.octopus.components.registry.server.service.ForceResetOutcome
@@ -49,6 +51,7 @@ class AdminControllerV4(
     private val teamcityValidationJobService: TeamcityValidationJobService,
     private val contextRefresher: ContextRefresher,
     private val currentUserResolver: CurrentUserResolver,
+    private val componentProfileCatalog: ComponentProfileCatalog,
 ) {
     @PostMapping("/migrate-component/{name}")
     fun migrateComponent(
@@ -125,11 +128,33 @@ class AdminControllerV4(
      * [ConfigRefreshListener][org.octopusden.octopus.components.registry.server.listener.ConfigRefreshListener]
      * to re-sync both blobs into the `registry_config` cache synchronously. Returns the
      * set of property keys that changed.
+     *
+     * The component profiles are then reloaded by this request itself, also when the refresh
+     * failed on `field-config`, and every response carries their outcome as `componentProfiles`.
+     * Profiles that are not usable are kept as they were and answer 422 `component-profiles`.
      */
     @PostMapping("/reload-config")
     fun reloadConfig(): ResponseEntity<Map<String, Any?>> {
-        val changed = contextRefresher.refresh()
-        return ResponseEntity.ok(mapOf("status" to "reloaded", "changedKeys" to changed.sorted()))
+        val refresh = runCatching { contextRefresher.refresh() }
+        val profileLoad = componentProfileCatalog.reload()
+        val profiles = ComponentProfilesReloadResponse.from(profileLoad)
+        val refreshFailure = refresh.exceptionOrNull()
+        return when {
+            refreshFailure is ConfigValidationException -> configValidationFailed(refreshFailure, profiles)
+            refreshFailure != null -> throw refreshFailure
+            !profileLoad.usable ->
+                ResponseEntity.status(HttpStatus.UNPROCESSABLE_ENTITY).body(
+                    mapOf(
+                        "error" to "component-profiles",
+                        "message" to "Component profiles are not usable; the profiles in use are kept",
+                        "componentProfiles" to profiles,
+                    ),
+                )
+            else ->
+                ResponseEntity.ok(
+                    mapOf("status" to "reloaded", "changedKeys" to refresh.getOrThrow().sorted(), "componentProfiles" to profiles),
+                )
+        }
     }
 
     /**
@@ -138,9 +163,18 @@ class AdminControllerV4(
      * message instead of an opaque 500; the DB cache is left untouched (no-clobber).
      */
     @ExceptionHandler(ConfigValidationException::class)
-    fun handleConfigValidation(e: ConfigValidationException): ResponseEntity<Map<String, Any?>> =
+    fun handleConfigValidation(e: ConfigValidationException): ResponseEntity<Map<String, Any?>> = configValidationFailed(e, null)
+
+    private fun configValidationFailed(
+        e: ConfigValidationException,
+        profiles: ComponentProfilesReloadResponse?,
+    ): ResponseEntity<Map<String, Any?>> =
         ResponseEntity.status(HttpStatus.UNPROCESSABLE_ENTITY).body(
-            mapOf("error" to "config-validation", "message" to (e.message ?: "Invalid configuration")),
+            buildMap {
+                put("error", "config-validation")
+                put("message", e.message ?: "Invalid configuration")
+                profiles?.let { put("componentProfiles", it) }
+            },
         )
 
     /**

@@ -4,8 +4,10 @@ import org.junit.jupiter.api.Assertions
 import org.junit.jupiter.api.DisplayName
 import org.junit.jupiter.api.Test
 import org.junit.jupiter.api.extension.ExtendWith
+import org.octopusden.octopus.components.registry.server.controller.AdminControllerV4
 import org.octopusden.octopus.components.registry.server.controller.ComponentControllerV4
 import org.octopusden.octopus.components.registry.server.controller.ComponentsRegistryServiceController
+import org.octopusden.octopus.components.registry.server.profile.ComponentProfileCatalog
 import org.octopusden.octopus.components.registry.server.service.ComponentManagementService
 import org.octopusden.octopus.components.registry.server.service.ComponentRegistryResolver
 import org.octopusden.octopus.components.registry.server.service.ComponentsRegistryService
@@ -143,5 +145,15 @@ class NoDbModeContextTest {
             status.configRevision,
             "configRevision must be null when no AuditLogRepository is wired (no-db mode / Git-based installs)",
         )
+    }
+
+    @Test
+    @DisplayName("component profiles are loaded in no-db mode; there is no reload endpoint to change them without a restart")
+    fun `component profiles load in no-db mode`() {
+        Assertions.assertEquals(
+            listOf("regular-external", "regular-internal", "solution", "dmp-bundle"),
+            ctx.getBean(ComponentProfileCatalog::class.java).profiles().map { it.id },
+        )
+        Assertions.assertTrue(ctx.getBeanNamesForType(AdminControllerV4::class.java).isEmpty())
     }
 }

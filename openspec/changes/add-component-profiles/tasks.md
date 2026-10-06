@@ -50,33 +50,52 @@
 
 ## 3. Catalog, startup and reload (Decisions 2, 3, 4)
 
-- [ ] 3.1 Write failing tests:
-  - [ ] 3.1.1 Catalog: usable load replaces the whole snapshot; a load with an invalid
+- [x] 3.1 Write failing tests:
+  - [x] 3.1.1 Catalog: usable load replaces the whole snapshot; a load with an invalid
         `regular` profile keeps the whole previous snapshot, including profiles whose change was
         valid, and returns the problems
-  - [ ] 3.1.2 Context with no `regular` profile, or an invalid one, fails to start with the
+  - [x] 3.1.2 Context with no `regular` profile, or an invalid one, fails to start with the
         problems in the message
-  - [ ] 3.1.3 Context with valid profiles and a template entry starts
-  - [ ] 3.1.4 `POST /admin/reload-config` after a valid change → 200 with
+  - [x] 3.1.3 Context with valid profiles and a template entry starts
+  - [x] 3.1.4 `POST /admin/reload-config` after a valid change → 200 with
         `componentProfiles.status: applied`, `status` and `changedKeys` unchanged
-  - [ ] 3.1.5 Reload changing one title and breaking another `regular` profile → 422
+  - [x] 3.1.5 Reload changing one title and breaking another `regular` profile → 422
         `error: component-profiles`, the broken entry `failed` with its problems, and the
-        listing still returns the previous title
-  - [ ] 3.1.6 Reload adding a template entry → 200, entry `failed` in `entries`
-  - [ ] 3.1.7 Corrected configuration reloaded after a failure → applied
-  - [ ] 3.1.8 No-db mode starts and reloads profiles the same way
-  - [ ] 3.1.9 Reload with an invalid `field-config` → 422 `config-validation`, and the profiles
+        listing still returns the previous title (checked on the catalog; the listing endpoint
+        comes in section 4)
+  - [x] 3.1.6 Reload adding a template entry → 200, entry `failed` in `entries`
+  - [x] 3.1.7 Corrected configuration reloaded after a failure → applied
+  - [x] 3.1.8 No-db mode starts with the profiles loaded. Changed during implementation: no-db
+        mode has no reload endpoint (`AdminControllerV4` is `@ConditionalOnDatabaseEnabled`), so
+        its profiles change only with a restart — `NoDbModeContextTest` pins both (design Decision 3)
+  - [x] 3.1.9 Reload with an invalid `field-config` → 422 `config-validation`, and the profiles
         are still reloaded and reported in `componentProfiles`
-  - [ ] 3.1.10 Two concurrent reloads each return their own outcome
-- [ ] 3.2 Implement:
-  - [ ] 3.2.1 `profile/ComponentProfileCatalog.kt` — `AtomicReference<ProfileSnapshot>`, load in
-        the initializer, `reload()` returning the outcome
-  - [ ] 3.2.2 `AdminControllerV4.reloadConfig` — `refresh()`, then `catalog.reload()` in a
-        `finally`; add `componentProfiles`; 422 on a failed load (Decision 4)
-- [ ] 3.3 Add a minimal valid profile set to every configuration that starts the server: test,
+  - [x] 3.1.10 Two concurrent reloads each return their own outcome (catalog level,
+        `ComponentProfileCatalogTest`)
+  - [x] 3.1.11 A reload whose configuration cannot be read keeps the profiles in use and reports
+        why (added during implementation)
+- [x] 3.2 Implement:
+  - [x] 3.2.1 `profile/ComponentProfileCatalog.kt` — `AtomicReference` over the live profile list
+        (no separate snapshot type), load in the initializer, `reload()` returning the outcome
+  - [x] 3.2.1a `config/ComponentProfilesConfig.kt` — source and catalog as beans in every mode,
+        not `@ConfigurationProperties` (added on review)
+  - [x] 3.2.2 `AdminControllerV4.reloadConfig` — `refresh()`, then `catalog.reload()` in a
+        `finally`; add `componentProfiles`; 422 on a failed load (Decision 4). Response part is
+        `dto/v4/ComponentProfilesReloadResponse`
+- [x] 3.3 Add a minimal valid profile set to every configuration that starts the server: test,
       integration-test, smoke, `-test-db*`, `ft-db`, `no-db`, dev profiles and the client
-      modules' test configs; none in the bundled `application.yml`
-- [ ] 3.4 Confirm tests pass (record the command and count)
+      modules' test configs; none in the bundled `application.yml`. Every test context activates
+      `common`, so the sets live in: the server's test `application-common.yml` (the four
+      profiles), the client and light-client test `application-common.yml` and
+      `application-integration-test.yml` (one regular profile each), and main
+      `application-dev.yml` (the four; also used by the compat candidate)
+- [x] 3.4 Confirm tests pass. Server `test` 1247 (1 skipped, 0 failures, incl.
+      `ComponentProfileCatalogTest` 8, `ComponentProfilesConfigTest` 3, `NoDbModeContextTest`);
+      `integrationTest` 3/3; client `test` 6/6; light-client `test` 2/2; `detekt`, `ktlintCheck`
+      clean. `dbTest` on H2: `ReloadConfigComponentProfilesTest` 5/5, `SolutionKeyWithoutProfileTest`
+      4/4. Not verified locally: the 182 `dbTest` cases that need Testcontainers Postgres failed
+      because Docker was not running (every failure traces to "Could not find a valid Docker
+      environment", none to the profiles) — to run with Docker up or on CI
 
 ## 4. Listing (Decision 6)
 

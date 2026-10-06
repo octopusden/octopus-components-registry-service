@@ -109,7 +109,9 @@ Creates against it:
 
 ### 2. A validated snapshot, swapped whole
 
-- `ComponentProfileCatalog` holds an immutable `ProfileSnapshot` in an `AtomicReference`.
+- `ComponentProfileCatalog` holds the live profiles, an immutable list, in an `AtomicReference`;
+  `profiles()` hands a reader that list. Built as a bean by `config/ComponentProfilesConfig`, not
+  a `@ConfigurationProperties` bean (Decision 1).
 - A load either replaces the whole snapshot or leaves it untouched: no `regular` profile or an
   invalid one keeps every profile in use, including ones whose change was valid. A failed
   template entry does not stop a load.
@@ -124,7 +126,11 @@ Creates against it:
 
 - The catalog loads in its initializer. Unreadable subtree, no `regular` profile or an invalid
   one → `ComponentProfilesException` with every problem → the context does not start.
-- Works the same in no-db mode; the catalog does not touch the database.
+- Works the same in no-db mode; the catalog does not touch the database. `AdminControllerV4` is
+  `@ConditionalOnDatabaseEnabled`, so no-db mode has no reload endpoint: its profiles change only
+  with a restart, like the other admin configuration. (found during implementation)
+- A reload whose configuration cannot be read (an unresolvable placeholder, say) is reported as a
+  configuration-level problem and keeps the profiles in use.
 - The bundled `application.yml` carries no profiles — they are installation data, and a bundled
   map could not be shrunk by service-config (Spring merges maps by key). Every test and dev
   profile that starts the server gets a minimal profile set instead.
