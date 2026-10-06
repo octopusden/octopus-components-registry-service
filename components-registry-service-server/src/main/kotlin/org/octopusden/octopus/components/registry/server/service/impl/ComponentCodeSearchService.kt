@@ -56,51 +56,67 @@ class ComponentCodeSearchService(
         maxMatchesPerComponent: Int = DEFAULT_MAX_MATCHES_PER_COMPONENT,
     ): AsCodeSearchResponse {
         val q = query.trim()
+        validate(q, limit, maxMatchesPerComponent)
+        // Compile (and reject) the pattern before a possibly expensive index rebuild.
+        val pattern = if (regex) compilePattern(q) else null
+        val documents = currentIndex().documents
+        val matcher = lineMatcher(q, pattern)
+
+        val hits =
+            documents
+                .filter { archived == null || it.archived == archived }
+                .mapNotNull { doc -> matchDocument(doc, matcher, maxMatchesPerComponent) }
+        return AsCodeSearchResponse(
+            query = q,
+            regex = regex,
+            totalComponents = hits.size,
+            truncated = hits.size > limit,
+            results = hits.take(limit),
+        )
+    }
+
+    private fun validate(
+        q: String,
+        limit: Int,
+        maxMatchesPerComponent: Int,
+    ) {
         require(q.length >= MIN_QUERY_LENGTH) { "q must be at least $MIN_QUERY_LENGTH characters" }
         require(q.length <= MAX_QUERY_LENGTH) { "q must be at most $MAX_QUERY_LENGTH characters" }
         require(limit in 1..MAX_LIMIT) { "limit must be between 1 and $MAX_LIMIT" }
         require(maxMatchesPerComponent in 1..MAX_MATCHES_PER_COMPONENT) {
             "maxMatchesPerComponent must be between 1 and $MAX_MATCHES_PER_COMPONENT"
         }
-        // Compile (and reject) the pattern before a possibly expensive index rebuild.
-        val pattern = if (regex) compilePattern(q) else null
-        val documents = currentIndex().documents
-        // The time budget starts AFTER the index is ready, so a rebuild never counts against it.
-        val deadline = clock.instant().plus(REGEX_TIME_BUDGET)
-        val matcher: (String) -> Boolean =
-            if (pattern != null) {
-                // Lines are matched through a deadline-checking CharSequence so a pathological
-                // (catastrophically backtracking) pattern fails fast instead of pinning a thread.
-                { line -> pattern.containsMatchIn(DeadlineCharSequence(line, deadline, clock)) }
-            } else {
-                { line -> line.contains(q, ignoreCase = true) }
-            }
+    }
 
-        val hits = mutableListOf<AsCodeSearchHit>()
-        var total = 0
-        for (doc in documents.filter { archived == null || it.archived == archived }) {
-            val matches = mutableListOf<AsCodeSearchLine>()
-            var matchCount = 0
-            doc.lines.forEachIndexed { i, line ->
-                if (line.text.isNotEmpty() && matcher(line.text)) {
-                    matchCount++
-                    if (matches.size < maxMatchesPerComponent) {
-                        matches += AsCodeSearchLine(line = i + 1, text = line.text.trim(), path = line.path)
-                    }
-                }
-            }
-            if (matchCount > 0) {
-                total++
-                if (hits.size < limit) hits += AsCodeSearchHit(doc.componentKey, doc.archived, matchCount, matches)
-            }
-        }
-        return AsCodeSearchResponse(
-            query = q,
-            regex = regex,
-            totalComponents = total,
-            truncated = total > hits.size,
-            results = hits,
-        )
+    /**
+     * Case-insensitive substring matcher, or — for [pattern] — a regex matcher whose time budget
+     * starts now, i.e. AFTER the index is ready, so a rebuild never counts against it. Lines are fed
+     * to the regex through a deadline-checking CharSequence, so a pathological (catastrophically
+     * backtracking) pattern fails fast instead of pinning a thread.
+     */
+    private fun lineMatcher(
+        q: String,
+        pattern: Regex?,
+    ): (String) -> Boolean {
+        if (pattern == null) return { line -> line.contains(q, ignoreCase = true) }
+        val deadline = clock.instant().plus(REGEX_TIME_BUDGET)
+        return { line -> pattern.containsMatchIn(DeadlineCharSequence(line, deadline, clock)) }
+    }
+
+    /** The hit for [doc], or `null` when no line matches. `matches` is capped; `matchCount` is not. */
+    private fun matchDocument(
+        doc: SearchDocument,
+        matcher: (String) -> Boolean,
+        maxMatchesPerComponent: Int,
+    ): AsCodeSearchHit? {
+        val matching =
+            doc.lines.withIndex().filter { (_, line) -> line.text.isNotEmpty() && matcher(line.text) }
+        if (matching.isEmpty()) return null
+        val matches =
+            matching
+                .take(maxMatchesPerComponent)
+                .map { (i, line) -> AsCodeSearchLine(line = i + 1, text = line.text.trim(), path = line.path) }
+        return AsCodeSearchHit(doc.componentKey, doc.archived, matching.size, matches)
     }
 
     private fun compilePattern(q: String): Regex =
