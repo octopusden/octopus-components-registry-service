@@ -3,7 +3,7 @@ package org.octopusden.octopus.components.registry.cli.model
 import kotlinx.serialization.Serializable
 
 /**
- * Mirror of v4.json `AsCodeSearchResponse` — GET /rest/api/4/components/as-code/search (SYS-098).
+ * Mirror of v4.json `AsCodeSearchResponse` — GET /rest/api/4/components/as-code/search (SYS-100).
  */
 @Serializable
 data class AsCodeSearchResponse(

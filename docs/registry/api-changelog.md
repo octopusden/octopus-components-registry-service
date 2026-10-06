@@ -18,7 +18,7 @@ refresh it with `./gradlew :components-registry-service-server:generateOpenApiDo
 
 ## Unreleased
 
-- **`GET /components/as-code/search` added (SYS-098).** Global text search over every component's
+- **`GET /components/as-code/search` added (SYS-100).** Global text search over every component's
   FULL as-code view (`GET /components/{id}/as-code`), the replacement for grepping the Groovy DSL
   files. `ACCESS_COMPONENTS`. Params: `q` (required, 2–200 characters after trimming;
   case-insensitive substring), `regex` (default `false`; `true` matches `q` as a case-insensitive
@@ -28,7 +28,7 @@ refresh it with `./gradlew :components-registry-service-server:generateOpenApiDo
   `{componentKey, archived, matchCount, matches}` sorted by key, and each `AsCodeSearchLine` is
   `{line, text, path}` — the 1-based line number in the as-code view, the line without its
   indentation, and the enclosing block headers outermost first. `400` for a bad `q`/`limit`, an
-  invalid regex, or a regex that exceeds the evaluation time budget. The RMS section of the as-code
+  invalid regex, or a regex that exceeds the per-request evaluation time budget or exhausts the stack. The RMS section of the as-code
   view is not searched. Results may lag an edit that bypasses the component tables and the audit log
   (e.g. TeamCity version-line sync) by up to 5 minutes.
 - **`GET /meta/release-managers` and `GET /meta/security-champions` added.** Two new

@@ -217,7 +217,7 @@ v2 JSON as before. The Groovy DSL mode and the as-code export do not carry them.
   escrow libraries are involved — it is a plain string builder). Surfaced in the Portal as the
   read-only **"As Code"** tab on the component page (syntax-highlighted, with Full/Resolved toggle).
 
-### 1.7 Search as Code (SYS-098)
+### 1.7 Search as Code (SYS-100)
 
 The DB-era replacement for grepping the Groovy DSL files: one text search over every component's
 FULL as-code view (§1.6), so artifact/group patterns, version ranges, VCS URLs, Jira keys, docker

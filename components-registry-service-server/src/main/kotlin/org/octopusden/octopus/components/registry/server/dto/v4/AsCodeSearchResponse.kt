@@ -1,7 +1,7 @@
 package org.octopusden.octopus.components.registry.server.dto.v4
 
 /**
- * Result of `GET /rest/api/4/components/as-code/search` (SYS-098): a grep over every
+ * Result of `GET /rest/api/4/components/as-code/search` (SYS-100): a grep over every
  * component's FULL as-code text, grouped by component.
  */
 data class AsCodeSearchResponse(

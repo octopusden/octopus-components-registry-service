@@ -85,7 +85,7 @@ interface ComponentManagementService {
 
     /**
      * FULL as-code render of every component (archived included), sorted by component key —
-     * the corpus of the as-code text search (SYS-098). Same text as [renderComponentAsCode]
+     * the corpus of the as-code text search (SYS-100). Same text as [renderComponentAsCode]
      * minus the RMS section, which is RMS data rather than the component's own configuration.
      */
     fun renderAllComponentsAsCode(): List<RenderedComponentCode>

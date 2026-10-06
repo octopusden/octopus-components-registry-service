@@ -27,7 +27,7 @@ import java.nio.file.Paths
 import java.util.UUID
 
 /**
- * SYS-098: `GET /rest/api/4/components/as-code/search` end-to-end against the H2 `ft-db`
+ * SYS-100: `GET /rest/api/4/components/as-code/search` end-to-end against the H2 `ft-db`
  * profile — the real bulk render, the real change stamp, and the controller contract.
  * Matching / shaping details are unit-tested in `ComponentCodeSearchServiceTest`.
  */
@@ -58,8 +58,8 @@ class ComponentAsCodeSearchIntegrationTest {
     }
 
     @Test
-    @DisplayName("SYS-098: a value from the as-code view is found, with the line number of the as-code view")
-    fun `SYS-098 a value from the as-code view is found at its as-code line`() {
+    @DisplayName("SYS-100: a value from the as-code view is found, with the line number of the as-code view")
+    fun `SYS-100 a value from the as-code view is found at its as-code line`() {
         val owner = "srchowner${suffix()}"
         val name = newComponent(owner = owner)
 
@@ -74,8 +74,8 @@ class ComponentAsCodeSearchIntegrationTest {
     }
 
     @Test
-    @DisplayName("SYS-098: an edit is visible to the next search (index invalidated by the change stamp)")
-    fun `SYS-098 an edit is visible to the next search`() {
+    @DisplayName("SYS-100: an edit is visible to the next search (index invalidated by the change stamp)")
+    fun `SYS-100 an edit is visible to the next search`() {
         val before = "srchbefore${suffix()}"
         val after = "srchafter${suffix()}"
         val name = newComponent(owner = before)
@@ -95,8 +95,8 @@ class ComponentAsCodeSearchIntegrationTest {
     }
 
     @Test
-    @DisplayName("SYS-098: too-short query and invalid regex are 400")
-    fun `SYS-098 too-short query and invalid regex are 400`() {
+    @DisplayName("SYS-100: too-short query and invalid regex are 400")
+    fun `SYS-100 too-short query and invalid regex are 400`() {
         mvc.perform(get("/rest/api/4/components/as-code/search?q=a").with(adminJwt())).andExpect(status().isBadRequest)
         mvc
             .perform(get("/rest/api/4/components/as-code/search").param("q", "([a-z").param("regex", "true").with(adminJwt()))

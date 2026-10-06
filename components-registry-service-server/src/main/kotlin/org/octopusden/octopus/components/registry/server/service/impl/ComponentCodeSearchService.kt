@@ -17,7 +17,7 @@ import java.util.concurrent.atomic.AtomicReference
 import java.util.regex.PatternSyntaxException
 
 /**
- * Global text search over the components' as-code view (SYS-098) — the DB-era replacement for
+ * Global text search over the components' as-code view (SYS-100) — the DB-era replacement for
  * grepping the Groovy DSL files. The corpus is every component's FULL as-code render
  * ([ComponentManagementService.renderAllComponentsAsCode]), so anything the as-code view shows —
  * artifact patterns, version ranges, VCS URLs, Jira keys, docker images, people — is searchable
@@ -89,18 +89,27 @@ class ComponentCodeSearchService(
     }
 
     /**
-     * Case-insensitive substring matcher, or — for [pattern] — a regex matcher whose time budget
-     * starts now, i.e. AFTER the index is ready, so a rebuild never counts against it. Lines are fed
-     * to the regex through a deadline-checking CharSequence, so a pathological (catastrophically
-     * backtracking) pattern fails fast instead of pinning a thread.
+     * Case-insensitive substring matcher, or — for [pattern] — a regex matcher bounded by one
+     * [RegexBudget] for the whole request. The budget starts now, i.e. AFTER the index is ready, so
+     * a rebuild never counts against it. It is checked before every line (many cheap lines must not
+     * outrun it) and, through [DeadlineCharSequence], inside a single expensive match (catastrophic
+     * backtracking). A pattern whose recursion exhausts the stack on a long line is reported as
+     * invalid input too, instead of escaping as a StackOverflowError.
      */
     private fun lineMatcher(
         q: String,
         pattern: Regex?,
     ): (String) -> Boolean {
         if (pattern == null) return { line -> line.contains(q, ignoreCase = true) }
-        val deadline = clock.instant().plus(REGEX_TIME_BUDGET)
-        return { line -> pattern.containsMatchIn(DeadlineCharSequence(line, deadline, clock)) }
+        val budget = RegexBudget(clock.instant().plus(REGEX_TIME_BUDGET), clock)
+        return { line ->
+            budget.check()
+            try {
+                pattern.containsMatchIn(DeadlineCharSequence(line, budget))
+            } catch (e: StackOverflowError) {
+                throw IllegalArgumentException(TOO_COMPLEX_MESSAGE, e)
+            }
+        }
     }
 
     /** The hit for [doc], or `null` when no line matches. `matches` is capped; `matchCount` is not. */
@@ -180,36 +189,49 @@ class ComponentCodeSearchService(
     )
 
     /**
-     * A CharSequence view that aborts regex evaluation once [deadline] passes. `java.util.regex`
-     * reads input exclusively through [get], so checking there bounds even exponential backtracking.
-     * The clock is consulted every [CHECK_INTERVAL] reads to keep the overhead negligible.
+     * The regex time budget of ONE search request, shared by every line it matches. The read
+     * counter is shared too, so the every-[CHECK_INTERVAL]-reads clock check spans lines instead of
+     * restarting at zero on each one. Confined to the request thread, so no synchronization.
+     */
+    private class RegexBudget(
+        private val deadline: Instant,
+        private val clock: Clock,
+    ) {
+        private var reads = 0L
+
+        fun check() = require(!clock.instant().isAfter(deadline)) { TOO_EXPENSIVE_MESSAGE }
+
+        fun onRead() {
+            if (++reads % CHECK_INTERVAL == 0L) check()
+        }
+
+        private companion object {
+            const val CHECK_INTERVAL = 10_000L
+        }
+    }
+
+    /**
+     * A CharSequence view that charges every read to the request's [RegexBudget]. `java.util.regex`
+     * reads input exclusively through [get], so this bounds even exponential backtracking within a
+     * single line; the clock itself is consulted only every few thousand reads.
      */
     private class DeadlineCharSequence(
         private val delegate: CharSequence,
-        private val deadline: Instant,
-        private val clock: Clock,
+        private val budget: RegexBudget,
     ) : CharSequence {
-        private var reads = 0
-
         override val length: Int get() = delegate.length
 
         override fun get(index: Int): Char {
-            require(++reads % CHECK_INTERVAL != 0 || !clock.instant().isAfter(deadline)) {
-                "Regular expression is too expensive to evaluate; simplify the pattern"
-            }
+            budget.onRead()
             return delegate[index]
         }
 
         override fun subSequence(
             startIndex: Int,
             endIndex: Int,
-        ): CharSequence = DeadlineCharSequence(delegate.subSequence(startIndex, endIndex), deadline, clock)
+        ): CharSequence = DeadlineCharSequence(delegate.subSequence(startIndex, endIndex), budget)
 
         override fun toString(): String = delegate.toString()
-
-        private companion object {
-            const val CHECK_INTERVAL = 10_000
-        }
     }
 
     companion object {
@@ -221,6 +243,8 @@ class ComponentCodeSearchService(
         const val MAX_MATCHES_PER_COMPONENT = 1000
         val MAX_INDEX_AGE: Duration = Duration.ofMinutes(5)
         private val REGEX_TIME_BUDGET: Duration = Duration.ofSeconds(2)
+        private const val TOO_EXPENSIVE_MESSAGE = "Regular expression is too expensive to evaluate; simplify the pattern"
+        private const val TOO_COMPLEX_MESSAGE = "Regular expression is too complex to evaluate; simplify the pattern"
 
         /**
          * Split a rendered document into lines, tagging each with the block headers that enclose

@@ -90,8 +90,8 @@
 | SYS-095 | Component-key format is enforced on **create and rename only**: `[a-z][a-z0-9-]*`, or the lowercased effective `clientCode` (its underscores included) as a **leading** prefix followed by end-of-key or `-` plus the same kebab tail; `_` is legal nowhere else, and a component whose effective `clientCode` is absent/blank may carry none. Existing keys are never re-validated (legacy uppercase / dotted / underscored keys keep saving) and the DSL import path is unaffected | High | unit-test | ✅ Tested |
 | SYS-096 | `GET /components/{idOrName}/archive-readiness` — read-only pre-flight for the archive/delete flow, gated by the same authorization as `deleteComponent` (`ACCESS_COMPONENTS` + `canDeleteComponent`); resolves by id or name identically to `getComponent`; returns one entry per external target (VCS repository, TeamCity project, Jira open issues, Jira project) with outcome `COMPLETED`/`NOT_COMPLETED`/`UNKNOWN`, a reason for the latter two, and a `reasonKind` classifying what an `UNKNOWN` entry needs; `ready` is false iff any entry is `NOT_COMPLETED` or `UNKNOWN` | High | unit + integration-test | ✅ Tested |
 | SYS-097 | The explicit+external "≥1 distribution coordinate" rule is not applied when the component's **BASE** build system is `WHISKEY` (case-insensitive; per-range build-system overrides are ignored). Applies on create, component PATCH and the `/field-overrides` endpoints; non-WHISKEY explicit+external components still require a coordinate, including after being switched off WHISKEY | High | integration-test | ✅ Tested |
-| SYS-098 | `GET /components/as-code/search` — global case-insensitive substring (or `regex=true`) search over every component's FULL as-code view, grouped by component with line number, line text and enclosing block path; `archived` / `limit` / `maxMatchesPerComponent` params; in-memory index rebuilt when the DB change stamp moves or after 5 minutes; `crsctl search` client command | High | unit + integration-test | ✅ Tested |
 | SYS-098 | A component configuration may declare one or more **generic HTTP-URL artifacts** under `distribution.generic`; each artifact is a path string stored verbatim in DB (V10 migration, table `distribution_generic_artifacts`). The path must match `GENERIC_ENTRY` regex (no dots-only segments, no commas, no traversal sequences); the only allowed `${…}` placeholders are `${version}`, `${major}`, `${minor}`, `${service}`, `${fix}`, and `${build}` — any other placeholder (including SpEL expressions such as `T(…).method()`) is rejected with 400. The `generic` field of `DistributionDTO` is the comma-joined CSV of paths sorted by `sort_order`; it is `null` when no artifacts are set (`@JsonInclude(NON_NULL)`) and silently ignored by older clients (`@JsonIgnoreProperties(ignoreUnknown = true)`) | High | unit + integration-test | ✅ Tested |
+| SYS-100 | `GET /components/as-code/search` — global case-insensitive substring (or `regex=true`) search over every component's FULL as-code view, grouped by component with line number, line text and enclosing block path; `archived` / `limit` / `maxMatchesPerComponent` params; in-memory index rebuilt when the DB change stamp moves or after 5 minutes; `crsctl search` client command | High | unit + integration-test | ✅ Tested |
 
 ---
 
@@ -3318,7 +3318,7 @@ at least one distribution coordinate`, so these components could not be edited a
 `` `SYS-097 switching explicit-external without coordinate off WHISKEY is rejected` `` (4),
 `create_explicitExternal_noCoordinate_badRequest` (5, pre-existing).
 
-### SYS-098: Global text search over the components' as-code view
+### SYS-100: Global text search over the components' as-code view
 
 **Priority:** High
 **Test layer:** unit + integration-test
@@ -3350,8 +3350,10 @@ field the view shows without per-field query code.
   `text` the line without indentation, `path` the enclosing block headers outermost first (e.g.
   `["comp", "\"[1.5,)\"", "jira"]`), so a match inside a version-range block is identifiable.
 - Errors (`400`): `q` too short / too long, `limit` or `maxMatchesPerComponent` out of range, an
-  invalid regex, or a regex whose evaluation exceeds a 2 s time budget for the request (guards
-  against catastrophic backtracking).
+  invalid regex, a regex whose evaluation exceeds a 2 s time budget for the request, or a regex
+  whose recursion exhausts the stack on a long line. The budget is one per request: it is checked
+  before every line and, within a single match, every few thousand character reads, so neither many
+  cheap lines nor one catastrophically backtracking match can outrun it.
 - The RMS section that `/as-code` appends is **not** searched: it is RMS data, not the
   component's configuration, and it changes on the RMS sweep.
 - **Index.** The rendered lines are held in memory per pod and rebuilt lazily. Each search first
@@ -3382,27 +3384,30 @@ field the view shows without per-field query code.
 7. The index is not rebuilt while the stamp is unchanged, is rebuilt when any stamp component moves,
    and is rebuilt once it is older than 5 minutes.
 8. Too-short `q`, out-of-range `limit` and an invalid regex return `400`; a catastrophically
-   backtracking regex fails with `400` instead of hanging.
+   backtracking regex fails with `400` instead of hanging; the time budget also stops a search made
+   of many cheap per-line matches; a regex that exhausts the stack fails with `400`, not `500`.
 9. `crsctl search` maps its options to the query params, prints grep-shaped lines, emits the
    `results` array with `-o json`, and warns on STDERR when truncated.
 
 **Test method:** `ComponentCodeSearchServiceTest` —
-`` `SYS-098 substring match is case-insensitive with line numbers and block path` `` (1, 2),
-`` `SYS-098 regex metacharacters are literal by default` `` (2),
-`` `SYS-098 regex mode matches a case-insensitive regular expression` `` (2),
-`` `SYS-098 hit inside a version-range block reports the range in its path` `` (3),
-`` `SYS-098 archived narrows to archived or active components` `` (4),
-`` `SYS-098 limit cuts the component list and flags truncation` `` (5),
-`` `SYS-098 maxMatchesPerComponent caps lines while matchCount counts all` `` (5),
-`` `SYS-098 index is reused while the stamp holds and rebuilt when it moves` `` (7),
-`` `SYS-098 index older than MAX_INDEX_AGE is rebuilt` `` (7),
-`` `SYS-098 invalid input is rejected` `` (8),
-`` `SYS-098 catastrophically backtracking regex is aborted` `` (8),
-`` `SYS-098 indexLines keeps blank lines so positions equal line numbers` `` (1);
+`` `SYS-100 substring match is case-insensitive with line numbers and block path` `` (1, 2),
+`` `SYS-100 regex metacharacters are literal by default` `` (2),
+`` `SYS-100 regex mode matches a case-insensitive regular expression` `` (2),
+`` `SYS-100 hit inside a version-range block reports the range in its path` `` (3),
+`` `SYS-100 archived narrows to archived or active components` `` (4),
+`` `SYS-100 limit cuts the component list and flags truncation` `` (5),
+`` `SYS-100 maxMatchesPerComponent caps lines while matchCount counts all` `` (5),
+`` `SYS-100 index is reused while the stamp holds and rebuilt when it moves` `` (7),
+`` `SYS-100 index older than MAX_INDEX_AGE is rebuilt` `` (7),
+`` `SYS-100 invalid input is rejected` `` (8),
+`` `SYS-100 catastrophically backtracking regex is aborted` `` (8),
+`` `SYS-100 regex budget is enforced between lines` `` (8),
+`` `SYS-100 regex stack exhaustion is rejected` `` (8),
+`` `SYS-100 indexLines keeps blank lines so positions equal line numbers` `` (1);
 `ComponentAsCodeSearchIntegrationTest` (H2 `ft-db`) —
-`` `SYS-098 a value from the as-code view is found at its as-code line` `` (1),
-`` `SYS-098 an edit is visible to the next search` `` (6),
-`` `SYS-098 too-short query and invalid regex are 400` `` (8);
-`CommandsTest` (CLI) — `` `SYS-098 search maps options to query params and prints grep-shaped lines` ``,
-`` `SYS-098 search without --regex omits the regex param` ``,
-`` `SYS-098 search -o json emits the top-level array of matching components` `` (9).
+`` `SYS-100 a value from the as-code view is found at its as-code line` `` (1),
+`` `SYS-100 an edit is visible to the next search` `` (6),
+`` `SYS-100 too-short query and invalid regex are 400` `` (8);
+`CommandsTest` (CLI) — `` `SYS-100 search maps options to query params and prints grep-shaped lines` ``,
+`` `SYS-100 search without --regex omits the regex param` ``,
+`` `SYS-100 search -o json emits the top-level array of matching components` `` (9).

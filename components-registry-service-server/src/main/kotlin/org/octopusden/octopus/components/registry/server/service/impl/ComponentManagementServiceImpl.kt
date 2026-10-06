@@ -488,7 +488,7 @@ class ComponentManagementServiceImpl(
         return RenderedComponentCode(entity.componentKey, body)
     }
 
-    // Bulk FULL render for the as-code search index (SYS-098). RMS ranges are deliberately
+    // Bulk FULL render for the as-code search index (SYS-100). RMS ranges are deliberately
     // omitted: they are RMS's data, not this component's configuration, and they change on the
     // RMS sweep without touching any component row the index's change stamp watches.
     @Transactional(readOnly = true)

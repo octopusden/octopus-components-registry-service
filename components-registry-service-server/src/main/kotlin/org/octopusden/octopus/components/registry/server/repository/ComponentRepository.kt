@@ -255,7 +255,7 @@ interface ComponentRepository :
     fun countComponentsBySecurityChampion(): List<NameCountRow>
 
     /**
-     * Cheap change-detection stamp for the as-code search index (SYS-098). Every v4 write bumps
+     * Cheap change-detection stamp for the as-code search index (SYS-100). Every v4 write bumps
      * the owning component's `updatedAt` / `version` (see `bumpParentVersion`), create/import adds
      * a row and delete removes one, so any component edit changes at least one of these three
      * aggregates — on every pod, since the stamp is read from the shared DB.

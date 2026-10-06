@@ -64,7 +64,7 @@ private fun cli(exchange: QueueExchange) =
 
 private const val URL = "--crs-url=https://crs.example"
 
-/** Canned `/components/as-code/search` reply (SYS-098): 2 matching components, cut at limit=1. */
+/** Canned `/components/as-code/search` reply (SYS-100): 2 matching components, cut at limit=1. */
 private const val SEARCH_BODY =
     """{"query":"ALPHA","regex":false,"totalComponents":2,"truncated":true,"results":[""" +
         """{"componentKey":"alpha","archived":false,"matchCount":3,"matches":[""" +
@@ -529,7 +529,7 @@ class CommandsTest {
     }
 
     @Test
-    fun `SYS-098 search maps options to query params and prints grep-shaped lines`() {
+    fun `SYS-100 search maps options to query params and prints grep-shaped lines`() {
         val ex = QueueExchange(listOf(200 to SEARCH_BODY))
         val result =
             cli(ex).test(
@@ -551,7 +551,7 @@ class CommandsTest {
     }
 
     @Test
-    fun `SYS-098 search without --regex omits the regex param`() {
+    fun `SYS-100 search without --regex omits the regex param`() {
         val ex = QueueExchange(listOf(200 to SEARCH_BODY))
         val result = cli(ex).test(listOf(URL, "search", "ALPHA"))
         assertEquals(0, result.statusCode, result.stderr)
@@ -563,7 +563,7 @@ class CommandsTest {
     }
 
     @Test
-    fun `SYS-098 search -o json emits the top-level array of matching components`() {
+    fun `SYS-100 search -o json emits the top-level array of matching components`() {
         val ex = QueueExchange(listOf(200 to SEARCH_BODY))
         val result = cli(ex).test(listOf(URL, "-o", "json", "search", "ALPHA"))
         assertEquals(0, result.statusCode, result.stderr)

@@ -159,7 +159,7 @@ Print the component's as-code (Groovy-style) source verbatim. Output is raw `tex
 
 ### `search <QUERY>`
 
-Search the as-code text of **every** component (SYS-098) — the replacement for grepping the old
+Search the as-code text of **every** component (SYS-100) — the replacement for grepping the old
 Groovy DSL files: artifact/group patterns, version ranges, VCS URLs, Jira keys, docker images,
 people, … Case-insensitive substring; `--regex` treats the query as a case-insensitive regular
 expression. Options: `--archived <true|false>` (default: both), `--limit <n>` (components, server

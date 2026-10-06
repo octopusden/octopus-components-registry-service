@@ -15,7 +15,7 @@ import org.octopusden.octopus.components.registry.cli.model.AsCodeSearchResponse
 import org.octopusden.octopus.components.registry.cli.output.Renderer
 
 /**
- * `crsctl search <query>` — grep every component's as-code view (SYS-098), the replacement for
+ * `crsctl search <query>` — grep every component's as-code view (SYS-100), the replacement for
  * grepping the old Groovy DSL files.
  *
  * Table output is grep-shaped, one line per match: `<component>:<line>: <text>`, with the enclosing
