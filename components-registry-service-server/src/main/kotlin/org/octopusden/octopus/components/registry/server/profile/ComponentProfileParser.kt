@@ -2,7 +2,7 @@ package org.octopusden.octopus.components.registry.server.profile
 
 /**
  * Turns the flattened properties under `components-registry.component-profiles` into profiles,
- * one [ProfileEntry] per configured id, and configuration-level problems.
+ * one [ProfileLoad.Entry] per configured id, and configuration-level problems.
  *
  * Input keys are relative to that prefix (`solution.classification.external`,
  * `solution.rules.artifactIds[0].groupPattern.pattern`) and values are the strings the
@@ -16,15 +16,17 @@ object ComponentProfileParser {
         setOf("kind", "title", "description", "order", "classification.external", "classification.explicit", "classification.solution")
     private val REQUIRED_KEYS = listOf("kind", "title", "description", "order", "classification.external", "classification.explicit")
     private const val RULES = "rules."
+    const val REGULAR_KIND = "regular"
+    const val TEMPLATE_KIND = "template"
 
-    fun parse(properties: Map<String, String>): ProfileParseResult {
+    fun parse(properties: Map<String, String>): ProfileLoad {
         val parsed =
             properties.entries
                 .groupBy({ it.key.substringBefore('.') }, { it.key.substringAfter('.', "") to it.value })
                 .map { (id, keyValues) -> EntryParser(id, keyValues.toMap()).parse() }
         val problems =
             if (parsed.none { it.first.kind == REGULAR_KIND }) listOf("at least one regular profile is required") else emptyList()
-        return ProfileParseResult(
+        return ProfileLoad(
             profiles = parsed.mapNotNull { it.second }.sortedWith(compareBy({ it.order }, { it.id })),
             entries = parsed.map { it.first }.sortedBy { it.id },
             problems = problems,
@@ -37,17 +39,18 @@ object ComponentProfileParser {
     ) {
         private val problems = mutableListOf<String>()
 
-        fun parse(): Pair<ProfileEntry, ComponentProfile?> {
+        fun parse(): Pair<ProfileLoad.Entry, ComponentProfile?> {
             val kind = values["kind"]
             if (kind == TEMPLATE_KIND) {
-                return ProfileEntry(id, kind, EntryStatus.FAILED, listOf("$id.kind: templates are not supported yet")) to null
+                return ProfileLoad.Entry(id, kind, ProfileLoad.Entry.Status.FAILED, listOf("$id.kind: templates are not supported yet")) to
+                    null
             }
             checkStructure(kind)
             val profile = readProfile()
             return if (problems.isEmpty() && profile != null) {
-                ProfileEntry(id, kind, EntryStatus.LIVE, emptyList()) to profile
+                ProfileLoad.Entry(id, kind, ProfileLoad.Entry.Status.LIVE, emptyList()) to profile
             } else {
-                ProfileEntry(id, kind, EntryStatus.FAILED, problems) to null
+                ProfileLoad.Entry(id, kind, ProfileLoad.Entry.Status.FAILED, problems) to null
             }
         }
 
@@ -81,15 +84,15 @@ object ComponentProfileParser {
             return value.toIntOrNull().also { if (it == null) problems += "$id.order: '$value' is not a whole number" }
         }
 
-        private fun classification(): ProfileClassification? {
+        private fun classification(): ComponentProfile.Classification? {
             val external = choice("classification.external", BOOLEANS)?.toBooleanStrict()
-            val explicit = choice("classification.explicit", BOOLEANS + "ask")?.let { ExplicitChoice.valueOf(it.uppercase()) }
+            val explicit = choice("classification.explicit", BOOLEANS + "ask")?.let { ComponentProfile.Explicit.valueOf(it.uppercase()) }
             val solution = choice("classification.solution", BOOLEANS)?.toBooleanStrict() ?: false
-            val shippedExplicitly = external != false && explicit in setOf(null, ExplicitChoice.TRUE)
+            val shippedExplicitly = external != false && explicit in setOf(null, ComponentProfile.Explicit.TRUE)
             if (solution && !shippedExplicitly) {
                 problems += "$id.classification.solution: a solution profile needs external: true and explicit: true"
             }
-            return ProfileClassification(external ?: return null, explicit ?: return null, solution)
+            return ComponentProfile.Classification(external ?: return null, explicit ?: return null, solution)
         }
 
         private fun text(key: String): String? {
@@ -107,7 +110,7 @@ object ComponentProfileParser {
             return value.takeIf { it in allowed }
         }
 
-        private fun rules(): List<FieldRule> {
+        private fun rules(): List<ComponentProfile.FieldRule> {
             val byPath = mutableMapOf<String, MutableMap<String, String>>()
             values.filterKeys { it.startsWith(RULES) }.forEach { (key, value) ->
                 val rest = key.removePrefix(RULES)
@@ -123,7 +126,7 @@ object ComponentProfileParser {
         private fun rule(
             path: String,
             rule: Map<String, String>,
-        ): FieldRule? {
+        ): ComponentProfile.FieldRule? {
             val prefix = "$id.rules.$path"
             val before = problems.size
             if (path !in CreateRequestPaths.PATHS) problems += "$prefix: not a create-request path a rule may name"
@@ -140,7 +143,7 @@ object ComponentProfileParser {
                 message.isBlank() -> problems += "$prefix.message: must not be blank"
             }
             if (problems.size != before) return null
-            return FieldRule(path, checkNotNull(pattern), checkNotNull(message))
+            return ComponentProfile.FieldRule(path, checkNotNull(pattern), checkNotNull(message))
         }
     }
 }

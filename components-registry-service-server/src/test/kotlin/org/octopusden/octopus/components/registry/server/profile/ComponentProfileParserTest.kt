@@ -88,15 +88,21 @@ class ComponentProfileParserTest {
 
         assertTrue(result.usable, "problems: ${result.problems} ${result.entries}")
         assertEquals(listOf("regular-external", "regular-internal", "solution", "dmp-bundle"), result.profiles.map { it.id })
-        assertTrue(result.entries.all { it.status == EntryStatus.LIVE })
+        assertTrue(result.entries.all { it.status == ProfileLoad.Entry.Status.LIVE })
 
         val solution = result.profiles.single { it.id == "solution" }
-        assertEquals(ProfileClassification(external = true, explicit = ExplicitChoice.TRUE, solution = true), solution.classification)
+        assertEquals(
+            ComponentProfile.Classification(external = true, explicit = ComponentProfile.Explicit.TRUE, solution = true),
+            solution.classification,
+        )
         assertEquals(30, solution.order)
-        assertEquals(listOf(FieldRule("name", SOLUTION_NAME_PATTERN, SOLUTION_NAME_MESSAGE)), solution.rules)
+        assertEquals(listOf(ComponentProfile.FieldRule("name", SOLUTION_NAME_PATTERN, SOLUTION_NAME_MESSAGE)), solution.rules)
 
         val internal = result.profiles.single { it.id == "regular-internal" }
-        assertEquals(ProfileClassification(external = false, explicit = ExplicitChoice.ASK, solution = false), internal.classification)
+        assertEquals(
+            ComponentProfile.Classification(external = false, explicit = ComponentProfile.Explicit.ASK, solution = false),
+            internal.classification,
+        )
     }
 
     @Test
@@ -121,7 +127,7 @@ class ComponentProfileParserTest {
 
         assertTrue(result.usable, "problems: ${result.entries}")
         assertEquals(
-            listOf(FieldRule("baseConfiguration.mavenArtifacts[0].artifactPattern", "^pay-.*$", "Starts with pay-.")),
+            listOf(ComponentProfile.FieldRule("baseConfiguration.mavenArtifacts[0].artifactPattern", "^pay-.*$", "Starts with pay-.")),
             result.profiles.single().rules,
         )
     }
@@ -142,7 +148,7 @@ class ComponentProfileParserTest {
         assertTrue(result.usable)
         assertEquals(4, result.profiles.size)
         val entry = result.entries.single { it.id == "ww-modpack" }
-        assertEquals(EntryStatus.FAILED, entry.status)
+        assertEquals(ProfileLoad.Entry.Status.FAILED, entry.status)
         assertEquals("template", entry.kind)
         assertEquals(listOf("ww-modpack.kind: templates are not supported yet"), entry.problems)
     }
@@ -168,16 +174,16 @@ class ComponentProfileParserTest {
     private fun entryOf(
         properties: Map<String, String>,
         id: String,
-    ): ProfileEntry = ComponentProfileParser.parse(properties).entries.single { it.id == id }
+    ): ProfileLoad.Entry = ComponentProfileParser.parse(properties).entries.single { it.id == id }
 
     private fun assertInvalid(
         properties: Map<String, String>,
         id: String,
         problemPrefix: String,
-    ): ProfileEntry {
+    ): ProfileLoad.Entry {
         val result = ComponentProfileParser.parse(properties)
         val entry = result.entries.single { it.id == id }
-        assertEquals(EntryStatus.FAILED, entry.status, "expected $id to fail")
+        assertEquals(ProfileLoad.Entry.Status.FAILED, entry.status, "expected $id to fail")
         assertTrue(entry.problems.any { it.startsWith(problemPrefix) }, "expected a problem starting '$problemPrefix' in ${entry.problems}")
         assertFalse(result.usable)
         assertTrue(result.profiles.none { it.id == id })
@@ -331,7 +337,7 @@ class ComponentProfileParserTest {
 
         assertFalse(result.usable)
         assertEquals(5, result.entries.size)
-        assertEquals(EntryStatus.FAILED, result.entries.single { it.id == "broken" }.status)
-        assertTrue(result.entries.filter { it.id != "broken" }.all { it.status == EntryStatus.LIVE })
+        assertEquals(ProfileLoad.Entry.Status.FAILED, result.entries.single { it.id == "broken" }.status)
+        assertTrue(result.entries.filter { it.id != "broken" }.all { it.status == ProfileLoad.Entry.Status.LIVE })
     }
 }
