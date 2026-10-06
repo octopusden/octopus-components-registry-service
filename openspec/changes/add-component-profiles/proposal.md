@@ -64,7 +64,7 @@ None.
 
 ## Impact
 
-- `components-registry-service-server`: profile parsing and catalog, reload listener, new
+- `components-registry-service-server`: profile parsing and catalog, `reloadConfig`, new
   controller, `ComponentCreateRequest.profile`, the create path in
   `ComponentManagementServiceImpl`. The update path is unchanged.
 - **No behavior change for existing API clients:** a create without `profile`, a rename and a

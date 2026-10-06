@@ -84,15 +84,27 @@ Creates against it:
 
 ## Decisions
 
-### 1. Parse the raw subtree, not a typed properties bean
+### 1. Read the flattened keys from the property sources, not through `Binder`
 
-- `ComponentProfilesSource` reads `components-registry.component-profiles` from the `Environment`
-  through `Binder` as a nested `Map<String, Any?>`; `ComponentProfileParser` turns it into
-  profiles plus a problem list.
-- A typed `@ConfigurationProperties` bean ignores unknown keys and stops at the first type error;
-  the requirement is to name every unknown key and every bad value.
-- The parser is pure: unit-tested without Spring. A binding test pins how YAML values arrive
-  (strings for numbers and booleans, nested maps for `classification` and `rules`).
+- `ComponentProfilesSource` walks the environment's `EnumerablePropertySource`s and collects every
+  key under `components-registry.component-profiles.`, the highest-precedence value winning per
+  key — the same merge Spring applies. Keys are taken exactly as written.
+- Why not `Binder` or a typed `@ConfigurationProperties` bean:
+  - A typed bean ignores unknown keys and stops at the first type error; the requirement is to
+    name every unknown key and every bad value.
+  - Relaxed map binding strips any character other than letters, digits, `-` and `.` from an
+    unbracketed map key, so `regular_external` would load as `regularexternal`; and a dotted key
+    splits into nested maps (pinned for `field-config` by `AdminConfigPropertiesBindingTest`).
+    Neither can be detected after binding.
+- Each key splits as `<id>.<rest>`: the id is the first segment; under `rules.` the path is
+  everything between `rules.` and the last segment (`pattern` or `message`), so
+  `rules.artifactIds[0].groupPattern.pattern` yields the path `artifactIds[0].groupPattern`. No
+  bracket notation is needed in YAML.
+- `ComponentProfileParser` turns the flat key → value map into profiles plus a problem list. It is
+  pure and unit-tested without Spring. Values may arrive as strings, numbers or booleans,
+  depending on the source; the parser accepts each form.
+- A non-enumerable property source cannot be walked and is not read; profiles come from
+  service-config YAML, which is enumerable.
 
 ### 2. A validated snapshot, swapped whole
 
@@ -100,7 +112,7 @@ Creates against it:
 - A load either replaces the whole snapshot or leaves it untouched: no `regular` profile or an
   invalid one keeps every profile in use, including ones whose change was valid. A failed
   template entry does not stop a load.
-- Spring rebinds the environment before anyone can validate it, so the catalog never reads the
+- Spring refreshes the environment before anyone can validate it, so the catalog never reads the
   environment on a request — only on load.
 - Readers (listing, create) take the snapshot once per call, so a reload mid-request cannot mix
   two configurations.
@@ -118,10 +130,15 @@ Creates against it:
 
 ### 4. Reload result
 
-- `ComponentProfilesRefreshListener` on `RefreshScopeRefreshedEvent` (all modes) asks the catalog
-  to reload and keeps the outcome; `reloadConfig` adds it to its response as `componentProfiles`:
-  `status` (`applied` | `failed`), `problems` (configuration-level) and `entries` (id, kind,
-  `live` | `failed`, problems).
+- `reloadConfig` calls `contextRefresher.refresh()` and then `catalog.reload()` itself, and returns
+  that outcome as `componentProfiles`: `status` (`applied` | `failed`), `problems`
+  (configuration-level) and `entries` (id, kind, `live` | `failed`, problems).
+- No refresh listener: the outcome belongs to one request, so passing it through shared state
+  would let two concurrent reloads read each other's result. The admin endpoint is the only
+  refresh path (`/actuator/refresh` is not exposed).
+- `catalog.reload()` runs in a `finally`, so the profiles are reloaded even when
+  `ConfigRefreshListener` throws `ConfigValidationException` for `field-config`; that 422 then
+  also carries `componentProfiles`.
 - A failed profile load answers 422 with `error: component-profiles` and the same body, matching
   the existing `config-validation` 422.
 - A template entry is `failed` with "templates are not supported yet" and never blocks a load.
@@ -146,23 +163,30 @@ Creates against it:
   have permission to create components".
 - The listing and the create check both call it, so the D&S change edits one place.
 - The create endpoint already requires `CREATE_COMPONENTS`, so the 403 for an unusable profile is
-  not reachable in this change; it is tested with a stubbed availability.
+  not reachable in this change; it becomes reachable with the D&S rule, and is tested now with a
+  stubbed availability.
 
 ### 7. Profile on create
 
 - Order, after the existing key and uniqueness checks: unknown or non-`regular` id → 400
   `profile: unknown profile '<id>'`; not usable → 403 with the reason; classification mismatch →
   400 `profile: …` naming the differing flag; then each rule.
-- Classification match: `solution` against `request.solution`, `external` against
-  `distributionExternal`, `explicit` against `distributionExplicit` unless `ask`. An absent
-  request flag counts as `false`.
+- Classification match: `solution`, `external` and `explicit` against the values the create will
+  store — after `stripIfHidden` drops a flag hidden in the field configuration — not the raw
+  request. `explicit: ask` takes either value. An absent or stripped flag counts as `false`, so
+  a Solution profile with `component.solution` hidden rejects the create instead of storing a
+  non-solution.
 - A rule failure is 400 prefixed with the rule's path, carrying the configured message.
 
 ### 8. Reading a create-request path
 
 - `CreateRequestPaths.read(request, path) → String?` covers exactly the rule paths listed in the
   spec. The same list validates rule keys on load.
+- It reads the values the create will store: `name` trimmed as `createComponent` trims it, hidden
+  fields stripped. A rule never fails on whitespace the create would drop.
 - An absent value is matched as `""`, so the pattern decides whether a field may be empty.
+- A path with `[0]` reads only the first entry of that list; later entries are not checked. Rule
+  paths name the first entry because that is the one a profile or template sets.
 - The templates change reuses it to name the parameters behind a failing field.
 
 ## Out of Scope

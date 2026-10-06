@@ -42,7 +42,8 @@ A field rule's path SHALL be one of these create-request paths: `name`, `display
 `baseConfiguration.mavenArtifacts[0].groupPattern`,
 `baseConfiguration.mavenArtifacts[0].artifactPattern`,
 `baseConfiguration.dockerImages[0].imageName`, `baseConfiguration.dockerImages[0].flavor`,
-`baseConfiguration.packages[0].packageName`.
+`baseConfiguration.packages[0].packageName`. A path with `[0]` SHALL apply to the first entry of
+that list only. A path SHALL be written as-is in the YAML key, without bracket notation.
 
 Each problem SHALL name the profile id and the key concerned. The configuration SHALL contain
 at least one `regular` profile, and every `regular` profile SHALL be valid. An entry of kind
@@ -75,6 +76,11 @@ checked further, and SHALL NOT affect the rest of the configuration.
 #### Scenario: Invalid profile id
 - **WHEN** a profile id contains an upper-case letter, `_` or a space
 - **THEN** that profile is invalid with a problem naming the id
+
+#### Scenario: Dotted rule path written as-is
+- **WHEN** a profile has a rule under the YAML key `baseConfiguration.jira.projectKey`, without
+  brackets
+- **THEN** the rule is read with the path `baseConfiguration.jira.projectKey`
 
 #### Scenario: Solution profile not explicit and external
 - **WHEN** a profile has `classification.solution: true` with `classification.explicit: ask`,
@@ -184,8 +190,10 @@ profile is checked against.
 `ComponentCreateRequest` SHALL accept an optional `profile`; the rest of the request and the
 endpoint are unchanged. When `profile` is given, the registry SHALL reject the create unless it
 names a live `regular` profile (400, `profile: `), the user may use it (403, with the reason),
-and the request's classification matches it (400, `profile: `, naming the differing flag).
-`explicit: ask` SHALL match either value; an absent request flag SHALL count as `false`. When
+and the classification the create would store matches it (400, `profile: `, naming the
+differing flag). The stored classification is the request's flags after any flag hidden in the
+field configuration is dropped. `explicit: ask` SHALL match either value; an absent or dropped
+flag SHALL count as `false`. When
 `profile` is absent, no field rules SHALL apply.
 
 #### Scenario: Unknown profile
@@ -195,6 +203,17 @@ and the request's classification matches it (400, `profile: `, naming the differ
 #### Scenario: Classification differs
 - **WHEN** a create names `profile: solution` with `solution: false`
 - **THEN** the response is 400 with `errorMessage` starting `profile: ` naming `solution`
+
+#### Scenario: Hidden solution flag
+- **WHEN** `component.solution` is hidden in the field configuration and a create names
+  `profile: solution` with `solution: true`
+- **THEN** the response is 400 with `errorMessage` starting `profile: ` naming `solution`, since
+  the create would store a non-solution
+
+#### Scenario: Profile the user may not use
+- **WHEN** a create names a profile the availability rule marks unusable for the user (not
+  reachable in this change, since create already requires `CREATE_COMPONENTS`)
+- **THEN** the response is 403 with the reason and no component is created
 
 #### Scenario: Explicit asked
 - **WHEN** a create names `profile: regular-external` with `distributionExternal: true` and
@@ -209,7 +228,8 @@ and the request's classification matches it (400, `profile: `, naming the differ
 ### Requirement: Field rules of the chosen profile
 
 When a create names a profile, the registry SHALL check the value at each rule's path against
-the rule's pattern, as a whole-value match, treating an absent value as empty. A failure SHALL be
+the rule's pattern, as a whole-value match, using the value the create would store (trimmed,
+hidden fields dropped) and treating an absent value as empty. A failure SHALL be
 400 with `errorMessage` starting with the rule's path and `: `, followed by the rule's message.
 Rules in force at the time of the create SHALL apply; existing components SHALL NOT be re-checked.
 
@@ -233,6 +253,15 @@ Rules in force at the time of the create SHALL apply; existing components SHALL 
 #### Scenario: Field without a rule
 - **WHEN** the profile has no rule for `displayName`
 - **THEN** `displayName` is checked only by the existing create validation
+
+#### Scenario: Surrounding whitespace
+- **WHEN** a create names `profile: solution` with `name: " payments-solution "`
+- **THEN** the `name` rule checks `payments-solution` and passes
+
+#### Scenario: Only the first list entry
+- **WHEN** a profile has a rule on `baseConfiguration.vcsEntries[0].vcsPath` and the create has two
+  VCS entries, only the second breaking the rule
+- **THEN** the rule passes
 
 #### Scenario: Absent value
 - **WHEN** a profile has a rule on `clientCode` whose pattern does not match an empty value, and

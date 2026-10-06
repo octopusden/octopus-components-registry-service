@@ -23,9 +23,14 @@
         further (its `parameters`, `fields` are not reported as unknown keys); others live
   - [ ] 2.1.10 No `regular` profile, or one invalid `regular` profile → configuration unusable,
         every entry listed with its status
-- [ ] 2.2 Write a failing binding test for `ComponentProfilesSource`: YAML with nested
-      `classification` and `rules` maps, numbers and booleans, arrives as the nested map the
-      parser expects; absent subtree → empty map
+- [ ] 2.2 Write failing tests for `ComponentProfilesSource` with YAML property sources (Decision 1):
+  - [ ] 2.2.1 Keys arrive exactly as written: id `regular_external` and `Regular-External` kept,
+        so the parser can reject them
+  - [ ] 2.2.2 Dotted and indexed rule paths without brackets (`baseConfiguration.jira.projectKey`,
+        `artifactIds[0].groupPattern`) arrive as one path
+  - [ ] 2.2.3 Two sources (base and profile file): the higher-precedence value wins per key, keys
+        from both are kept
+  - [ ] 2.2.4 Numbers and booleans arrive typed or as strings; absent subtree → empty map
 - [ ] 2.3 Implement:
   - [ ] 2.3.1 `profile/ComponentProfile.kt` — profile, classification (`Explicit` with `ASK`),
         field rule
@@ -33,7 +38,8 @@
         (Decision 8); one test per listed path reading the value from a create request
   - [ ] 2.3.3 `profile/ComponentProfileParser.kt` — pure parse to profiles + entry statuses +
         configuration problems
-  - [ ] 2.3.4 `profile/ComponentProfilesSource.kt` — raw subtree from the `Environment`
+  - [ ] 2.3.4 `profile/ComponentProfilesSource.kt` — flat keys from the enumerable property
+        sources, highest precedence first
 - [ ] 2.4 Confirm tests pass (record the command and count)
 
 ## 3. Catalog, startup and reload (Decisions 2, 3, 4)
@@ -53,12 +59,14 @@
   - [ ] 3.1.6 Reload adding a template entry → 200, entry `failed` in `entries`
   - [ ] 3.1.7 Corrected configuration reloaded after a failure → applied
   - [ ] 3.1.8 No-db mode starts and reloads profiles the same way
+  - [ ] 3.1.9 Reload with an invalid `field-config` → 422 `config-validation`, and the profiles
+        are still reloaded and reported in `componentProfiles`
+  - [ ] 3.1.10 Two concurrent reloads each return their own outcome
 - [ ] 3.2 Implement:
   - [ ] 3.2.1 `profile/ComponentProfileCatalog.kt` — `AtomicReference<ProfileSnapshot>`, load in
         the initializer, `reload()` returning the outcome
-  - [ ] 3.2.2 `listener/ComponentProfilesRefreshListener.kt` — `RefreshScopeRefreshedEvent`, all
-        modes
-  - [ ] 3.2.3 `AdminControllerV4.reloadConfig` — add `componentProfiles`; 422 on a failed load
+  - [ ] 3.2.2 `AdminControllerV4.reloadConfig` — `refresh()`, then `catalog.reload()` in a
+        `finally`; add `componentProfiles`; 422 on a failed load (Decision 4)
 - [ ] 3.3 Add a minimal valid profile set to every configuration that starts the server: test,
       integration-test, smoke, `-test-db*`, `ft-db`, `no-db`, dev profiles and the client
       modules' test configs; none in the bundled `application.yml`
@@ -90,6 +98,12 @@
   - [ ] 5.1.5 `resolution-service` with `regular-internal` → 400 with the regular profile's
         message; `payments-solution` with `solution` → 201
   - [ ] 5.1.6 An unusable profile (availability stubbed) → 403 with the reason (Decision 6)
+  - [ ] 5.1.7 `component.solution` hidden, `profile: solution` with `solution: true` → 400
+        `profile: ` naming `solution`; same for hidden `distributionExternal` against
+        `external: true`
+  - [ ] 5.1.8 `name: " payments-solution "` with `profile: solution` → the rule passes
+  - [ ] 5.1.9 Rule on `baseConfiguration.vcsEntries[0].vcsPath`, two entries, only the second
+        breaking it → accepted
 - [ ] 5.2 Implement: `ComponentCreateRequest.profile`; `profile/ProfileCreateCheck.kt` (lookup,
       availability, classification, rules); call it from `createComponent` before the flush
 - [ ] 5.3 Confirm tests pass (record the command and count)
@@ -100,7 +114,8 @@
 - [ ] 6.2 `docs/registry/api-changelog.md` — Unreleased: the listing endpoint, `profile` on create,
       the reload response; no behavior change for creates without `profile`
 - [ ] 6.3 `docs/registry/functional-spec.md` — profiles and their field rules
-- [ ] 6.4 ADR-016 — `component-profiles` as a third subtree: raw parsing, snapshot and the
+- [ ] 6.4 ADR-016 — `component-profiles` as a third subtree: read from the property sources (so
+      rule paths need no bracket notation, unlike `field-config`), snapshot and the
       no-partial-apply rule
 - [ ] 6.5 Tech-debt records in `docs/registry/tech-debt/` for the limitations this change leaves
       in place, each `Open` with Context, The limit, Removal options and References, numbered from
