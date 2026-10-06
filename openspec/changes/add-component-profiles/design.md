@@ -102,7 +102,8 @@ Creates against it:
   bracket notation is needed in YAML.
 - `ComponentProfileParser` turns the flat key → value map into profiles plus a problem list. It is
   pure and unit-tested without Spring. Values may arrive as strings, numbers or booleans,
-  depending on the source; the parser accepts each form.
+  depending on the source; the source hands each to the parser as the string the `Environment`
+  resolves, so the parser reads strings only.
 - A non-enumerable property source cannot be walked and is not read; profiles come from
   service-config YAML, which is enumerable.
 

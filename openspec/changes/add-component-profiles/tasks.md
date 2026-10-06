@@ -1,46 +1,52 @@
 ## 1. Baseline
 
-- [ ] 1.1 Characterization tests on today's create and update: a solution created as `payments`,
+- [x] 1.1 Characterization tests on today's create and update: a solution created as `payments`,
       a regular component created as `resolution-service`, a rename to `payments-solution`, and
-      unflagging `payments-solution` — all accepted today, and still accepted after this change
+      unflagging `payments-solution` — all accepted today, and still accepted after this change.
+      `SolutionKeyWithoutProfileTest` (`@Tag("integration")`, so it runs in `dbTest` on H2
+      `ft-db`): 4/4 green on the unchanged code
 
 ## 2. Profile parsing (Decisions 1, 5)
 
-- [ ] 2.1 Write failing unit tests for `ComponentProfileParser`:
-  - [ ] 2.1.1 The four profiles of the design example parse to four live profiles
-  - [ ] 2.1.2 Each required key missing (`kind`, `title`, `description`, `order`,
+- [x] 2.1 Write failing unit tests for `ComponentProfileParser`:
+  - [x] 2.1.1 The four profiles of the design example parse to four live profiles
+  - [x] 2.1.2 Each required key missing (`kind`, `title`, `description`, `order`,
         `classification.external`, `classification.explicit`) → problem naming it
-  - [ ] 2.1.3 Unknown key at profile, `classification` and rule level → problem naming it
-  - [ ] 2.1.4 Bad values: `kind: special`, blank `title` or `description`,
+  - [x] 2.1.3 Unknown key at profile, `classification` and rule level → problem naming it
+  - [x] 2.1.4 Bad values: `kind: special`, blank `title` or `description`,
         `explicit: maybe`, `order: ten`, `external: yes` → problem naming key and value
-  - [ ] 2.1.5 Id with an upper-case letter or `_` → invalid
-  - [ ] 2.1.6 `solution` absent → `false`; `solution: true` with `explicit: ask` or
+  - [x] 2.1.5 Id with an upper-case letter or `_` → invalid
+  - [x] 2.1.6 `solution` absent → `false`; `solution: true` with `explicit: ask` or
         `external: false` → invalid
-  - [ ] 2.1.7 Rule with a non-compiling pattern, a blank or missing `message`, an extra key, or a
+  - [x] 2.1.7 Rule with a non-compiling pattern, a blank or missing `message`, an extra key, or a
         path outside the spec's path list → invalid, naming the path; each listed path accepted
-  - [ ] 2.1.8 Several problems in one profile → all reported
-  - [ ] 2.1.9 `kind: template` → failed with "templates are not supported yet" and not checked
+  - [x] 2.1.8 Several problems in one profile → all reported
+  - [x] 2.1.9 `kind: template` → failed with "templates are not supported yet" and not checked
         further (its `parameters`, `fields` are not reported as unknown keys); others live
-  - [ ] 2.1.10 No `regular` profile, or one invalid `regular` profile → configuration unusable,
+  - [x] 2.1.10 No `regular` profile, or one invalid `regular` profile → configuration unusable,
         every entry listed with its status
-- [ ] 2.2 Write failing tests for `ComponentProfilesSource` with YAML property sources (Decision 1):
-  - [ ] 2.2.1 Keys arrive exactly as written: id `regular_external` and `Regular-External` kept,
+- [x] 2.2 Write failing tests for `ComponentProfilesSource` with YAML property sources (Decision 1):
+  - [x] 2.2.1 Keys arrive exactly as written: id `regular_external` and `Regular-External` kept,
         so the parser can reject them
-  - [ ] 2.2.2 Dotted and indexed rule paths without brackets (`baseConfiguration.jira.projectKey`,
+  - [x] 2.2.2 Dotted and indexed rule paths without brackets (`baseConfiguration.jira.projectKey`,
         `artifactIds[0].groupPattern`) arrive as one path
-  - [ ] 2.2.3 Two sources (base and profile file): the higher-precedence value wins per key, keys
+  - [x] 2.2.3 Two sources (base and profile file): the higher-precedence value wins per key, keys
         from both are kept
-  - [ ] 2.2.4 Numbers and booleans arrive typed or as strings; absent subtree → empty map
-- [ ] 2.3 Implement:
-  - [ ] 2.3.1 `profile/ComponentProfile.kt` — profile, classification (`Explicit` with `ASK`),
+  - [x] 2.2.4 Numbers and booleans arrive typed or as strings; absent subtree → empty map. The
+        source hands the parser the resolved string either way (design Decision 1)
+- [x] 2.3 Implement:
+  - [x] 2.3.1 `profile/ComponentProfile.kt` — profile, classification (`Explicit` with `ASK`),
         field rule
-  - [ ] 2.3.2 `profile/CreateRequestPaths.kt` — the free-text path list and `read(request, path)`
+  - [x] 2.3.2 `profile/CreateRequestPaths.kt` — the free-text path list and `read(request, path)`
         (Decision 8); one test per listed path reading the value from a create request
-  - [ ] 2.3.3 `profile/ComponentProfileParser.kt` — pure parse to profiles + entry statuses +
+  - [x] 2.3.3 `profile/ComponentProfileParser.kt` — pure parse to profiles + entry statuses +
         configuration problems
-  - [ ] 2.3.4 `profile/ComponentProfilesSource.kt` — flat keys from the enumerable property
+  - [x] 2.3.4 `profile/ComponentProfilesSource.kt` — flat keys from the enumerable property
         sources, highest precedence first
-- [ ] 2.4 Confirm tests pass (record the command and count)
+- [x] 2.4 Confirm tests pass. `./gradlew :components-registry-service-server:test --tests "*.profile.*"`:
+      `ComponentProfileParserTest` 39, `ComponentProfilesSourceTest` 8, `CreateRequestPathsTest`
+      23, all green. Full module `test`: 1235 tests, 0 failures, 1 skipped. `detekt` and
+      `ktlintCheck` clean
 
 ## 3. Catalog, startup and reload (Decisions 2, 3, 4)
 

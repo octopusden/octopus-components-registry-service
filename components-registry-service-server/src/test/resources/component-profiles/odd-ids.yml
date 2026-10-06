@@ -1,0 +1,10 @@
+components-registry:
+  component-profiles:
+    regular_external:
+      kind: regular
+    Regular-External:
+      kind: regular
+    internal:
+      rules:
+        baseConfiguration.jira.projectKey: { pattern: "^[A-Z]+$", message: "Upper-case letters." }
+        artifactIds[0].groupPattern: { pattern: "^org\\..*$", message: "Starts with org." }
