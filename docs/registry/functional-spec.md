@@ -231,7 +231,7 @@ images, people and every other rendered field are found without a per-field filt
   case-insensitive regular expression (bounded by a 2 s evaluation budget per request). The RMS
   section of the as-code view is not searched.
 - **Output**: JSON `{query, regex, totalComponents, truncated, results[]}`; each result is
-  `{componentKey, archived, matchCount, matches[]}` (sorted by key), each match
+  `{id, componentKey, archived, matchCount, matches[]}` (sorted by key; `id` is the component UUID), each match
   `{line, text, path}` — the 1-based line in the FULL as-code view, the line without indentation,
   and the enclosing block headers (e.g. the version range a match sits in).
 - **400** for an invalid `q` / `limit` / `maxMatchesPerComponent`, an invalid regex, or a regex over

@@ -64,6 +64,8 @@ class ComponentAsCodeSearchIntegrationTest {
         val name = newComponent(owner = owner)
 
         val hit = search(owner).single { it["componentKey"].asText() == name }
+        // The hit carries the UUID the v4 write endpoints are addressed by.
+        assertEquals(getDetail(name)["id"].asText(), hit["id"].asText())
 
         val match = hit["matches"].single()
         assertEquals("componentOwner = \"$owner\"", match["text"].asText())

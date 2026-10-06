@@ -109,4 +109,6 @@ data class RenderedComponentCode(
     val componentKey: String,
     val body: String,
     val archived: Boolean = false,
+    /** The component's UUID; set by the bulk render (search hits link to the UUID-addressed editor). */
+    val id: UUID? = null,
 )

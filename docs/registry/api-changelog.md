@@ -25,7 +25,7 @@ refresh it with `./gradlew :components-registry-service-server:generateOpenApiDo
   regular expression), `archived` (omitted = both), `limit` (components returned, 1–1000, default
   100), `maxMatchesPerComponent` (1–1000, default 20). Returns `AsCodeSearchResponse`
   `{query, regex, totalComponents, truncated, results}`; each `AsCodeSearchHit` is
-  `{componentKey, archived, matchCount, matches}` sorted by key, and each `AsCodeSearchLine` is
+  `{id, componentKey, archived, matchCount, matches}` sorted by key (`id` = component UUID), and each `AsCodeSearchLine` is
   `{line, text, path}` — the 1-based line number in the as-code view, the line without its
   indentation, and the enclosing block headers outermost first. `400` for a bad `q`/`limit`, an
   invalid regex, or a regex that exceeds the per-request evaluation time budget or exhausts the stack. The RMS section of the as-code

@@ -3343,7 +3343,8 @@ field the view shows without per-field query code.
   with `regex=true` a case-insensitive regular expression. Archived components are included unless
   `archived` narrows them out.
 - Response `AsCodeSearchResponse {query, regex, totalComponents, truncated, results}`. `results`
-  are `AsCodeSearchHit {componentKey, archived, matchCount, matches}` sorted by component key, cut at
+  are `AsCodeSearchHit {id, componentKey, archived, matchCount, matches}` sorted by component key (`id` is the
+  component UUID, the id the v4 write endpoints are addressed by), cut at
   `limit`; `totalComponents` counts every matching component and `truncated` says whether the cut
   happened. `matches` holds the first `maxMatchesPerComponent` lines as
   `AsCodeSearchLine {line, text, path}`: `line` is the 1-based line number in the as-code view,

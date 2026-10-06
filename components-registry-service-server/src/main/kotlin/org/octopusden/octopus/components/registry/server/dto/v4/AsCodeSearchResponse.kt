@@ -1,5 +1,7 @@
 package org.octopusden.octopus.components.registry.server.dto.v4
 
+import java.util.UUID
+
 /**
  * Result of `GET /rest/api/4/components/as-code/search` (SYS-100): a grep over every
  * component's FULL as-code text, grouped by component.
@@ -18,6 +20,8 @@ data class AsCodeSearchResponse(
 )
 
 data class AsCodeSearchHit(
+    /** The component's UUID — the id the v4 write endpoints (PATCH, field-overrides) are addressed by. */
+    val id: UUID,
     val componentKey: String,
     val archived: Boolean,
     /** Total matching lines in this component, even when [matches] is capped. */

@@ -20,6 +20,7 @@ import java.time.Duration
 import java.time.Instant
 import java.time.ZoneId
 import java.time.ZoneOffset
+import java.util.UUID
 
 /** SYS-100: as-code text search — matching, result shaping and index freshness. */
 class ComponentCodeSearchServiceTest {
@@ -45,6 +46,7 @@ class ComponentCodeSearchServiceTest {
                 }
             }
             """.trimIndent() + "\n",
+            id = ALPHA_ID,
         )
     private val beta =
         RenderedComponentCode(
@@ -56,6 +58,7 @@ class ComponentCodeSearchServiceTest {
             }
             """.trimIndent() + "\n",
             archived = true,
+            id = UUID.randomUUID(),
         )
 
     @BeforeEach
@@ -72,6 +75,7 @@ class ComponentCodeSearchServiceTest {
         assertThat(result.totalComponents).isEqualTo(2)
         assertThat(result.truncated).isFalse()
         assertThat(result.results.map { it.componentKey }).containsExactly("alpha", "beta")
+        assertThat(result.results.first().id).isEqualTo(ALPHA_ID)
         val line =
             result.results
                 .first()
@@ -162,7 +166,7 @@ class ComponentCodeSearchServiceTest {
         // deadline checks, and `a*a*a*b` over a long run of `a` needs far more than the 10 000
         // character reads between checks (cubic backtracking) — no JDK-regex internals, no real wait.
         whenever(componentManagementService.renderAllComponentsAsCode())
-            .thenReturn(listOf(RenderedComponentCode("evil", "a".repeat(200) + "\n")))
+            .thenReturn(listOf(RenderedComponentCode("evil", "a".repeat(200) + "\n", id = UUID.randomUUID())))
         val tickingService =
             ComponentCodeSearchService(componentManagementService, componentRepository, auditLogRepository, TickingClock())
 
@@ -191,7 +195,15 @@ class ComponentCodeSearchServiceTest {
         // long run of `a` overflows the stack long before the time budget is spent. A real clock
         // keeps the test bounded: if no overflow happened, the budget would fail it as "too expensive".
         whenever(componentManagementService.renderAllComponentsAsCode())
-            .thenReturn(listOf(RenderedComponentCode("deep", "deep {\n    copyright = \"" + "a".repeat(100_000) + "\"\n}\n")))
+            .thenReturn(
+                listOf(
+                    RenderedComponentCode(
+                        "deep",
+                        "deep {\n    copyright = \"" + "a".repeat(100_000) + "\"\n}\n",
+                        id = UUID.randomUUID(),
+                    ),
+                ),
+            )
         val realClockService =
             ComponentCodeSearchService(componentManagementService, componentRepository, auditLogRepository, Clock.systemUTC())
 
@@ -281,5 +293,9 @@ class ComponentCodeSearchServiceTest {
         override fun withZone(zone: ZoneId?): Clock = this
 
         override fun instant(): Instant = now.also { now = now.plusSeconds(1) }
+    }
+
+    private companion object {
+        val ALPHA_ID: UUID = UUID.fromString("00000000-0000-0000-0000-0000000000a1")
     }
 }

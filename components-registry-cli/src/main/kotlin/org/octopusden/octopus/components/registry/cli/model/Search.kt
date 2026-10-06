@@ -17,6 +17,7 @@ data class AsCodeSearchResponse(
 /** Mirror of v4.json `AsCodeSearchHit` — one matching component. */
 @Serializable
 data class AsCodeSearchHit(
+    val id: String? = null,
     val componentKey: String,
     val archived: Boolean,
     val matchCount: Int,

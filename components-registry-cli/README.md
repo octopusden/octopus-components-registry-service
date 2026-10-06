@@ -174,7 +174,7 @@ my-component:31: projectKey = "FOO"  ["[2.0,)" > jira]
 my-component: ... 3 more
 ```
 
-`-o json` emits a **JSON array** of `{componentKey, archived, matchCount, matches:[{line, text, path}]}`.
+`-o json` emits a **JSON array** of `{id, componentKey, archived, matchCount, matches:[{line, text, path}]}`.
 When more components matched than `--limit`, a warning goes to STDERR.
 
 ### `component overrides <ID_OR_NAME>`

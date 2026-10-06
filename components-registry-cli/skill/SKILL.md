@@ -47,7 +47,7 @@ with `--env <name>` (or `--crs-url <url>` / `CRS_URL`) and `-o json` for machine
 | `component get` | single component-detail **object** |
 | `component as-code` | raw text (not JSON; do not pipe to jq) |
 | `component overrides` | JSON **array** of field-override objects |
-| `search` | JSON **array** of `{componentKey, archived, matchCount, matches:[{line, text, path}]}` |
+| `search` | JSON **array** of `{id, componentKey, archived, matchCount, matches:[{line, text, path}]}` |
 | `meta <kind>` (dictionaries) | JSON **array of strings** |
 | `meta employees` | JSON **array** of `{username, active}` |
 | `whoami` (with token) | single `User` **object** |

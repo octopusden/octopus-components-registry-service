@@ -13,6 +13,7 @@ import org.springframework.stereotype.Service
 import java.time.Clock
 import java.time.Duration
 import java.time.Instant
+import java.util.UUID
 import java.util.concurrent.atomic.AtomicReference
 import java.util.regex.PatternSyntaxException
 
@@ -125,7 +126,7 @@ class ComponentCodeSearchService(
             matching
                 .take(maxMatchesPerComponent)
                 .map { (i, line) -> AsCodeSearchLine(line = i + 1, text = line.text.trim(), path = line.path) }
-        return AsCodeSearchHit(doc.componentKey, doc.archived, matching.size, matches)
+        return AsCodeSearchHit(doc.id, doc.componentKey, doc.archived, matching.size, matches)
     }
 
     private fun compilePattern(q: String): Regex =
@@ -178,6 +179,7 @@ class ComponentCodeSearchService(
     )
 
     private class SearchDocument(
+        val id: UUID,
         val componentKey: String,
         val archived: Boolean,
         val lines: List<IndexedLine>,
@@ -268,6 +270,7 @@ class ComponentCodeSearchService(
 
         private fun toDocument(rendered: RenderedComponentCode): SearchDocument =
             SearchDocument(
+                id = checkNotNull(rendered.id) { "Rendered component '${rendered.componentKey}' has no id" },
                 componentKey = rendered.componentKey,
                 archived = rendered.archived,
                 lines = indexLines(rendered.body).map { (text, path) -> IndexedLine(text, path) },

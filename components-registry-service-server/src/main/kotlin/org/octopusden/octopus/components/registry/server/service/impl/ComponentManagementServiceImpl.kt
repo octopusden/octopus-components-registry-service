@@ -502,6 +502,7 @@ class ComponentManagementServiceImpl(
                     componentKey = entity.componentKey,
                     body = componentCodeRenderer.renderFull(entity, ownershipExportPatterns(entity, ownershipContext)),
                     archived = entity.archived,
+                    id = entity.id,
                 )
             }
     }

@@ -169,6 +169,10 @@
           "componentKey" : {
             "type" : "string"
           },
+          "id" : {
+            "format" : "uuid",
+            "type" : "string"
+          },
           "matchCount" : {
             "format" : "int32",
             "type" : "integer"
@@ -183,6 +187,7 @@
         "required" : [
           "archived",
           "componentKey",
+          "id",
           "matchCount",
           "matches"
         ],
