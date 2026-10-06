@@ -161,6 +161,23 @@
         ],
         "type" : "object"
       },
+      "AsCodeMatchRange" : {
+        "properties" : {
+          "end" : {
+            "format" : "int32",
+            "type" : "integer"
+          },
+          "start" : {
+            "format" : "int32",
+            "type" : "integer"
+          }
+        },
+        "required" : [
+          "end",
+          "start"
+        ],
+        "type" : "object"
+      },
       "AsCodeSearchHit" : {
         "properties" : {
           "archived" : {
@@ -205,6 +222,12 @@
             },
             "type" : "array"
           },
+          "ranges" : {
+            "items" : {
+              "$ref" : "#/components/schemas/AsCodeMatchRange"
+            },
+            "type" : "array"
+          },
           "text" : {
             "type" : "string"
           }
@@ -212,6 +235,7 @@
         "required" : [
           "line",
           "path",
+          "ranges",
           "text"
         ],
         "type" : "object"

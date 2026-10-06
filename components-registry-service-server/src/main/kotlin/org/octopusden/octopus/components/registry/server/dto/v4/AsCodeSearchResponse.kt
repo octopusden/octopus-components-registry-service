@@ -41,4 +41,16 @@ data class AsCodeSearchLine(
      * identifiable without opening the component.
      */
     val path: List<String>,
+    /**
+     * Where the query matched within [text], in order — computed by the server's own matcher, so
+     * a client can highlight regex hits exactly (a client-side regex engine may disagree). Empty
+     * matches (e.g. from `x*`) are omitted; at most 50 spans per line.
+     */
+    val ranges: List<AsCodeMatchRange>,
+)
+
+/** A matched span of [AsCodeSearchLine.text]: `start` inclusive, `end` exclusive, 0-based UTF-16 offsets. */
+data class AsCodeMatchRange(
+    val start: Int,
+    val end: Int,
 )

@@ -69,6 +69,10 @@ class ComponentAsCodeSearchIntegrationTest {
 
         val match = hit["matches"].single()
         assertEquals("componentOwner = \"$owner\"", match["text"].asText())
+        val start = match["text"].asText().indexOf(owner)
+        val range = match["ranges"].single()
+        assertEquals(start, range["start"].asInt())
+        assertEquals(start + owner.length, range["end"].asInt())
         val asCodeLines = getAsCode(name).lines()
         assertEquals(asCodeLines[match["line"].asInt() - 1].trim(), match["text"].asText())
         // The component block header as rendered (a key with '-' is double-quoted by the renderer).

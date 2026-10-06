@@ -232,8 +232,9 @@ images, people and every other rendered field are found without a per-field filt
   section of the as-code view is not searched.
 - **Output**: JSON `{query, regex, totalComponents, truncated, results[]}`; each result is
   `{id, componentKey, archived, matchCount, matches[]}` (sorted by key; `id` is the component UUID), each match
-  `{line, text, path}` — the 1-based line in the FULL as-code view, the line without indentation,
-  and the enclosing block headers (e.g. the version range a match sits in).
+  `{line, text, path, ranges}` — the 1-based line in the FULL as-code view, the line without
+  indentation, the enclosing block headers (e.g. the version range a match sits in), and the
+  matched spans of the text (`{start, end}`, end exclusive) for highlighting.
 - **400** for an invalid `q` / `limit` / `maxMatchesPerComponent`, an invalid regex, or a regex over
   the time budget.
 - **Freshness**: an edit is visible to the next search on every pod (the in-memory index is rebuilt

@@ -141,7 +141,7 @@ GET    /rest/api/4/components?productType=&archived=&search=&owner=
 
 GET    /rest/api/4/components/as-code/search?q=&regex=&archived=&limit=&maxMatchesPerComponent=
   Response: AsCodeSearchResponse { query, regex, totalComponents, truncated,
-            results: [{ id, componentKey, archived, matchCount, matches: [{ line, text, path }] }] }
+            results: [{ id, componentKey, archived, matchCount, matches: [{ line, text, path, ranges: [{ start, end }] }] }] }
   Auth:     ACCESS_COMPONENTS
   Behavior: grep over every component's FULL as-code render (SYS-100). Served by
             ComponentCodeSearchService from a per-pod in-memory index of rendered lines, built by

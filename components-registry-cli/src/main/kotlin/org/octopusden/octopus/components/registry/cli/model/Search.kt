@@ -30,4 +30,12 @@ data class AsCodeSearchLine(
     val line: Int,
     val text: String,
     val path: List<String> = emptyList(),
+    val ranges: List<AsCodeMatchRange> = emptyList(),
+)
+
+/** Mirror of v4.json `AsCodeMatchRange` — a matched span of the line text (`end` exclusive). */
+@Serializable
+data class AsCodeMatchRange(
+    val start: Int,
+    val end: Int,
 )

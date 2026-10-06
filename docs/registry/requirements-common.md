@@ -3347,9 +3347,12 @@ field the view shows without per-field query code.
   component UUID, the id the v4 write endpoints are addressed by), cut at
   `limit`; `totalComponents` counts every matching component and `truncated` says whether the cut
   happened. `matches` holds the first `maxMatchesPerComponent` lines as
-  `AsCodeSearchLine {line, text, path}`: `line` is the 1-based line number in the as-code view,
-  `text` the line without indentation, `path` the enclosing block headers outermost first (e.g.
-  `["comp", "\"[1.5,)\"", "jira"]`), so a match inside a version-range block is identifiable.
+  `AsCodeSearchLine {line, text, path, ranges}`: `line` is the 1-based line number in the as-code
+  view, `text` the line without indentation, `path` the enclosing block headers outermost first
+  (e.g. `["comp", "\"[1.5,)\"", "jira"]`), so a match inside a version-range block is
+  identifiable, and `ranges` the matched spans of `text` (`{start, end}`, end exclusive) as found
+  by the server's own matcher — so a client highlights regex hits exactly instead of re-running
+  the pattern in a different regex engine. Empty matches are omitted; at most 50 spans per line.
 - Errors (`400`): `q` too short / too long, `limit` or `maxMatchesPerComponent` out of range, an
   invalid regex, a regex whose evaluation exceeds a 2 s time budget for the request, or a regex
   whose recursion exhausts the stack on a long line. The budget is one per request: it is checked
@@ -3389,6 +3392,9 @@ field the view shows without per-field query code.
    of many cheap per-line matches; a regex that exhausts the stack fails with `400`, not `500`.
 9. `crsctl search` maps its options to the query params, prints grep-shaped lines, emits the
    `results` array with `-o json`, and warns on STDERR when truncated.
+10. Each match carries `ranges` pointing at the matched text within `text` (indentation
+    accounted for), for substring and regex searches alike; a regex matching only empty strings
+    still matches the line, with no ranges.
 
 **Test method:** `ComponentCodeSearchServiceTest` —
 `` `SYS-100 substring match is case-insensitive with line numbers and block path` `` (1, 2),
@@ -3404,9 +3410,13 @@ field the view shows without per-field query code.
 `` `SYS-100 catastrophically backtracking regex is aborted` `` (8),
 `` `SYS-100 regex budget is enforced between lines` `` (8),
 `` `SYS-100 regex stack exhaustion is rejected` `` (8),
-`` `SYS-100 indexLines keeps blank lines so positions equal line numbers` `` (1);
+`` `SYS-100 indexLines keeps blank lines so positions equal line numbers` `` (1),
+`` `SYS-100 substring match reports ranges relative to the trimmed text` `` (10),
+`` `SYS-100 regex match reports the matched spans` `` (10),
+`` `SYS-100 empty regex matches yield no ranges` `` (10),
+`` `SYS-100 substringSpans finds every occurrence` `` (10);
 `ComponentAsCodeSearchIntegrationTest` (H2 `ft-db`) —
-`` `SYS-100 a value from the as-code view is found at its as-code line` `` (1),
+`` `SYS-100 a value from the as-code view is found at its as-code line` `` (1, 10),
 `` `SYS-100 an edit is visible to the next search` `` (6),
 `` `SYS-100 too-short query and invalid regex are 400` `` (8);
 `CommandsTest` (CLI) — `` `SYS-100 search maps options to query params and prints grep-shaped lines` ``,

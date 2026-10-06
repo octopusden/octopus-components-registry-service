@@ -9,6 +9,7 @@ import org.mockito.kotlin.mock
 import org.mockito.kotlin.times
 import org.mockito.kotlin.verify
 import org.mockito.kotlin.whenever
+import org.octopusden.octopus.components.registry.server.dto.v4.AsCodeMatchRange
 import org.octopusden.octopus.components.registry.server.repository.AuditChangeStats
 import org.octopusden.octopus.components.registry.server.repository.AuditLogRepository
 import org.octopusden.octopus.components.registry.server.repository.ComponentChangeStampRow
@@ -246,6 +247,53 @@ class ComponentCodeSearchServiceTest {
         assertThat(lines.map { it.first }).containsExactly("c {", "", "    x = 1", "}", "")
         assertThat(lines[2].second).containsExactly("c")
         assertThat(lines[0].second).isEmpty()
+    }
+
+    @Test
+    @DisplayName("SYS-100: each line reports where the query matched, as offsets into the indentation-free text")
+    fun `SYS-100 substring match reports ranges relative to the trimmed text`() {
+        val line =
+            service
+                .search("JDOE", archived = false)
+                .results
+                .single()
+                .matches
+                .single()
+
+        val start = line.text.indexOf("jdoe")
+        assertThat(line.ranges).containsExactly(AsCodeMatchRange(start, start + 4))
+    }
+
+    @Test
+    @DisplayName("SYS-100: regex mode reports the spans the server's regex matched")
+    fun `SYS-100 regex match reports the matched spans`() {
+        val line =
+            service
+                .search("alpha\\.\\w+", regex = true)
+                .results
+                .single()
+                .matches
+                .single()
+
+        val start = line.text.indexOf("alpha.git")
+        assertThat(line.ranges).containsExactly(AsCodeMatchRange(start, start + "alpha.git".length))
+    }
+
+    @Test
+    @DisplayName("SYS-100: a regex matching only empty strings still matches lines, with nothing to mark")
+    fun `SYS-100 empty regex matches yield no ranges`() {
+        val hit = service.search("z*", regex = true, archived = false, maxMatchesPerComponent = 1).results.single()
+
+        assertThat(hit.matchCount).isEqualTo(11)
+        assertThat(hit.matches.single().ranges).isEmpty()
+    }
+
+    @Test
+    @DisplayName("SYS-100: substringSpans finds every case-insensitive, non-overlapping occurrence")
+    fun `SYS-100 substringSpans finds every occurrence`() {
+        assertThat(ComponentCodeSearchService.substringSpans("Org.org.ORG", "org")).containsExactly(0..2, 4..6, 8..10)
+        assertThat(ComponentCodeSearchService.substringSpans("aaaa", "aa")).containsExactly(0..1, 2..3)
+        assertThat(ComponentCodeSearchService.substringSpans("nothing", "zz")).isEmpty()
     }
 
     private fun stamp(

@@ -1,6 +1,7 @@
 package org.octopusden.octopus.components.registry.server.service.impl
 
 import org.octopusden.octopus.components.registry.server.config.ConditionalOnDatabaseEnabled
+import org.octopusden.octopus.components.registry.server.dto.v4.AsCodeMatchRange
 import org.octopusden.octopus.components.registry.server.dto.v4.AsCodeSearchHit
 import org.octopusden.octopus.components.registry.server.dto.v4.AsCodeSearchLine
 import org.octopusden.octopus.components.registry.server.dto.v4.AsCodeSearchResponse
@@ -100,13 +101,16 @@ class ComponentCodeSearchService(
     private fun lineMatcher(
         q: String,
         pattern: Regex?,
-    ): (String) -> Boolean {
-        if (pattern == null) return { line -> line.contains(q, ignoreCase = true) }
+    ): LineMatcher {
+        if (pattern == null) return LineMatcher { line -> substringSpans(line, q).ifEmpty { null } }
         val budget = RegexBudget(clock.instant().plus(REGEX_TIME_BUDGET), clock)
-        return { line ->
+        return LineMatcher { line ->
             budget.check()
             try {
-                pattern.containsMatchIn(DeadlineCharSequence(line, budget))
+                // Materialized inside the try: findAll is lazy, and the overflow happens while iterating.
+                val found = pattern.findAll(DeadlineCharSequence(line, budget)).take(MAX_SPANS_PER_LINE).toList()
+                // A line whose only matches are empty (e.g. `x*`) still matches; it just has nothing to mark.
+                found.takeIf { it.isNotEmpty() }?.mapNotNull { m -> m.range.takeIf { !it.isEmpty() } }
             } catch (e: StackOverflowError) {
                 throw IllegalArgumentException(TOO_COMPLEX_MESSAGE, e)
             }
@@ -116,17 +120,48 @@ class ComponentCodeSearchService(
     /** The hit for [doc], or `null` when no line matches. `matches` is capped; `matchCount` is not. */
     private fun matchDocument(
         doc: SearchDocument,
-        matcher: (String) -> Boolean,
+        matcher: LineMatcher,
         maxMatchesPerComponent: Int,
     ): AsCodeSearchHit? {
         val matching =
-            doc.lines.withIndex().filter { (_, line) -> line.text.isNotEmpty() && matcher(line.text) }
+            doc.lines.withIndex().mapNotNull { (i, line) ->
+                if (line.text.isEmpty()) return@mapNotNull null
+                matcher.spans(line.text)?.let { spans -> Triple(i, line, spans) }
+            }
         if (matching.isEmpty()) return null
         val matches =
             matching
                 .take(maxMatchesPerComponent)
-                .map { (i, line) -> AsCodeSearchLine(line = i + 1, text = line.text.trim(), path = line.path) }
+                .map { (i, line, spans) -> toSearchLine(i + 1, line, spans) }
         return AsCodeSearchHit(doc.id, doc.componentKey, doc.archived, matching.size, matches)
+    }
+
+    /**
+     * Matching spans of one line, inclusive [IntRange]s in the coordinates of the indexed (indented)
+     * line; `null` when the line does not match at all.
+     */
+    private fun interface LineMatcher {
+        fun spans(line: String): List<IntRange>?
+    }
+
+    /**
+     * The API line: [AsCodeSearchLine.text] drops the indentation, so the spans are shifted by it
+     * and clipped to the trimmed text (a match on indentation alone leaves no span).
+     */
+    private fun toSearchLine(
+        lineNumber: Int,
+        line: IndexedLine,
+        spans: List<IntRange>,
+    ): AsCodeSearchLine {
+        val indent = line.text.length - line.text.trimStart().length
+        val text = line.text.trim()
+        val ranges =
+            spans.mapNotNull { span ->
+                val start = (span.first - indent).coerceAtLeast(0)
+                val end = (span.last + 1 - indent).coerceAtMost(text.length)
+                AsCodeMatchRange(start, end).takeIf { start < end }
+            }
+        return AsCodeSearchLine(line = lineNumber, text = text, path = line.path, ranges = ranges)
     }
 
     private fun compilePattern(q: String): Regex =
@@ -245,8 +280,25 @@ class ComponentCodeSearchService(
         const val MAX_MATCHES_PER_COMPONENT = 1000
         val MAX_INDEX_AGE: Duration = Duration.ofMinutes(5)
         private val REGEX_TIME_BUDGET: Duration = Duration.ofSeconds(2)
+
+        /** Highlight spans reported per line; matching beyond this many spans adds nothing to read. */
+        const val MAX_SPANS_PER_LINE = 50
         private const val TOO_EXPENSIVE_MESSAGE = "Regular expression is too expensive to evaluate; simplify the pattern"
         private const val TOO_COMPLEX_MESSAGE = "Regular expression is too complex to evaluate; simplify the pattern"
+
+        /** Case-insensitive, non-overlapping occurrences of [q] in [line] (inclusive ranges), capped. */
+        internal fun substringSpans(
+            line: String,
+            q: String,
+        ): List<IntRange> {
+            val spans = mutableListOf<IntRange>()
+            var at = line.indexOf(q, ignoreCase = true)
+            while (at >= 0 && spans.size < MAX_SPANS_PER_LINE) {
+                spans += at until at + q.length
+                at = line.indexOf(q, at + q.length, ignoreCase = true)
+            }
+            return spans
+        }
 
         /**
          * Split a rendered document into lines, tagging each with the block headers that enclose
