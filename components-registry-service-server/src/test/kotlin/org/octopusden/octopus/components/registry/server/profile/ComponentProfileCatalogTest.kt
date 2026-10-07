@@ -39,6 +39,17 @@ class ComponentProfileCatalogTest {
     }
 
     @Test
+    @DisplayName("Decision 3: a configuration that cannot be read at construction throws, saying why")
+    fun unreadableAtStartup() {
+        val error =
+            assertThrows(ComponentProfilesException::class.java) {
+                ComponentProfileCatalog { throw IllegalArgumentException("Could not resolve placeholder 'missing'") }
+            }
+
+        assertTrue(requireNotNull(error.message).contains("the configuration cannot be read: Could not resolve placeholder 'missing'"))
+    }
+
+    @Test
     @DisplayName("Decision 3: a template entry next to valid profiles does not stop construction")
     fun templateEntryAtStartup() {
         val catalog = ComponentProfileCatalog { designExampleProperties() + ("ww-modpack.kind" to "template") }

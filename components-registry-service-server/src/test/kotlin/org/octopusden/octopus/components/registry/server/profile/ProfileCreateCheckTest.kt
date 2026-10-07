@@ -46,6 +46,28 @@ class ProfileCreateCheckTest {
     }
 
     @Test
+    @DisplayName("Decision 7: a template entry named as the profile is rejected as unknown")
+    fun templateIdAsProfile() {
+        val withTemplate = ComponentProfileCatalog { designExampleProperties() + ("ww-modpack.kind" to "template") }
+        val templateCheck = ProfileCreateCheck(withTemplate) { ProfileAvailability.Availability(usable = true, reason = null) }
+
+        assertEquals("profile: unknown profile 'ww-modpack'", rejection { templateCheck.check("ww-modpack", internal) })
+    }
+
+    @Test
+    @DisplayName("a profile removed by an applied reload is rejected as unknown")
+    fun removedProfile() {
+        var properties = designExampleProperties()
+        val switchable = ComponentProfileCatalog { properties }
+        val switchableCheck = ProfileCreateCheck(switchable) { ProfileAvailability.Availability(usable = true, reason = null) }
+        properties = properties.filterKeys { !it.startsWith("dmp-bundle.") }
+
+        switchable.reload()
+
+        assertEquals("profile: unknown profile 'dmp-bundle'", rejection { switchableCheck.check("dmp-bundle", internal) })
+    }
+
+    @Test
     @DisplayName("Decision 6: a profile the user may not use is refused with 403 and the reason")
     fun unusableProfile() {
         val refusing = ProfileCreateCheck(catalog) { ProfileAvailability.Availability(usable = false, reason = "Not for you") }

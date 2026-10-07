@@ -16,7 +16,7 @@ class ComponentProfileCatalog(
     private val current: AtomicReference<List<ComponentProfile>>
 
     init {
-        val load = ComponentProfileParser.parse(read())
+        val load = load()
         if (!load.usable) throw ComponentProfilesException(load)
         current = AtomicReference(load.profiles)
     }
@@ -26,12 +26,14 @@ class ComponentProfileCatalog(
 
     @Synchronized
     fun reload(): ProfileLoad {
-        val load =
-            runCatching { ComponentProfileParser.parse(read()) }
-                .getOrElse { ProfileLoad(emptyList(), emptyList(), listOf("the configuration cannot be read: ${it.message}")) }
+        val load = load()
         if (load.usable) current.set(load.profiles)
         return load
     }
+
+    private fun load(): ProfileLoad =
+        runCatching { ComponentProfileParser.parse(read()) }
+            .getOrElse { ProfileLoad(emptyList(), emptyList(), listOf("the configuration cannot be read: ${it.message}")) }
 }
 
 class ComponentProfilesException(

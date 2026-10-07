@@ -129,8 +129,9 @@ Creates against it:
 - Works the same in no-db mode; the catalog does not touch the database. `AdminControllerV4` is
   `@ConditionalOnDatabaseEnabled`, so no-db mode has no reload endpoint: its profiles change only
   with a restart, like the other admin configuration. (found during implementation)
-- A reload whose configuration cannot be read (an unresolvable placeholder, say) is reported as a
-  configuration-level problem and keeps the profiles in use.
+- A configuration that cannot be read (an unresolvable placeholder, say) is a configuration-level
+  problem: at startup it fails with `ComponentProfilesException` like any unusable load; on reload
+  it keeps the profiles in use.
 - The bundled `application.yml` carries no profiles — they are installation data, and a bundled
   map could not be shrunk by service-config (Spring merges maps by key). Every test and dev
   profile that starts the server gets a minimal profile set instead.

@@ -74,6 +74,9 @@
         `ComponentProfileCatalogTest`)
   - [x] 3.1.11 A reload whose configuration cannot be read keeps the profiles in use and reports
         why (added during implementation)
+  - [x] 3.1.12 A configuration that cannot be read at startup fails with
+        `ComponentProfilesException` saying why, like an unusable one; it used to escape as the raw
+        read error (added on review)
 - [x] 3.2 Implement:
   - [x] 3.2.1 `profile/ComponentProfileCatalog.kt` — `AtomicReference` over the live profile list
         (no separate snapshot type), load in the initializer, `reload()` returning the outcome
@@ -147,6 +150,10 @@
         new pattern (the create half of 4.1.4)
   - [x] 5.1.11 A blank `profile` is the same as no profile (added during implementation)
   - [x] 5.1.12 A rename of a component created with a profile is checked as today
+  - [x] 5.1.1a Template id as `profile` had no test; `ProfileCreateCheckTest` now pins
+        `profile: unknown profile 'ww-modpack'` (added on review)
+  - [x] 5.1.13 A profile removed by an applied reload is rejected as unknown — the "Profile
+        removed" scenario's create half (added on review)
 - [x] 5.2 Implement: `ComponentCreateRequest.profile`; `profile/ProfileCreateCheck.kt` (lookup,
       availability, classification, rules); call it from `createComponent` before the flush
   - [x] 5.2.1 `v4.json` regenerated for `ComponentCreateRequest.profile`
