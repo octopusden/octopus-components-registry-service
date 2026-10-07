@@ -56,14 +56,17 @@
 - Regular creates are unchanged: the Portal keeps pre-filling its wizard, and a regular create
   through the API still gets no defaults.
 
-**Dry run and create**
-- `POST /rest/api/4/component-templates/{id}/dry-run`:
+**Dry run and create: one endpoint**
+- `POST /rest/api/4/component-templates/{id}/components` with a `dryRun` query parameter,
+  default `true`: the same body and the same steps; only `dryRun=false` commits.
+- A dry run (`dryRun` absent or `true`):
   - checks the parameters, renders, and checks the template's field rules;
   - runs today's create on the rendered request, in a transaction that is always rolled back;
-  - returns the rendered component, each field's source parameters, and every problem found,
-    each naming the parameters to change or marked as a template problem.
-- `POST /rest/api/4/component-templates/{id}/components`:
-  - runs the same steps, and commits the create only when nothing failed;
+  - answers 200 with the rendered component, each field's source parameters, and every problem
+    found, each naming the parameters to change or marked as a template problem.
+- A create (`dryRun=false`):
+  - runs the same steps, and commits the create only when nothing failed; otherwise 422 with the
+    dry-run body;
   - takes the Jira task key and comment as today's create does: the key must match the pattern
     when given, and may be blank;
   - writes the audit entry any create writes; the component keeps no link to the template.
