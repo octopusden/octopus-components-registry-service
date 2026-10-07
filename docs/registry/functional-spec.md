@@ -47,7 +47,10 @@ Base URLs for links are configurable per deployment via `registry_config` (same 
 - **Required fields**: `name` (unique, alphanumeric + hyphens + underscores, max 255 chars), `componentOwner`
 - **Conditionally required**: `releaseManager`, `securityChampion`, `displayName` — required when `distribution.explicit && distribution.external`; `copyright` — required under the same gate only when `components-registry.copyright-path` is configured
 - **Optional + unique**: `displayName` — nullable (stored verbatim from the DSL; NOT backfilled to the component key, preserving the legacy v1/v2/v3 `$.name` wire). When set it must be unique across components (400 keyed `displayName` on a duplicate)
-- **Optional fields**: productType, system, clientCode, solution, groupId, labels, doc
+- **Optional fields**: productType, system, clientCode, solution, groupId, labels, doc, profile
+
+**Profile (optional, see 7.4).** `profile` names the Create-component profile the component is created with; blank is absent. When given, the create is rejected unless the profile is live (**400** `profile: …`), the caller may use it (**403** with the reason), the classification the create stores matches the profile's (**400** `profile: …` naming `solution`, `external` or `explicit`; `explicit: ask` takes either value; a flag hidden in the field configuration, or absent, counts as `false`), and every field rule of the profile holds (**400** `<path>: <rule message>`). Rules check the stored values — the key trimmed, hidden fields dropped — as a whole-value match, an absent value as empty, and a `[0]` path the first list entry only. Without `profile` nothing changes: no field rules apply. Renames and solution-flag changes are never checked against profile rules ([TD-024](tech-debt/024-solution-key-rules-only-on-profile-creates.md)).
+
 
 **Person-field validation (enforced on the v4 write path — see ADR-015).** Restored from the old `EscrowConfigValidator` + the (formerly default-off CI) `ComponentRegistryValidationTask`, and modernised into per-request checks on `POST /rest/api/4/components` and `PATCH /rest/api/4/components/{id}`:
 
@@ -71,7 +74,7 @@ Base URLs for links are configurable per deployment via `registry_config` (same 
 
 **UI — Create Component dialog:**
 
-1. **Profile selection** (future feature, out of scope for initial implementation) — admin-defined profiles (e.g., "Gradle Library", "Spring Boot Service", "Kotlin DSL Plugin") that pre-fill build, VCS, and escrow settings. For now, component defaults serve as a single implicit profile.
+1. **Profile selection** — the start page offers the profiles from `GET /rest/api/4/component-profiles` (see 7.4). A profile sets the classification (external, explicit, solution) and carries field rules, such as the Solution key pattern; the create sends its id as `profile`. Pre-filling build, VCS and escrow settings from a profile is a later feature (templates); component defaults still pre-fill the rest.
 2. **Component name** (required) + **display name** (optional; required for explicit+external components)
 3. **Owner** — pre-filled with current user
 4. **TeamCity integration** — optional checkbox "Create TeamCity project". When checked, user selects a parent TeamCity project from a dropdown/search. On component creation, the system calls TeamCity API to create a sub-project. (Out of scope for initial implementation — documented as future integration point.)
@@ -429,6 +432,17 @@ Replaces `Defaults.groovy`. Admin defines default values applied when creating a
 ### 7.3 Audit
 
 Changes to field configuration and component defaults are recorded in the audit log (entity_type = `registry_config`).
+
+### 7.4 Component Profiles
+
+The Create-component start-page profiles are configuration, in service-config under `components-registry.component-profiles` (a map of profile id → profile), delivered and reloaded like field configuration ([ADR-016](adr/016-admin-config-as-code.md)).
+
+- **Keys.** Id: lowercase letters, digits and `-`. Required: `kind` (`regular`; `template` is reserved), `title`, `description` (non-blank), `order` (whole number), `classification.external` (`true`/`false`), `classification.explicit` (`true`/`false`/`ask`). Optional: `classification.solution` (default `false`; `true` needs `external: true` and `explicit: true`) and `rules`, a map of create-request path → `{pattern, message}`. Rule paths are the free-text create-request fields (`name`, `displayName`, `clientCode`, `artifactIds[0].groupPattern`, and the `baseConfiguration` build-tasks, first VCS entry, Jira, first Maven artifact, first Docker image and first package fields), written as plain YAML keys without bracket notation.
+- **Checking.** Every entry is checked on load; any other key, a missing required key, a value outside the allowed values, an invalid rule pattern or an empty message makes the entry invalid, and every problem is reported with the key it concerns. A `kind: template` entry is marked failed ("templates are not supported yet") and does not block the load.
+- **Startup.** CRS does not start when the subtree cannot be read, holds no `regular` profile, or holds an invalid one.
+- **Reload.** `POST /rest/api/4/admin/reload-config` reloads the profiles; a usable result replaces them as a whole, otherwise the profiles in use are kept and the reload answers **422** `component-profiles`. The response lists every entry with its status (`live` / `failed`) and problems. No-db mode has no reload endpoint: its profiles change with a restart.
+- **Listing.** `GET /rest/api/4/component-profiles` (`ACCESS_COMPONENTS`) returns the live profiles in `order`, then id, with their classification, rules and whether the caller may use them (`CREATE_COMPONENTS`); the rules returned are the ones a create naming the profile is checked against.
+- **Existing components** are never re-checked against profile rules; a changed rule applies to the next create.
 
 ## 8. Error Handling
 

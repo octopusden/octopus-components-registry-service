@@ -153,12 +153,13 @@
 
 ## 6. Docs and contract
 
-- [ ] 6.1 Regenerate `v4.json` (`generateOpenApiDocs`); `OpenApiV4SpecTest` green. Done with each
-      contract change (4.2.1, 5.2.1); here only a final check that nothing drifted
-- [ ] 6.2 `docs/registry/api-changelog.md` — Unreleased: the listing endpoint, `profile` on create,
+- [x] 6.1 Regenerate `v4.json` (`generateOpenApiDocs`); `OpenApiV4SpecTest` green. Done with each
+      contract change (4.2.1, 5.2.1); final check: `OpenApiV4SpecTest` 1/1, no drift
+- [x] 6.2 `docs/registry/api-changelog.md` — Unreleased: the listing endpoint, `profile` on create,
       the reload response; no behavior change for creates without `profile`
-- [ ] 6.3 `docs/registry/functional-spec.md` — profiles and their field rules
-- [ ] 6.4 ADR-016 — `component-profiles` as a third subtree: read from the property sources (so
+- [x] 6.3 `docs/registry/functional-spec.md` — profiles and their field rules: §1.3 (create with
+      `profile`, the start-page item) and a new §7.4 (configuration, startup, reload, listing)
+- [x] 6.4 ADR-016 — `component-profiles` as a third subtree: read from the property sources (so
       rule paths need no bracket notation, unlike `field-config`), snapshot and the
       no-partial-apply rule
 - [ ] 6.5 Tech-debt records in `docs/registry/tech-debt/` for the limitations this change leaves
