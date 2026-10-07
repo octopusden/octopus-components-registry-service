@@ -11,6 +11,7 @@ import org.octopusden.octopus.components.registry.server.ComponentRegistryServic
 import org.octopusden.octopus.components.registry.server.service.impl.ComponentProfileCatalog
 import org.octopusden.octopus.components.registry.server.support.adminJwt
 import org.octopusden.octopus.components.registry.server.support.viewerJwt
+import org.octopusden.octopus.components.registry.server.template.standaloneTemplateProperties
 import org.springframework.beans.factory.annotation.Autowired
 import org.springframework.boot.test.autoconfigure.web.servlet.AutoConfigureMockMvc
 import org.springframework.boot.test.context.SpringBootTest
@@ -126,9 +127,33 @@ class ComponentProfileControllerV4Test {
     @Test
     @DisplayName("a failed template entry is not listed")
     fun failedEntryNotListed() {
-        reloadWith("ww-modpack.kind" to "template")
+        reloadWith("client-plugin.kind" to "template")
 
         list().andExpect(jsonPath("$.profiles.length()").value(4))
+    }
+
+    @Test
+    @DisplayName(
+        "Decision 1: a live template is listed next to the profiles by order then id, with kind, version, classification and rules",
+    )
+    fun templateListed() {
+        reloadWith(
+            *standaloneTemplateProperties().toList().toTypedArray(),
+            "client-plugin.order" to "25",
+            "client-plugin.rules.name.pattern" to "^[a-z]+-plugin-[a-z0-9]+$",
+            "client-plugin.rules.name.message" to "A plugin key is <client>-plugin-<code>.",
+        )
+
+        list()
+            .andExpect(
+                jsonPath("$.profiles[*].id", contains("regular-external", "regular-internal", "client-plugin", "solution", "dmp-bundle")),
+            ).andExpect(jsonPath("$.profiles[2].kind").value("template"))
+            .andExpect(jsonPath("$.profiles[2].version").value(3))
+            .andExpect(jsonPath("$.profiles[2].classification.explicit").value("false"))
+            .andExpect(jsonPath("$.profiles[2].classification.external").value(true))
+            .andExpect(jsonPath("$.profiles[2].rules[0].path").value("name"))
+            .andExpect(jsonPath("$.profiles[2].usable").value(true))
+            .andExpect(jsonPath("$.profiles[0].version").doesNotExist())
     }
 
     @Test
