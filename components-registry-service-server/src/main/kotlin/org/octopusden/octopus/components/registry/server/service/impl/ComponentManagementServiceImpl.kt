@@ -4395,6 +4395,40 @@ class ComponentManagementServiceImpl(
                     },
                 )
         }
+        // SYS-101 involvement: OR across the chosen roles (owner / release manager / security
+        // champion) for ANY listed username. Role memberships are EXISTS subqueries rather than
+        // joins: an OR across two child collections via joins would need LEFT joins and multiply
+        // rows; subqueries keep one row per component and no distinct.
+        if (!filter.involves.isNullOrEmpty()) {
+            val roles = involvementRoles(filter.involvesRoles)
+            val users = filter.involves
+            spec =
+                spec.and(
+                    Specification { root, query, cb ->
+                        val predicates = mutableListOf<jakarta.persistence.criteria.Predicate>()
+                        if (INVOLVES_OWNER in roles) predicates += root.get<String>("componentOwner").`in`(users)
+                        if (INVOLVES_RELEASE_MANAGER in roles) {
+                            val sub = query!!.subquery(Int::class.java)
+                            val rm = sub.from(ComponentReleaseManagerEntity::class.java)
+                            sub.select(cb.literal(1)).where(
+                                cb.equal(rm.get<ComponentEntity>("component"), root),
+                                rm.get<String>("username").`in`(users),
+                            )
+                            predicates += cb.exists(sub)
+                        }
+                        if (INVOLVES_SECURITY_CHAMPION in roles) {
+                            val sub = query!!.subquery(Int::class.java)
+                            val sc = sub.from(ComponentSecurityChampionEntity::class.java)
+                            sub.select(cb.literal(1)).where(
+                                cb.equal(sc.get<ComponentEntity>("component"), root),
+                                sc.get<String>("username").`in`(users),
+                            )
+                            predicates += cb.exists(sub)
+                        }
+                        cb.or(*predicates.toTypedArray())
+                    },
+                )
+        }
         filter.search?.let { search ->
             val pattern = "%${search.lowercase()}%"
             spec =
@@ -4862,6 +4896,12 @@ class ComponentManagementServiceImpl(
     private companion object {
         private val log = org.slf4j.LoggerFactory.getLogger(ComponentManagementServiceImpl::class.java)
 
+        // SYS-101 `involvesRoles` values.
+        private const val INVOLVES_OWNER = "owner"
+        private const val INVOLVES_RELEASE_MANAGER = "releaseManager"
+        private const val INVOLVES_SECURITY_CHAMPION = "securityChampion"
+        private val INVOLVES_ALL_ROLES = setOf(INVOLVES_OWNER, INVOLVES_RELEASE_MANAGER, INVOLVES_SECURITY_CHAMPION)
+
         /** Split a multi-valued `groupPattern` on comma or pipe (legacy DSL semantics). */
         private val GROUP_ID_SPLIT = Regex("[,|]")
 
@@ -4888,5 +4928,15 @@ class ComponentManagementServiceImpl(
         private const val ROW_TYPE_BASE = "BASE"
         private const val ATTR_JAVA_VERSION = "build.javaVersion"
         private const val ATTR_MAVEN_VERSION = "build.mavenVersion"
+
+        /** The roles an `involves` filter checks: all three when none are given; an unknown role is a 400. */
+        private fun involvementRoles(requested: List<String>?): Set<String> {
+            if (requested.isNullOrEmpty()) return INVOLVES_ALL_ROLES
+            val unknown = requested.filterNot { it in INVOLVES_ALL_ROLES }
+            require(unknown.isEmpty()) {
+                "involvesRoles: unknown role(s) ${unknown.joinToString()}; expected any of ${INVOLVES_ALL_ROLES.joinToString()}"
+            }
+            return requested.toSet()
+        }
     }
 }

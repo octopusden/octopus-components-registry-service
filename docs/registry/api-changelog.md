@@ -18,6 +18,11 @@ refresh it with `./gradlew :components-registry-service-server:generateOpenApiDo
 
 ## Unreleased
 
+- **`involves` / `involvesRoles` list filters added (SYS-101).** `GET /components?involves=<u>` returns
+  components where any listed user is the owner OR a release manager OR a security champion;
+  `involvesRoles` (any of `owner`, `releaseManager`, `securityChampion`; default all) narrows the
+  roles, OR across them. Combines with the other filters via AND; one row per component; an unknown
+  role is `400`. Backs the Portal's "Mine" filter.
 - **`GET /components/as-code/search` added (SYS-100).** Global text search over every component's
   FULL as-code view (`GET /components/{id}/as-code`), the replacement for grepping the Groovy DSL
   files. `ACCESS_COMPONENTS`. Params: `q` (required, 2–200 characters after trimming;

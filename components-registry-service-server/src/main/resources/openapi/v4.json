@@ -7540,6 +7540,28 @@
           },
           {
             "in" : "query",
+            "name" : "involves",
+            "required" : false,
+            "schema" : {
+              "items" : {
+                "type" : "string"
+              },
+              "type" : "array"
+            }
+          },
+          {
+            "in" : "query",
+            "name" : "involvesRoles",
+            "required" : false,
+            "schema" : {
+              "items" : {
+                "type" : "string"
+              },
+              "type" : "array"
+            }
+          },
+          {
+            "in" : "query",
             "name" : "buildSystem",
             "required" : false,
             "schema" : {

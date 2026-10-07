@@ -40,6 +40,14 @@ class ComponentsListCommand :
     private val search by option("--search", help = "Free-text search across name/displayName.")
     private val owner by option("--owner", help = "Filter by component owner (repeatable).").multiple()
     private val system by option("--system", help = "Filter by system code (repeatable).").multiple()
+    private val involves by option(
+        "--involves",
+        help = "Components where this user is owner OR release manager OR security champion (repeatable).",
+    ).multiple()
+    private val involvesRole by option(
+        "--involves-role",
+        help = "Narrow --involves to these roles: owner, releaseManager, securityChampion (repeatable).",
+    ).multiple()
     private val productType by option("--product-type", help = "Filter by product type.")
     private val buildSystem by option("--build-system", help = "Filter by build system (repeatable).").multiple()
     private val label by option("--label", help = "Filter by label (repeatable).").multiple()
@@ -94,6 +102,8 @@ class ComponentsListCommand :
             .add("search", search)
             .addAll("owner", owner.ifEmpty { null })
             .addAll("system", system.ifEmpty { null })
+            .addAll("involves", involves.ifEmpty { null })
+            .addAll("involvesRoles", involvesRole.ifEmpty { null })
             .add("productType", productType)
             .addAll("buildSystem", buildSystem.ifEmpty { null })
             .addAll("labels", label.ifEmpty { null })

@@ -515,6 +515,24 @@ class CommandsTest {
     }
 
     @Test
+    fun `SYS-101 components list maps --involves and --involves-role`() {
+        val ex = QueueExchange(listOf(200 to """{"content":[],"last":true}"""))
+        val result =
+            cli(ex).test(
+                listOf(URL, "components", "list", "--involves", "alice", "--involves-role", "owner", "--involves-role", "releaseManager"),
+            )
+        assertEquals(0, result.statusCode, result.stderr)
+        val q =
+            ex.requests
+                .single()
+                .uri()
+                .rawQuery
+        assertTrue(q.contains("involves=alice"), q)
+        assertTrue(q.contains("involvesRoles=owner"), q)
+        assertTrue(q.contains("involvesRoles=releaseManager"), q)
+    }
+
+    @Test
     fun `meta owners returns string list as table`() {
         val ex = QueueExchange(listOf(200 to """["alice","bob"]"""))
         val result = cli(ex).test(listOf(URL, "meta", "owners"))

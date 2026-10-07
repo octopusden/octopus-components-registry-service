@@ -92,6 +92,7 @@
 | SYS-097 | The explicit+external "≥1 distribution coordinate" rule is not applied when the component's **BASE** build system is `WHISKEY` (case-insensitive; per-range build-system overrides are ignored). Applies on create, component PATCH and the `/field-overrides` endpoints; non-WHISKEY explicit+external components still require a coordinate, including after being switched off WHISKEY | High | integration-test | ✅ Tested |
 | SYS-098 | A component configuration may declare one or more **generic HTTP-URL artifacts** under `distribution.generic`; each artifact is a path string stored verbatim in DB (V10 migration, table `distribution_generic_artifacts`). The path must match `GENERIC_ENTRY` regex (no dots-only segments, no commas, no traversal sequences); the only allowed `${…}` placeholders are `${version}`, `${major}`, `${minor}`, `${service}`, `${fix}`, and `${build}` — any other placeholder (including SpEL expressions such as `T(…).method()`) is rejected with 400. The `generic` field of `DistributionDTO` is the comma-joined CSV of paths sorted by `sort_order`; it is `null` when no artifacts are set (`@JsonInclude(NON_NULL)`) and silently ignored by older clients (`@JsonIgnoreProperties(ignoreUnknown = true)`) | High | unit + integration-test | ✅ Tested |
 | SYS-100 | `GET /components/as-code/search` — global case-insensitive substring (or `regex=true`) search over every component's FULL as-code view, grouped by component with line number, line text and enclosing block path; `archived` / `limit` / `maxMatchesPerComponent` params; in-memory index rebuilt when the DB change stamp moves or after 5 minutes; `crsctl search` client command | High | unit + integration-test | ✅ Tested |
+| SYS-101 | `GET /components?involves=<u>[&involvesRoles=…]` — components where any listed user is the owner OR a release manager OR a security champion (OR across the chosen roles; all three by default); combines with every other filter via AND; one row per component; unknown role → 400. `crsctl components list --involves/--involves-role` | High | integration-test | ✅ Tested |
 
 ---
 
@@ -3422,3 +3423,38 @@ field the view shows without per-field query code.
 `CommandsTest` (CLI) — `` `SYS-100 search maps options to query params and prints grep-shaped lines` ``,
 `` `SYS-100 search without --regex omits the regex param` ``,
 `` `SYS-100 search -o json emits the top-level array of matching components` `` (9).
+
+### SYS-101: `involves` — every component a user is involved in
+
+**Priority:** High
+**Test layer:** integration-test
+**Status:** ✅ Tested
+
+**Motivation:**
+"Show me everything I am involved in" is the most common list question, but the `owner`,
+`releaseManager` and `securityChampion` filters combine with AND — selecting two of them returns
+only components where the user holds both roles. The Portal's "Mine" filter needs OR across roles.
+
+**Description:**
+- `GET /rest/api/4/components` gains `involves` (multi-value, CSV or repeatable, normalised like the
+  other multi-value filters) and `involvesRoles` (any subset of `owner`, `releaseManager`,
+  `securityChampion`; empty = all three).
+- A component matches when any listed username is its `componentOwner` (if `owner` is among the
+  roles) OR among its release managers (if `releaseManager`) OR among its security champions (if
+  `securityChampion`). Role memberships are `EXISTS` subqueries, so a component where the user holds
+  several roles is returned once.
+- `involves` combines with every other filter via AND. An unknown `involvesRoles` value is `400`.
+- `crsctl components list --involves <u> [--involves-role <role>]…`.
+
+**Acceptance criteria:**
+1. `involves=<u>` returns components where `<u>` is owner, release manager or security champion,
+   and none where `<u>` holds no role.
+2. A component where `<u>` holds all three roles appears once.
+3. `involvesRoles` narrows to the chosen roles, OR across them.
+4. `involves` combines with `archived` via AND.
+5. An unknown `involvesRoles` value returns `400`.
+
+**Test method:** `ListComponentsInvolvesFilterTest` (H2 `ft-db`) —
+`` `SYS-101 involves matches any role` `` (1), `` `SYS-101 no duplicate rows` `` (2),
+`` `SYS-101 involvesRoles narrows` `` (3), `` `SYS-101 combines with archived` `` (4),
+`` `SYS-101 unknown role is 400` `` (5); `CommandsTest` — `` `SYS-101 components list maps --involves and --involves-role` ``.
