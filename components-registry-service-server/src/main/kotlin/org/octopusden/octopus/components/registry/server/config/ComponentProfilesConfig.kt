@@ -5,6 +5,7 @@ import org.octopusden.octopus.components.registry.server.service.ProfileAvailabi
 import org.octopusden.octopus.components.registry.server.service.impl.ComponentProfileCatalog
 import org.octopusden.octopus.components.registry.server.service.impl.PermissionProfileAvailability
 import org.octopusden.octopus.components.registry.server.service.impl.ProfileCreateCheck
+import org.octopusden.octopus.components.registry.server.template.ComponentDefaultsSeed
 import org.springframework.context.annotation.Bean
 import org.springframework.context.annotation.Configuration
 import org.springframework.core.env.ConfigurableEnvironment
@@ -19,8 +20,12 @@ class ComponentProfilesConfig {
     @Bean
     fun componentProfilesSource(environment: ConfigurableEnvironment): ComponentProfilesSource = ComponentProfilesSource(environment)
 
+    /** `component-defaults` is read on every load, so a reload sees it after the rebind that precedes it. */
     @Bean
-    fun componentProfileCatalog(source: ComponentProfilesSource): ComponentProfileCatalog = ComponentProfileCatalog(source::read)
+    fun componentProfileCatalog(
+        source: ComponentProfilesSource,
+        adminConfig: AdminConfigProperties,
+    ): ComponentProfileCatalog = ComponentProfileCatalog(source::read) { ComponentDefaultsSeed.from(adminConfig.componentDefaults) }
 
     @Bean
     fun profileAvailability(permissionEvaluator: PermissionEvaluator): ProfileAvailability =
