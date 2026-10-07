@@ -13,6 +13,7 @@ import org.octopusden.octopus.components.registry.server.ComponentRegistryServic
 import org.octopusden.octopus.components.registry.server.service.impl.ComponentProfileCatalog
 import org.octopusden.octopus.components.registry.server.service.impl.ConfigValidationException
 import org.octopusden.octopus.components.registry.server.support.adminJwt
+import org.octopusden.octopus.components.registry.server.template.standaloneTemplateProperties
 import org.springframework.beans.factory.annotation.Autowired
 import org.springframework.boot.test.autoconfigure.web.servlet.AutoConfigureMockMvc
 import org.springframework.boot.test.context.SpringBootTest
@@ -121,19 +122,22 @@ class ReloadConfigComponentProfilesTest {
     }
 
     @Test
-    @DisplayName("a broken template entry added: 200 applied, the entry listed as failed with its problems")
-    fun templateEntry() {
-        changeServiceConfig("client-plugin.kind" to "template")
+    @DisplayName("a valid and a broken template added: 200 applied, the valid one live, the broken one failed with its problems")
+    fun templateEntries() {
+        changeServiceConfig(*standaloneTemplateProperties().toList().toTypedArray(), "broken-plugin.kind" to "template")
 
         reload()
             .andExpect(status().isOk)
             .andExpect(jsonPath("$.componentProfiles.status").value("applied"))
-            .andExpect(jsonPath("$.componentProfiles.entries[?(@.id == 'client-plugin')].status").value("failed"))
+            .andExpect(jsonPath("$.componentProfiles.entries[?(@.id == 'client-plugin')].status").value("live"))
+            .andExpect(jsonPath("$.componentProfiles.entries[?(@.id == 'broken-plugin')].status").value("failed"))
             .andExpect(
                 jsonPath(
-                    "$.componentProfiles.entries[?(@.id == 'client-plugin')].problems[0]",
-                ).value("client-plugin.title: required"),
+                    "$.componentProfiles.entries[?(@.id == 'broken-plugin')].problems[0]",
+                ).value("broken-plugin.title: required"),
             )
+
+        assertEquals(listOf("client-plugin"), catalog.templates().map { it.id })
     }
 
     @Test

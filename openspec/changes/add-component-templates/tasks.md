@@ -93,28 +93,32 @@
 
 ## 3. Catalog, listing and availability (Decisions 1, 12)
 
-- [ ] 3.1 Write failing tests:
-  - [ ] 3.1.1 Catalog swap:
-    - [ ] a usable load swaps profiles and templates together
-    - [ ] a load with an invalid regular profile keeps both, including a template whose change
+- [x] 3.1 Write failing tests:
+  - [x] 3.1.1 Catalog swap:
+    - [x] a usable load swaps profiles and templates together
+    - [x] a load with an invalid regular profile keeps both, including a template whose change
           was valid
-  - [ ] 3.1.2 Catalog keeps the last load's outcome and each entry's raw keys
-  - [ ] 3.1.3 Reload adding a valid and a broken template → 200, `live` and `failed` (replaces
+  - [x] 3.1.2 Catalog keeps the last load's outcome and each entry's raw keys
+  - [x] 3.1.3 Reload adding a valid and a broken template → 200, `live` and `failed` (replaces
         1.1.1's expectation)
-  - [ ] 3.1.4 Startup with valid regular profiles and a broken template → starts, template absent
-  - [ ] 3.1.5 Listing:
-    - [ ] templates next to profiles, by `order` then id
-    - [ ] kind `template`, `version`, explicit `true` / `false`, rules
-    - [ ] a failed template absent
-  - [ ] 3.1.6 `PermissionProfileAvailability`:
-    - [ ] template usable with `CREATE_COMPONENTS`, unusable without
-    - [ ] `mayOverride` follows usability
-  - [ ] 3.1.7 A create naming a template id as `profile` is still 400 `profile: unknown profile`
-- [ ] 3.2 Implement:
-  - [ ] 3.2.1 Catalog snapshot of profiles and templates
-  - [ ] 3.2.2 `ProfileAvailability.evaluate(template)` and `mayOverride`
-  - [ ] 3.2.3 `ComponentProfileResponse.version` and the template mapping
-- [ ] 3.3 Confirm tests pass
+  - [x] 3.1.4 Startup with valid regular profiles and a broken template → starts, template absent
+  - [x] 3.1.5 Listing:
+    - [x] templates next to profiles, by `order` then id
+    - [x] kind `template`, `version`, explicit `true` / `false`, rules
+    - [x] a failed template absent
+  - [x] 3.1.6 `PermissionProfileAvailability`:
+    - [x] template usable with `CREATE_COMPONENTS`, unusable without
+    - [x] `mayOverride` follows usability
+  - [x] 3.1.7 A create naming a template id as `profile` is still 400 `profile: unknown profile`
+- [x] 3.2 Implement:
+  - [x] 3.2.1 Catalog snapshot of profiles and templates
+  - [x] 3.2.2 `ProfileAvailability.evaluate(template)` and `mayOverride`
+  - [x] 3.2.3 `ComponentProfileResponse.version` and the template mapping
+- [x] 3.3 Confirm tests pass: `test` — `ComponentProfileCatalogTest` 14, `PermissionProfileAvailabilityTest` 4,
+      `ProfileCreateCheckTest` 16; `dbTest` — `ComponentProfileControllerV4Test` 10,
+      `ProfileOnCreateTest` 17, `ReloadConfigComponentProfilesTest` 5. ktlint and detekt clean.
+- [x] 3.4 The catalog takes a `component-defaults` supplier, read on every load; tested with a
+      template whose required branch only a default fills (added on review)
 
 ## 4. Parameter checks (Decision 5)
 

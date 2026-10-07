@@ -17,6 +17,7 @@ import org.octopusden.octopus.components.registry.server.repository.RegistryConf
 import org.octopusden.octopus.components.registry.server.service.ProfileAvailability
 import org.octopusden.octopus.components.registry.server.service.impl.ComponentProfileCatalog
 import org.octopusden.octopus.components.registry.server.support.adminJwt
+import org.octopusden.octopus.components.registry.server.template.ComponentTemplate
 import org.springframework.beans.factory.annotation.Autowired
 import org.springframework.boot.test.autoconfigure.web.servlet.AutoConfigureMockMvc
 import org.springframework.boot.test.context.SpringBootTest
@@ -46,6 +47,10 @@ class SwitchableProfileAvailability : ProfileAvailability {
     var refusal: String? = null
 
     override fun evaluate(profile: ComponentProfile) = ProfileAvailability.Availability(usable = refusal == null, reason = refusal)
+
+    override fun evaluate(template: ComponentTemplate) = ProfileAvailability.Availability(usable = refusal == null, reason = refusal)
+
+    override fun mayOverride(template: ComponentTemplate) = refusal == null
 }
 
 @TestConfiguration

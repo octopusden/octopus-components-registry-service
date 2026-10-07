@@ -73,6 +73,22 @@ fun exampleTemplate(): MutableMap<String, Any> =
         "overridable" to listOf("baseConfiguration.vcsEntries[0].vcsPath", "baseConfiguration.jira.projectKey"),
     )
 
+/**
+ * The design example with the values it otherwise takes from `component-defaults` fixed in the
+ * template, so it is live without any defaults.
+ */
+@Suppress("UNCHECKED_CAST")
+fun standaloneTemplate(): MutableMap<String, Any> =
+    exampleTemplate().apply {
+        at("fields.baseConfiguration.jira")["versionFormat"] = "\$versionPrefix-\$baseVersionFormat"
+        val vcs = (at("fields.baseConfiguration")["vcsEntries"] as List<MutableMap<String, Any>>).single()
+        vcs["branch"] = "main"
+        vcs["tag"] = "\$module-\$version"
+    }
+
+/** [standaloneTemplate] as the flattened properties of entry [id]. */
+fun standaloneTemplateProperties(id: String = TEMPLATE_ID): Map<String, String> = flatten(standaloneTemplate(), id)
+
 /** Flattens nested maps and lists the way Spring flattens YAML: `a.b`, `a[0]`. */
 fun flatten(
     value: Any,
