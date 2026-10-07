@@ -4,6 +4,7 @@ import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.Assertions.assertTrue
 import org.junit.jupiter.api.DisplayName
 import org.junit.jupiter.api.Test
+import org.springframework.boot.context.properties.source.ConfigurationPropertySources
 import org.springframework.boot.env.YamlPropertySourceLoader
 import org.springframework.core.env.MapPropertySource
 import org.springframework.core.env.StandardEnvironment
@@ -101,5 +102,52 @@ class ComponentProfilesSourceTest {
 
         assertEquals("20", properties["internal.order"])
         assertEquals("false", properties["internal.classification.external"])
+    }
+
+    @Test
+    @DisplayName("ids that relaxed binding would treat as one keep their own values when Boot's relaxed layer is attached")
+    fun relaxedAliasesKeptApart() {
+        val environment = StandardEnvironment()
+        environment.propertySources.addFirst(
+            MapPropertySource(
+                "aliases",
+                mapOf(
+                    "components-registry.component-profiles.regular-internal.title" to "Internal dashed",
+                    "components-registry.component-profiles.regularinternal.title" to "Internal undashed",
+                ),
+            ),
+        )
+        ConfigurationPropertySources.attach(environment)
+
+        val properties = ComponentProfilesSource(environment).read()
+
+        assertEquals("Internal dashed", properties["regular-internal.title"])
+        assertEquals("Internal undashed", properties["regularinternal.title"])
+    }
+
+    @Test
+    @DisplayName("a higher-precedence source wins per key, read from the source itself")
+    fun precedenceFromSources() {
+        val environment = environment("base.yml", "override.yml")
+        ConfigurationPropertySources.attach(environment)
+
+        val properties = ComponentProfilesSource(environment).read()
+
+        assertEquals("Solution (QA)", properties["solution.title"])
+        assertEquals("30", properties["solution.order"])
+    }
+
+    @Test
+    @DisplayName("a placeholder in a value is resolved against the environment")
+    fun placeholderResolved() {
+        val environment = StandardEnvironment()
+        environment.propertySources.addFirst(
+            MapPropertySource(
+                "placeholders",
+                mapOf("org-name" to "Example", "components-registry.component-profiles.internal.title" to "\${org-name} internal"),
+            ),
+        )
+
+        assertEquals("Example internal", ComponentProfilesSource(environment).read()["internal.title"])
     }
 }
