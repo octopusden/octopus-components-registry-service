@@ -24,8 +24,9 @@ refresh it with `./gradlew :components-registry-service-server:generateOpenApiDo
   - **`GET /rest/api/4/component-profiles` added** (`ACCESS_COMPONENTS`): `{ profiles: [...] }`, the
     live profiles in `order`, then id. Each carries `id`, `kind` (`regular`), `title`,
     `description`, `classification` (`external`, `explicit` as `true` / `false` / `ask`,
-    `solution`), `rules` (`path`, `pattern`, `message`; `[]` when none), `usable` and, when not
-    usable, `unusableReason`. A profile is usable for a caller with `CREATE_COMPONENTS`.
+    `solution`), `rules` (`path`, `pattern`, `message`; `[]` when none; `pattern` is written for
+    both Java and JavaScript regular expressions — a client that cannot compile one skips its own
+    check), `usable` and, when not usable, `unusableReason`. A profile is usable for a caller with `CREATE_COMPONENTS`.
   - **`ComponentCreateRequest.profile` added** (optional; blank = absent). When given, the create
     fails with `400` and `errorMessage` `profile: …` when the profile is not configured, or when the
     classification the create stores (hidden fields dropped; absent = `false`) differs from the

@@ -221,5 +221,10 @@ Creates against it:
   rename or a solution-flag change can still produce a key that breaks them. Accepted: it keeps
   today's behavior for every existing client; enforcing them everywhere is a separate change.
   TD-024. The other Portal-only create rules stay in the Portal: TD-025.
+- **Two regex engines read the same pattern.** CRS checks with Java, the Portal's fast check with
+  JavaScript; a Java-only construct (`\p{Lu}`, possessive quantifiers) loads in CRS but breaks the
+  Portal's check. Accepted: patterns are written in syntax both accept (spec and ADR-016 say so),
+  and the Portal skips a pattern it cannot compile, leaving the create's answer to decide. Today's
+  four patterns are valid in both. (raised on review)
 - **Rule patterns are case-sensitive.** The regular profiles' rule rejects `solution` but not
   `Solution`. Accepted: component keys are lower-case by `validateComponentKey`.

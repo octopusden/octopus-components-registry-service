@@ -32,7 +32,11 @@ data class ComponentProfileResponse(
     data class FieldRule(
         @field:Schema(description = "Create-request path, e.g. `name` or `baseConfiguration.jira.projectKey`.")
         val path: String,
-        @field:Schema(description = "Regular expression the whole value must match.")
+        @field:Schema(
+            description =
+                "Regular expression the whole value must match, in syntax both Java (the registry) and " +
+                    "JavaScript accept. A client that cannot compile it skips its own check; the create decides.",
+        )
         val pattern: String,
         val message: String,
     )

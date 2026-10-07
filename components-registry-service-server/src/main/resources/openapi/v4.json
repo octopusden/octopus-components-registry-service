@@ -1806,7 +1806,7 @@
             "type" : "string"
           },
           "pattern" : {
-            "description" : "Regular expression the whole value must match.",
+            "description" : "Regular expression the whole value must match, in syntax both Java (the registry) and JavaScript accept. A client that cannot compile it skips its own check; the create decides.",
             "type" : "string"
           }
         },

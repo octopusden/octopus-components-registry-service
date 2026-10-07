@@ -154,6 +154,10 @@
         `profile: unknown profile 'ww-modpack'` (added on review)
   - [x] 5.1.13 A profile removed by an applied reload is rejected as unknown — the "Profile
         removed" scenario's create half (added on review)
+- [x] 5.4 Patterns are checked by Java in CRS and by JavaScript in the Portal: spec, design risk,
+      ADR-016, functional spec, changelog and the `FieldRule.pattern` schema description state that a
+      pattern uses syntax both accept, and that a client which cannot compile one skips its check;
+      `v4.json` regenerated (added on review)
 - [x] 5.2 Implement: `ComponentCreateRequest.profile`; `profile/ProfileCreateCheck.kt` (lookup,
       availability, classification, rules); call it from `createComponent` before the flush
   - [x] 5.2.1 `v4.json` regenerated for `ComponentCreateRequest.profile`

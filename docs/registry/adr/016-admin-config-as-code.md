@@ -145,7 +145,7 @@ all installations).
 ### Component profiles (third subtree)
 
 `components-registry.component-profiles` — the Create-component start-page profiles — is delivered
-and reloaded the same way (service-config, `POST /admin/reload-config`), with three differences:
+and reloaded the same way (service-config, `POST /admin/reload-config`), with four differences:
 
 - **Read from the property sources, not bound.** `ComponentProfilesSource` takes the keys under the
   prefix exactly as written from the environment's enumerable property sources, the
@@ -162,6 +162,11 @@ and reloaded the same way (service-config, `POST /admin/reload-config`), with th
   mode, and CRS does not start without a usable set. `reloadConfig` reloads them itself after the
   refresh, also when the `field-config` sync fails, and reports them as `componentProfiles`. No-db
   mode has no reload endpoint, so its profiles change with a restart.
+- **Rule patterns serve two regex engines.** CRS checks a rule's `pattern` with Java; the listing
+  hands the same text to the Portal, which checks it with JavaScript while the user types. Write
+  patterns in syntax both accept (no `\p{…}` classes, possessive quantifiers or other Java-only
+  constructs). A client that cannot compile a pattern skips its own check; CRS's answer on create
+  decides.
 
 ## Consequences
 

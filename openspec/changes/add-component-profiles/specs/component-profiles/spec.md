@@ -29,7 +29,7 @@ A field rule SHALL accept only these keys, with these values:
 
 | Key | Required | Allowed values |
 |---|---|---|
-| `pattern` | Yes | A regular expression that compiles; the whole field value must match it |
+| `pattern` | Yes | A regular expression that compiles; the whole field value must match it. Written in syntax both Java and JavaScript accept (see the listing requirement) |
 | `message` | Yes | Non-blank text |
 
 A field rule's path SHALL be one of these create-request paths: `name`, `displayName`,
@@ -156,7 +156,10 @@ every entry with its id, kind, status (`live` or `failed`) and problems.
 live profiles sorted by `order` and then id, each with its id, kind, title, description,
 classification, its field rules (path, pattern and message), and whether the current user may
 use it, with the reason when not. The field rules returned SHALL be the ones a create naming that
-profile is checked against.
+profile is checked against. The registry checks a pattern with Java regular expressions; a client
+checks the same pattern with its own engine, such as JavaScript in the Portal. A pattern SHALL
+therefore use syntax both accept; a client that cannot compile a pattern skips its own check, and
+the registry's answer on create decides.
 
 #### Scenario: User who may create components
 - **WHEN** a user with `CREATE_COMPONENTS` asks
