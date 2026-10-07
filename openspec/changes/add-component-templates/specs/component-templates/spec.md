@@ -327,10 +327,32 @@ R7 SHALL apply only to the fields the Portal's create wizard pre-fills from `com
   has one
 - **THEN** the rendered request carries the default, with no source parameter
 
+### Requirement: One endpoint, dry run by default
+
+`POST /rest/api/4/component-templates/{id}/components` SHALL take parameter values, overrides, a
+Jira task key and a comment, and a `dryRun` query parameter:
+
+| `dryRun` | What happens |
+|---|---|
+| Absent or `true` | A dry run: nothing is created |
+| `false` | A create from the template |
+
+- A dry run and a create SHALL take the same body and run the same steps; only a create commits.
+- A malformed Jira task key SHALL be rejected with 400 on both, so a dry run finds it before the
+  create.
+- A failed, removed or unknown template SHALL answer 404 on both.
+
+#### Scenario: No dryRun means a dry run
+- **WHEN** a request without `dryRun` passes every check
+- **THEN** the response is 200 with a valid result, and nothing is created
+
+#### Scenario: Same body, dry run then create
+- **WHEN** a request passes with `dryRun` absent, and the same body is sent with `dryRun=false`
+- **THEN** the second response is 201 with the component, unless something changed in between
+
 ### Requirement: Dry run
 
-`POST /rest/api/4/component-templates/{id}/dry-run` SHALL take parameter values and overrides,
-and run these steps:
+A dry run SHALL run these steps:
 
 1. Check the parameter values. When any check fails, stop here.
 2. Render the template.
@@ -352,7 +374,8 @@ How problems are reported:
 - Today's create stops at its first failure, so at most one problem SHALL come from step 4,
   worded as the create words it.
 
-Nothing SHALL be created, saved or recorded in the audit.
+It SHALL answer 200 whether or not the input is valid. Nothing SHALL be created, saved or
+recorded in the audit.
 
 #### Scenario: Parameter problems stop the dry run
 - **WHEN** any parameter check fails
@@ -385,8 +408,7 @@ Nothing SHALL be created, saved or recorded in the audit.
 
 ### Requirement: Create from a template
 
-`POST /rest/api/4/component-templates/{id}/components` SHALL take parameter values, overrides, a
-Jira task key and a comment, and:
+`POST /rest/api/4/component-templates/{id}/components?dryRun=false` SHALL:
 
 - run the dry-run steps at that moment;
 - create the component only when no problem is found, with the audit entry any create writes;
@@ -418,7 +440,7 @@ The component SHALL keep no link to the template.
 - **THEN** the component is created, as any create without a key is
 
 #### Scenario: Template removed meanwhile
-- **WHEN** the template was removed by a reload after the creator's dry run
+- **WHEN** the template was removed by a reload after the creator's dry run, and the create is sent
 - **THEN** the response is 404
 
 ### Requirement: Overrides

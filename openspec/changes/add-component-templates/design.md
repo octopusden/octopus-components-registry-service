@@ -266,6 +266,14 @@ A dry run with `CLIENT_CODE=ACME`, `PLUGIN_CODE=CORE`, `PLUGIN_NAME=Core API`, o
 
 ### 8. The dry run is today's create, rolled back
 
+- One endpoint, `POST …/component-templates/{id}/components`, serves both; the `dryRun` query
+  parameter, default `true`, picks the dry run:
+  - one body and one set of steps, so the dry run cannot drift from the create;
+  - a caller that leaves the flag out never creates a component by accident; creating takes an
+    explicit `dryRun=false`.
+- The admin migrate endpoint's `dryRun` defaults to `false`; this one differs on purpose, because
+  it is the endpoint automation and the Portal call on every review step.
+
 - `TemplateDryRun` runs:
   1. parameter checks — stop on failure;
   2. render;
@@ -291,11 +299,12 @@ A dry run with `CLIENT_CODE=ACME`, `PLUGIN_CODE=CORE`, `PLUGIN_NAME=Core API`, o
 
 ### 10. Create from a template commits only a clean dry run
 
-- `POST …/components` runs Decision 8's steps in one transaction:
+- `POST …/components?dryRun=false` runs Decision 8's steps in one transaction:
   - it commits when nothing failed;
   - on a problem it answers 422 with the dry run's body, and nothing is created.
 - The Jira task key and comment follow today's create: the key must match today's pattern when
-  given, and may be blank. Requiring it is a Portal rule, recorded with the other Portal-only
+  given, and may be blank. A dry run checks the key's pattern too, so a malformed key surfaces
+  before the create. Requiring it is a Portal rule, recorded with the other Portal-only
   create rules in TD-025.
 - An unknown, failed or removed template → 404, at the moment of the call.
 - Overrides:

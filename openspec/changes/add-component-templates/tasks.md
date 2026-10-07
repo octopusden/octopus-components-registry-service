@@ -173,7 +173,10 @@
     - [ ] one test per message prefix today's create emits, mapped to its paths
     - [ ] an unmatched message → no field
   - [ ] 7.1.2 Template rule failure attributed to its parameters; fixed field → template problem
-  - [ ] 7.1.3 Through the endpoint:
+  - [ ] 7.1.3 Through `POST …/components`, `dryRun` absent or `true`:
+    - [ ] `dryRun` absent → a dry run: 200, nothing created
+    - [ ] an invalid input still answers 200, `valid: false`
+    - [ ] a malformed Jira task key → 400
     - [ ] parameter problems stop it
     - [ ] key taken → problem on `name` naming `CLIENT_CODE`, `PLUGIN_CODE`
     - [ ] rule and create problems both reported
@@ -188,12 +191,13 @@
   - [ ] 7.2.1 `template/CreateFailureFields.kt`
   - [ ] 7.2.2 `template/TemplateDryRun.kt` — rollback-only `TransactionTemplate` around
         `createComponent`
-  - [ ] 7.2.3 The dry-run endpoint and its DTOs
+  - [ ] 7.2.3 `POST …/components` on `ComponentTemplateControllerV4` with `dryRun` (default
+        `true`), and its DTOs
 - [ ] 7.3 Confirm tests pass, `dbTest` included
 
 ## 8. Create from a template and overrides (Decision 10)
 
-- [ ] 8.1 Write failing tests through `POST /rest/api/4/component-templates/{id}/components`:
+- [ ] 8.1 Write failing tests through `POST /rest/api/4/component-templates/{id}/components?dryRun=false`:
   - [ ] 8.1.1 Clean input → 201; the audit row has the Jira task key and comment; the component
         has no link to the template
   - [ ] 8.1.2 Any problem → 422 with the dry-run body, nothing created
@@ -204,9 +208,9 @@
     - [ ] non-overridable path → 400 naming it
     - [ ] `mayOverride` false (stubbed) → 403
     - [ ] invalid override → problem on that field
-  - [ ] 8.1.6 A passing dry run followed by the create → 201
-- [ ] 8.2 Implement the create endpoint on `ComponentTemplateControllerV4`, and the committing path
-      in `TemplateDryRun`
+  - [ ] 8.1.6 The same body sent without `dryRun`, then with `dryRun=false` → 200 valid, then 201
+- [ ] 8.2 Implement `dryRun=false` on the same endpoint, and the committing path in
+      `TemplateDryRun`
 - [ ] 8.3 Confirm tests pass
 
 ## 9. Administrator read (Decision 11)
