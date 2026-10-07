@@ -121,24 +121,35 @@
 
 ## 5. Profile on create (Decisions 7, 8)
 
-- [ ] 5.1 Write failing tests through `POST /rest/api/4/components`, one per scenario of the
+- [x] 5.1 Write failing tests through `POST /rest/api/4/components`, one per scenario of the
       "Optional profile on create" and "Field rules" requirements, plus:
-  - [ ] 5.1.1 Template id as `profile` → 400 `profile: `
-  - [ ] 5.1.2 Absent `distributionExternal` against `external: true` → 400 naming `external`
-  - [ ] 5.1.3 Rule on an absent field with a pattern that rejects empty → 400 with the path
-  - [ ] 5.1.4 A Portal-shaped request without `profile` → 201 as today
-  - [ ] 5.1.5 `resolution-service` with `regular-internal` → 400 with the regular profile's
+  - [x] 5.1.1 Template id as `profile` → 400 `profile: `
+  - [x] 5.1.2 Absent `distributionExternal` against `external: true` → 400 naming `external`
+  - [x] 5.1.3 Rule on an absent field with a pattern that rejects empty → 400 with the path
+  - [x] 5.1.4 A Portal-shaped request without `profile` → 201 as today
+  - [x] 5.1.5 `resolution-service` with `regular-internal` → 400 with the regular profile's
         message; `payments-solution` with `solution` → 201
-  - [ ] 5.1.6 An unusable profile (availability stubbed) → 403 with the reason (Decision 6)
-  - [ ] 5.1.7 `component.solution` hidden, `profile: solution` with `solution: true` → 400
+  - [x] 5.1.6 An unusable profile (availability stubbed) → 403 with the reason (Decision 6)
+  - [x] 5.1.7 `component.solution` hidden, `profile: solution` with `solution: true` → 400
         `profile: ` naming `solution`; same for hidden `distributionExternal` against
         `external: true`
-  - [ ] 5.1.8 `name: " payments-solution "` with `profile: solution` → the rule passes
-  - [ ] 5.1.9 Rule on `baseConfiguration.vcsEntries[0].vcsPath`, two entries, only the second
+  - [x] 5.1.8 `name: " payments-solution "` with `profile: solution` → the rule passes
+  - [x] 5.1.9 Rule on `baseConfiguration.vcsEntries[0].vcsPath`, two entries, only the second
         breaking it → accepted
-- [ ] 5.2 Implement: `ComponentCreateRequest.profile`; `profile/ProfileCreateCheck.kt` (lookup,
+  - [x] 5.1.10 After an applied reload that changes a pattern, a create is checked against the
+        new pattern (the create half of 4.1.4)
+  - [x] 5.1.11 A blank `profile` is the same as no profile (added during implementation)
+  - [x] 5.1.12 A rename of a component created with a profile is checked as today
+- [x] 5.2 Implement: `ComponentCreateRequest.profile`; `profile/ProfileCreateCheck.kt` (lookup,
       availability, classification, rules); call it from `createComponent` before the flush
-- [ ] 5.3 Confirm tests pass (record the command and count)
+  - [x] 5.2.1 `v4.json` regenerated for `ComponentCreateRequest.profile`
+  - [x] 5.2.2 `profile/CreatedComponent.kt` — the check reads the entity and base row the create
+        built, not the request (changed during implementation, design Decision 8); its reader map
+        is pinned to `CreateRequestPaths.PATHS`
+- [x] 5.3 Confirm tests pass. `ProfileCreateCheckTest` 14/14; `ProfileOnCreateTest` 17/17 (H2);
+      server `test` 1263, 0 failures, 1 skipped; every H2 `dbTest` class (67 classes, 580 tests,
+      0 failures, 2 skipped) — the whole create path; client 6/6, light-client 2/2; `detekt`,
+      `ktlintCheck` clean. Postgres `dbTest` classes not run locally (no Docker) — left to CI
 
 ## 6. Docs and contract
 

@@ -178,7 +178,8 @@ Creates against it:
 
 ### 7. Profile on create
 
-- Order, after the existing key and uniqueness checks: unknown or non-`regular` id → 400
+- Runs once the entity and base row are built — after the key, uniqueness and value checks, before
+  the person-field and malformed-field checks. Order: unknown or non-`regular` id → 400
   `profile: unknown profile '<id>'`; not usable → 403 with the reason; classification mismatch →
   400 `profile: …` naming the differing flag; then each rule.
 - Classification match: `solution`, `external` and `explicit` against the values the create will
@@ -187,13 +188,18 @@ Creates against it:
   a Solution profile with `component.solution` hidden rejects the create instead of storing a
   non-solution.
 - A rule failure is 400 prefixed with the rule's path, carrying the configured message.
+- A blank `profile` is the same as an absent one. The unusable 403 is a `ResponseStatusException`,
+  as the create's other 403s.
 
 ### 8. Reading a create-request path
 
-- `CreateRequestPaths.read(request, path) → String?` covers exactly the rule paths listed in the
-  spec. The same list validates rule keys on load.
-- It reads the values the create will store: `name` trimmed as `createComponent` trims it, hidden
-  fields stripped. A rule never fails on whitespace the create would drop.
+- `CreateRequestPaths.PATHS` is the list of rule paths in the spec; it validates rule keys on load.
+- On create, rules and the classification read `EntityCreatedComponent`: the entity and base
+  configuration row `createComponent` has built, just before the flush. So they see exactly what is
+  stored — `name` trimmed, hidden fields stripped, blanks cleared — without repeating the create's
+  normalization. Its reader map is keyed by exactly `CreateRequestPaths.PATHS` (pinned by a test).
+  (changed during implementation: reading the request would have duplicated every strip and trim)
+- `CreateRequestPaths.read(request, path)` stays for the templates change, which renders a request.
 - An absent value is matched as `""`, so the pattern decides whether a field may be empty.
 - A path with `[0]` reads only the first entry of that list; later entries are not checked. Rule
   paths name the first entry because that is the one a profile or template sets.

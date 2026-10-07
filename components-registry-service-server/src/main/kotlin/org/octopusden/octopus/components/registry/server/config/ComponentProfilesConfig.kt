@@ -4,6 +4,7 @@ import org.octopusden.octopus.components.registry.server.profile.ComponentProfil
 import org.octopusden.octopus.components.registry.server.profile.ComponentProfilesSource
 import org.octopusden.octopus.components.registry.server.profile.PermissionProfileAvailability
 import org.octopusden.octopus.components.registry.server.profile.ProfileAvailability
+import org.octopusden.octopus.components.registry.server.profile.ProfileCreateCheck
 import org.octopusden.octopus.components.registry.server.security.PermissionEvaluator
 import org.springframework.context.annotation.Bean
 import org.springframework.context.annotation.Configuration
@@ -25,4 +26,10 @@ class ComponentProfilesConfig {
     @Bean
     fun profileAvailability(permissionEvaluator: PermissionEvaluator): ProfileAvailability =
         PermissionProfileAvailability(permissionEvaluator::hasPermission)
+
+    @Bean
+    fun profileCreateCheck(
+        catalog: ComponentProfileCatalog,
+        availability: ProfileAvailability,
+    ): ProfileCreateCheck = ProfileCreateCheck(catalog, availability)
 }

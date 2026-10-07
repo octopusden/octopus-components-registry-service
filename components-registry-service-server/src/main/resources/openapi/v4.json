@@ -663,6 +663,10 @@
           "productType" : {
             "type" : "string"
           },
+          "profile" : {
+            "description" : "Id of the Create-component profile this component is created with (GET /rest/api/4/component-profiles). When given, the create is rejected unless the profile is live, the caller may use it, the stored classification matches it and every field rule of the profile holds. Blank is the same as absent.",
+            "type" : "string"
+          },
           "releaseManager" : {
             "items" : {
               "type" : "string"
