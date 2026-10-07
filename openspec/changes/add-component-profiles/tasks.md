@@ -84,7 +84,7 @@
         `dto/v4/ComponentProfilesReloadResponse`
 - [x] 3.3 Add a minimal valid profile set to every configuration that starts the server: test,
       integration-test, smoke, `-test-db*`, `ft-db`, `no-db`, dev profiles and the client
-      modules' test configs; none in the bundled `application.yml`. Every test context activates
+      modules' test configs; none in the bundled `application.yml`. Every test context but one activates
       `common`, so the sets live in: the server's test `application-common.yml` (the four
       profiles), the client and light-client test `application-common.yml` and
       `application-integration-test.yml` (one regular profile each), and main
@@ -93,6 +93,9 @@
         mounted as `application-test.yaml`) gets the four profiles too: TeamCity's Compile & UT
         deploys it and it failed readiness with "at least one regular profile is required"
         (added post-review)
+  - [x] 3.3.2 The client's `application-v3.yml` gets one regular profile:
+        `ComponentRegistryServiceClientV3Test` runs as `("v3", "test")`, the one context without
+        `common`, and failed to start on CI (added post-review)
 - [x] 3.4 Confirm tests pass. Server `test` 1247 (1 skipped, 0 failures, incl.
       `ComponentProfileCatalogTest` 8, `ComponentProfilesConfigTest` 3, `NoDbModeContextTest`);
       `integrationTest` 3/3; client `test` 6/6; light-client `test` 2/2; `detekt`, `ktlintCheck`
