@@ -141,6 +141,14 @@ class ReloadConfigComponentProfilesTest {
     }
 
     @Test
+    @DisplayName("Decision 4: a template that leaves its VCS tag to component-defaults is live after a reload")
+    fun templateUsesComponentDefaults() {
+        changeServiceConfig(*standaloneTemplateProperties().filterKeys { !it.endsWith("vcsEntries[0].tag") }.toList().toTypedArray())
+
+        reload().andExpect(jsonPath("$.componentProfiles.entries[?(@.id == 'client-plugin')].status").value("live"))
+    }
+
+    @Test
     @DisplayName("a corrected configuration reloaded after a failure is applied")
     fun fixedAfterFailure() {
         changeServiceConfig("dmp-bundle.order" to "ten")

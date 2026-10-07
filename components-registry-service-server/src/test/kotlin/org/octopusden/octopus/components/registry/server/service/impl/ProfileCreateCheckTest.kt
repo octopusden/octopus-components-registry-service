@@ -11,6 +11,7 @@ import org.octopusden.octopus.components.registry.server.entity.ComponentArtifac
 import org.octopusden.octopus.components.registry.server.entity.ComponentConfigurationEntity
 import org.octopusden.octopus.components.registry.server.entity.ComponentEntity
 import org.octopusden.octopus.components.registry.server.entity.VcsSettingsEntryEntity
+import org.octopusden.octopus.components.registry.server.model.ComponentProfile
 import org.octopusden.octopus.components.registry.server.service.ProfileAvailability
 import org.octopusden.octopus.components.registry.server.support.designExampleProperties
 import org.octopusden.octopus.components.registry.server.support.profileProperties

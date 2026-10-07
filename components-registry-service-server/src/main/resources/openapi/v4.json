@@ -466,6 +466,7 @@
       "Classification" : {
         "properties" : {
           "explicit" : {
+            "description" : "Never `ask` for a template.",
             "enum" : [
               "true",
               "false",
@@ -956,7 +957,10 @@
             "type" : "string"
           },
           "kind" : {
-            "description" : "`regular`; templates are listed with their own kind once supported.",
+            "enum" : [
+              "regular",
+              "template"
+            ],
             "type" : "string"
           },
           "rules" : {
@@ -975,6 +979,11 @@
           },
           "usable" : {
             "type" : "boolean"
+          },
+          "version" : {
+            "description" : "A template's version, raised by the administrator on every change; absent for a regular profile.",
+            "format" : "int32",
+            "type" : "integer"
           }
         },
         "required" : [

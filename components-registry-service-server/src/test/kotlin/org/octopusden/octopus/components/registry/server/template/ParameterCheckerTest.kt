@@ -3,7 +3,7 @@ package org.octopusden.octopus.components.registry.server.template
 import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.DisplayName
 import org.junit.jupiter.api.Test
-import org.octopusden.octopus.components.registry.server.profile.ComponentProfile
+import org.octopusden.octopus.components.registry.server.model.ComponentProfile
 import org.octopusden.octopus.components.registry.server.service.impl.ActiveStatus
 import org.octopusden.octopus.components.registry.server.template.ParameterProblem.Check
 

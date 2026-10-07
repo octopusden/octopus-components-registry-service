@@ -88,7 +88,7 @@
   - [x] 2.4.5 `profile/FieldRuleParser.kt` — rule parsing shared by profiles and templates
 - [x] 2.5 Profile tests that pinned "templates are not supported yet" now expect a broken template
       to fail with its own problems (added on review)
-- [ ] 2.6 The catalog still parses with no `component-defaults`, so a template that relies on a
+- [x] 2.6 The catalog still parses with no `component-defaults`, so a template that relies on a
       default fails its load check until section 5 passes them in (added on review)
 
 ## 3. Catalog, listing and availability (Decisions 1, 12)
@@ -144,23 +144,30 @@
 
 ## 5. Rendering (Decision 6)
 
-- [ ] 5.1 Write failing unit tests for `TemplateRenderer`:
-  - [ ] 5.1.1 R1–R8, one test each, including sources per field
-  - [ ] 5.1.2 The design example renders to the expected request and sources
-  - [ ] 5.1.3 Same input twice → equal output
-  - [ ] 5.1.4 Defaults (`ComponentDefaultsSeedTest`):
-    - [ ] each row of Decision 6's table applied only when the field is unset and the default is
+- [x] 5.1 Write failing unit tests for `TemplateRenderer`:
+  - [x] 5.1.1 R1–R8, one test each, including sources per field
+  - [x] 5.1.2 The design example renders to the expected request and sources
+  - [x] 5.1.3 Same input twice → equal output
+  - [x] 5.1.4 Defaults (`ComponentDefaultsSeedTest`):
+    - [x] each row of Decision 6's table applied only when the field is unset and the default is
           non-blank, with no sources
-    - [ ] copyright only for explicit + external
-    - [ ] VCS tag and branch only when the build system needs VCS
-    - [ ] minor falls back to line; build omitted when equal to release
-    - [ ] deprecated build system ignored
-    - [ ] no `master` or version-format fallback
-  - [ ] 5.1.5 Classification, Jira task key and comment carried; `profile` absent
-- [ ] 5.2 Implement `template/TemplateRenderer.kt` and `template/ComponentDefaultsSeed.kt`
-- [ ] 5.3 The catalog passes `ComponentDefaultsSeed`'s paths to `ComponentProfileParser.parse`, on
+    - [x] copyright only for explicit + external
+    - [x] VCS tag and branch only when the build system needs VCS
+    - [x] minor falls back to line, line to minor; build omitted when equal to release
+    - [x] deprecated build system ignored
+    - [x] no `master` or version-format fallback
+  - [x] 5.1.5 Classification, Jira task key and comment carried; `profile` absent
+- [x] 5.2 Implement `template/TemplateRenderer.kt` and `template/ComponentDefaultsSeed.kt`
+- [x] 5.3 The catalog passes `ComponentDefaultsSeed`'s paths to `ComponentProfileParser.parse`, on
       load and on reload, closing 2.6 (added on review)
-- [ ] 5.4 Confirm tests pass
+- [x] 5.4 Confirm tests pass: `test` — 1402 tests, 0 failures, 1 skipped (pre-existing);
+      `TemplateRendererTest` 15, `ComponentDefaultsSeedTest` 6. `dbTest` on H2 —
+      `ReloadConfigComponentProfilesTest` 6, `ComponentProfileControllerV4Test` 10,
+      `ProfileOnCreateTest` 17, `TemplateCreateBaselineTest` 2. ktlint and detekt clean.
+      `AdminControllerV4SecurityTest` needs Postgres in Docker; not run locally, left to CI
+- [x] 5.5 `v4.json` regenerated for the listing's `kind: template` and `version`, so
+      `OpenApiV4SpecTest` stays green; the `api-changelog.md` entry stays with section 10
+      (added on review)
 
 ## 6. Describe parameters
 
