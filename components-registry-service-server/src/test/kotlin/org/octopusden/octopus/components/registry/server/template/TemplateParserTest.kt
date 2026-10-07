@@ -615,6 +615,26 @@ class TemplateParserTest {
     }
 
     @Test
+    @DisplayName("a rule on an unset field sees the default the renderer gives it: none for VCS when the build system needs none")
+    fun ruleOnUnsetFieldSeesApplicableDefault() {
+        val rule = linkedMapOf("baseConfiguration.vcsEntries[0].branch" to linkedMapOf("pattern" to ".+", "message" to "Set a branch."))
+        val needsVcs = exampleTemplate().apply { put("rules", rule) }
+        val noVcs =
+            flatten(
+                exampleTemplate().apply {
+                    put("rules", rule)
+                    at("fields.baseConfiguration.build")["buildSystem"] = "PROVIDED"
+                },
+                TEMPLATE_ID,
+            )
+
+        assertEquals(emptyList<String>(), problems(needsVcs))
+        assertTrue(
+            flatProblems(noVcs, EXAMPLE_DEFAULTS).any { it.startsWith("$TEMPLATE_ID.rules.baseConfiguration.vcsEntries[0].branch") },
+        )
+    }
+
+    @Test
     @DisplayName("solution: true without explicit and external is a problem")
     fun solutionNeedsExplicitExternal() {
         assertProblem("classification.solution", exampleTemplate().apply { at("classification")["solution"] = "true" })

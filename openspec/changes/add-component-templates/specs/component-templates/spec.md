@@ -58,9 +58,9 @@ Field paths, and the value each field kind accepts:
 | Field kind | Paths | Value |
 |---|---|---|
 | Free text | The field-rule paths of the profiles specification | Text that may contain `{{ NAME }}`, `{{ NAME \| lower }}`, `{{ NAME \| upper }}` |
-| CRS value | `baseConfiguration.build.buildSystem`, `baseConfiguration.escrow.generation` | A value of that list, or exactly `{{ NAME }}` |
-| Person | `componentOwner` | A login, or exactly `{{ NAME }}` |
-| Free-text list | `artifactIds[0].artifactTokens` | Items, each free text or exactly `{{ NAME }}` of a multi-value parameter |
+| CRS value | `baseConfiguration.build.buildSystem`, `baseConfiguration.escrow.generation` | A value of that list, or exactly `{{ NAME }}` of a `crs-list` parameter of the same list |
+| Person | `componentOwner` | A login, or exactly `{{ NAME }}` of a single-value `person` parameter |
+| Free-text list | `artifactIds[0].artifactTokens` | Items, each free text or exactly `{{ NAME }}` of a multi-value `select` |
 | CRS list | `labels` | Labels, or exactly `{{ NAME }}` of a `labels` parameter |
 | People list | `releaseManager`, `securityChampion` | Logins, or exactly `{{ NAME }}` of a `person` parameter |
 | Fixed choice | `artifactIds[0].mode`, `baseConfiguration.packages[0].packageType` | A fixed value only |
@@ -126,7 +126,7 @@ Field checks:
 |---|---|
 | Path | The path is not in the field table |
 | Parameter | The field uses a parameter the template does not define |
-| Kind | The field kind does not accept the parameter's type: a Person never goes into free text, and a multi-value parameter only into a list |
+| Kind | The field kind does not accept the parameter, as the field table says: a Person never goes into free text, and a multi-value parameter only into a list |
 | Whole value | A CRS value, Person or list item has text around `{{ NAME }}`, or a filter |
 | Filter | A filter other than `lower` or `upper` is used |
 | Fixed value | A fixed value is not in its static list: build systems, escrow generation modes, fixed choices |
@@ -153,6 +153,8 @@ Required fields, by classification:
   as needing VCS and as not `WHISKEY`.
 - A field fills a requirement when it has fixed non-blank text or a fixed list item, uses a
   required parameter, or gets a value from `component-defaults`.
+- A template rule on a field the template leaves unset is checked against the default R7 would
+  give it, or against an empty value.
 - Copyright SHALL NOT be checked on load; the dry run's create step checks it.
 
 Not checked on load, because they depend on data that changes at runtime:
@@ -294,7 +296,7 @@ registry SHALL record the parameters the value came from.
 | R2 Empty values | An empty optional parameter is replaced by nothing; a free-text field that ends up empty is unset |
 | R3 Whole values | A CRS value or Person field set to `{{ NAME }}` takes the value as it is |
 | R4 Free-text lists | Each item follows R1 and R2; an empty item is dropped; a multi-value parameter becomes one item per value |
-| R5 CRS and people lists | The template's items, then the parameter's values, in order, without duplicates |
+| R5 CRS and people lists | The items in the order the template lists them, a parameter's values in its place, without duplicates |
 | R6 Classification | Always the template's |
 | R7 Defaults | A field still unset takes its non-blank value from `component-defaults` (see below) |
 | R8 Overrides | An override replaces the rendered value of its field, and nothing else |

@@ -36,8 +36,6 @@ data class RenderedTemplate(
  * missing; the missing text is empty, so the create step reports it as it would for any request.
  */
 object TemplateRenderer {
-    private val VCS_DEFAULTS = setOf(ComponentDefaultsSeed.VCS_TAG, ComponentDefaultsSeed.VCS_BRANCH)
-
     fun render(
         template: ComponentTemplate,
         values: Map<String, List<String>>,
@@ -107,19 +105,13 @@ object TemplateRenderer {
         defaults: Map<String, String>,
         fields: MutableMap<String, List<String>>,
         sources: MutableMap<String, Set<String>>,
-    ) {
-        val explicitExternal = classification.external && classification.explicit == ComponentProfile.Explicit.TRUE
-        val buildSystem = fields[TemplateFields.BUILD_SYSTEM]?.firstOrNull() ?: defaults[TemplateFields.BUILD_SYSTEM]
-        val needsVcs = buildSystem == null || buildSystem !in TemplateFields.NO_VCS_BUILD_SYSTEMS
-        defaults
-            .filterKeys { it !in fields }
-            .filterKeys { it != ComponentDefaultsSeed.COPYRIGHT || explicitExternal }
-            .filterKeys { it !in VCS_DEFAULTS || needsVcs }
-            .forEach { (path, value) ->
-                fields[path] = listOf(value)
-                sources[path] = emptySet()
-            }
-    }
+    ) = ComponentDefaultsSeed
+        .applicable(defaults, classification, fields[TemplateFields.BUILD_SYSTEM]?.firstOrNull() ?: defaults[TemplateFields.BUILD_SYSTEM])
+        .filterKeys { it !in fields }
+        .forEach { (path, value) ->
+            fields[path] = listOf(value)
+            sources[path] = emptySet()
+        }
 
     private class RequestBuilder(
         private val fields: Map<String, List<String>>,

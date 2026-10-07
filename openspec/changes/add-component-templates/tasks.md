@@ -169,6 +169,11 @@
       `OpenApiV4SpecTest` stays green; the `api-changelog.md` entry stays with section 10
       (added on review)
 
+- [x] 5.6 A template rule on an unset field is checked on load against the default the renderer
+      would give it: `ComponentDefaultsSeed.applicable` shared by the renderer and
+      `TemplateParser`, so no VCS default for a build system that needs no VCS;
+      `TemplateParserTest` 75 (added on review)
+
 ## 6. Describe parameters
 
 - [ ] 6.1 Write failing tests for `GET /rest/api/4/component-templates/{id}`:
