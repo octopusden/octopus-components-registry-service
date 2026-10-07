@@ -162,7 +162,7 @@ class TemplateRendererTest {
     }
 
     @Test
-    @DisplayName("R5: a CRS or people list is the template's items then the parameter's values, in order, without duplicates")
+    @DisplayName("R5: a CRS or people list keeps the template's order, a parameter's values in its place, without duplicates")
     fun r5Lists() {
         val template =
             parsedTemplate(

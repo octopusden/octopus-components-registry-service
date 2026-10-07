@@ -206,27 +206,35 @@ A dry run with `CLIENT_CODE=ACME`, `PLUGIN_CODE=CORE`, `PLUGIN_NAME=Core API`, o
 
 ### 5. Parameter checks are pure, with two ports
 
-- `ParameterChecker.check(template, values) → List<ParameterProblem>` runs P1–P9 and returns every
-  failure, each with the parameter name and the check id.
+- `ParameterChecker.check(template, submitted, caller) → ParameterValues(values, problems)` runs
+  P1–P9:
+  - `values`: by parameter, defaults applied, blanks and duplicates dropped — what rendering uses;
+  - `problems`: every failure, each with the parameter name and the check id.
 - P7 asks a `ListValues` port:
   - labels: the dictionary, from the database;
   - build systems and escrow generation modes: the enums;
   - no `client-codes` list (Decision 13).
-- P8 asks the `EmployeeDirectoryService` the create already uses; when it is unavailable, P8
-  passes, as on create.
+- P8 asks an `EmployeeStatus` port, backed by the `EmployeeDirectoryService` the create already
+  uses, with the same `ActiveStatus`:
+  - inactive or unknown fails;
+  - unavailable or disabled passes, as on create.
 - A value given twice for a multi-value parameter counts once.
 - An absent parameter takes its default; `current-user` is the caller's login from
   `CurrentUserResolver`.
 
 ### 6. Rendering is pure and records sources
 
-- `TemplateRenderer.render(template, values, overrides, defaults) → Rendered(request, sources)`.
-  `sources` maps each set path to the parameters it used; a fixed value has none.
+- `TemplateRenderer.render(template, values, overrides, defaults, jiraTaskKey, changeComment)
+  → RenderedTemplate(request, fields, sources, overridden)`:
+  - `fields`: every set path and its rendered value;
+  - `sources`: each set path → the parameters it used; a fixed or defaulted value has none;
+  - `overridden`: the paths an override replaced.
 - Order:
   1. R1–R5, field by field;
   2. `component-defaults` on fields still unset (R7);
   3. overrides (R8).
-- A field filled by a default has no source parameters; an override's source is the override.
+- Which defaults apply to a template (copyright, VCS) is `ComponentDefaultsSeed.applicable`; the
+  renderer and the load check of the template's own rules both use it.
 - Why the registry applies the defaults:
   - whoever builds the component fills its unset fields — the Portal for a regular create, the
     registry for a template;
@@ -383,6 +391,13 @@ A dry run with `CLIENT_CODE=ACME`, `PLUGIN_CODE=CORE`, `PLUGIN_NAME=Core API`, o
     template problem.
   - Accepted: the list changes at runtime, so a load-time check could not keep a template valid
     anyway.
+- **A template cannot set `copyright`.**
+  - It is not a template field; an explicit, external template gets it only from
+    `component-defaults.copyright`.
+  - Where copyright is shown and a copyright folder is configured, today's create requires it for
+    an explicit, external component, so such a template fails every dry run without that default.
+  - Accepted: an installation that hides copyright strips it and never requires it; a `copyright`
+    field can be added to the field table when a template needs its own.
 - **Rules read the rendered request, not the stored entity.**
   - A rule on a field the installation hides sees the rendered value, although the create drops
     it.

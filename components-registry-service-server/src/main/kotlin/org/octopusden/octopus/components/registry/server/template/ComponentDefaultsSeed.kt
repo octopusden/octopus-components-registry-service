@@ -1,6 +1,7 @@
 package org.octopusden.octopus.components.registry.server.template
 
 import org.octopusden.octopus.components.registry.server.config.AdminConfigProperties
+import org.octopusden.octopus.components.registry.server.profile.ComponentProfile
 
 /**
  * The `component-defaults` values the Portal's create wizard pre-fills, by create-request path
@@ -8,8 +9,7 @@ import org.octopusden.octopus.components.registry.server.config.AdminConfigPrope
  * formats pair up as the Portal sends them. The Portal's own fallbacks — branch `master`, a
  * built-in full version format — are deliberately not invented here.
  *
- * Which defaults apply to a template, by its classification and build system, is the renderer's
- * decision; this only maps the keys.
+ * [applicable] narrows them to one template, by its classification and build system.
  */
 object ComponentDefaultsSeed {
     const val COPYRIGHT = "copyright"
@@ -37,6 +37,22 @@ object ComponentDefaultsSeed {
             VCS_TAG to defaults.vcs?.tag.clean(),
             VCS_BRANCH to defaults.vcs?.branch.clean(),
         ).mapNotNull { (path, value) -> value?.let { path to it } }.toMap()
+    }
+
+    /**
+     * The defaults a template gets: copyright only for an explicit, external one, VCS tag and
+     * branch only when its build system needs VCS. A `null` [buildSystem] counts as needing VCS.
+     */
+    fun applicable(
+        defaults: Map<String, String>,
+        classification: ComponentProfile.Classification,
+        buildSystem: String?,
+    ): Map<String, String> {
+        val explicitExternal = classification.external && classification.explicit == ComponentProfile.Explicit.TRUE
+        val needsVcs = buildSystem == null || buildSystem !in TemplateFields.NO_VCS_BUILD_SYSTEMS
+        return defaults
+            .filterKeys { it != COPYRIGHT || explicitExternal }
+            .filterKeys { (it != VCS_TAG && it != VCS_BRANCH) || needsVcs }
     }
 
     private fun String?.clean(): String? = this?.trim()?.takeIf { it.isNotEmpty() }

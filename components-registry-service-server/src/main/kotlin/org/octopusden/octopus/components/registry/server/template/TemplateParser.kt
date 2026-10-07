@@ -37,7 +37,7 @@ internal class TemplateParser(
         val overridable = overridable(fields)
         val rules = FieldRuleParser.parse("$id.rules", keys.values.ruleKeys(), keys.problems)
         classification?.let { TemplateRequiredFields(parameters, fields, defaults, keys).check(it) }
-        checkOwnRules(rules, fields)
+        classification?.let { checkOwnRules(rules, fields, it) }
         if (keys.problems.isNotEmpty()) return ProfileLoad.Entry(id, KIND, ProfileLoad.Entry.Status.FAILED, keys.problems.toList()) to null
         val template =
             ComponentTemplate(
@@ -133,19 +133,38 @@ internal class TemplateParser(
             }.onEach { (key, path) -> if (path !in fields) keys.problem(key, "'$path' is not set in fields") }
             .map { it.value }
 
-    /** A rule on a field built from parameters is checked by the dry run, on the rendered value. */
+    /**
+     * A rule on a field built from parameters is checked by the dry run, on the rendered value. An
+     * unset field is checked with the default the renderer would give it, or as empty.
+     */
     private fun checkOwnRules(
         rules: List<ComponentProfile.FieldRule>,
         fields: Map<String, TemplateField>,
-    ) = rules.forEach { rule ->
+        classification: ComponentProfile.Classification,
+    ) {
+        val buildSystem =
+            when (val field = fields[TemplateFields.BUILD_SYSTEM]) {
+                null -> defaults[TemplateFields.BUILD_SYSTEM]
+                is TemplateField.Single -> field.value.literal().takeIf { field.value.parameters.isEmpty() }
+                is TemplateField.Items -> null
+            }
+        val applicable = ComponentDefaultsSeed.applicable(defaults, classification, buildSystem)
+        rules.forEach { rule -> checkOwnRule(rule, fields, applicable) }
+    }
+
+    private fun checkOwnRule(
+        rule: ComponentProfile.FieldRule,
+        fields: Map<String, TemplateField>,
+        defaults: Map<String, String>,
+    ) {
         val field = fields[rule.path] as? TemplateField.Single
         val value =
             when {
                 field == null -> defaults[rule.path].orEmpty()
                 field.value.parameters.isEmpty() -> field.value.literal()
-                else -> return@forEach
+                else -> return
             }
-        if (!rule.regex.matches(value)) keys.problem("rules.${rule.path}", "the fixed value '$value' breaks the rule: ${rule.message}")
+        if (!rule.regex.matches(value)) keys.problem("rules.${rule.path}", "the value '$value' breaks the rule: ${rule.message}")
     }
 
     companion object {
