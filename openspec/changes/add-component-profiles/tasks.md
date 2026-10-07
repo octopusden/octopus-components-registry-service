@@ -162,17 +162,17 @@
 - [x] 6.4 ADR-016 — `component-profiles` as a third subtree: read from the property sources (so
       rule paths need no bracket notation, unlike `field-config`), snapshot and the
       no-partial-apply rule
-- [ ] 6.5 Tech-debt records in `docs/registry/tech-debt/` for the limitations this change leaves
+- [x] 6.5 Tech-debt records in `docs/registry/tech-debt/` for the limitations this change leaves
       in place, each `Open` with Context, The limit, Removal options and References, numbered from
-      the next free `TD-NNN` at implementation time:
-  - [ ] 6.5.1 Solution key rules hold only on a create that names a profile — a create without
-        `profile`, a rename and a solution-flag change are not checked against them
-  - [ ] 6.5.2 The remaining Portal-only create rules (Jira project key and full version format,
+      the next free `TD-NNN` at implementation time (TD-024 to TD-026; no other branch claimed them):
+  - [x] 6.5.1 Solution key rules hold only on a create that names a profile — a create without
+        `profile`, a rename and a solution-flag change are not checked against them — TD-024
+  - [x] 6.5.2 The remaining Portal-only create rules (Jira project key and full version format,
         VCS path, branch and tag unless the build system needs no VCS, `ssh://` VCS path on the
         configured host, artifact-ownership group-ID prefix, complete distribution coordinate) are
-        not enforced by the registry, so an API create can skip them
-  - [ ] 6.5.3 A reload is not atomic across configuration subtrees — `field-config` and
-        `component-defaults` are applied even when the profiles fail
+        not enforced by the registry, so an API create can skip them — TD-025
+  - [x] 6.5.3 A reload is not atomic across configuration subtrees — `field-config` and
+        `component-defaults` are applied even when the profiles fail — TD-026
 
 ## 7. Finalization
 
