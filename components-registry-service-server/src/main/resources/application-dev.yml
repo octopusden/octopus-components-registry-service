@@ -18,7 +18,6 @@ octopus-security:
       - EDIT_METADATA
 
 components-registry:
-  # The start-page profiles; CRS does not start without at least one valid regular profile.
   component-profiles:
     regular-external:
       kind: regular

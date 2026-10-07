@@ -4,7 +4,6 @@ server:
 components-registry:
   vcs:
     enabled: false
-  # CRS does not start without at least one valid regular profile.
   component-profiles:
     regular-internal:
       kind: regular
