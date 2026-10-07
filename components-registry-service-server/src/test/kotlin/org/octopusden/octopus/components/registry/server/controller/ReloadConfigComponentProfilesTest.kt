@@ -121,18 +121,18 @@ class ReloadConfigComponentProfilesTest {
     }
 
     @Test
-    @DisplayName("a template entry added: 200 applied, the entry listed as failed")
+    @DisplayName("a broken template entry added: 200 applied, the entry listed as failed with its problems")
     fun templateEntry() {
-        changeServiceConfig("ww-modpack.kind" to "template")
+        changeServiceConfig("client-plugin.kind" to "template")
 
         reload()
             .andExpect(status().isOk)
             .andExpect(jsonPath("$.componentProfiles.status").value("applied"))
-            .andExpect(jsonPath("$.componentProfiles.entries[?(@.id == 'ww-modpack')].status").value("failed"))
+            .andExpect(jsonPath("$.componentProfiles.entries[?(@.id == 'client-plugin')].status").value("failed"))
             .andExpect(
                 jsonPath(
-                    "$.componentProfiles.entries[?(@.id == 'ww-modpack')].problems[0]",
-                ).value("ww-modpack.kind: templates are not supported yet"),
+                    "$.componentProfiles.entries[?(@.id == 'client-plugin')].problems[0]",
+                ).value("client-plugin.title: required"),
             )
     }
 

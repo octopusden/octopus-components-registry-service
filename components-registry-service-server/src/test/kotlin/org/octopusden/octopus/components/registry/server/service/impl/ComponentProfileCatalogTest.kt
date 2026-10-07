@@ -53,9 +53,9 @@ class ComponentProfileCatalogTest {
     }
 
     @Test
-    @DisplayName("Decision 3: a template entry next to valid profiles does not stop construction")
+    @DisplayName("Decision 3: a broken template entry next to valid profiles does not stop construction")
     fun templateEntryAtStartup() {
-        val catalog = ComponentProfileCatalog { designExampleProperties() + ("ww-modpack.kind" to "template") }
+        val catalog = ComponentProfileCatalog { designExampleProperties() + ("client-plugin.kind" to "template") }
 
         assertEquals(4, catalog.profiles().size)
     }

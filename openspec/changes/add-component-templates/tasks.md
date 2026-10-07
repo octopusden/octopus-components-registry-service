@@ -16,66 +16,80 @@
 
 ## 2. Template model and parsing (Decisions 1–4)
 
-- [ ] 2.1 Write failing unit tests for `TemplateParser` and `TemplateExpression`:
-  - [ ] 2.1.1 The design example parses to a live template: four parameters, fourteen fields, two
+- [x] 2.1 Write failing unit tests for `TemplateParser` and `TemplateExpression`:
+  - [x] 2.1.1 The design example parses to a live template: four parameters, fourteen fields, two
         overridable paths
-  - [ ] 2.1.2 Required keys — each missing one → a problem naming it:
-    - [ ] `title`, `description`, `order`, `version`, `fields`
-    - [ ] `classification.external`, `classification.explicit`
-    - [ ] a parameter's `label`, `type`
-  - [ ] 2.1.3 Unknown keys — a problem naming the key, at each level:
-    - [ ] template
-    - [ ] classification; `explicit: ask` is also a problem
-    - [ ] parameter
-    - [ ] rule
-  - [ ] 2.1.4 Parameter checks, one test each:
-    - [ ] bad parameter name
-    - [ ] a key that does not apply to the type
-    - [ ] `multiple` on `text`, and on `crs-list`
-    - [ ] `select` without options; with a repeated option
-    - [ ] unknown `list`; `list: client-codes`
-    - [ ] pattern that does not compile
-    - [ ] `max-length` / `max-selection` not above 0
-    - [ ] invalid default: not an option, not matching the pattern, too long, several values for
+  - [x] 2.1.2 Required keys — each missing one → a problem naming it:
+    - [x] `title`, `description`, `order`, `version`, `fields`
+    - [x] `classification.external`, `classification.explicit`
+    - [x] a parameter's `label`, `type`
+  - [x] 2.1.3 Unknown keys — a problem naming the key, at each level:
+    - [x] template
+    - [x] classification; `explicit: ask` is also a problem
+    - [x] parameter
+    - [x] rule
+  - [x] 2.1.4 Parameter checks, one test each:
+    - [x] bad parameter name
+    - [x] a key that does not apply to the type
+    - [x] `multiple` on `text`, and on `crs-list`
+    - [x] `select` without options; with a repeated option
+    - [x] unknown `list`; `list: client-codes`
+    - [x] pattern that does not compile
+    - [x] `max-length` / `max-selection` not above 0
+    - [x] invalid default: not an option, not matching the pattern, too long, several values for
           a single-value parameter
-    - [ ] unused parameter
-  - [ ] 2.1.5 Field checks, one test each:
-    - [ ] path outside the table
-    - [ ] undefined parameter
-    - [ ] Person in free text
-    - [ ] multi-value parameter in a non-list field
-    - [ ] CRS value, Person or list item with text around `{{ NAME }}`, or with a filter
-    - [ ] filter other than `lower` / `upper`
-    - [ ] malformed `{{`
-    - [ ] fixed build system or escrow mode not in its enum
-    - [ ] fixed choice outside its values
-  - [ ] 2.1.6 Whole-template checks, one test each:
-    - [ ] each required field, for explicit + external and not
-    - [ ] distribution: none of Maven GAV, Docker image, package → fails; `WHISKEY` → passes
-    - [ ] build system from a parameter → VCS fields required
-    - [ ] a required field filled by a fixed value, by a required parameter, by a component
+    - [x] unused parameter
+  - [x] 2.1.5 Field checks, one test each:
+    - [x] path outside the table
+    - [x] undefined parameter
+    - [x] Person in free text
+    - [x] multi-value parameter in a non-list field
+    - [x] CRS value, Person or list item with text around `{{ NAME }}`, or with a filter
+    - [x] filter other than `lower` / `upper`
+    - [x] malformed `{{`
+    - [x] fixed build system or escrow mode not in its enum
+    - [x] fixed choice outside its values
+  - [x] 2.1.6 Whole-template checks, one test each:
+    - [x] each required field, for explicit + external and not
+    - [x] distribution: none of Maven GAV, Docker image, package → fails; `WHISKEY` → passes
+    - [x] build system from a parameter → VCS fields required
+    - [x] a required field filled by a fixed value, by a required parameter, by a component
           default → passes
-    - [ ] a required field only the Portal's fallback would fill → fails
-    - [ ] no VCS needed, for each of the five build systems
-    - [ ] `overridable` path not set in `fields`
-    - [ ] fixed value breaking a template rule
-    - [ ] `solution: true` without explicit and external
-  - [ ] 2.1.7 Fixed labels, fixed people and uniqueness are not checked on load
-  - [ ] 2.1.8 Several problems in one template → all reported, each naming its parameter or field
-  - [ ] 2.1.9 Expressions (Jinja subset):
-    - [ ] spaces inside the braces are optional
-    - [ ] literal text is kept
-    - [ ] `{{` without a closing match is rejected
-    - [ ] a `{% … %}` tag and a `{# … #}` comment are rejected
-    - [ ] an expression other than a parameter name (`{{ A ~ B }}`, `{{ 'x' }}`) is rejected
-- [ ] 2.2 Implement:
-  - [ ] 2.2.1 `template/ComponentTemplate.kt` — template, parameter (sealed by type), field value
-  - [ ] 2.2.2 `template/TemplateFields.kt` — path → field kind table (Decision 2)
-  - [ ] 2.2.3 `template/TemplateExpression.kt` — parse and render one free-text value
-  - [ ] 2.2.4 `template/TemplateParser.kt` — pure; problems prefixed with the full key
-  - [ ] 2.2.5 `ComponentProfileParser` hands `kind: template` to `TemplateParser`; `ProfileLoad`
+    - [x] a required field only the Portal's fallback would fill → fails
+    - [x] no VCS needed, for each of the five build systems
+    - [x] `overridable` path not set in `fields`
+    - [x] fixed value breaking a template rule
+    - [x] `solution: true` without explicit and external
+  - [x] 2.1.7 Fixed labels, fixed people and uniqueness are not checked on load
+  - [x] 2.1.8 Several problems in one template → all reported, each naming its parameter or field
+  - [x] 2.1.9 Expressions (Jinja subset):
+    - [x] spaces inside the braces are optional
+    - [x] literal text is kept
+    - [x] `{{` without a closing match is rejected
+    - [x] a `{% … %}` tag and a `{# … #}` comment are rejected
+    - [x] an expression other than a parameter name (`{{ A ~ B }}`, `{{ 'x' }}`) is rejected
+- [x] 2.2 Implement:
+  - [x] 2.2.1 `template/ComponentTemplate.kt` — template, parameter (sealed by type), field value
+  - [x] 2.2.2 `template/TemplateFields.kt` — path → field kind table (Decision 2)
+  - [x] 2.2.3 `template/TemplateExpression.kt` — parse one value into literal and parameter parts
+        (rendering moves to section 5)
+  - [x] 2.2.4 `template/TemplateParser.kt` — pure; problems prefixed with the full key
+  - [x] 2.2.5 `ComponentProfileParser` hands `kind: template` to `TemplateParser`; `ProfileLoad`
         gains `templates`
-- [ ] 2.3 Confirm tests pass (record the command and count)
+- [x] 2.3 Confirm tests pass: `./gradlew :components-registry-service-server:test` — 1355 tests,
+      0 failures, 1 skipped (pre-existing); `TemplateExpressionTest` 15, `TemplateParserTest` 74.
+      `dbTest` for `TemplateCreateBaselineTest` 2, `ReloadConfigComponentProfilesTest` 5,
+      `ComponentProfileControllerV4Test` 9 — all green. ktlint and detekt clean.
+- [x] 2.4 Split out of `TemplateParser` to keep each file to one job (added on review):
+  - [x] 2.4.1 `template/EntryKeys.kt` — flattened keys of an entry or section, and its problem list
+  - [x] 2.4.2 `template/TemplateParameterParser.kt` — one parameter and its checks
+  - [x] 2.4.3 `template/TemplateFieldChecker.kt` — the field-kind checks
+  - [x] 2.4.4 `template/TemplateRequiredFields.kt` — the required-fields table
+  - [x] 2.4.5 `profile/FieldRuleParser.kt` — rule parsing shared by profiles and templates
+- [x] 2.5 Profile tests that pinned "templates are not supported yet" now expect a broken template
+      to fail with its own problems (added on review)
+- [ ] 2.6 The catalog still parses with no `component-defaults`, so a template that relies on a
+      default fails its load check until section 5 passes them in (added on review)
 
 ## 3. Catalog, listing and availability (Decisions 1, 12)
 
@@ -137,7 +151,9 @@
     - [ ] no `master` or version-format fallback
   - [ ] 5.1.5 Classification, Jira task key and comment carried; `profile` absent
 - [ ] 5.2 Implement `template/TemplateRenderer.kt` and `template/ComponentDefaultsSeed.kt`
-- [ ] 5.3 Confirm tests pass
+- [ ] 5.3 The catalog passes `ComponentDefaultsSeed`'s paths to `ComponentProfileParser.parse`, on
+      load and on reload, closing 2.6 (added on review)
+- [ ] 5.4 Confirm tests pass
 
 ## 6. Describe parameters
 
