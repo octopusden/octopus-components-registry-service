@@ -340,6 +340,8 @@ Jira task key and a comment, and a `dryRun` query parameter:
 | `false` | A create from the template |
 
 - A dry run and a create SHALL take the same body and run the same steps; only a create commits.
+- Both SHALL require a user the availability rule lets use the template (`CREATE_COMPONENTS` in
+  this change), and answer 403 otherwise.
 - A malformed Jira task key SHALL be rejected with 400 on both, so a dry run finds it before the
   create.
 - A failed, removed or unknown template SHALL answer 404 on both.
@@ -347,6 +349,10 @@ Jira task key and a comment, and a `dryRun` query parameter:
 #### Scenario: No dryRun means a dry run
 - **WHEN** a request without `dryRun` passes every check
 - **THEN** the response is 200 with a valid result, and nothing is created
+
+#### Scenario: User who may not create components
+- **WHEN** a user without `CREATE_COMPONENTS` sends a dry run
+- **THEN** the response is 403
 
 #### Scenario: Same body, dry run then create
 - **WHEN** a request passes with `dryRun` absent, and the same body is sent with `dryRun=false`

@@ -16,14 +16,17 @@ The Portal's create wizard rejects a new component unless:
 - every artifact-ownership group ID starts with a supported prefix;
 - an explicit and external component has a complete distribution coordinate (Docker image name,
   package name).
+- a Jira task key is given; the registry accepts a blank one, on a template create as on any create.
 
 `POST /rest/api/4/components` checks none of these.
 
 ## The limit
 
-Any client calling the registry directly — automation, scripts, and later the template create path —
+Any client calling the registry directly — automation, scripts, and the template create path —
 can create a component the Portal would have refused: no Jira project, no VCS root, a VCS root on
-another host, an ownership group outside the supported prefixes, or a distribution without a name.
+another host, an ownership group outside the supported prefixes, a distribution without a name, or
+no Jira task key on the audit row. A template's required-field load check covers the first two for
+template creates.
 
 ## Removal options
 
@@ -40,3 +43,4 @@ another host, an ownership group outside the supported prefixes, or a distributi
 - Portal: `createFormModel.ts`, `buildCreateRequest.ts`, `vcsHost.ts`
 - `ComponentManagementServiceImpl.createComponent`, `validateMalformedFieldRules`
 - `openspec/changes/add-component-profiles/proposal.md` (Out of scope)
+- `openspec/changes/add-component-templates/proposal.md` (Out of scope)

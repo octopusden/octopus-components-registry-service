@@ -20,7 +20,8 @@ fun parsedTemplate(
     return requireNotNull(load.templates.singleOrNull()) { "not live: ${load.entries.single { it.id == TEMPLATE_ID }.problems}" }
 }
 
-private val EXAMPLE_VALUES =
+/** The design example's dry-run values, the owner given. */
+val EXAMPLE_VALUES =
     mapOf(
         "CLIENT_CODE" to listOf("ACME"),
         "PLUGIN_CODE" to listOf("CORE"),

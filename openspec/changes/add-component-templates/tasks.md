@@ -176,92 +176,106 @@
 
 ## 6. Describe parameters
 
-- [ ] 6.1 Write failing tests for `GET /rest/api/4/component-templates/{id}`:
-  - [ ] 6.1.1 Each type's settings and default
-  - [ ] 6.1.2 `crs-list` current values
-  - [ ] 6.1.3 `current-user` returned as the caller
-  - [ ] 6.1.4 404 for a failed and for an unknown template
-  - [ ] 6.1.5 403 without `ACCESS_COMPONENTS`
-- [ ] 6.2 Implement `controller/ComponentTemplateControllerV4.kt` (database mode) and its DTOs
-- [ ] 6.3 Confirm tests pass
+- [x] 6.1 Write failing tests for `GET /rest/api/4/component-templates/{id}`:
+  - [x] 6.1.1 Each type's settings and default
+  - [x] 6.1.2 `crs-list` current values
+  - [x] 6.1.3 `current-user` returned as the caller
+  - [x] 6.1.4 404 for a failed and for an unknown template
+  - [x] 6.1.5 403 without `ACCESS_COMPONENTS`
+- [x] 6.2 Implement `controller/ComponentTemplateControllerV4.kt` (database mode) and its DTOs
+- [x] 6.3 Confirm tests pass: `ComponentTemplateControllerV4Test` (`dbTest`, H2). The controller is
+      IO wiring, so it was written first and covered by the integration test
 
 ## 7. Dry run (Decisions 7–9)
 
-- [ ] 7.1 Write failing tests:
-  - [ ] 7.1.1 `CreateFailureFields`:
-    - [ ] one test per message prefix today's create emits, mapped to its paths
-    - [ ] an unmatched message → no field
-  - [ ] 7.1.2 Template rule failure attributed to its parameters; fixed field → template problem
-  - [ ] 7.1.3 Through `POST …/components`, `dryRun` absent or `true`:
-    - [ ] `dryRun` absent → a dry run: 200, nothing created
-    - [ ] an invalid input still answers 200, `valid: false`
-    - [ ] a malformed Jira task key → 400
-    - [ ] parameter problems stop it
-    - [ ] key taken → problem on `name` naming `CLIENT_CODE`, `PLUGIN_CODE`
-    - [ ] rule and create problems both reported
-    - [ ] unknown fixed label → template problem
-    - [ ] inactive fixed owner → template problem
-    - [ ] 404 for a failed template
-  - [ ] 7.1.4 Nothing written, after a passing and after a failing dry run: no component, label,
-        audit or TeamCity dictionary row
-  - [ ] 7.1.5 A 409 cross-component conflict and a 403 editability failure become problems, not
+- [x] 7.1 Write failing tests:
+  - [x] 7.1.1 `CreateFailureFields`:
+    - [x] one test per message prefix today's create emits, mapped to its paths
+    - [x] an unmatched message → no field
+  - [x] 7.1.2 Template rule failure attributed to its parameters; fixed field → template problem
+  - [x] 7.1.3 Through `POST …/components`, `dryRun` absent or `true`:
+    - [x] `dryRun` absent → a dry run: 200, nothing created
+    - [x] an invalid input still answers 200, `valid: false`
+    - [x] a malformed Jira task key → 400
+    - [x] parameter problems stop it
+    - [x] key taken → problem on `name` naming `CLIENT_CODE`, `PLUGIN_CODE`
+    - [x] rule and create problems both reported
+    - [x] unknown fixed label → template problem
+    - [x] inactive fixed owner → template problem
+    - [x] 404 for a failed template
+  - [x] 7.1.4 Nothing written, after a passing and after a failing dry run: no component, label,
+        audit or component-source row. A template sets no TeamCity projects, so the TeamCity
+        dictionary cannot be written (added on review)
+  - [x] 7.1.5 A 409 cross-component conflict and a 403 editability failure become problems, not
         error responses
-- [ ] 7.2 Implement:
-  - [ ] 7.2.1 `template/CreateFailureFields.kt`
-  - [ ] 7.2.2 `template/TemplateDryRun.kt` — rollback-only `TransactionTemplate` around
+- [x] 7.2 Implement:
+  - [x] 7.2.1 `template/CreateFailureFields.kt`
+  - [x] 7.2.2 `template/TemplateDryRun.kt` — rollback-only `TransactionTemplate` around
         `createComponent`
-  - [ ] 7.2.3 `POST …/components` on `ComponentTemplateControllerV4` with `dryRun` (default
+  - [x] 7.2.3 `POST …/components` on `ComponentTemplateControllerV4` with `dryRun` (default
         `true`), and its DTOs
-- [ ] 7.3 Confirm tests pass, `dbTest` included
+- [x] 7.3 Confirm tests pass, `dbTest` included: `CreateFailureFieldsTest` 31,
+      `TemplateProblemsTest` 8, `ComponentTemplateControllerV4Test` 26
+- [x] 7.4 `template/TemplateProblems.kt` — rule, fixed-label and create problems attributed
+      through `sources`, unit-tested apart from the transaction (added on review)
+- [x] 7.5 `config/ComponentTemplatesConfig.kt` (database mode): `ListValues` from the labels
+      dictionary, `ParameterChecker` on `EmployeeDirectoryService`, `TemplateDryRun` on today's
+      create (added on review)
+- [x] 7.6 Dry run and create require a user who may use the template (403); spec scenario added
+      (added on review)
 
 ## 8. Create from a template and overrides (Decision 10)
 
-- [ ] 8.1 Write failing tests through `POST /rest/api/4/component-templates/{id}/components?dryRun=false`:
-  - [ ] 8.1.1 Clean input → 201; the audit row has the Jira task key and comment; the component
+- [x] 8.1 Write failing tests through `POST /rest/api/4/component-templates/{id}/components?dryRun=false`:
+  - [x] 8.1.1 Clean input → 201; the audit row has the Jira task key and comment; the component
         has no link to the template
-  - [ ] 8.1.2 Any problem → 422 with the dry-run body, nothing created
-  - [ ] 8.1.3 Malformed Jira task key → 400; blank or absent key → created
-  - [ ] 8.1.4 Template removed by a reload → 404
-  - [ ] 8.1.5 Overrides:
-    - [ ] overridable path → created with the value
-    - [ ] non-overridable path → 400 naming it
-    - [ ] `mayOverride` false (stubbed) → 403
-    - [ ] invalid override → problem on that field
-  - [ ] 8.1.6 The same body sent without `dryRun`, then with `dryRun=false` → 200 valid, then 201
-- [ ] 8.2 Implement `dryRun=false` on the same endpoint, and the committing path in
+  - [x] 8.1.2 Any problem → 422 with the dry-run body, nothing created
+  - [x] 8.1.3 Malformed Jira task key → 400; blank or absent key → created
+  - [x] 8.1.4 Template removed by a reload → 404
+  - [x] 8.1.5 Overrides:
+    - [x] overridable path → created with the value
+    - [x] non-overridable path → 400 naming it
+    - [x] `mayOverride` false → 403, through a test availability rule that wraps the real one
+    - [x] invalid override → problem on that field, not a template problem (an `adminOnly`
+          Jira project key overridden by an editor)
+  - [x] 8.1.6 The same body sent without `dryRun`, then with `dryRun=false` → 200 valid, then 201
+- [x] 8.2 Implement `dryRun=false` on the same endpoint, and the committing path in
       `TemplateDryRun`
-- [ ] 8.3 Confirm tests pass
+- [x] 8.3 Confirm tests pass: in `ComponentTemplateControllerV4Test`
 
 ## 9. Administrator read (Decision 11)
 
-- [ ] 9.1 Write failing tests for `GET /rest/api/4/admin/component-profiles`:
-  - [ ] 9.1.1 Live and failed entries, with definition, problems and configuration text
-  - [ ] 9.1.2 Configuration version present, and absent
-  - [ ] 9.1.3 Last reload failed → said so, with the problems
-  - [ ] 9.1.4 403 without `IMPORT_DATA`
-- [ ] 9.2 Implement on `AdminControllerV4`, with the YAML dump of an entry's raw keys
-- [ ] 9.3 Confirm tests pass
+- [x] 9.1 Write failing tests for `GET /rest/api/4/admin/component-profiles`:
+  - [x] 9.1.1 Live and failed entries, with definition, problems and configuration text
+  - [x] 9.1.2 Configuration version present, and absent
+  - [x] 9.1.3 Last reload failed → said so, with the problems
+  - [x] 9.1.4 403 without `IMPORT_DATA`
+- [x] 9.2 Implement on `AdminControllerV4`, with the YAML dump of an entry's raw keys
+  - [x] 9.2.1 `profile/EntryYaml.kt` — pure; `EntryYamlTest` 4, written first: the design example
+        round-trips (added on review)
+- [x] 9.3 Confirm tests pass: `AdminComponentProfilesTest` 4. `AdminControllerV4SecurityTest`
+      needs Postgres in Docker; not run locally, left to CI
 
 ## 10. Docs and contract
 
-- [ ] 10.1 Regenerate `v4.json`; `OpenApiV4SpecTest` green
-- [ ] 10.2 `docs/registry/api-changelog.md`:
-  - [ ] the four endpoints
-  - [ ] `kind: template` and `version` in the listing
-  - [ ] `live` templates in the reload response
-- [ ] 10.3 `docs/registry/functional-spec.md` — templates, parameters, dry run, create
-- [ ] 10.4 ADR-016 — templates as entries of the `component-profiles` subtree; field keys are
+- [x] 10.1 Regenerate `v4.json` (`generateOpenApiDocs`); `OpenApiV4SpecTest` green
+- [x] 10.2 `docs/registry/api-changelog.md`:
+  - [x] the four endpoints
+  - [x] `kind: template` and `version` in the listing
+  - [x] `live` templates in the reload response
+- [x] 10.3 `docs/registry/functional-spec.md` — templates, parameters, dry run, create
+- [x] 10.4 ADR-016 — templates as entries of the `component-profiles` subtree; field keys are
       create-request paths
-- [ ] 10.5 Tech-debt records, next free `TD-NNN`:
-  - [ ] 10.5.1 The dry run reports one failure of today's create rules at a time
-  - [ ] 10.5.2 No client-code list in the registry:
-    - [ ] the limit: a template lists client codes by hand as `select` options, so a new client
+- [x] 10.5 Tech-debt records, next free `TD-NNN`:
+  - [x] 10.5.1 TD-027: the dry run reports one failure of today's create rules at a time
+  - [x] 10.5.2 TD-028: no client-code list in the registry:
+    - [x] the limit: a template lists client codes by hand as `select` options, so a new client
           needs a template change
-    - [ ] removal: read the list from the service that owns client codes, as a `client-codes`
+    - [x] removal: read the list from the service that owns client codes, as a `client-codes`
           `crs-list`
-- [ ] 10.5a TD-025 (Portal-only create rules): add the required Jira task key, which the Portal
+- [x] 10.5a TD-025 (Portal-only create rules): add the required Jira task key, which the Portal
       enforces and the registry does not
-- [ ] 10.6 Listing DTO schema text: `kind` now includes `template`
+- [x] 10.6 Listing DTO schema text: `kind` now includes `template`
 
 ## 11. Finalization
 
