@@ -174,9 +174,22 @@ A dry run with `CLIENT_CODE=ACME`, `PLUGIN_CODE=CORE`, `PLUGIN_NAME=Core API`, o
 ### 4. Load checks
 
 - The parser applies the spec's load checks; every problem is collected.
-- Required fields — a field counts as produced when:
-  - the template fixes it; or
-  - a required parameter fills it; or
+- Required fields: today's create rules plus the Portal-only required fields, so a template
+  component is complete whichever client creates it:
+
+  | Classification | Required |
+  |---|---|
+  | Any | `name`, `componentOwner`, build system, Jira project key, full version format (`baseConfiguration.jira.versionFormat`) |
+  | Any, unless the build system needs no VCS | VCS path, branch and tag |
+  | Explicit and external | `displayName`, `releaseManager`, `securityChampion` |
+  | Explicit and external, unless the build system is `WHISKEY` | At least one of: Maven GAV (group and artifact pattern), Docker image name, package name |
+
+  - A build system taken from a parameter counts as needing VCS and as not `WHISKEY`.
+  - Copyright is left to the dry run: today's create requires it only when a copyright catalog is
+    configured, a runtime setting.
+- A required field counts as produced when:
+  - the template fixes it with non-blank text, or a list field has a fixed item; or
+  - it uses a required parameter; or
   - `component-defaults` supplies it at load (Decision 6's table).
 
   The Portal's fallback values do not count.
@@ -228,7 +241,7 @@ A dry run with `CLIENT_CODE=ACME`, `PLUGIN_CODE=CORE`, `PLUGIN_NAME=Core API`, o
   | `copyright` | `copyright`, only for an explicit, external template |
   | `baseConfiguration.jira.projectKey` | `jira.projectKey` |
   | `baseConfiguration.jira.versionFormat` | `jira.componentVersionFormat.versionFormat` |
-  | `baseConfiguration.jira.lineVersionFormat` | `jira.componentVersionFormat.lineVersionFormat` |
+  | `baseConfiguration.jira.lineVersionFormat` | `jira.componentVersionFormat.lineVersionFormat`, else the minor format |
   | `baseConfiguration.jira.minorVersionFormat` | `jira.componentVersionFormat.minorVersionFormat`, else the line format |
   | `baseConfiguration.jira.releaseVersionFormat` | `jira.componentVersionFormat.releaseVersionFormat` |
   | `baseConfiguration.jira.buildVersionFormat` | `jira.componentVersionFormat.buildVersionFormat`, only when it differs from the release format |

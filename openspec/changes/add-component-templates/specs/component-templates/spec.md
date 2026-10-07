@@ -139,6 +139,22 @@ Whole-template checks:
 | Overridable | An `overridable` path is not set in `fields` |
 | Own rules | A fixed value breaks one of the template's rules |
 
+Required fields, by classification:
+
+| Classification | Required |
+|---|---|
+| Any | `name`, `componentOwner`, build system, Jira project key, full version format |
+| Any, unless the build system needs no VCS | VCS path, branch and tag |
+| Explicit and external | `displayName`, `releaseManager`, `securityChampion` |
+| Explicit and external, unless the build system is `WHISKEY` | At least one of: Maven GAV (group and artifact pattern), Docker image name, package name |
+
+- The build systems that need no VCS are `PROVIDED`, `ESCROW_PROVIDED_MANUALLY`,
+  `ESCROW_NOT_SUPPORTED`, `WHISKEY` and `BS2_0`. A build system taken from a parameter SHALL count
+  as needing VCS and as not `WHISKEY`.
+- A field fills a requirement when it has fixed non-blank text or a fixed list item, uses a
+  required parameter, or gets a value from `component-defaults`.
+- Copyright SHALL NOT be checked on load; the dry run's create step checks it.
+
 Not checked on load, because they depend on data that changes at runtime:
 
 - Fixed labels; the dry run checks them against the labels dictionary.
@@ -169,6 +185,11 @@ Not checked on load, because they depend on data that changes at runtime:
 - **WHEN** an explicit, external template sets no `displayName`, has no required parameter for it,
   and `component-defaults` has no display name
 - **THEN** the template is failed with a problem naming `displayName`
+
+#### Scenario: Distribution missing
+- **WHEN** an explicit, external template with build system `GRADLE` sets no Maven GAV, Docker
+  image or package name
+- **THEN** the template is failed with a problem naming the distribution fields
 
 #### Scenario: Default not set either
 - **WHEN** a template sets no VCS branch for a build system that needs VCS, and
