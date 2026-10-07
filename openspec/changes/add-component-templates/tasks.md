@@ -1,14 +1,18 @@
 ## 1. Baseline
 
-- [ ] 1.1 Characterization tests on what this change alters, green on the unchanged code:
-  - [ ] 1.1.1 A reload with a template entry answers 200, the entry `failed` with "templates are
-        not supported yet" (becomes `live` for a valid template in section 3)
-  - [ ] 1.1.2 A create whose `name` is taken throws `IllegalArgumentException`
+- [x] 1.1 Characterization tests on what this change alters, green on the unchanged code:
+  - [x] 1.1.1 A reload with a template entry answers 200, the entry `failed` with "templates are
+        not supported yet" (becomes `live` for a valid template in section 3) — already pinned by
+        `ReloadConfigComponentProfilesTest.templateEntry`
+  - [x] 1.1.2 A create whose `name` is taken throws `IllegalArgumentException`
         `name: a component with name '<key>' already exists` and leaves no row
-  - [ ] 1.1.3 A create rolled back after `saveAndFlush` leaves no component, label dictionary row
+  - [x] 1.1.3 A create rolled back after `saveAndFlush` leaves no component, label dictionary row
         or audit row (Decision 8 relies on it)
-- [ ] 1.2 Re-check Decision 6's table against the Portal's `initialValues`; adjust the table if the
+- [x] 1.2 Re-check Decision 6's table against the Portal's `initialValues`; adjust the table if the
       Portal changed
+  - [x] 1.2.1 The line format falls back to the minor format, as the Portal sends it; table fixed
+        (added on review)
+- [x] 1.3 Required fields by classification written into the spec and Decision 4 (added on review)
 
 ## 2. Template model and parsing (Decisions 1–4)
 
@@ -47,6 +51,8 @@
     - [ ] fixed choice outside its values
   - [ ] 2.1.6 Whole-template checks, one test each:
     - [ ] each required field, for explicit + external and not
+    - [ ] distribution: none of Maven GAV, Docker image, package → fails; `WHISKEY` → passes
+    - [ ] build system from a parameter → VCS fields required
     - [ ] a required field filled by a fixed value, by a required parameter, by a component
           default → passes
     - [ ] a required field only the Portal's fallback would fill → fails
