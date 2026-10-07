@@ -122,22 +122,25 @@
 
 ## 4. Parameter checks (Decision 5)
 
-- [ ] 4.1 Write failing unit tests for `ParameterChecker`, with stub `ListValues` and employee
+- [x] 4.1 Write failing unit tests for `ParameterChecker`, with stub `ListValues` and employee
       lookups:
-  - [ ] 4.1.1 P1–P9, one failing and one passing case each
-  - [ ] 4.1.2 P5 uses the template's message when set, a default message otherwise
-  - [ ] 4.1.3 P6 with client codes listed as `select` options: an unlisted code fails
-  - [ ] 4.1.4 P7 for each list:
-    - [ ] labels against the dictionary
-    - [ ] build systems and escrow modes against their enums
-  - [ ] 4.1.5 Absent parameter takes its default; `current-user` resolves to the caller
-  - [ ] 4.1.6 Empty optional parameter passes; a duplicate value counts once
-  - [ ] 4.1.7 Employee service unavailable → P8 passes
-  - [ ] 4.1.8 Several failures → all reported
-- [ ] 4.2 Implement:
-  - [ ] 4.2.1 `template/ParameterChecker.kt`
-  - [ ] 4.2.2 `template/ListValues.kt` and its implementation: labels dictionary, the two enums
-- [ ] 4.3 Confirm tests pass
+  - [x] 4.1.1 P1–P9, one failing and one passing case each
+  - [x] 4.1.2 P5 uses the template's message when set, a default message otherwise
+  - [x] 4.1.3 P6 with client codes listed as `select` options: an unlisted code fails
+  - [x] 4.1.4 P7 for each list:
+    - [x] labels against the dictionary
+    - [x] build systems and escrow modes against their enums
+  - [x] 4.1.5 Absent parameter takes its default; `current-user` resolves to the caller
+  - [x] 4.1.6 Empty optional parameter passes; a duplicate value counts once
+  - [x] 4.1.7 Employee service unavailable → P8 passes
+  - [x] 4.1.8 Several failures → all reported
+- [x] 4.2 Implement:
+  - [x] 4.2.1 `template/ParameterChecker.kt`
+  - [x] 4.2.2 `ListValues` (in `ParameterChecker.kt`) and `template/RegistryListValues.kt`: labels
+        dictionary, the two enums; `EmployeeStatus` reuses the create's `ActiveStatus`. Beans are
+        wired with the endpoint (section 6)
+- [x] 4.3 Confirm tests pass: `ParameterCheckerTest` 17, `RegistryListValuesTest` 2; ktlint and
+      detekt clean
 
 ## 5. Rendering (Decision 6)
 
