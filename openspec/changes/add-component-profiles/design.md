@@ -165,7 +165,10 @@ Creates against it:
 
 ### 6. Availability is one function
 
-- `ProfileAvailability.evaluate(profile, permissions) → usable | (unusable, reason)`.
+- `ProfileAvailability.evaluate(profile) → Availability(usable, reason)`, a `fun interface`; this
+  change's implementation is `PermissionProfileAvailability`, built in `ComponentProfilesConfig`
+  over `PermissionEvaluator.hasPermission`. The D&S change replaces the implementation, not the
+  callers.
 - In this change: usable when the user holds `CREATE_COMPONENTS`; reason otherwise "You do not
   have permission to create components".
 - The listing and the create check both call it, so the D&S change edits one place.

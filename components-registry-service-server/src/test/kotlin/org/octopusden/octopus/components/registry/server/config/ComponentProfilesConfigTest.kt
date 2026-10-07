@@ -3,12 +3,17 @@ package org.octopusden.octopus.components.registry.server.config
 import org.assertj.core.api.Assertions.assertThat
 import org.junit.jupiter.api.DisplayName
 import org.junit.jupiter.api.Test
+import org.mockito.Mockito.mock
 import org.octopusden.octopus.components.registry.server.profile.ComponentProfileCatalog
 import org.octopusden.octopus.components.registry.server.profile.ComponentProfilesException
+import org.octopusden.octopus.components.registry.server.security.PermissionEvaluator
 import org.springframework.boot.test.context.runner.ApplicationContextRunner
 
 class ComponentProfilesConfigTest {
-    private val runner = ApplicationContextRunner().withUserConfiguration(ComponentProfilesConfig::class.java)
+    private val runner =
+        ApplicationContextRunner()
+            .withUserConfiguration(ComponentProfilesConfig::class.java)
+            .withBean(PermissionEvaluator::class.java, { mock(PermissionEvaluator::class.java) })
 
     private val validProfile =
         arrayOf(

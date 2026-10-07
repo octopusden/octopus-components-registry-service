@@ -99,18 +99,25 @@
 
 ## 4. Listing (Decision 6)
 
-- [ ] 4.1 Write failing tests:
-  - [ ] 4.1.1 `ProfileAvailability`: with `CREATE_COMPONENTS` → usable; without → unusable with
+- [x] 4.1 Write failing tests:
+  - [x] 4.1.1 `ProfileAvailability`: with `CREATE_COMPONENTS` → usable; without → unusable with
         the reason
-  - [ ] 4.1.2 `GET /rest/api/4/component-profiles`: sorted by `order` then id; fields present;
+  - [x] 4.1.2 `GET /rest/api/4/component-profiles`: sorted by `order` then id; fields present;
         failed entries absent; 403 without `ACCESS_COMPONENTS`
-  - [ ] 4.1.3 Each profile's rules returned with path, pattern and message; a profile without
+  - [x] 4.1.3 Each profile's rules returned with path, pattern and message; a profile without
         rules returns an empty list
-  - [ ] 4.1.4 After an applied reload that changes a pattern, the listing and a create with that
-        profile both use the new pattern
-- [ ] 4.2 Implement `profile/ProfileAvailability.kt`, response DTOs and
-      `controller/ComponentProfileControllerV4.kt`
-- [ ] 4.3 Confirm tests pass (record the command and count)
+  - [x] 4.1.4 After an applied reload that changes a pattern, the listing and a create with that
+        profile both use the new pattern. Listing half here; the create half is 5.1.10, once
+        create checks the profile
+- [x] 4.2 Implement `profile/ProfileAvailability.kt`, response DTOs and
+      `controller/ComponentProfileControllerV4.kt`. Response: `{ profiles: [...] }`
+      (`dto/v4/ComponentProfileResponse.kt`), each with `usable` and `unusableReason`
+  - [x] 4.2.1 `OpenApiV4Config` matches `/rest/api/4/component-profiles` and `v4.json` is
+        regenerated in this step: the v4 group lists its paths, and `OpenApiV4SpecTest` runs in
+        `test`, so a contract change carries its spec (added during implementation)
+- [x] 4.3 Confirm tests pass. `PermissionProfileAvailabilityTest` 2/2; `dbTest`
+      `ComponentProfileControllerV4Test` 9/9 (H2); server `test` 1249, 0 failures, 1 skipped
+      (incl. `OpenApiV4SpecTest`, `ArchitectureFitnessTest`); `detekt`, `ktlintCheck` clean
 
 ## 5. Profile on create (Decisions 7, 8)
 
@@ -135,7 +142,8 @@
 
 ## 6. Docs and contract
 
-- [ ] 6.1 Regenerate `v4.json` (`generateOpenApiDocs`); `OpenApiV4SpecTest` green
+- [ ] 6.1 Regenerate `v4.json` (`generateOpenApiDocs`); `OpenApiV4SpecTest` green. Done with each
+      contract change (4.2.1, 5.2.1); here only a final check that nothing drifted
 - [ ] 6.2 `docs/registry/api-changelog.md` — Unreleased: the listing endpoint, `profile` on create,
       the reload response; no behavior change for creates without `profile`
 - [ ] 6.3 `docs/registry/functional-spec.md` — profiles and their field rules

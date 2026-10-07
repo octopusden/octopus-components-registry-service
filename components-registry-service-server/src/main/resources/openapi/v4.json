@@ -463,6 +463,30 @@
         ],
         "type" : "object"
       },
+      "Classification" : {
+        "properties" : {
+          "explicit" : {
+            "enum" : [
+              "true",
+              "false",
+              "ask"
+            ],
+            "type" : "string"
+          },
+          "external" : {
+            "type" : "boolean"
+          },
+          "solution" : {
+            "type" : "boolean"
+          }
+        },
+        "required" : [
+          "explicit",
+          "external",
+          "solution"
+        ],
+        "type" : "object"
+      },
       "ComponentConfigurationResponse" : {
         "properties" : {
           "build" : {
@@ -913,6 +937,64 @@
           "groupKey",
           "isFake",
           "role"
+        ],
+        "type" : "object"
+      },
+      "ComponentProfileResponse" : {
+        "properties" : {
+          "classification" : {
+            "$ref" : "#/components/schemas/Classification"
+          },
+          "description" : {
+            "type" : "string"
+          },
+          "id" : {
+            "type" : "string"
+          },
+          "kind" : {
+            "description" : "`regular`; templates are listed with their own kind once supported.",
+            "type" : "string"
+          },
+          "rules" : {
+            "description" : "Rules a create naming this profile is checked against; empty when the profile has none.",
+            "items" : {
+              "$ref" : "#/components/schemas/FieldRule"
+            },
+            "type" : "array"
+          },
+          "title" : {
+            "type" : "string"
+          },
+          "unusableReason" : {
+            "description" : "Why the current user may not use the profile; absent when usable.",
+            "type" : "string"
+          },
+          "usable" : {
+            "type" : "boolean"
+          }
+        },
+        "required" : [
+          "classification",
+          "description",
+          "id",
+          "kind",
+          "rules",
+          "title",
+          "usable"
+        ],
+        "type" : "object"
+      },
+      "ComponentProfilesResponse" : {
+        "properties" : {
+          "profiles" : {
+            "items" : {
+              "$ref" : "#/components/schemas/ComponentProfileResponse"
+            },
+            "type" : "array"
+          }
+        },
+        "required" : [
+          "profiles"
         ],
         "type" : "object"
       },
@@ -1706,6 +1788,28 @@
         "required" : [
           "overriddenAttribute",
           "versionRange"
+        ],
+        "type" : "object"
+      },
+      "FieldRule" : {
+        "description" : "Rules a create naming this profile is checked against; empty when the profile has none.",
+        "properties" : {
+          "message" : {
+            "type" : "string"
+          },
+          "path" : {
+            "description" : "Create-request path, e.g. `name` or `baseConfiguration.jira.projectKey`.",
+            "type" : "string"
+          },
+          "pattern" : {
+            "description" : "Regular expression the whole value must match.",
+            "type" : "string"
+          }
+        },
+        "required" : [
+          "message",
+          "path",
+          "pattern"
         ],
         "type" : "object"
       },
@@ -7353,6 +7457,116 @@
         },
         "tags" : [
           "audit-controller-v-4"
+        ]
+      }
+    },
+    "/rest/api/4/component-profiles" : {
+      "get" : {
+        "operationId" : "listProfiles",
+        "responses" : {
+          "200" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ComponentProfilesResponse"
+                }
+              }
+            },
+            "description" : "OK"
+          },
+          "400" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description" : "Bad Request"
+          },
+          "404" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description" : "Not Found"
+          },
+          "409" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description" : "Conflict"
+          },
+          "413" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description" : "Payload Too Large"
+          },
+          "425" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description" : "Too Early"
+          },
+          "500" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description" : "Internal Server Error"
+          },
+          "501" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description" : "Not Implemented"
+          },
+          "502" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description" : "Bad Gateway"
+          },
+          "503" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description" : "Service Unavailable"
+          }
+        },
+        "tags" : [
+          "component-profile-controller-v-4"
         ]
       }
     },
