@@ -18,6 +18,43 @@ refresh it with `./gradlew :components-registry-service-server:generateOpenApiDo
 
 ## Unreleased
 
+- **Component templates.** A `kind: template` entry under `components-registry.component-profiles`
+  is now read: fixed classification, parameters, fields built from them, overridable paths and
+  optional field rules. A template is checked on load and reload; a broken one is `failed`, is not
+  offered, and never blocks a load.
+  - **`GET /rest/api/4/component-profiles`** lists live templates next to the regular profiles, in
+    one `order`, then id: `kind` `template` and a new `version` (absent for a regular profile). A
+    client that assumed every entry is `regular` must branch on `kind`. A template's
+    `classification.explicit` is never `ask`.
+  - **`POST /rest/api/4/admin/reload-config`**: a valid template entry is now `live` in
+    `componentProfiles.entries`; only a broken one is `failed`, with its own problems instead of
+    "templates are not supported yet".
+  - **`GET /rest/api/4/component-templates/{id}` added** (`ACCESS_COMPONENTS`, database mode): a live
+    template's `id`, `version`, `title`, `description`, `classification`, `overridable` and
+    `parameters` in configured order — `name`, `label`, `hint`, `type` (`text`, `select`,
+    `crs-list`, `person`), `required`, `multiple`, `default`, and the type's settings (`pattern`,
+    `message`, `maxLength`; `options`, `maxSelection`; `list` with its current `values`). A `person`
+    default `current-user` comes back as the caller. `404` for a failed or unknown template.
+  - **`POST /rest/api/4/component-templates/{id}/components` added** (`ACCESS_COMPONENTS`, and a
+    template the caller may use: `CREATE_COMPONENTS`; database mode). Body: `parameters` and
+    `overrides` (maps to lists of strings), `jiraTaskKey` and `changeComment` as on any create.
+    - `dryRun` absent or `true` → `200` with `valid`, `parameterProblems` (`parameter`, `check`
+      `P1`–`P9`, `message`), the rendered `component`, `sources` (path → parameters) and `problems`
+      (`fields`, `parameters`, `templateProblem`, `message`). Nothing is created.
+    - `dryRun=false` → `201` with the component when nothing failed; otherwise `422` with the dry-run
+      body, and nothing is created.
+    - At most one problem comes from today's create rules, worded as the create words it; every
+      parameter and rule problem is reported.
+    - `400` for a malformed `jiraTaskKey` or an override on a path the template does not list;
+      `403` when the caller may not use the template or override its fields; `404` for a failed,
+      removed or unknown template.
+  - **`GET /rest/api/4/admin/component-profiles` added** (`IMPORT_DATA`, database mode): every
+    configured entry in use, live or failed, with `status`, `problems`, the parsed `profile` or
+    `template`, and its `configuration` as YAML; `configVersion` from the config server, and
+    `lastLoad`, the outcome of the last load or reload in the `componentProfiles` shape.
+  - **No change for a regular create:** a create without `profile`, or naming a regular profile,
+    is validated as before; a template id given as `profile` is still an unknown profile.
+
 - **Create-component profiles from configuration.** The start-page profiles are configured in
   service-config under `components-registry.component-profiles` and checked when CRS starts and on
   reload; CRS does not start without at least one valid `regular` profile.

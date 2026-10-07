@@ -282,14 +282,17 @@ A dry run with `CLIENT_CODE=ACME`, `PLUGIN_CODE=CORE`, `PLUGIN_NAME=Core API`, o
 - The admin migrate endpoint's `dryRun` defaults to `false`; this one differs on purpose, because
   it is the endpoint automation and the Portal call on every review step.
 
+- The endpoint first checks that the user may use the template (`ProfileAvailability`, 403), and
+  may override when the request has overrides (403).
 - `TemplateDryRun` runs:
   1. parameter checks — stop on failure;
   2. render;
   3. field rules;
   4. today's `createComponent(rendered)`, inside a `TransactionTemplate` whose status is set
      rollback-only, so it always rolls back, without an `UnexpectedRollbackException`.
-- Everything the create writes is rolled back with it: the component row, the label and TeamCity
-  dictionaries, the audit event at `BEFORE_COMMIT`.
+- Everything the create writes is rolled back with it: the component row, the label dictionary,
+  the component-source row, the audit event at `BEFORE_COMMIT`. A template sets no TeamCity
+  projects, so the TeamCity dictionary is never touched.
 - A failure from `createComponent` is caught whatever its type (400, 403, 409, 422) and reported
   as a problem, its message unchanged.
 - Today's create stops at its first failure, so the dry run reports at most one of those. Every
@@ -297,12 +300,19 @@ A dry run with `CLIENT_CODE=ACME`, `PLUGIN_CODE=CORE`, `PLUGIN_NAME=Core API`, o
 
 ### 9. A create failure is attributed to fields by its message
 
+- `TemplateProblems` turns a rule failure, an unknown fixed label or a create failure into a problem
+  through the rendered template's `sources`; `CreateFailureFields` reads the field a create message
+  names.
+
 - `CreateFailureFields` maps the field a create message starts with to the template paths it
   concerns: `name:`, `displayName:`, `artifactIds:`, `componentOwner '…'`, the Jira project and
   version prefix conflict, …
 - Each prefix today's create emits gets a test.
 - Paths become parameters through `sources`:
-  - a path set only by fixed values or defaults makes the problem a template problem;
+  - of the paths a message concerns, only those the template set are named, or all of them when
+    it set none;
+  - a path set only by fixed values or defaults, or left unset, makes the problem a template
+    problem; an overridden path never does;
   - a message no prefix matches is reported without a field.
 
 ### 10. Create from a template commits only a clean dry run
@@ -327,8 +337,8 @@ A dry run with `CLIENT_CODE=ACME`, `PLUGIN_CODE=CORE`, `PLUGIN_NAME=Core API`, o
 - Per entry:
   - id, kind, status and problems;
   - the parsed definition, when live;
-  - the configuration text: the entry's raw keys dumped back to YAML with SnakeYAML, so a failed
-    entry shows what was read.
+  - the configuration text: the entry's raw keys dumped back to YAML with SnakeYAML
+    (`EntryYaml`), so a failed entry shows what was read.
 - The configuration version: the `config.client.version` property Spring Cloud Config sets;
   absent when not served by a config server.
 - The last reload's outcome: applied, or failed with its problems. When it failed, the entries
@@ -368,7 +378,7 @@ A dry run with `CLIENT_CODE=ACME`, `PLUGIN_CODE=CORE`, `PLUGIN_NAME=Core API`, o
   - A creator fixes it and runs again to see the next.
   - Accepted: collecting them means reworking every check of the busiest code path; parameter
     and rule problems, which name parameters, are all reported.
-  - Tech-debt record.
+  - TD-027.
 - **Attribution depends on message prefixes.**
   - A message reworded in `createComponent` loses its field and is shown without parameters.
   - Mitigated by one test per prefix; the problem is still reported.
@@ -382,7 +392,7 @@ A dry run with `CLIENT_CODE=ACME`, `PLUGIN_CODE=CORE`, `PLUGIN_NAME=Core API`, o
   - A new client needs a template change before its first component.
   - Two templates can list different codes.
   - Accepted: the registry has no list of its own, and the owning service is not connected yet.
-    Tech-debt record (Decision 13).
+    TD-028 (Decision 13).
 - **The Jira task key is optional on a template create through the API.**
   - Automation can create a component without one.
   - Accepted: it keeps today's create rule; the Portal requires it. TD-025.

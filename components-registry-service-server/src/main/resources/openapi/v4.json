@@ -31,6 +31,68 @@
         ],
         "type" : "object"
       },
+      "AdminComponentProfileEntry" : {
+        "properties" : {
+          "configuration" : {
+            "description" : "The entry's configuration as read, in YAML.",
+            "type" : "string"
+          },
+          "id" : {
+            "type" : "string"
+          },
+          "kind" : {
+            "type" : "string"
+          },
+          "problems" : {
+            "items" : {
+              "type" : "string"
+            },
+            "type" : "array"
+          },
+          "profile" : {
+            "$ref" : "#/components/schemas/ComponentProfileResponse"
+          },
+          "status" : {
+            "enum" : [
+              "live",
+              "failed"
+            ],
+            "type" : "string"
+          },
+          "template" : {
+            "$ref" : "#/components/schemas/ComponentTemplateResponse"
+          }
+        },
+        "required" : [
+          "configuration",
+          "id",
+          "problems",
+          "status"
+        ],
+        "type" : "object"
+      },
+      "AdminComponentProfilesResponse" : {
+        "properties" : {
+          "configVersion" : {
+            "description" : "The configuration version the config server reported; absent when not served by one.",
+            "type" : "string"
+          },
+          "entries" : {
+            "items" : {
+              "$ref" : "#/components/schemas/AdminComponentProfileEntry"
+            },
+            "type" : "array"
+          },
+          "lastLoad" : {
+            "$ref" : "#/components/schemas/ComponentProfilesReloadResponse"
+          }
+        },
+        "required" : [
+          "entries",
+          "lastLoad"
+        ],
+        "type" : "object"
+      },
       "ArchiveReadinessEntry" : {
         "properties" : {
           "openIssues" : {
@@ -997,6 +1059,32 @@
         ],
         "type" : "object"
       },
+      "ComponentProfilesReloadResponse" : {
+        "description" : "The outcome of the last load or reload, applied or not.",
+        "properties" : {
+          "entries" : {
+            "items" : {
+              "$ref" : "#/components/schemas/Entry"
+            },
+            "type" : "array"
+          },
+          "problems" : {
+            "items" : {
+              "type" : "string"
+            },
+            "type" : "array"
+          },
+          "status" : {
+            "type" : "string"
+          }
+        },
+        "required" : [
+          "entries",
+          "problems",
+          "status"
+        ],
+        "type" : "object"
+      },
       "ComponentProfilesResponse" : {
         "properties" : {
           "profiles" : {
@@ -1158,6 +1246,132 @@
           "status",
           "type",
           "updatedAt"
+        ],
+        "type" : "object"
+      },
+      "ComponentTemplateParameter" : {
+        "properties" : {
+          "default" : {
+            "description" : "The default values; a person parameter's `current-user` is returned as the caller.",
+            "items" : {
+              "description" : "The default values; a person parameter's `current-user` is returned as the caller.",
+              "type" : "string"
+            },
+            "type" : "array"
+          },
+          "hint" : {
+            "type" : "string"
+          },
+          "label" : {
+            "type" : "string"
+          },
+          "list" : {
+            "enum" : [
+              "build-systems",
+              "escrow-generation",
+              "labels"
+            ],
+            "type" : "string"
+          },
+          "maxLength" : {
+            "format" : "int32",
+            "type" : "integer"
+          },
+          "maxSelection" : {
+            "format" : "int32",
+            "type" : "integer"
+          },
+          "message" : {
+            "type" : "string"
+          },
+          "multiple" : {
+            "type" : "boolean"
+          },
+          "name" : {
+            "type" : "string"
+          },
+          "options" : {
+            "items" : {
+              "type" : "string"
+            },
+            "type" : "array"
+          },
+          "pattern" : {
+            "type" : "string"
+          },
+          "required" : {
+            "type" : "boolean"
+          },
+          "type" : {
+            "enum" : [
+              "text",
+              "select",
+              "crs-list",
+              "person"
+            ],
+            "type" : "string"
+          },
+          "values" : {
+            "description" : "A crs-list parameter's list, as it is at the time of the call.",
+            "items" : {
+              "description" : "A crs-list parameter's list, as it is at the time of the call.",
+              "type" : "string"
+            },
+            "type" : "array"
+          }
+        },
+        "required" : [
+          "default",
+          "label",
+          "multiple",
+          "name",
+          "required",
+          "type"
+        ],
+        "type" : "object"
+      },
+      "ComponentTemplateResponse" : {
+        "description" : "The parsed template, when live.",
+        "properties" : {
+          "classification" : {
+            "$ref" : "#/components/schemas/Classification"
+          },
+          "description" : {
+            "type" : "string"
+          },
+          "id" : {
+            "type" : "string"
+          },
+          "overridable" : {
+            "description" : "Create-request paths a creator may override.",
+            "items" : {
+              "description" : "Create-request paths a creator may override.",
+              "type" : "string"
+            },
+            "type" : "array"
+          },
+          "parameters" : {
+            "items" : {
+              "$ref" : "#/components/schemas/ComponentTemplateParameter"
+            },
+            "type" : "array"
+          },
+          "title" : {
+            "type" : "string"
+          },
+          "version" : {
+            "format" : "int32",
+            "type" : "integer"
+          }
+        },
+        "required" : [
+          "classification",
+          "description",
+          "id",
+          "overridable",
+          "parameters",
+          "title",
+          "version"
         ],
         "type" : "object"
       },
@@ -1441,6 +1655,31 @@
         "required" : [
           "active",
           "username"
+        ],
+        "type" : "object"
+      },
+      "Entry" : {
+        "properties" : {
+          "id" : {
+            "type" : "string"
+          },
+          "kind" : {
+            "type" : "string"
+          },
+          "problems" : {
+            "items" : {
+              "type" : "string"
+            },
+            "type" : "array"
+          },
+          "status" : {
+            "type" : "string"
+          }
+        },
+        "required" : [
+          "id",
+          "problems",
+          "status"
         ],
         "type" : "object"
       },
@@ -3619,6 +3858,116 @@
         },
         "tags" : [
           "auth-controller"
+        ]
+      }
+    },
+    "/rest/api/4/admin/component-profiles" : {
+      "get" : {
+        "operationId" : "componentProfiles",
+        "responses" : {
+          "200" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/AdminComponentProfilesResponse"
+                }
+              }
+            },
+            "description" : "OK"
+          },
+          "400" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description" : "Bad Request"
+          },
+          "404" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description" : "Not Found"
+          },
+          "409" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description" : "Conflict"
+          },
+          "413" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description" : "Payload Too Large"
+          },
+          "425" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description" : "Too Early"
+          },
+          "500" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description" : "Internal Server Error"
+          },
+          "501" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description" : "Not Implemented"
+          },
+          "502" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description" : "Bad Gateway"
+          },
+          "503" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description" : "Service Unavailable"
+          }
+        },
+        "tags" : [
+          "admin-controller-v-4"
         ]
       }
     },

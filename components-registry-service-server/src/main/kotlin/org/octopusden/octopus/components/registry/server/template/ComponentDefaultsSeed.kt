@@ -1,7 +1,7 @@
 package org.octopusden.octopus.components.registry.server.template
 
 import org.octopusden.octopus.components.registry.server.config.AdminConfigProperties
-import org.octopusden.octopus.components.registry.server.profile.ComponentProfile
+import org.octopusden.octopus.components.registry.server.model.ComponentProfile
 
 /**
  * The `component-defaults` values the Portal's create wizard pre-fills, by create-request path
