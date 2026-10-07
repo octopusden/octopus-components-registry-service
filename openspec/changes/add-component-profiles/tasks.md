@@ -89,6 +89,10 @@
       profiles), the client and light-client test `application-common.yml` and
       `application-integration-test.yml` (one regular profile each), and main
       `application-dev.yml` (the four; also used by the compat candidate)
+  - [x] 3.3.1 The OKD functional-test pod (`components-registry-automation/data/components-registry-service.yaml`,
+        mounted as `application-test.yaml`) gets the four profiles too: TeamCity's Compile & UT
+        deploys it and it failed readiness with "at least one regular profile is required"
+        (added post-review)
 - [x] 3.4 Confirm tests pass. Server `test` 1247 (1 skipped, 0 failures, incl.
       `ComponentProfileCatalogTest` 8, `ComponentProfilesConfigTest` 3, `NoDbModeContextTest`);
       `integrationTest` 3/3; client `test` 6/6; light-client `test` 2/2; `detekt`, `ktlintCheck`
