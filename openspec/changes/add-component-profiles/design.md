@@ -89,6 +89,10 @@ Creates against it:
 - `ComponentProfilesSource` walks the environment's `EnumerablePropertySource`s and collects every
   key under `components-registry.component-profiles.`, the highest-precedence value winning per
   key — the same merge Spring applies. Keys are taken exactly as written.
+- Each value is read from the first source holding that exact name, not through
+  `Environment.getProperty`: Boot attaches a relaxed-lookup source that treats `regular-internal` and
+  `regularinternal` as one name, so two distinct ids would receive the same values. Placeholders in
+  a value are resolved against the environment. (changed on review)
 - Why not `Binder` or a typed `@ConfigurationProperties` bean:
   - A typed bean ignores unknown keys and stops at the first type error; the requirement is to
     name every unknown key and every bad value.
@@ -102,8 +106,8 @@ Creates against it:
   bracket notation is needed in YAML.
 - `ComponentProfileParser` turns the flat key → value map into profiles plus a problem list. It is
   pure and unit-tested without Spring. Values may arrive as strings, numbers or booleans,
-  depending on the source; the source hands each to the parser as the string the `Environment`
-  resolves, so the parser reads strings only.
+  depending on the source; the source hands each to the parser as a string, placeholders
+  resolved, so the parser reads strings only.
 - A non-enumerable property source cannot be walked and is not read; profiles come from
   service-config YAML, which is enumerable.
 
@@ -138,15 +142,22 @@ Creates against it:
 
 ### 4. Reload result
 
-- `reloadConfig` calls `contextRefresher.refresh()` and then `catalog.reload()` itself, and returns
-  that outcome as `componentProfiles`: `status` (`applied` | `failed`), `problems`
-  (configuration-level) and `entries` (id, kind, `live` | `failed`, problems).
+- `reloadConfig` calls `AdminConfigReloader.reload()`: `contextRefresher.refresh()`, then
+  `catalog.reload()`, and returns that outcome as `componentProfiles`: `status` (`applied` |
+  `failed`), `problems` (configuration-level) and `entries` (id, kind, `live` | `failed`, problems).
+- The refresh and the profile load are one critical section (`AdminConfigReloader` is
+  synchronized). The profile source reads the environment a refresh replaces, so a second reload
+  refreshing between the first's refresh and its load could hand that load a mix of two revisions.
+  `ContextRefresher.refresh()` is synchronized on its own, but releases its lock before the profile
+  load. (changed on review)
 - No refresh listener: the outcome belongs to one request, so passing it through shared state
   would let two concurrent reloads read each other's result. The admin endpoint is the only
   refresh path (`/actuator/refresh` is not exposed).
 - `catalog.reload()` runs in a `finally`, so the profiles are reloaded even when
   `ConfigRefreshListener` throws `ConfigValidationException` for `field-config`; that 422 then
-  also carries `componentProfiles`.
+  also carries `componentProfiles`. Any other refresh failure — a `field-config` value the rebinder
+  cannot bind, say — answers 500 `config-refresh` with the message and `componentProfiles`, so the
+  administrator sees whether the profiles changed. (added on review)
 - A failed profile load answers 422 with `error: component-profiles` and the same body, matching
   the existing `config-validation` 422.
 - A template entry is `failed` with "templates are not supported yet" and never blocks a load.

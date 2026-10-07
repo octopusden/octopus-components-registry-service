@@ -165,4 +165,22 @@ class ReloadConfigComponentProfilesTest {
 
         assertEquals("Solution (renamed)", solutionTitle())
     }
+
+    @Test
+    @DisplayName("any other refresh failure (a field-config binding error): 500 config-refresh, the profiles still reloaded and reported")
+    fun otherRefreshFailureStillReportsProfiles() {
+        doThrow(IllegalStateException("Could not bind properties to 'AdminConfigProperties': required 'maybe' is not a Boolean"))
+            .`when`(contextRefresher)
+            .refresh()
+        changeServiceConfig("solution.title" to "Solution (renamed)")
+
+        reload()
+            .andExpect(status().isInternalServerError)
+            .andExpect(jsonPath("$.error").value("config-refresh"))
+            .andExpect(
+                jsonPath("$.message").value("Could not bind properties to 'AdminConfigProperties': required 'maybe' is not a Boolean"),
+            ).andExpect(jsonPath("$.componentProfiles.status").value("applied"))
+
+        assertEquals("Solution (renamed)", solutionTitle())
+    }
 }

@@ -38,8 +38,9 @@ refresh it with `./gradlew :components-registry-service-server:generateOpenApiDo
     (`applied` / `failed`), `problems` and `entries` (`id`, `kind`, `status` `live` / `failed`,
     `problems`). Profiles that are not usable are kept as they were and the reload answers `422`
     with `error: component-profiles`; an invalid `field-config` still answers `422`
-    `config-validation`, now also carrying `componentProfiles`. `status` and `changedKeys` are
-    unchanged.
+    `config-validation`, now also carrying `componentProfiles`; any other refresh failure answers
+    `500` with `error: config-refresh`, the message and `componentProfiles`. `status` and
+    `changedKeys` are unchanged. Overlapping reloads run one after the other.
   - **No behavior change for existing clients:** a create without `profile`, a rename and a
     solution-flag change are validated exactly as before.
 

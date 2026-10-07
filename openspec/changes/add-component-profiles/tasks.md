@@ -212,3 +212,22 @@
       file; D&S and templates appear only as the failed template entry and a KDoc note)
 - [x] 7.3 Risks in `design.md` still stated, and each accepted limitation has its tech-debt
       record from 6.5 (each risk names TD-024, TD-025 or TD-026)
+
+## 8. PR review (added on review)
+
+- [x] 8.1 Profile values were fetched through `Environment.getProperty`, whose relaxed lookup
+      treats `regular-internal` and `regularinternal` as one name, so two ids received the same
+      values. `ComponentProfilesSource` now reads each value from the first property source holding
+      the exact name and resolves placeholders (design Decision 1). Tests with Boot's
+      configuration-property sources attached: aliases kept apart, precedence per key,
+      placeholder resolved — `ComponentProfilesSourceTest` 11/11
+- [x] 8.2 A second reload could refresh between the first's refresh and its profile load, handing
+      that load a mix of two revisions. `AdminConfigReloader` runs refresh and profile load as one
+      synchronized step (Decision 4); `AdminConfigReloaderTest` holds the gap open and fails
+      without the lock (seen red), passes with it
+- [x] 8.3 A refresh failure other than `ConfigValidationException` (a value the rebinder cannot
+      bind) was rethrown, losing the profile outcome. It now answers 500 `config-refresh` with the
+      message and `componentProfiles` (Decision 4, spec "Other refresh failure");
+      `ReloadConfigComponentProfilesTest` 6/6 on H2
+- [x] 8.4 Server `test` 1271, 0 failures, 1 skipped; `detekt`, `ktlintCheck` clean.
+      `AdminControllerV4SecurityTest` needs Testcontainers Postgres (no Docker locally) — CI

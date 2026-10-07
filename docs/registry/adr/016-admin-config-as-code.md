@@ -160,8 +160,11 @@ and reloaded the same way (service-config, `POST /admin/reload-config`), with fo
   ([TD-026](../tech-debt/026-reload-not-atomic-across-config-subtrees.md)).
 - **No DB cache; startup fails without them.** The catalog holds the profiles in memory in every
   mode, and CRS does not start without a usable set. `reloadConfig` reloads them itself after the
-  refresh, also when the `field-config` sync fails, and reports them as `componentProfiles`. No-db
-  mode has no reload endpoint, so its profiles change with a restart.
+  refresh, also when the refresh fails, and reports them as `componentProfiles`;
+  `AdminConfigReloader` runs refresh and profile load as one critical section, so overlapping
+  reloads cannot mix two revisions. Values are read from the property source holding the exact
+  key, never through the relaxed `Environment` lookup. No-db mode has no reload endpoint, so its
+  profiles change with a restart.
 - **Rule patterns serve two regex engines.** CRS checks a rule's `pattern` with Java; the listing
   hands the same text to the Portal, which checks it with JavaScript while the user types. Write
   patterns in syntax both accept (no `\p{…}` classes, possessive quantifiers or other Java-only

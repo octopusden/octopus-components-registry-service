@@ -125,7 +125,9 @@ registry SHALL use it at once; when it cannot be read, holds no `regular` profil
 invalid `regular` profile, the registry SHALL keep the profiles in use unchanged and answer 422
 with `error: component-profiles` and the problems. Either way the response SHALL carry
 `componentProfiles` with `status` (`applied` or `failed`), configuration-level `problems`, and
-every entry with its id, kind, status (`live` or `failed`) and problems.
+every entry with its id, kind, status (`live` or `failed`) and problems — also when the rest of the
+refresh fails. Each profile SHALL take its values from its own id only, and one reload SHALL read
+a single configuration revision, even while another reload runs.
 
 #### Scenario: Valid change
 - **WHEN** a profile's title is changed in service-config and the configuration is reloaded
@@ -149,6 +151,20 @@ every entry with its id, kind, status (`live` or `failed`) and problems.
 #### Scenario: Fixed and reloaded
 - **WHEN** a reload failed and the configuration is corrected and reloaded
 - **THEN** the reload is applied
+
+#### Scenario: Other refresh failure
+- **WHEN** the refresh fails on a `field-config` value Spring cannot bind, and the profiles are valid
+- **THEN** the response is 500 with `error: config-refresh`, the message and `componentProfiles`
+  (`status: applied`)
+
+#### Scenario: Ids alike to relaxed binding
+- **WHEN** the configuration holds both `regular-internal` and `regularinternal`, with different
+  titles
+- **THEN** each profile has its own title
+
+#### Scenario: Overlapping reloads
+- **WHEN** a second reload starts while the first is between its refresh and its profile load
+- **THEN** the second waits, and the first loads the profiles of the revision it refreshed
 
 ### Requirement: Profiles listed for the current user
 
