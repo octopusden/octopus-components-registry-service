@@ -213,12 +213,12 @@ Creates against it:
 
 - **A reload is not atomic across subtrees.** `field-config` and `component-defaults` are already
   rebound when the profiles fail; only the profiles keep their previous snapshot. Accepted: the
-  existing subtrees already behave this way, and the response says which part failed.
+  existing subtrees already behave this way, and the response says which part failed. TD-026.
 - **Startup depends on service-config.** A missing subtree stops CRS. Accepted: the requirement
   prefers a loud failure to an empty start page; the rollout note orders the deploys.
 - **The key rules hold only for creates that name a profile.** An API create without `profile`, a
   rename or a solution-flag change can still produce a key that breaks them. Accepted: it keeps
   today's behavior for every existing client; enforcing them everywhere is a separate change.
-- Each accepted limitation above that outlives this change has a tech-debt record (tasks 6.5).
+  TD-024. The other Portal-only create rules stay in the Portal: TD-025.
 - **Rule patterns are case-sensitive.** The regular profiles' rule rejects `solution` but not
   `Solution`. Accepted: component keys are lower-case by `validateComponentKey`.

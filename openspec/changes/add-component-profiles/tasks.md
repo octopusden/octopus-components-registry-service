@@ -176,9 +176,21 @@
 
 ## 7. Finalization
 
-- [ ] 7.1 `./gradlew build` and `qualityStatic` green; coverage floors unchanged
-- [ ] 7.2 Out-of-scope boundaries hold: no template parsing beyond the failed entry, no D&S rule,
+- [x] 7.1 `./gradlew build` and `qualityStatic` green; coverage floors unchanged. Locally `build`
+      does not configure without OKD auth-server settings, so ran `test qualityStatic` across all
+      modules (placeholder `-Pauth-server.*`): every module's tests green (server 1263, cli 115,
+      resolver-core 175, validation 170, …), detekt / ktlint / checkstyle / PMD clean. Three tasks
+      failed outside this change: `components-registry-automation:compileTestKotlin` (cannot
+      resolve the `kotlin-test` JUnit 5 variant, same on the base), `dockerBuildImage` (no Docker),
+      and `component-resolver-core:test`, whose JVM crashes in the JIT (SIGSEGV in
+      `BoolNode::Ideal`, local JDK 21.0.9) after its tests pass. No build file or PIT target
+      changed, so the coverage floors are untouched. `build` itself runs on CI
+  - [x] 7.1a SonarCloud flagged `classification.*` key literals repeated in
+        `ComponentProfileParser`; named once as constants (added on review)
+- [x] 7.2 Out-of-scope boundaries hold: no template parsing beyond the failed entry, no D&S rule,
       no change to the update, import or field-override paths, no global naming convention,
-      no migration (checked by diff)
-- [ ] 7.3 Risks in `design.md` still stated, and each accepted limitation has its tech-debt
-      record from 6.5
+      no migration (checked by diff against `main`: `ComponentManagementServiceImpl` changes only
+      imports, the constructor and `createComponent`; no migration, import, field-override or DSL
+      file; D&S and templates appear only as the failed template entry and a KDoc note)
+- [x] 7.3 Risks in `design.md` still stated, and each accepted limitation has its tech-debt
+      record from 6.5 (each risk names TD-024, TD-025 or TD-026)

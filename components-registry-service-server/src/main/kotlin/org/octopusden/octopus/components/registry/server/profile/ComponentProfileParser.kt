@@ -12,9 +12,11 @@ package org.octopusden.octopus.components.registry.server.profile
 object ComponentProfileParser {
     private val ID = Regex("[a-z0-9-]+")
     private val BOOLEANS = listOf("true", "false")
-    private val PROFILE_KEYS =
-        setOf("kind", "title", "description", "order", "classification.external", "classification.explicit", "classification.solution")
-    private val REQUIRED_KEYS = listOf("kind", "title", "description", "order", "classification.external", "classification.explicit")
+    private const val EXTERNAL = "classification.external"
+    private const val EXPLICIT = "classification.explicit"
+    private const val SOLUTION = "classification.solution"
+    private val REQUIRED_KEYS = listOf("kind", "title", "description", "order", EXTERNAL, EXPLICIT)
+    private val PROFILE_KEYS = REQUIRED_KEYS.toSet() + SOLUTION
     private const val RULES = "rules."
     const val REGULAR_KIND = "regular"
     const val TEMPLATE_KIND = "template"
@@ -85,9 +87,9 @@ object ComponentProfileParser {
         }
 
         private fun classification(): ComponentProfile.Classification? {
-            val external = choice("classification.external", BOOLEANS)?.toBooleanStrict()
-            val explicit = choice("classification.explicit", BOOLEANS + "ask")?.let { ComponentProfile.Explicit.valueOf(it.uppercase()) }
-            val solution = choice("classification.solution", BOOLEANS)?.toBooleanStrict() ?: false
+            val external = choice(EXTERNAL, BOOLEANS)?.toBooleanStrict()
+            val explicit = choice(EXPLICIT, BOOLEANS + "ask")?.let { ComponentProfile.Explicit.valueOf(it.uppercase()) }
+            val solution = choice(SOLUTION, BOOLEANS)?.toBooleanStrict() ?: false
             val shippedExplicitly = external != false && explicit in setOf(null, ComponentProfile.Explicit.TRUE)
             if (solution && !shippedExplicitly) {
                 problems += "$id.classification.solution: a solution profile needs external: true and explicit: true"
