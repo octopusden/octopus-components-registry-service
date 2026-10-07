@@ -279,12 +279,19 @@
 
 ## 11. Finalization
 
-- [ ] 11.1 `test qualityStatic` across all modules green; coverage floors unchanged
-- [ ] 11.2 Out-of-scope boundaries hold, checked by diff:
-  - [ ] no D&S rule beyond the availability seam
-  - [ ] no change to `createComponent`'s checks
-  - [ ] no change to the update, import or field-override paths
-  - [ ] no migration
-- [ ] 11.3 Risks in `design.md` still stated:
-  - [ ] the one-failure and client-code risks have their tech-debt records
-  - [ ] the optional Jira task key is in TD-025
+- [x] 11.1 `test qualityStatic` across all modules green; coverage floors unchanged — on the
+      profiles head `6568eb51`: server `test` 1451 tests, 0 failures, 1 skipped (pre-existing);
+      `dbTest` for the template and profile suites 66, 0 failures; ktlint and detekt clean; no build
+      file touched, so the floors are unchanged. Not green locally, and not caused by this change:
+  - `:components-registry-automation:test` deploys to OKD, so it is left to CI
+  - `:components-registry-automation:compileTestKotlin` cannot resolve `kotlin-test:1.9.25`; it
+    fails the same way on the profiles branch
+  - `AdminControllerV4SecurityTest` needs Postgres in Docker, so it is left to CI
+- [x] 11.2 Out-of-scope boundaries hold, checked by diff:
+  - [x] no D&S rule beyond the availability seam
+  - [x] no change to `createComponent`'s checks
+  - [x] no change to the update, import or field-override paths
+  - [x] no migration
+- [x] 11.3 Risks in `design.md` still stated:
+  - [x] the one-failure and client-code risks have their tech-debt records
+  - [x] the optional Jira task key is in TD-025
