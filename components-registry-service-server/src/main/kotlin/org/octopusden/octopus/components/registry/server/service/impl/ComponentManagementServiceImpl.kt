@@ -4318,6 +4318,38 @@ class ComponentManagementServiceImpl(
         }.getOrNull()
     }
 
+    private fun involvesSpecification(
+        users: List<String>,
+        roles: Set<String>,
+    ): Specification<ComponentEntity> =
+        Specification { root, query, cb ->
+            val predicates = mutableListOf<jakarta.persistence.criteria.Predicate>()
+            if (INVOLVES_OWNER in roles) predicates += root.get<String>("componentOwner").`in`(users)
+            if (INVOLVES_RELEASE_MANAGER in roles) {
+                predicates += cb.exists(roleMembership(ComponentReleaseManagerEntity::class.java, users, root, query!!, cb))
+            }
+            if (INVOLVES_SECURITY_CHAMPION in roles) {
+                predicates += cb.exists(roleMembership(ComponentSecurityChampionEntity::class.java, users, root, query!!, cb))
+            }
+            cb.or(*predicates.toTypedArray())
+        }
+
+    /** `EXISTS (SELECT 1 FROM <role table> WHERE component = root AND username IN users)`. */
+    private fun <T> roleMembership(
+        roleEntity: Class<T>,
+        users: List<String>,
+        root: jakarta.persistence.criteria.Root<ComponentEntity>,
+        query: jakarta.persistence.criteria.CriteriaQuery<*>,
+        cb: jakarta.persistence.criteria.CriteriaBuilder,
+    ): jakarta.persistence.criteria.Subquery<Int> {
+        val sub = query.subquery(Int::class.java)
+        val member = sub.from(roleEntity)
+        return sub.select(cb.literal(1)).where(
+            cb.equal(member.get<ComponentEntity>("component"), root),
+            member.get<String>("username").`in`(users),
+        )
+    }
+
     private fun buildSpecification(filter: ComponentFilter): Specification<ComponentEntity> {
         var spec = Specification.where<ComponentEntity>(null)
 
@@ -4400,34 +4432,7 @@ class ComponentManagementServiceImpl(
         // joins: an OR across two child collections via joins would need LEFT joins and multiply
         // rows; subqueries keep one row per component and no distinct.
         if (!filter.involves.isNullOrEmpty()) {
-            val roles = involvementRoles(filter.involvesRoles)
-            val users = filter.involves
-            spec =
-                spec.and(
-                    Specification { root, query, cb ->
-                        val predicates = mutableListOf<jakarta.persistence.criteria.Predicate>()
-                        if (INVOLVES_OWNER in roles) predicates += root.get<String>("componentOwner").`in`(users)
-                        if (INVOLVES_RELEASE_MANAGER in roles) {
-                            val sub = query!!.subquery(Int::class.java)
-                            val rm = sub.from(ComponentReleaseManagerEntity::class.java)
-                            sub.select(cb.literal(1)).where(
-                                cb.equal(rm.get<ComponentEntity>("component"), root),
-                                rm.get<String>("username").`in`(users),
-                            )
-                            predicates += cb.exists(sub)
-                        }
-                        if (INVOLVES_SECURITY_CHAMPION in roles) {
-                            val sub = query!!.subquery(Int::class.java)
-                            val sc = sub.from(ComponentSecurityChampionEntity::class.java)
-                            sub.select(cb.literal(1)).where(
-                                cb.equal(sc.get<ComponentEntity>("component"), root),
-                                sc.get<String>("username").`in`(users),
-                            )
-                            predicates += cb.exists(sub)
-                        }
-                        cb.or(*predicates.toTypedArray())
-                    },
-                )
+            spec = spec.and(involvesSpecification(filter.involves, involvementRoles(filter.involvesRoles)))
         }
         filter.search?.let { search ->
             val pattern = "%${search.lowercase()}%"
