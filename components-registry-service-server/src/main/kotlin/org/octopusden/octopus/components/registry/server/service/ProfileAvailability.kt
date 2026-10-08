@@ -1,7 +1,7 @@
 package org.octopusden.octopus.components.registry.server.service
 
 import org.octopusden.octopus.components.registry.server.model.ComponentProfile
-import org.octopusden.octopus.components.registry.server.template.ComponentTemplate
+import org.octopusden.octopus.components.registry.server.model.ComponentTemplate
 
 /**
  * Whether the current user may use a profile or a template, and override a template's fields

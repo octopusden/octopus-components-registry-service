@@ -2,7 +2,7 @@ package org.octopusden.octopus.components.registry.server.dto.v4
 
 import io.swagger.v3.oas.annotations.media.Schema
 import jakarta.validation.constraints.Pattern
-import org.octopusden.octopus.components.registry.server.template.TemplateInput
+import org.octopusden.octopus.components.registry.server.service.impl.TemplateInput
 
 /** `POST /rest/api/4/component-templates/{id}/components`: the same body for a dry run and a create. */
 data class TemplateComponentRequest(

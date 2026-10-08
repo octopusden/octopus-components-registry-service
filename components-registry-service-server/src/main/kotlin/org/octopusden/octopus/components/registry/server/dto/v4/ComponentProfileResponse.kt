@@ -2,8 +2,8 @@ package org.octopusden.octopus.components.registry.server.dto.v4
 
 import io.swagger.v3.oas.annotations.media.Schema
 import org.octopusden.octopus.components.registry.server.model.ComponentProfile
+import org.octopusden.octopus.components.registry.server.model.ComponentTemplate
 import org.octopusden.octopus.components.registry.server.service.ProfileAvailability
-import org.octopusden.octopus.components.registry.server.template.ComponentTemplate
 
 /** `GET /rest/api/4/component-profiles`: the live profiles and templates in order, for the current user. */
 data class ComponentProfilesResponse(

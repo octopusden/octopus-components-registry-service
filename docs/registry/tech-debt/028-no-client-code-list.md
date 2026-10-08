@@ -29,4 +29,4 @@ lists by hand. A `crs-list` of client codes is refused on load.
 ## References
 
 - `openspec/changes/add-component-templates/design.md` (Decision 13, Risks)
-- `template/ComponentTemplate.kt` (`TemplateList`)
+- `model/ComponentTemplate.kt` (`TemplateList`)

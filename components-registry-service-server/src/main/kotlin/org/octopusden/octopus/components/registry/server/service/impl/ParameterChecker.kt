@@ -1,16 +1,10 @@
-package org.octopusden.octopus.components.registry.server.template
+package org.octopusden.octopus.components.registry.server.service.impl
 
+import org.octopusden.octopus.components.registry.server.model.ComponentTemplate
+import org.octopusden.octopus.components.registry.server.model.TemplateParameter
+import org.octopusden.octopus.components.registry.server.service.EmployeeStatus
+import org.octopusden.octopus.components.registry.server.service.ListValues
 import org.octopusden.octopus.components.registry.server.service.impl.ActiveStatus
-
-/** The current values of a registry list (Decision 5): labels from the dictionary, the others from their enums. */
-fun interface ListValues {
-    fun values(list: TemplateList): Set<String>
-}
-
-/** Whether a login is an active employee, as today's create asks the employee service. */
-fun interface EmployeeStatus {
-    fun of(login: String): ActiveStatus
-}
 
 /** One failed parameter check, with a message a creator can act on. */
 data class ParameterProblem(

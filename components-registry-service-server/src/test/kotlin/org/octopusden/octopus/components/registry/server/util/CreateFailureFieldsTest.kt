@@ -1,4 +1,4 @@
-package org.octopusden.octopus.components.registry.server.template
+package org.octopusden.octopus.components.registry.server.util
 
 import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.DisplayName

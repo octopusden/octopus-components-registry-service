@@ -1,4 +1,4 @@
-package org.octopusden.octopus.components.registry.server.template
+package org.octopusden.octopus.components.registry.server.util
 
 import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.Assertions.assertFalse
@@ -8,26 +8,13 @@ import org.junit.jupiter.api.Test
 import org.junit.jupiter.api.assertThrows
 import org.octopusden.octopus.components.registry.server.dto.v4.ArtifactIdRequest
 import org.octopusden.octopus.components.registry.server.dto.v4.VcsEntryRequest
+import org.octopusden.octopus.components.registry.server.model.ComponentTemplate
+import org.octopusden.octopus.components.registry.server.support.EXAMPLE_DEFAULTS
+import org.octopusden.octopus.components.registry.server.support.EXAMPLE_VALUES
+import org.octopusden.octopus.components.registry.server.support.at
+import org.octopusden.octopus.components.registry.server.support.exampleTemplate
+import org.octopusden.octopus.components.registry.server.support.parsedTemplate
 import org.octopusden.octopus.components.registry.server.util.ComponentProfileParser
-import org.octopusden.octopus.components.registry.server.support.designExampleProperties
-
-/** A template as the parser produces it, failing the test when it is not live. */
-fun parsedTemplate(
-    template: Map<String, Any> = exampleTemplate(),
-    defaults: Map<String, String> = EXAMPLE_DEFAULTS,
-): ComponentTemplate {
-    val load = ComponentProfileParser.parse(designExampleProperties() + flatten(template, TEMPLATE_ID), defaults)
-    return requireNotNull(load.templates.singleOrNull()) { "not live: ${load.entries.single { it.id == TEMPLATE_ID }.problems}" }
-}
-
-/** The design example's dry-run values, the owner given. */
-val EXAMPLE_VALUES =
-    mapOf(
-        "CLIENT_CODE" to listOf("ACME"),
-        "PLUGIN_CODE" to listOf("CORE"),
-        "PLUGIN_NAME" to listOf("Core API"),
-        "COMPONENT_OWNER" to listOf("jdoe"),
-    )
 
 class TemplateRendererTest {
     private fun render(

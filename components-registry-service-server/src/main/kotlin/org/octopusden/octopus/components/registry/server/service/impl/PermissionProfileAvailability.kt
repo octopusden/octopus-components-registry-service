@@ -1,8 +1,8 @@
 package org.octopusden.octopus.components.registry.server.service.impl
 
 import org.octopusden.octopus.components.registry.server.model.ComponentProfile
+import org.octopusden.octopus.components.registry.server.model.ComponentTemplate
 import org.octopusden.octopus.components.registry.server.service.ProfileAvailability
-import org.octopusden.octopus.components.registry.server.template.ComponentTemplate
 
 /** Usable for a user who may create components; such a user may also override any template field. */
 class PermissionProfileAvailability(

@@ -3,8 +3,8 @@ package org.octopusden.octopus.components.registry.server.util
 import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.DisplayName
 import org.junit.jupiter.api.Test
-import org.octopusden.octopus.components.registry.server.template.exampleTemplate
-import org.octopusden.octopus.components.registry.server.template.flatten
+import org.octopusden.octopus.components.registry.server.support.exampleTemplate
+import org.octopusden.octopus.components.registry.server.support.flatten
 import org.yaml.snakeyaml.Yaml
 
 class EntryYamlTest {

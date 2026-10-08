@@ -1,4 +1,4 @@
-package org.octopusden.octopus.components.registry.server.template
+package org.octopusden.octopus.components.registry.server.config
 
 import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.DisplayName
@@ -77,15 +77,15 @@ class ComponentDefaultsSeedTest {
                 "baseConfiguration.vcsEntries[0].tag" to "\$module-\$version",
                 "baseConfiguration.vcsEntries[0].branch" to "main",
             ),
-            ComponentDefaultsSeed.from(defaults),
+            defaults.templateDefaults(),
         )
     }
 
     @Test
     @DisplayName("blank and absent defaults are left out")
     fun blankLeftOut() {
-        assertEquals(emptyMap<String, String>(), ComponentDefaultsSeed.from(componentDefaults(displayName = "  ", vcsBranch = "")))
-        assertEquals(emptyMap<String, String>(), ComponentDefaultsSeed.from(AdminConfigProperties.ComponentDefaults()))
+        assertEquals(emptyMap<String, String>(), componentDefaults(displayName = "  ", vcsBranch = "").templateDefaults())
+        assertEquals(emptyMap<String, String>(), AdminConfigProperties.ComponentDefaults().templateDefaults())
     }
 
     @Test
@@ -93,14 +93,14 @@ class ComponentDefaultsSeedTest {
     fun lineAndMinorFallBack() {
         assertEquals(
             mapOf("baseConfiguration.jira.lineVersionFormat" to "\$major", "baseConfiguration.jira.minorVersionFormat" to "\$major"),
-            ComponentDefaultsSeed.from(componentDefaults(line = "\$major")),
+            componentDefaults(line = "\$major").templateDefaults(),
         )
         assertEquals(
             mapOf(
                 "baseConfiguration.jira.lineVersionFormat" to "\$major.\$minor",
                 "baseConfiguration.jira.minorVersionFormat" to "\$major.\$minor",
             ),
-            ComponentDefaultsSeed.from(componentDefaults(minor = "\$major.\$minor")),
+            componentDefaults(minor = "\$major.\$minor").templateDefaults(),
         )
     }
 
@@ -109,20 +109,20 @@ class ComponentDefaultsSeedTest {
     fun buildEqualToReleaseLeftOut() {
         assertEquals(
             mapOf("baseConfiguration.jira.releaseVersionFormat" to "\$major.\$minor.\$service"),
-            ComponentDefaultsSeed.from(componentDefaults(release = "\$major.\$minor.\$service", build = "\$major.\$minor.\$service")),
+            componentDefaults(release = "\$major.\$minor.\$service", build = "\$major.\$minor.\$service").templateDefaults(),
         )
     }
 
     @Test
     @DisplayName("a deprecated default build system is ignored")
     fun deprecatedBuildSystemIgnored() {
-        assertEquals(emptyMap<String, String>(), ComponentDefaultsSeed.from(componentDefaults(buildSystem = "BS2_0")))
+        assertEquals(emptyMap<String, String>(), componentDefaults(buildSystem = "BS2_0").templateDefaults())
     }
 
     @Test
     @DisplayName("Decision 6: no Portal fallback is invented — no branch master, no full version format")
     fun noPortalFallbacks() {
-        val seed = ComponentDefaultsSeed.from(componentDefaults(projectKey = "PLUGINS"))
+        val seed = componentDefaults(projectKey = "PLUGINS").templateDefaults()
 
         assertEquals(mapOf("baseConfiguration.jira.projectKey" to "PLUGINS"), seed)
     }

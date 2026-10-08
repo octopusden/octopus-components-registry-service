@@ -158,7 +158,8 @@ A dry run with `CLIENT_CODE=ACME`, `PLUGIN_CODE=CORE`, `PLUGIN_NAME=Core API`, o
 
 - The syntax is a subset of Jinja, so it looks familiar to template authors:
   `{{ NAME }}`, `{{ NAME | lower }}`, `{{ NAME | upper }}`; spaces inside the braces are optional.
-- Parsed by `TemplateExpression`, not by a Jinja engine (such as Jinjava):
+- Parsed by `TemplateExpressionParser` into a `TemplateExpression`, not by a Jinja engine (such
+  as Jinjava):
   - the subset needs no engine, and no new dependency;
   - knowing exactly which parameters each field uses, on load, is what the load checks and the
     parameter attribution rely on; `{% if %}` and `{% for %}` would make that known only at render
@@ -370,6 +371,29 @@ A dry run with `CLIENT_CODE=ACME`, `PLUGIN_CODE=CORE`, `PLUGIN_NAME=Core API`, o
   `crs-list` the Portal's form can offer, is recorded as tech debt.
 - A new client means a configuration change adding its code to the template's options, reviewed
   and reloaded like any template change.
+
+### 14. Code placement follows the server's layers
+
+As for the profiles (`add-component-profiles`, Decision 9), there is no feature package; each class
+sits in the layer the server already uses for its kind.
+
+| Layer | Classes |
+|---|---|
+| `model/` | `ComponentTemplate` (with `TemplateParameter`, `TemplateField`, `TemplateFieldKind`, `TemplateList`), `TemplateExpression` |
+| `util/` | `TemplateParser`, `TemplateParameterParser`, `TemplateFieldChecker`, `TemplateRequiredFields`, `EntryKeys`, `TemplateFields`, `TemplateExpressionParser`, `TemplateRenderer`, `ComponentDefaultsSeed`, `TemplateProblems`, `CreateFailureFields`, `FieldRuleParser`, `EntryYaml` |
+| `service/` | `ListValues`, `EmployeeStatus` — the parameter checks' two ports |
+| `service/impl/` | `ParameterChecker`, `RegistryListValues`, `TemplateDryRun` |
+| `config/` | `ComponentTemplatesConfig` (the beans), `TemplateDefaults` (`component-defaults` → template field paths) |
+
+- `model/` imports nothing from the server but `model/`: the field kind is a model enum, and the
+  expression's data is apart from its parser, so no `model` ↔ `util` cycle (TD-016).
+- `util/` holds the pure logic, so it sits in the PIT mutation scope. It imports `model/` and the
+  request DTOs, never `service/` or `config/`: reading `AdminConfigProperties` is
+  `config/TemplateDefaults`'s job.
+- Test fixtures (the design example, `flatten`, `parsedTemplate`) live in
+  `support/ComponentTemplateFixtures.kt`.
+
+(changed on review: the classes first lived in one `template/` package)
 
 ## Out of Scope
 

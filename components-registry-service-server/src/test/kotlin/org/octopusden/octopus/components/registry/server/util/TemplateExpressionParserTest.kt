@@ -1,15 +1,15 @@
-package org.octopusden.octopus.components.registry.server.template
+package org.octopusden.octopus.components.registry.server.util
 
 import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.DisplayName
 import org.junit.jupiter.api.Test
 import org.junit.jupiter.params.ParameterizedTest
 import org.junit.jupiter.params.provider.ValueSource
-import org.octopusden.octopus.components.registry.server.template.TemplateExpression.Filter
-import org.octopusden.octopus.components.registry.server.template.TemplateExpression.Part
+import org.octopusden.octopus.components.registry.server.model.TemplateExpression.Filter
+import org.octopusden.octopus.components.registry.server.model.TemplateExpression.Part
 
-class TemplateExpressionTest {
-    private fun parse(text: String) = TemplateExpression.parse(text).getOrThrow()
+class TemplateExpressionParserTest {
+    private fun parse(text: String) = TemplateExpressionParser.parse(text).getOrThrow()
 
     @Test
     @DisplayName("Decision 3: the design example's name splits into parameters with their filters and the literal between them")
@@ -65,7 +65,7 @@ class TemplateExpressionTest {
     )
     @DisplayName("Decision 3: a construct outside the subset is rejected with a reason")
     fun outsideSubsetRejected(text: String) {
-        val failure = TemplateExpression.parse(text).exceptionOrNull()
+        val failure = TemplateExpressionParser.parse(text).exceptionOrNull()
 
         requireNotNull(failure?.message) { "'$text' must be rejected with a message" }
     }

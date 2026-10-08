@@ -69,11 +69,11 @@
     - [x] a `{% … %}` tag and a `{# … #}` comment are rejected
     - [x] an expression other than a parameter name (`{{ A ~ B }}`, `{{ 'x' }}`) is rejected
 - [x] 2.2 Implement:
-  - [x] 2.2.1 `template/ComponentTemplate.kt` — template, parameter (sealed by type), field value
-  - [x] 2.2.2 `template/TemplateFields.kt` — path → field kind table (Decision 2)
-  - [x] 2.2.3 `template/TemplateExpression.kt` — parse one value into literal and parameter parts
+  - [x] 2.2.1 `model/ComponentTemplate.kt` — template, parameter (sealed by type), field value
+  - [x] 2.2.2 `util/TemplateFields.kt` — path → field kind table (Decision 2)
+  - [x] 2.2.3 `model/TemplateExpression.kt` and `util/TemplateExpressionParser.kt` — parse one value into literal and parameter parts
         (rendering moves to section 5)
-  - [x] 2.2.4 `template/TemplateParser.kt` — pure; problems prefixed with the full key
+  - [x] 2.2.4 `util/TemplateParser.kt` — pure; problems prefixed with the full key
   - [x] 2.2.5 `ComponentProfileParser` hands `kind: template` to `TemplateParser`; `ProfileLoad`
         gains `templates`
 - [x] 2.3 Confirm tests pass: `./gradlew :components-registry-service-server:test` — 1355 tests,
@@ -81,11 +81,11 @@
       `dbTest` for `TemplateCreateBaselineTest` 2, `ReloadConfigComponentProfilesTest` 5,
       `ComponentProfileControllerV4Test` 9 — all green. ktlint and detekt clean.
 - [x] 2.4 Split out of `TemplateParser` to keep each file to one job (added on review):
-  - [x] 2.4.1 `template/EntryKeys.kt` — flattened keys of an entry or section, and its problem list
-  - [x] 2.4.2 `template/TemplateParameterParser.kt` — one parameter and its checks
-  - [x] 2.4.3 `template/TemplateFieldChecker.kt` — the field-kind checks
-  - [x] 2.4.4 `template/TemplateRequiredFields.kt` — the required-fields table
-  - [x] 2.4.5 `profile/FieldRuleParser.kt` — rule parsing shared by profiles and templates
+  - [x] 2.4.1 `util/EntryKeys.kt` — flattened keys of an entry or section, and its problem list
+  - [x] 2.4.2 `util/TemplateParameterParser.kt` — one parameter and its checks
+  - [x] 2.4.3 `util/TemplateFieldChecker.kt` — the field-kind checks
+  - [x] 2.4.4 `util/TemplateRequiredFields.kt` — the required-fields table
+  - [x] 2.4.5 `util/FieldRuleParser.kt` — rule parsing shared by profiles and templates
 - [x] 2.5 Profile tests that pinned "templates are not supported yet" now expect a broken template
       to fail with its own problems (added on review)
 - [x] 2.6 The catalog still parses with no `component-defaults`, so a template that relies on a
@@ -135,8 +135,8 @@
   - [x] 4.1.7 Employee service unavailable → P8 passes
   - [x] 4.1.8 Several failures → all reported
 - [x] 4.2 Implement:
-  - [x] 4.2.1 `template/ParameterChecker.kt`
-  - [x] 4.2.2 `ListValues` (in `ParameterChecker.kt`) and `template/RegistryListValues.kt`: labels
+  - [x] 4.2.1 `service/impl/ParameterChecker.kt`
+  - [x] 4.2.2 `service/ListValues.kt` and `service/impl/RegistryListValues.kt`: labels
         dictionary, the two enums; `EmployeeStatus` reuses the create's `ActiveStatus`. Beans are
         wired with the endpoint (section 6)
 - [x] 4.3 Confirm tests pass: `ParameterCheckerTest` 17, `RegistryListValuesTest` 2; ktlint and
@@ -158,7 +158,7 @@
     - [x] deprecated build system ignored
     - [x] no `master` or version-format fallback
   - [x] 5.1.5 Classification, Jira task key and comment carried; `profile` absent
-- [x] 5.2 Implement `template/TemplateRenderer.kt` and `template/ComponentDefaultsSeed.kt`
+- [x] 5.2 Implement `util/TemplateRenderer.kt` and `util/ComponentDefaultsSeed.kt`
 - [x] 5.3 The catalog passes `ComponentDefaultsSeed`'s paths to `ComponentProfileParser.parse`, on
       load and on reload, closing 2.6 (added on review)
 - [x] 5.4 Confirm tests pass: `test` — 1402 tests, 0 failures, 1 skipped (pre-existing);
@@ -210,14 +210,14 @@
   - [x] 7.1.5 A 409 cross-component conflict and a 403 editability failure become problems, not
         error responses
 - [x] 7.2 Implement:
-  - [x] 7.2.1 `template/CreateFailureFields.kt`
-  - [x] 7.2.2 `template/TemplateDryRun.kt` — rollback-only `TransactionTemplate` around
+  - [x] 7.2.1 `util/CreateFailureFields.kt`
+  - [x] 7.2.2 `service/impl/TemplateDryRun.kt` — rollback-only `TransactionTemplate` around
         `createComponent`
   - [x] 7.2.3 `POST …/components` on `ComponentTemplateControllerV4` with `dryRun` (default
         `true`), and its DTOs
 - [x] 7.3 Confirm tests pass, `dbTest` included: `CreateFailureFieldsTest` 30,
       `TemplateProblemsTest` 9, `ComponentTemplateControllerV4Test` 27
-- [x] 7.4 `template/TemplateProblems.kt` — rule, fixed-label and create problems attributed
+- [x] 7.4 `util/TemplateProblems.kt` — rule, fixed-label and create problems attributed
       through `sources`, unit-tested apart from the transaction (added on review)
 - [x] 7.5 `config/ComponentTemplatesConfig.kt` (database mode): `ListValues` from the labels
       dictionary, `ParameterChecker` on `EmployeeDirectoryService`, `TemplateDryRun` on today's
@@ -252,7 +252,7 @@
   - [x] 9.1.3 Last reload failed → said so, with the problems
   - [x] 9.1.4 403 without `IMPORT_DATA`
 - [x] 9.2 Implement on `AdminControllerV4`, with the YAML dump of an entry's raw keys
-  - [x] 9.2.1 `profile/EntryYaml.kt` — pure; `EntryYamlTest` 4, written first: the design example
+  - [x] 9.2.1 `util/EntryYaml.kt` — pure; `EntryYamlTest` 4, written first: the design example
         round-trips (added on review)
 - [x] 9.3 Confirm tests pass: `AdminComponentProfilesTest` 4. `AdminControllerV4SecurityTest`
       needs Postgres in Docker; not run locally, left to CI
@@ -325,3 +325,21 @@
   - [x] 12.3.4 A `labels` parameter's default is not checked on load; P7 checks it when used
 - [x] 12.4 Confirm tests pass: server `test` 1456, 0 failures, 1 skipped (pre-existing);
       `ComponentTemplateControllerV4Test` 28; ktlint and detekt clean
+
+## 13. Code placement (Decision 14)
+
+- [x] 13.1 The classes left the `template/` package for the server's layers, as the profiles did
+      (added on review):
+  - [x] 13.1.1 `model/`: `ComponentTemplate` with the field kind as `TemplateFieldKind`, and
+        `TemplateExpression` apart from its parser, `util/TemplateExpressionParser`, so `model/`
+        imports nothing outside itself
+  - [x] 13.1.2 `util/`: parser, field checks, renderer, defaults narrowing, problems, failure
+        attribution; `FieldRuleParser` and `EntryYaml` too. `util/` imports no `service/` or
+        `config/`: the `component-defaults` mapping is `config/TemplateDefaults.templateDefaults()`
+  - [x] 13.1.3 `service/`: the `ListValues` and `EmployeeStatus` ports; `service/impl/`:
+        `ParameterChecker`, `RegistryListValues`, `TemplateDryRun`
+  - [x] 13.1.4 Tests moved with their classes; fixtures to `support/ComponentTemplateFixtures.kt`
+- [x] 13.2 Confirm tests pass: server `test` 1457 tests, 0 failures, 1 skipped (pre-existing);
+      `dbTest` for the template and profile suites 68, 0 failures; ktlint and detekt clean.
+      `pitest`, now covering the template classes in `util/`: 76% mutation score (1048 of 1386)
+      and 87% line coverage, above both floors; the template classes 528 of 612 mutants killed

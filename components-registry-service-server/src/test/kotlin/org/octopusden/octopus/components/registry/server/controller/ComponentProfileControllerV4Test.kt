@@ -10,8 +10,8 @@ import org.octopusden.cloud.commons.security.client.AuthServerClient
 import org.octopusden.octopus.components.registry.server.ComponentRegistryServiceApplication
 import org.octopusden.octopus.components.registry.server.service.impl.ComponentProfileCatalog
 import org.octopusden.octopus.components.registry.server.support.adminJwt
+import org.octopusden.octopus.components.registry.server.support.standaloneTemplateProperties
 import org.octopusden.octopus.components.registry.server.support.viewerJwt
-import org.octopusden.octopus.components.registry.server.template.standaloneTemplateProperties
 import org.springframework.beans.factory.annotation.Autowired
 import org.springframework.boot.test.autoconfigure.web.servlet.AutoConfigureMockMvc
 import org.springframework.boot.test.context.SpringBootTest

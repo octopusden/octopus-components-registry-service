@@ -1,11 +1,18 @@
-package org.octopusden.octopus.components.registry.server.template
+package org.octopusden.octopus.components.registry.server.service.impl
 
 import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.DisplayName
 import org.junit.jupiter.api.Test
 import org.octopusden.octopus.components.registry.server.model.ComponentProfile
+import org.octopusden.octopus.components.registry.server.model.ComponentTemplate
+import org.octopusden.octopus.components.registry.server.model.TemplateList
+import org.octopusden.octopus.components.registry.server.model.TemplateParameter
+import org.octopusden.octopus.components.registry.server.service.EmployeeStatus
+import org.octopusden.octopus.components.registry.server.service.ListValues
 import org.octopusden.octopus.components.registry.server.service.impl.ActiveStatus
-import org.octopusden.octopus.components.registry.server.template.ParameterProblem.Check
+import org.octopusden.octopus.components.registry.server.service.impl.ParameterProblem.Check
+import org.octopusden.octopus.components.registry.server.support.TEMPLATE_ID
+import org.octopusden.octopus.components.registry.server.util.TemplateFields
 
 private const val CALLER = "jdoe"
 

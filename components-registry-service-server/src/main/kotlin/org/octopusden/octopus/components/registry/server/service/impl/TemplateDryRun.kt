@@ -1,9 +1,16 @@
-package org.octopusden.octopus.components.registry.server.template
+package org.octopusden.octopus.components.registry.server.service.impl
 
 import org.octopusden.octopus.components.registry.core.exceptions.CrossComponentConflictException
 import org.octopusden.octopus.components.registry.core.exceptions.NotFoundException
 import org.octopusden.octopus.components.registry.server.dto.v4.ComponentCreateRequest
 import org.octopusden.octopus.components.registry.server.dto.v4.ComponentDetailResponse
+import org.octopusden.octopus.components.registry.server.model.ComponentTemplate
+import org.octopusden.octopus.components.registry.server.model.TemplateList
+import org.octopusden.octopus.components.registry.server.service.ListValues
+import org.octopusden.octopus.components.registry.server.util.RenderedTemplate
+import org.octopusden.octopus.components.registry.server.util.TemplateProblem
+import org.octopusden.octopus.components.registry.server.util.TemplateProblems
+import org.octopusden.octopus.components.registry.server.util.TemplateRenderer
 import org.slf4j.Logger
 import org.slf4j.LoggerFactory
 import org.springframework.dao.DataIntegrityViolationException

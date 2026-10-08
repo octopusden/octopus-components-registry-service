@@ -9,7 +9,7 @@ import org.junit.jupiter.api.Test
 import org.octopusden.octopus.components.registry.server.model.ProfileLoad
 import org.octopusden.octopus.components.registry.server.support.designExampleProperties
 import org.octopusden.octopus.components.registry.server.support.profileProperties
-import org.octopusden.octopus.components.registry.server.template.standaloneTemplateProperties
+import org.octopusden.octopus.components.registry.server.support.standaloneTemplateProperties
 import java.util.concurrent.CountDownLatch
 import java.util.concurrent.Executors
 import java.util.concurrent.TimeUnit

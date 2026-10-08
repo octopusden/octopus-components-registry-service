@@ -1,9 +1,10 @@
-package org.octopusden.octopus.components.registry.server.template
+package org.octopusden.octopus.components.registry.server.service.impl
 
 import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.Assertions.assertTrue
 import org.junit.jupiter.api.DisplayName
 import org.junit.jupiter.api.Test
+import org.octopusden.octopus.components.registry.server.model.TemplateList
 
 class RegistryListValuesTest {
     @Test

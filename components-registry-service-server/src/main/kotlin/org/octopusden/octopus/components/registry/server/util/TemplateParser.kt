@@ -1,10 +1,14 @@
-package org.octopusden.octopus.components.registry.server.template
+package org.octopusden.octopus.components.registry.server.util
 
 import org.octopusden.octopus.components.registry.server.model.ComponentProfile
-import org.octopusden.octopus.components.registry.server.util.FieldRuleParser
+import org.octopusden.octopus.components.registry.server.model.ComponentTemplate
 import org.octopusden.octopus.components.registry.server.model.ProfileLoad
+import org.octopusden.octopus.components.registry.server.model.TemplateExpression
+import org.octopusden.octopus.components.registry.server.model.TemplateField
+import org.octopusden.octopus.components.registry.server.model.TemplateParameter
+import org.octopusden.octopus.components.registry.server.util.FieldRuleParser
+import org.octopusden.octopus.components.registry.server.util.TemplateFieldChecker.Companion.FIELDS
 import org.octopusden.octopus.components.registry.server.util.ruleKeys
-import org.octopusden.octopus.components.registry.server.template.TemplateFieldChecker.Companion.FIELDS
 
 /**
  * Parses one `kind: template` entry and applies every load check of the spec (Decision 4),
@@ -109,7 +113,7 @@ internal class TemplateParser(
         key: String,
         value: String,
     ): TemplateExpression? =
-        TemplateExpression
+        TemplateExpressionParser
             .parse(value)
             .onFailure { keys.problem(key, it.message.orEmpty()) }
             .getOrNull()

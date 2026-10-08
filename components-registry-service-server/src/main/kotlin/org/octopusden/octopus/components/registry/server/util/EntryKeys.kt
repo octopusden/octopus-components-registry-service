@@ -1,4 +1,4 @@
-package org.octopusden.octopus.components.registry.server.template
+package org.octopusden.octopus.components.registry.server.util
 
 /**
  * The flattened keys of one configuration entry, or of a section of it, and the problem list

@@ -1,6 +1,8 @@
-package org.octopusden.octopus.components.registry.server.template
+package org.octopusden.octopus.components.registry.server.util
 
 import org.octopusden.octopus.components.registry.server.model.ComponentProfile
+import org.octopusden.octopus.components.registry.server.model.TemplateField
+import org.octopusden.octopus.components.registry.server.model.TemplateParameter
 
 /**
  * The spec's required-fields table. A field is produced when the template fixes it, a required

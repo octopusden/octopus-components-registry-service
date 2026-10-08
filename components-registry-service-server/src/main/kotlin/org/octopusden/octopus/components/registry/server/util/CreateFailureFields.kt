@@ -1,4 +1,4 @@
-package org.octopusden.octopus.components.registry.server.template
+package org.octopusden.octopus.components.registry.server.util
 
 /**
  * The template paths a failure message of today's create concerns (Decision 9), read from the
