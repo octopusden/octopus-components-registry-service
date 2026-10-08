@@ -253,11 +253,52 @@ class ComponentTemplateControllerV4Test {
     fun describeSelectAndPerson() {
         describe(jwt = viewerJwt("jdoe"))
             .andExpect(status().isOk)
+            .andExpect(jsonPath("$.title").value("Client plugin"))
+            .andExpect(jsonPath("$.description").value("A plugin built for one client."))
             .andExpect(jsonPath("$.parameters[0].type").value("select"))
             .andExpect(jsonPath("$.parameters[0].options", contains("ACME", "GLOBEX")))
             .andExpect(jsonPath("$.parameters[0].multiple").value(false))
             .andExpect(jsonPath("$.parameters[3].type").value("person"))
+            .andExpect(jsonPath("$.parameters[3].multiple").value(false))
             .andExpect(jsonPath("$.parameters[3].default", contains("jdoe")))
+    }
+
+    @Test
+    @DisplayName("describe: each type's settings and default — a multi-value select, a crs-list default, a multi-person parameter")
+    fun describeSettingsAndDefaults() {
+        configure(
+            standaloneTemplate().apply {
+                at("parameters")["TARGETS"] =
+                    linkedMapOf(
+                        "label" to "Targets",
+                        "type" to "select",
+                        "options" to listOf("api", "ui"),
+                        "multiple" to "true",
+                        "max-selection" to "2",
+                        "default" to listOf("api"),
+                    )
+                at("parameters")["BS"] =
+                    linkedMapOf("label" to "Build system", "type" to "crs-list", "list" to "build-systems", "default" to "GRADLE")
+                at("parameters")["REVIEWERS"] = linkedMapOf("label" to "Reviewers", "type" to "person", "multiple" to "true")
+                @Suppress("UNCHECKED_CAST")
+                ((at("fields")["artifactIds"] as List<MutableMap<String, Any>>).single())["artifactTokens"] =
+                    listOf("{{ PLUGIN_CODE | lower }}", "{{ TARGETS }}")
+                at("fields.baseConfiguration.build")["buildSystem"] = "{{ BS }}"
+                at("fields")["securityChampion"] = listOf("{{ REVIEWERS }}")
+            },
+        )
+
+        describe()
+            .andExpect(status().isOk)
+            .andExpect(jsonPath("$.parameters[4].name").value("TARGETS"))
+            .andExpect(jsonPath("$.parameters[4].multiple").value(true))
+            .andExpect(jsonPath("$.parameters[4].maxSelection").value(2))
+            .andExpect(jsonPath("$.parameters[4].default", contains("api")))
+            .andExpect(jsonPath("$.parameters[5].multiple").value(false))
+            .andExpect(jsonPath("$.parameters[5].default", contains("GRADLE")))
+            .andExpect(jsonPath("$.parameters[5].values", hasItem("GRADLE")))
+            .andExpect(jsonPath("$.parameters[6].type").value("person"))
+            .andExpect(jsonPath("$.parameters[6].multiple").value(true))
     }
 
     @Test
@@ -473,6 +514,7 @@ class ComponentTemplateControllerV4Test {
     @DisplayName("Decision 10: a create without a Jira task key is accepted, as any create is")
     fun createdWithoutJiraTaskKey() {
         components(body(), dryRun = false).andExpect(status().isCreated)
+        components(body(extra = mapOf("jiraTaskKey" to "")), dryRun = false).andExpect(status().isCreated)
     }
 
     @Test
@@ -514,7 +556,13 @@ class ComponentTemplateControllerV4Test {
     fun overridable() {
         val vcsPath = "ssh://git@git.example.com/custom/${UUID.randomUUID()}.git"
 
-        components(body(extra = mapOf("overrides" to mapOf("baseConfiguration.vcsEntries[0].vcsPath" to listOf(vcsPath)))), dryRun = false)
+        val overrides = mapOf("overrides" to mapOf("baseConfiguration.vcsEntries[0].vcsPath" to listOf(vcsPath)))
+
+        components(body(extra = overrides))
+            .andExpect(status().isOk)
+            .andExpect(jsonPath("$.overridden", contains("baseConfiguration.vcsEntries[0].vcsPath")))
+            .andExpect(jsonPath("$.sources['baseConfiguration.vcsEntries[0].vcsPath']").isEmpty)
+        components(body(extra = overrides), dryRun = false)
             .andExpect(status().isCreated)
             .andExpect(jsonPath("$.configurations[0].vcsEntries[0].vcsPath").value(vcsPath))
     }
@@ -522,18 +570,25 @@ class ComponentTemplateControllerV4Test {
     @Test
     @DisplayName("overrides: a path the template does not list answers 400 naming it")
     fun notOverridable() {
+        val before = counts()
+
         components(body(extra = mapOf("overrides" to mapOf("name" to listOf("my-name")))), dryRun = false)
             .andExpect(status().isBadRequest)
             .andExpect(jsonPath("$.errorMessage", startsWith("name:")))
+
+        assertEquals(before, counts())
     }
 
     @Test
     @DisplayName("Decision 12: an override from a user the availability rule refuses answers 403")
     fun overrideRefused() {
         switchable.overrideAllowed = false
+        val before = counts()
 
         components(body(extra = mapOf("overrides" to mapOf("baseConfiguration.jira.projectKey" to listOf("OTHER")))), dryRun = false)
             .andExpect(status().isForbidden)
+
+        assertEquals(before, counts())
     }
 
     @Test
@@ -552,5 +607,6 @@ class ComponentTemplateControllerV4Test {
     @DisplayName("a user who may not create components is refused, on a dry run as on a create")
     fun viewerRefused() {
         components(body(), jwt = viewerJwt()).andExpect(status().isForbidden)
+        components(body(), dryRun = false, jwt = viewerJwt()).andExpect(status().isForbidden)
     }
 }

@@ -59,7 +59,10 @@ object TemplateRenderer {
             }
         }
         applyDefaults(template.classification, defaults, fields, sources)
-        overrides.forEach { (path, value) -> fields[path] = value.filter { it.isNotBlank() } }
+        overrides.forEach { (path, value) ->
+            fields[path] = value.filter { it.isNotBlank() }
+            sources[path] = emptySet()
+        }
         val request = RequestBuilder(fields).build(template.classification, jiraTaskKey, changeComment)
         return RenderedTemplate(request, fields, sources, overrides.keys)
     }

@@ -39,7 +39,8 @@ refresh it with `./gradlew :components-registry-service-server:generateOpenApiDo
     template the caller may use: `CREATE_COMPONENTS`; database mode). Body: `parameters` and
     `overrides` (maps to lists of strings), `jiraTaskKey` and `changeComment` as on any create.
     - `dryRun` absent or `true` → `200` with `valid`, `parameterProblems` (`parameter`, `check`
-      `P1`–`P9`, `message`), the rendered `component`, `sources` (path → parameters) and `problems`
+      `P1`–`P9`, `message`), the rendered `component`, `sources` (path → parameters), `overridden`
+      (the paths an override set) and `problems`
       (`fields`, `parameters`, `templateProblem`, `message`). Nothing is created.
     - `dryRun=false` → `201` with the component when nothing failed; otherwise `422` with the dry-run
       body, and nothing is created.

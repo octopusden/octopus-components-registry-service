@@ -168,8 +168,8 @@ A dry run with `CLIENT_CODE=ACME`, `PLUGIN_CODE=CORE`, `PLUGIN_NAME=Core API`, o
 - A further filter, such as `trim` or `replace`, can be added later as one more row in the spec;
   templates written for the current subset stay valid.
 - Parsed once, on load, into literal and parameter parts.
-- A CRS value, Person or list item takes a parameter whole: `{{ NAME }}` and nothing else, no
-  filter.
+- A CRS value, a Person, or an item of a CRS list or people list takes a parameter whole:
+  `{{ NAME }}` and nothing else, no filter. A free-text list item is free text.
 
 ### 4. Load checks
 
@@ -190,7 +190,8 @@ A dry run with `CLIENT_CODE=ACME`, `PLUGIN_CODE=CORE`, `PLUGIN_NAME=Core API`, o
 - A required field counts as produced when:
   - the template fixes it with non-blank text, or a list field has a fixed item; or
   - it uses a required parameter; or
-  - `component-defaults` supplies it at load (Decision 6's table).
+  - `component-defaults` supplies it at load (Decision 6's table), also when the template sets it
+    from an optional parameter, since rendering then falls back to the default.
 
   The Portal's fallback values do not count.
 - Build systems that need no VCS skip the VCS fields, as the Portal does: `PROVIDED`,
@@ -227,8 +228,9 @@ A dry run with `CLIENT_CODE=ACME`, `PLUGIN_CODE=CORE`, `PLUGIN_NAME=Core API`, o
 - `TemplateRenderer.render(template, values, overrides, defaults, jiraTaskKey, changeComment)
   → RenderedTemplate(request, fields, sources, overridden)`:
   - `fields`: every set path and its rendered value;
-  - `sources`: each set path → the parameters it used; a fixed or defaulted value has none;
-  - `overridden`: the paths an override replaced.
+  - `sources`: each set path → the parameters it used; a fixed, defaulted or overridden value has
+    none;
+  - `overridden`: the paths an override replaced; the dry-run response returns them.
 - Order:
   1. R1–R5, field by field;
   2. `component-defaults` on fields still unset (R7);
@@ -293,8 +295,10 @@ A dry run with `CLIENT_CODE=ACME`, `PLUGIN_CODE=CORE`, `PLUGIN_NAME=Core API`, o
 - Everything the create writes is rolled back with it: the component row, the label dictionary,
   the component-source row, the audit event at `BEFORE_COMMIT`. A template sets no TeamCity
   projects, so the TeamCity dictionary is never touched.
-- A failure from `createComponent` is caught whatever its type (400, 403, 409, 422) and reported
-  as a problem, its message unchanged.
+- A failure from `createComponent` is reported as a problem, its message unchanged: an
+  `IllegalArgumentException` (400), a `ResponseStatusException` (403, 422), a `NotFoundException`
+  (404) or a `CrossComponentConflictException` (409). A unique-index violation from a concurrent
+  create is a problem on `name`. Any other exception propagates.
 - Today's create stops at its first failure, so the dry run reports at most one of those. Every
   parameter problem and every rule problem is reported.
 
@@ -317,8 +321,9 @@ A dry run with `CLIENT_CODE=ACME`, `PLUGIN_CODE=CORE`, `PLUGIN_NAME=Core API`, o
 
 ### 10. Create from a template commits only a clean dry run
 
-- `POST …/components?dryRun=false` runs Decision 8's steps in one transaction:
-  - it commits when nothing failed;
+- `POST …/components?dryRun=false` runs Decision 8's steps; only the create step is
+  transactional:
+  - its transaction commits when nothing failed, rule and label problems included;
   - on a problem it answers 422 with the dry run's body, and nothing is created.
 - The Jira task key and comment follow today's create: the key must match today's pattern when
   given, and may be blank. A dry run checks the key's pattern too, so a malformed key surfaces
@@ -387,7 +392,8 @@ A dry run with `CLIENT_CODE=ACME`, `PLUGIN_CODE=CORE`, `PLUGIN_NAME=Core API`, o
   - Accepted: a dry run lasts milliseconds, plus the employee-service calls.
 - **Passing a dry run does not guarantee the create.**
   - Someone may take the key in between, or a label may be removed.
-  - Accepted: the create runs every check again and fails cleanly.
+  - Accepted: the create runs every check again and fails cleanly; a concurrent create that wins
+    the unique index is reported as a problem on `name`.
 - **Client codes are maintained by hand in each template.**
   - A new client needs a template change before its first component.
   - Two templates can list different codes.

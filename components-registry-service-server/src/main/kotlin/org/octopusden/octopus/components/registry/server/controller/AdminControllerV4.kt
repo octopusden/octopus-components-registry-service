@@ -176,7 +176,6 @@ class AdminControllerV4(
      * are kept as they were and answer 422 `component-profiles`; a refresh failure other than
      * `config-validation` answers 500 `config-refresh`.
      */
-
     @PostMapping("/reload-config")
     fun reloadConfig(): ResponseEntity<Map<String, Any?>> {
         val outcome = adminConfigReloader.reload()

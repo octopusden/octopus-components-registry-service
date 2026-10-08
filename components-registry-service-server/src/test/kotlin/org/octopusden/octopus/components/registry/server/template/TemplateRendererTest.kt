@@ -251,6 +251,7 @@ class TemplateRendererTest {
                 ?.vcsPath,
         )
         assertEquals(setOf(path), rendered.overridden)
+        assertEquals(emptySet<String>(), rendered.sources[path], "an overridden value came from no parameter")
         assertEquals(render().request.copy(baseConfiguration = null), rendered.request.copy(baseConfiguration = null))
     }
 

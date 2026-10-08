@@ -56,6 +56,7 @@ internal class TemplateParser(
     }
 
     private fun checkKeys() {
+        if (!ID.matches(id)) keys.problem(null, "an id consists of lowercase letters, digits and '-'")
         keys.values.keys
             .filter { key -> key !in SCALAR_KEYS && SECTIONS.none { key.startsWith(it) } && !OVERRIDABLE_ITEM.matches(key) }
             .forEach { if (it.isEmpty()) keys.problem(null, "must hold template keys, not a value") else keys.problem(it, "unknown key") }
@@ -176,6 +177,7 @@ internal class TemplateParser(
         private val REQUIRED_KEYS = listOf("title", "description", "order", "version", EXTERNAL, EXPLICIT)
         private val SCALAR_KEYS = setOf("kind", "title", "description", "order", "version", EXTERNAL, EXPLICIT, SOLUTION)
         private val SECTIONS = listOf("$PARAMETERS.", FIELDS, "rules.")
+        private val ID = Regex("[a-z0-9-]+")
         private val OVERRIDABLE_ITEM = Regex("""overridable\[\d+]""")
         private val LIST_ITEM = Regex("""(.+)\[(\d+)]""")
     }

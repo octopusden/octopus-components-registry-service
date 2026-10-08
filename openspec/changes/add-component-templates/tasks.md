@@ -148,7 +148,8 @@
   - [x] 5.1.1 R1–R8, one test each, including sources per field
   - [x] 5.1.2 The design example renders to the expected request and sources
   - [x] 5.1.3 Same input twice → equal output
-  - [x] 5.1.4 Defaults (`ComponentDefaultsSeedTest`):
+  - [x] 5.1.4 Defaults (`ComponentDefaultsSeedTest`; applied-when-unset, copyright and VCS in
+        `TemplateRendererTest` R7):
     - [x] each row of Decision 6's table applied only when the field is unset and the default is
           non-blank, with no sources
     - [x] copyright only for explicit + external
@@ -214,8 +215,8 @@
         `createComponent`
   - [x] 7.2.3 `POST …/components` on `ComponentTemplateControllerV4` with `dryRun` (default
         `true`), and its DTOs
-- [x] 7.3 Confirm tests pass, `dbTest` included: `CreateFailureFieldsTest` 31,
-      `TemplateProblemsTest` 8, `ComponentTemplateControllerV4Test` 26
+- [x] 7.3 Confirm tests pass, `dbTest` included: `CreateFailureFieldsTest` 30,
+      `TemplateProblemsTest` 9, `ComponentTemplateControllerV4Test` 27
 - [x] 7.4 `template/TemplateProblems.kt` — rule, fixed-label and create problems attributed
       through `sources`, unit-tested apart from the transaction (added on review)
 - [x] 7.5 `config/ComponentTemplatesConfig.kt` (database mode): `ListValues` from the labels
@@ -260,7 +261,7 @@
 
 - [x] 10.1 Regenerate `v4.json` (`generateOpenApiDocs`); `OpenApiV4SpecTest` green
 - [x] 10.2 `docs/registry/api-changelog.md`:
-  - [x] the four endpoints
+  - [x] the three new endpoints
   - [x] `kind: template` and `version` in the listing
   - [x] `live` templates in the reload response
 - [x] 10.3 `docs/registry/functional-spec.md` — templates, parameters, dry run, create
@@ -279,8 +280,8 @@
 
 ## 11. Finalization
 
-- [x] 11.1 `test qualityStatic` across all modules green; coverage floors unchanged — on the
-      profiles head `6568eb51`: server `test` 1451 tests, 0 failures, 1 skipped (pre-existing);
+- [x] 11.1 `test qualityStatic` across all modules green; coverage floors unchanged — stacked on
+      the profiles head `6568eb51`: server `test` 1451 tests, 0 failures, 1 skipped (pre-existing);
       `dbTest` for the template and profile suites 66, 0 failures; ktlint and detekt clean; no build
       file touched, so the floors are unchanged. Not green locally, and not caused by this change:
   - `:components-registry-automation:test` deploys to OKD, so it is left to CI
@@ -295,3 +296,24 @@
 - [x] 11.3 Risks in `design.md` still stated:
   - [x] the one-failure and client-code risks have their tech-debt records
   - [x] the optional Jira task key is in TD-025
+
+## 12. Alignment review
+
+- [x] 12.1 Fixes found by the doc ↔ code ↔ FR review (added on review):
+  - [x] 12.1.1 `OpenApiV4Config` covers `/rest/api/4/component-templates/**`; `v4.json` regenerated
+        with both template endpoints, `dryRun` default `true`, and the 200 / 201 / 422 bodies;
+        `OpenApiV4SpecTest` requires the prefix
+  - [x] 12.1.2 A required field set from an optional parameter counts as produced when
+        `component-defaults` fills it, as rendering does (`TemplateParserTest`)
+  - [x] 12.1.3 A unique-index violation from a concurrent create is a problem on `name`, not a 409
+        error response (`TemplateDryRunTest`)
+  - [x] 12.1.4 An overridden path has no source parameters; the dry-run response lists
+        `overridden` (`TemplateRendererTest`, `ComponentTemplateControllerV4Test`)
+  - [x] 12.1.5 A template id is checked like a profile id (`TemplateParserTest`)
+  - [x] 12.1.6 Tests strengthened: describe returns each type's settings and default; a blank
+        Jira task key creates; refused overrides create nothing; a viewer is refused on create too;
+        a no-VCS build system leaves the template live
+- [x] 12.2 Confirm tests pass: server `test` 1454 tests, 0 failures, 1 skipped (pre-existing);
+      `dbTest` for `ComponentTemplateControllerV4Test`, `AdminComponentProfilesTest`,
+      `ReloadConfigComponentProfilesTest`, `ComponentProfileControllerV4Test`,
+      `TemplateCreateBaselineTest` 50, 0 failures; ktlint and detekt clean

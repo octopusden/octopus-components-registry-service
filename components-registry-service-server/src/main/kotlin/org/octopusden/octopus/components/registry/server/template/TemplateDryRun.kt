@@ -4,6 +4,9 @@ import org.octopusden.octopus.components.registry.core.exceptions.CrossComponent
 import org.octopusden.octopus.components.registry.core.exceptions.NotFoundException
 import org.octopusden.octopus.components.registry.server.dto.v4.ComponentCreateRequest
 import org.octopusden.octopus.components.registry.server.dto.v4.ComponentDetailResponse
+import org.slf4j.Logger
+import org.slf4j.LoggerFactory
+import org.springframework.dao.DataIntegrityViolationException
 import org.springframework.transaction.PlatformTransactionManager
 import org.springframework.transaction.support.TransactionTemplate
 import org.springframework.web.server.ResponseStatusException
@@ -36,9 +39,10 @@ data class TemplateRun(
  * runs in its own transaction, rolled back unless [run] is asked to commit and nothing failed
  * before it, so a dry run and a create cannot drift apart.
  *
- * A failure of today's create is reported as a problem whatever its status (400, 403, 409, 422);
- * any other exception propagates. An override on a path the template does not list is refused
- * with [IllegalArgumentException] before anything runs. Who may run or override a template is the
+ * A failure of today's create is reported as a problem: a 400, 403, 404, 409 or 422 it throws,
+ * and a unique-index violation from a concurrent create; any other exception propagates. An
+ * override on a path the template does not list is refused with [IllegalArgumentException]
+ * before anything runs. Who may run or override a template is the
  * caller's check, not this one's.
  */
 class TemplateDryRun(
@@ -104,5 +108,16 @@ class TemplateDryRun(
             CreateOutcome.Failed(e.message.orEmpty())
         } catch (e: NotFoundException) {
             CreateOutcome.Failed(e.message.orEmpty())
+        } catch (e: DataIntegrityViolationException) {
+            // Another create took the key or display name after today's checks passed; the
+            // unique index is the last word. A run again names the field through the usual check.
+            log.warn("template create lost a race on a unique index: {}", e.mostSpecificCause.message)
+            CreateOutcome.Failed(
+                "name: another component with this key or display name was saved at the same moment; run again to see which",
+            )
         }
+
+    private companion object {
+        val log: Logger = LoggerFactory.getLogger(TemplateDryRun::class.java)
+    }
 }
