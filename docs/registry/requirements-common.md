@@ -91,6 +91,8 @@
 | SYS-096 | `GET /components/{idOrName}/archive-readiness` — read-only pre-flight for the archive/delete flow, gated by the same authorization as `deleteComponent` (`ACCESS_COMPONENTS` + `canDeleteComponent`); resolves by id or name identically to `getComponent`; returns one entry per external target (VCS repository, TeamCity project, Jira open issues, Jira project) with outcome `COMPLETED`/`NOT_COMPLETED`/`UNKNOWN`, a reason for the latter two, and a `reasonKind` classifying what an `UNKNOWN` entry needs; `ready` is false iff any entry is `NOT_COMPLETED` or `UNKNOWN` | High | unit + integration-test | ✅ Tested |
 | SYS-097 | The explicit+external "≥1 distribution coordinate" rule is not applied when the component's **BASE** build system is `WHISKEY` (case-insensitive; per-range build-system overrides are ignored). Applies on create, component PATCH and the `/field-overrides` endpoints; non-WHISKEY explicit+external components still require a coordinate, including after being switched off WHISKEY | High | integration-test | ✅ Tested |
 | SYS-098 | A component configuration may declare one or more **generic HTTP-URL artifacts** under `distribution.generic`; each artifact is a path string stored verbatim in DB (V10 migration, table `distribution_generic_artifacts`). The path must match `GENERIC_ENTRY` regex (no dots-only segments, no commas, no traversal sequences); the only allowed `${…}` placeholders are `${version}`, `${major}`, `${minor}`, `${service}`, `${fix}`, and `${build}` — any other placeholder (including SpEL expressions such as `T(…).method()`) is rejected with 400. The `generic` field of `DistributionDTO` is the comma-joined CSV of paths sorted by `sort_order`; it is `null` when no artifacts are set (`@JsonInclude(NON_NULL)`) and silently ignored by older clients (`@JsonIgnoreProperties(ignoreUnknown = true)`) | High | unit + integration-test | ✅ Tested |
+| SYS-100 | `GET /components/as-code/search` — global case-insensitive substring (or `regex=true`) search over every component's FULL as-code view, grouped by component with line number, line text and enclosing block path; `archived` / `limit` / `maxMatchesPerComponent` params; in-memory index rebuilt when the DB change stamp moves or after 5 minutes; `crsctl search` client command | High | unit + integration-test | ✅ Tested |
+| SYS-101 | `GET /components?involves=<u>[&involvesRoles=…]` — components where any listed user is the owner OR a release manager OR a security champion (OR across the chosen roles; all three by default); combines with every other filter via AND; one row per component; unknown role → 400. `crsctl components list --involves/--involves-role` | High | integration-test | ✅ Tested |
 
 ---
 
@@ -3316,3 +3318,148 @@ at least one distribution coordinate`, so these components could not be edited a
 `` `SYS-097 field-override create on explicit-external WHISKEY without coordinate is accepted` `` (3),
 `` `SYS-097 switching explicit-external without coordinate off WHISKEY is rejected` `` (4),
 `create_explicitExternal_noCoordinate_badRequest` (5, pre-existing).
+
+### SYS-100: Global text search over the components' as-code view
+
+**Priority:** High
+**Test layer:** unit + integration-test
+**Status:** ✅ Tested
+
+**Motivation:**
+While the registry lived in Groovy DSL files, a plain text search over the files answered most
+"where is X?" questions in one step — which component owns an artifact or group pattern, who uses
+a VCS URL, which components pin a Java/Maven version, where a Jira key or docker image is declared,
+which version ranges override something. After the move to PostgreSQL that capability is gone: the
+v4 list filters each cover one field, and `?search=` only matches name / displayName. The as-code
+view (`GET /components/{id}/as-code`, `ComponentCodeRenderer.renderFull`) already renders each
+component in the old Groovy shape, so searching that text restores the old workflow and covers every
+field the view shows without per-field query code.
+
+**Description:**
+- `GET /rest/api/4/components/as-code/search`, `ACCESS_COMPONENTS` (same gate as `/as-code`). Two
+  path segments so the literal never shadows `GET /components/{id}` for a component named `search`.
+- Params: `q` (required; trimmed; 2–200 characters), `regex` (default `false`), `archived`
+  (omitted = both), `limit` (1–1000, default 100), `maxMatchesPerComponent` (1–1000, default 20).
+- Matching is line-based over each component's FULL as-code text: case-insensitive substring, or
+  with `regex=true` a case-insensitive regular expression. Archived components are included unless
+  `archived` narrows them out.
+- Response `AsCodeSearchResponse {query, regex, totalComponents, truncated, results}`. `results`
+  are `AsCodeSearchHit {id, componentKey, archived, matchCount, matches}` sorted by component key (`id` is the
+  component UUID, the id the v4 write endpoints are addressed by), cut at
+  `limit`; `totalComponents` counts every matching component and `truncated` says whether the cut
+  happened. `matches` holds the first `maxMatchesPerComponent` lines as
+  `AsCodeSearchLine {line, text, path, ranges}`: `line` is the 1-based line number in the as-code
+  view, `text` the line without indentation, `path` the enclosing block headers outermost first
+  (e.g. `["comp", "\"[1.5,)\"", "jira"]`), so a match inside a version-range block is
+  identifiable, and `ranges` the matched spans of `text` (`{start, end}`, end exclusive) as found
+  by the server's own matcher — so a client highlights regex hits exactly instead of re-running
+  the pattern in a different regex engine. Empty matches are omitted; at most 50 spans per line.
+- Errors (`400`): `q` too short / too long, `limit` or `maxMatchesPerComponent` out of range, an
+  invalid regex, a regex whose evaluation exceeds a 2 s time budget for the request, or a regex
+  whose recursion exhausts the stack on a long line. The budget is one per request: it is checked
+  before every line, every few dozen matches within a line and, within a single match, every few
+  thousand character reads, so neither many cheap lines, nor a run of empty matches that read no
+  input, nor one catastrophically backtracking match can outrun it.
+- The RMS section that `/as-code` appends is **not** searched: it is RMS data, not the
+  component's configuration, and it changes on the RMS sweep.
+- **Index.** The rendered lines are held in memory per pod and rebuilt lazily. Each search first
+  reads a change stamp from the shared DB — `COUNT`, `MAX(updatedAt)` and `SUM(version)` over
+  `components` plus the SYS-094 `audit_log.changeStats()` — and rebuilds when it differs from the
+  stamp the index was built at, so an edit on any pod is visible to the next search on every pod.
+  The stamp is read before rendering, so a write during a rebuild triggers another rebuild on the
+  next search. An index older than 5 minutes is rebuilt regardless, covering writes that bypass
+  both the component rows and the audit log (TeamCity version-line sync, SYS-051).
+- The bulk render loads the registry-wide artifact-ownership rows once for all components (the
+  ALL_EXCEPT_CLAIMED export pattern), instead of once per component as the single-component
+  `/as-code` path does.
+- `crsctl search <query> [--regex] [--archived true|false] [--limit N] [--max-matches N]` calls the
+  endpoint. Table output is grep-shaped (`<component>:<line>: <text>`, plus `[block > block]` for
+  nested matches and `<component>: ... N more` when lines were capped); `-o json` prints the
+  `results` array. A truncated result warns on STDERR.
+
+**Acceptance criteria:**
+1. A value present in a component's as-code view is found; the hit's `line` points at the same line
+   of `GET /components/{id}/as-code` and `text` equals that line trimmed.
+2. Matching is case-insensitive; without `regex=true` regex metacharacters are literal.
+3. A match inside a version-range block carries the range header in `path`.
+4. `archived=true|false` narrows to archived / active components.
+5. `limit` cuts `results`, `totalComponents` still counts all matches and `truncated` is `true`;
+   `maxMatchesPerComponent` caps `matches` while `matchCount` counts every matching line.
+6. After an edit through the v4 API the next search reflects the new value and no longer finds the
+   old one.
+7. The index is not rebuilt while the stamp is unchanged, is rebuilt when any stamp component moves,
+   and is rebuilt once it is older than 5 minutes.
+8. Too-short `q`, out-of-range `limit` and an invalid regex return `400`; a catastrophically
+   backtracking regex fails with `400` instead of hanging; the time budget also stops a search made
+   of many cheap per-line matches and a line of empty matches that read no input; a regex that exhausts the stack fails with `400`, not `500`.
+9. `crsctl search` maps its options to the query params, prints grep-shaped lines, emits the
+   `results` array with `-o json`, and warns on STDERR when truncated.
+10. Each match carries `ranges` pointing at the matched text within `text` (indentation
+    accounted for), for substring and regex searches alike; a regex matching only empty strings
+    still matches the line, with no ranges.
+
+**Test method:** `ComponentCodeSearchServiceTest` —
+`` `SYS-100 substring match is case-insensitive with line numbers and block path` `` (1, 2),
+`` `SYS-100 regex metacharacters are literal by default` `` (2),
+`` `SYS-100 regex mode matches a case-insensitive regular expression` `` (2),
+`` `SYS-100 hit inside a version-range block reports the range in its path` `` (3),
+`` `SYS-100 archived narrows to archived or active components` `` (4),
+`` `SYS-100 limit cuts the component list and flags truncation` `` (5),
+`` `SYS-100 maxMatchesPerComponent caps lines while matchCount counts all` `` (5),
+`` `SYS-100 index is reused while the stamp holds and rebuilt when it moves` `` (7),
+`` `SYS-100 index older than MAX_INDEX_AGE is rebuilt` `` (7),
+`` `SYS-100 invalid input is rejected` `` (8),
+`` `SYS-100 catastrophically backtracking regex is aborted` `` (8),
+`` `SYS-100 regex budget is enforced between lines` `` (8),
+`` `SYS-100 regex budget is enforced across empty matches` `` (8),
+`` `SYS-100 regex stack exhaustion is rejected` `` (8),
+`` `SYS-100 indexLines keeps blank lines so positions equal line numbers` `` (1),
+`` `SYS-100 substring match reports ranges relative to the trimmed text` `` (10),
+`` `SYS-100 regex match reports the matched spans` `` (10),
+`` `SYS-100 empty regex matches yield no ranges` `` (10),
+`` `SYS-100 empty regex matches do not hide a later real span` `` (10),
+`` `SYS-100 substringSpans finds every occurrence` `` (10);
+`ComponentAsCodeSearchIntegrationTest` (H2 `ft-db`) —
+`` `SYS-100 a value from the as-code view is found at its as-code line` `` (1, 10),
+`` `SYS-100 an edit is visible to the next search` `` (6),
+`` `SYS-100 too-short query and invalid regex are 400` `` (8);
+`CommandsTest` (CLI) — `` `SYS-100 search maps options to query params and prints grep-shaped lines` ``,
+`` `SYS-100 search without --regex omits the regex param` ``,
+`` `SYS-100 search -o json emits the top-level array of matching components` `` (9).
+
+### SYS-101: `involves` — every component a user is involved in
+
+**Priority:** High
+**Test layer:** integration-test
+**Status:** ✅ Tested
+
+**Motivation:**
+"Show me everything I am involved in" is the most common list question, but the `owner`,
+`releaseManager` and `securityChampion` filters combine with AND — selecting two of them returns
+only components where the user holds both roles. The Portal's "Mine" filter needs OR across roles.
+
+**Description:**
+- `GET /rest/api/4/components` gains `involves` (multi-value, CSV or repeatable, normalised like the
+  other multi-value filters) and `involvesRoles` (any subset of `owner`, `releaseManager`,
+  `securityChampion`; empty = all three).
+- A component matches when any listed username is its `componentOwner` (if `owner` is among the
+  roles) OR among its release managers (if `releaseManager`) OR among its security champions (if
+  `securityChampion`). Role memberships are `EXISTS` subqueries, so a component where the user holds
+  several roles is returned once.
+- `involves` combines with every other filter via AND. An unknown `involvesRoles` value is `400`.
+- `crsctl components list --involves <u> [--involves-role <role>]…`.
+
+**Acceptance criteria:**
+1. `involves=<u>` returns components where `<u>` is owner, release manager or security champion,
+   and none where `<u>` holds no role.
+2. A component where `<u>` holds all three roles appears once.
+3. `involvesRoles` narrows to the chosen roles, OR across them.
+4. `involves` combines with `archived` via AND.
+5. An unknown `involvesRoles` value returns `400`.
+6. Several `involves` users are ORed; paging through the result returns each component once and
+   `totalElements` counts each component once.
+
+**Test method:** `ListComponentsInvolvesFilterTest` (H2 `ft-db`) —
+`` `SYS-101 involves matches any role` `` (1), `` `SYS-101 no duplicate rows` `` (2),
+`` `SYS-101 involvesRoles narrows` `` (3), `` `SYS-101 combines with archived` `` (4),
+`` `SYS-101 unknown role is 400` `` (5), `` `SYS-101 several users paginate without duplicates` `` (6); `CommandsTest` — `` `SYS-101 components list maps --involves and --involves-role` ``.

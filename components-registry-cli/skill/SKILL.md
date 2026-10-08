@@ -24,6 +24,7 @@ with `--env <name>` (or `--crs-url <url>` / `CRS_URL`) and `-o json` for machine
 - "Which components does **alice** own in system **FOO**?" → `components list`
 - "Show me everything about component **X**." → `component get`
 - "What does component **X** look like as code?" → `component as-code`
+- "Which components mention artifact / group / VCS URL / Jira key / version **Y**?" → `search`
 - "List the field-overrides on component **X**." → `component overrides`
 - "What owners / systems / labels / build-systems exist?" → `meta <kind>`
 - "Who am I / what permissions do I have?" → `whoami`
@@ -31,7 +32,7 @@ with `--env <name>` (or `--crs-url <url>` / `CRS_URL`) and `-o json` for machine
 
 ## Auth — read this first
 
-- **Anonymous reads need no login:** `components`, `component`, `meta` (except `meta employees`),
+- **Anonymous reads need no login:** `components`, `component`, `search`, `meta` (except `meta employees`),
   and `whoami` all work with just a target URL.
 - **Only these need a credential:** `audit *`, `meta employees`, and an authenticated `whoami`.
 - The `login` flow (and therefore `audit` / `meta employees` end-to-end) is currently **gated** on a
@@ -46,6 +47,7 @@ with `--env <name>` (or `--crs-url <url>` / `CRS_URL`) and `-o json` for machine
 | `component get` | single component-detail **object** |
 | `component as-code` | raw text (not JSON; do not pipe to jq) |
 | `component overrides` | JSON **array** of field-override objects |
+| `search` | JSON **array** of `{id, componentKey, archived, matchCount, matches:[{line, text, path, ranges}]}` |
 | `meta <kind>` (dictionaries) | JSON **array of strings** |
 | `meta employees` | JSON **array** of `{username, active}` |
 | `whoami` (with token) | single `User` **object** |
@@ -68,6 +70,7 @@ On failure, stderr carries `{"errorCode": <code or null>, "message": <text>}`.
 ```
 crsctl [GLOBAL OPTS] components list [FILTERS] [PAGING]
 crsctl [GLOBAL OPTS] component get|as-code|overrides <ID_OR_NAME>
+crsctl [GLOBAL OPTS] search <QUERY> [--regex] [--archived true|false] [--limit N] [--max-matches N]
 crsctl [GLOBAL OPTS] meta <build-systems|client-codes|escrow-generations|group-keys|java-versions|
                           jira-project-keys|labels|labels-dictionary|maven-versions|owners|
                           parent-component-names|repository-types|systems|systems-dictionary>
@@ -111,6 +114,19 @@ Get one component's owner and labels:
 
 ```
 crsctl --env dev -o json component get my-component | jq '{owner: .componentOwner, labels}'
+```
+
+Which components declare a given Maven group (searches every component's as-code text;
+case-insensitive substring, `--regex` for a regular expression):
+
+```
+crsctl --env dev -o json search 'org.example.foo' --limit 1000 | jq -r '.[].componentKey'
+```
+
+Every line mentioning a Jira key, with its line number and enclosing block (e.g. version range):
+
+```
+crsctl --env dev -o json search 'projectKey = "FOO"' | jq -r '.[] | .componentKey as $c | .matches[] | "\($c):\(.line)\t\(.path | join(" > "))\t\(.text)"'
 ```
 
 View a component as code (raw text — do **not** pipe to jq):

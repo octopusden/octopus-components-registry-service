@@ -18,6 +18,26 @@ refresh it with `./gradlew :components-registry-service-server:generateOpenApiDo
 
 ## Unreleased
 
+- **`involves` / `involvesRoles` list filters added (SYS-101).** `GET /components?involves=<u>` returns
+  components where any listed user is the owner OR a release manager OR a security champion;
+  `involvesRoles` (any of `owner`, `releaseManager`, `securityChampion`; default all) narrows the
+  roles, OR across them. Combines with the other filters via AND; one row per component; an unknown
+  role is `400`. Backs the Portal's "Mine" filter.
+- **`GET /components/as-code/search` added (SYS-100).** Global text search over every component's
+  FULL as-code view (`GET /components/{id}/as-code`), the replacement for grepping the Groovy DSL
+  files. `ACCESS_COMPONENTS`. Params: `q` (required, 2–200 characters after trimming;
+  case-insensitive substring), `regex` (default `false`; `true` matches `q` as a case-insensitive
+  regular expression), `archived` (omitted = both), `limit` (components returned, 1–1000, default
+  100), `maxMatchesPerComponent` (1–1000, default 20). Returns `AsCodeSearchResponse`
+  `{query, regex, totalComponents, truncated, results}`; each `AsCodeSearchHit` is
+  `{id, componentKey, archived, matchCount, matches}` sorted by key (`id` = component UUID), and each `AsCodeSearchLine` is
+  `{line, text, path, ranges}` — the 1-based line number in the as-code view, the line without its
+  indentation, the enclosing block headers outermost first, and the matched spans of `text`
+  (`AsCodeMatchRange {start, end}`, end exclusive) as found by the server's matcher, for exact
+  highlighting of regex hits too. `400` for a bad `q`/`limit`, an
+  invalid regex, or a regex that exceeds the per-request evaluation time budget or exhausts the stack. The RMS section of the as-code
+  view is not searched. Results may lag an edit that bypasses the component tables and the audit log
+  (e.g. TeamCity version-line sync) by up to 5 minutes.
 - **`GET /meta/release-managers` and `GET /meta/security-champions` added.** Two new
   `ACCESS_COMPONENTS` endpoints return the sorted, distinct release-manager and security-champion
   usernames currently assigned to at least one component the v4 list shows (blank values excluded), as

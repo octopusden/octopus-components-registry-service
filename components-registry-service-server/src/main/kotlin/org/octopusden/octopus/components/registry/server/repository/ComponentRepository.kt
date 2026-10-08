@@ -253,6 +253,25 @@ interface ComponentRepository :
             "GROUP BY sc.username",
     )
     fun countComponentsBySecurityChampion(): List<NameCountRow>
+
+    /**
+     * Cheap change-detection stamp for the as-code search index (SYS-100). Every v4 write bumps
+     * the owning component's `updatedAt` / `version` (see `bumpParentVersion`), create/import adds
+     * a row and delete removes one, so any component edit changes at least one of these three
+     * aggregates — on every pod, since the stamp is read from the shared DB.
+     */
+    @Query(
+        "SELECT COUNT(c) AS componentCount, MAX(c.updatedAt) AS maxUpdatedAt, " +
+            "COALESCE(SUM(c.version), 0) AS versionSum FROM ComponentEntity c",
+    )
+    fun findChangeStamp(): ComponentChangeStampRow
+}
+
+/** Projection for [ComponentRepository.findChangeStamp]. */
+interface ComponentChangeStampRow {
+    val componentCount: Long
+    val maxUpdatedAt: java.time.Instant?
+    val versionSum: Long
 }
 
 /** Projection for the health-statistics GROUP BY queries: a name (owner / RM / SC username) and its count. */

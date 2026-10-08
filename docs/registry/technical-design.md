@@ -138,6 +138,17 @@ GET    /rest/api/4/components?productType=&archived=&search=&owner=
             componentOwner). All independently optional, ANDed when combined.
             `system` is currently rejected with 400 (JPA Criteria + text[] gap).
   Contract: SYS-035 pins the owner filter (case-sensitive exact match).
+
+GET    /rest/api/4/components/as-code/search?q=&regex=&archived=&limit=&maxMatchesPerComponent=
+  Response: AsCodeSearchResponse { query, regex, totalComponents, truncated,
+            results: [{ id, componentKey, archived, matchCount, matches: [{ line, text, path, ranges: [{ start, end }] }] }] }
+  Auth:     ACCESS_COMPONENTS
+  Behavior: grep over every component's FULL as-code render (SYS-100). Served by
+            ComponentCodeSearchService from a per-pod in-memory index of rendered lines, built by
+            ComponentManagementService.renderAllComponentsAsCode() (one readOnly transaction,
+            batch-fetched collections, ownership rows loaded once). Before each search a DB
+            change stamp (components COUNT/MAX(updatedAt)/SUM(version) + audit changeStats) is
+            compared with the index's; a mismatch, or an index older than 5 min, rebuilds it.
 ```
 
 #### Field Version Overrides

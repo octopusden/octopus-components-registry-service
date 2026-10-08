@@ -9,6 +9,7 @@ import org.octopusden.octopus.components.registry.server.entity.ComponentEntity
 import org.octopusden.octopus.components.registry.server.entity.TeamcityProjectEntity
 import org.octopusden.octopus.components.registry.server.entity.VersionLineEntity
 import org.octopusden.octopus.components.registry.server.event.AuditEvent
+import org.octopusden.octopus.components.registry.server.repository.ComponentChangeStampRow
 import org.octopusden.octopus.components.registry.server.repository.ComponentRepository
 import org.octopusden.octopus.components.registry.server.repository.TeamcityProjectRepository
 import org.octopusden.octopus.components.registry.server.repository.VersionLineRepository
@@ -869,6 +870,8 @@ class TeamcitySyncServiceTest {
                     .groupingBy { it }
                     .eachCount(),
             )
+
+        override fun findChangeStamp(): ComponentChangeStampRow = throw UnsupportedOperationException()
 
         override fun <S : ComponentEntity> save(entity: S): S = entity
 

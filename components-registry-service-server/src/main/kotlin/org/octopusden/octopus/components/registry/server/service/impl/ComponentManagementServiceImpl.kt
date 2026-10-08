@@ -79,6 +79,7 @@ import org.octopusden.octopus.components.registry.server.repository.ComponentLab
 import org.octopusden.octopus.components.registry.server.repository.ComponentRepository
 import org.octopusden.octopus.components.registry.server.repository.ComponentRequiredToolRepository
 import org.octopusden.octopus.components.registry.server.repository.ComponentSystemRepository
+import org.octopusden.octopus.components.registry.server.repository.CrossComponentMappingRow
 import org.octopusden.octopus.components.registry.server.repository.DistributionDockerImageRepository
 import org.octopusden.octopus.components.registry.server.repository.DistributionMavenArtifactRepository
 import org.octopusden.octopus.components.registry.server.repository.LabelRepository
@@ -485,6 +486,25 @@ class ComponentManagementServiceImpl(
                     "No configuration resolves for component '${entity.componentKey}' at version '$version'",
                 )
         return RenderedComponentCode(entity.componentKey, body)
+    }
+
+    // Bulk FULL render for the as-code search index (SYS-100). RMS ranges are deliberately
+    // omitted: they are RMS's data, not this component's configuration, and they change on the
+    // RMS sweep without touching any component row the index's change stamp watches.
+    @Transactional(readOnly = true)
+    override fun renderAllComponentsAsCode(): List<RenderedComponentCode> {
+        val ownershipContext = lazy(LazyThreadSafetyMode.NONE) { loadOwnershipExportContext() }
+        return componentRepository
+            .findAll()
+            .sortedBy { it.componentKey }
+            .map { entity ->
+                RenderedComponentCode(
+                    componentKey = entity.componentKey,
+                    body = componentCodeRenderer.renderFull(entity, ownershipExportPatterns(entity, ownershipContext)),
+                    archived = entity.archived,
+                    id = entity.id,
+                )
+            }
     }
 
     /**
@@ -3699,10 +3719,17 @@ class ComponentManagementServiceImpl(
      * to the wire render at the renderer, so this map carries ONLY the ALL_EXCEPT_CLAIMED entries —
      * and is empty (no cross-component query) when the component has none, keeping the common path free.
      */
-    private fun ownershipExportPatterns(entity: ComponentEntity): Map<UUID, String> {
-        val allExcept =
-            entity.artifactMappings.filter { it.artifactIdMode == ArtifactIdMode.ALL_EXCEPT_CLAIMED.name }
-        if (allExcept.isEmpty()) return emptyMap()
+    private fun ownershipExportPatterns(entity: ComponentEntity): Map<UUID, String> =
+        ownershipExportPatterns(entity, lazy(LazyThreadSafetyMode.NONE) { loadOwnershipExportContext() })
+
+    /** Registry-wide ownership rows the ALL_EXCEPT_CLAIMED export render needs (see [ownershipExportPatterns]). */
+    private class OwnershipExportContext(
+        val explicitRows: List<CrossComponentMappingRow>,
+        val shadowRangesByComponent: Map<String, Set<String>>,
+        val tokensByMapping: Map<UUID, List<String>>,
+    )
+
+    private fun loadOwnershipExportContext(): OwnershipExportContext {
         val allRows = componentArtifactMappingRepository.findAllRows()
         val explicitRows = allRows.filter { it.artifactIdMode == ArtifactIdMode.EXPLICIT.name }
         // Each component's own override (non-base) ranges. A rival's BASE EXPLICIT is shadowed (not in
@@ -3719,6 +3746,22 @@ class ComponentManagementServiceImpl(
                 ?.let { ids -> componentArtifactMappingTokenRepository.findTokensByMappingIdIn(ids) }
                 ?.groupBy({ it.mappingId }, { it.artifactPattern })
                 .orEmpty()
+        return OwnershipExportContext(explicitRows, shadowRangesByComponent, tokensByMapping)
+    }
+
+    // [context] is Lazy so a single-component render loads the registry-wide rows only when the
+    // component actually has an ALL_EXCEPT_CLAIMED mapping, while a bulk render (renderAllComponentsAsCode)
+    // shares ONE load across every component instead of re-reading all mappings per component.
+    private fun ownershipExportPatterns(
+        entity: ComponentEntity,
+        context: Lazy<OwnershipExportContext>,
+    ): Map<UUID, String> {
+        val allExcept =
+            entity.artifactMappings.filter { it.artifactIdMode == ArtifactIdMode.ALL_EXCEPT_CLAIMED.name }
+        if (allExcept.isEmpty()) return emptyMap()
+        val explicitRows = context.value.explicitRows
+        val shadowRangesByComponent = context.value.shadowRangesByComponent
+        val tokensByMapping = context.value.tokensByMapping
         val intersect: (String, String) -> Boolean = { a, b ->
             runCatching { versionRangeFactory.create(a).isIntersect(versionRangeFactory.create(b)) }.getOrDefault(true)
         }
@@ -4275,6 +4318,38 @@ class ComponentManagementServiceImpl(
         }.getOrNull()
     }
 
+    private fun involvesSpecification(
+        users: List<String>,
+        roles: Set<String>,
+    ): Specification<ComponentEntity> =
+        Specification { root, query, cb ->
+            val predicates = mutableListOf<jakarta.persistence.criteria.Predicate>()
+            if (INVOLVES_OWNER in roles) predicates += root.get<String>("componentOwner").`in`(users)
+            if (INVOLVES_RELEASE_MANAGER in roles) {
+                predicates += cb.exists(roleMembership(ComponentReleaseManagerEntity::class.java, users, root, query!!, cb))
+            }
+            if (INVOLVES_SECURITY_CHAMPION in roles) {
+                predicates += cb.exists(roleMembership(ComponentSecurityChampionEntity::class.java, users, root, query!!, cb))
+            }
+            cb.or(*predicates.toTypedArray())
+        }
+
+    /** `EXISTS (SELECT 1 FROM <role table> WHERE component = root AND username IN users)`. */
+    private fun <T> roleMembership(
+        roleEntity: Class<T>,
+        users: List<String>,
+        root: jakarta.persistence.criteria.Root<ComponentEntity>,
+        query: jakarta.persistence.criteria.CriteriaQuery<*>,
+        cb: jakarta.persistence.criteria.CriteriaBuilder,
+    ): jakarta.persistence.criteria.Subquery<Int> {
+        val sub = query.subquery(Int::class.java)
+        val member = sub.from(roleEntity)
+        return sub.select(cb.literal(1)).where(
+            cb.equal(member.get<ComponentEntity>("component"), root),
+            member.get<String>("username").`in`(users),
+        )
+    }
+
     private fun buildSpecification(filter: ComponentFilter): Specification<ComponentEntity> {
         var spec = Specification.where<ComponentEntity>(null)
 
@@ -4351,6 +4426,13 @@ class ComponentManagementServiceImpl(
                         join.get<String>("username").`in`(filter.securityChampion)
                     },
                 )
+        }
+        // SYS-101 involvement: OR across the chosen roles (owner / release manager / security
+        // champion) for ANY listed username. Role memberships are EXISTS subqueries rather than
+        // joins: an OR across two child collections via joins would need LEFT joins and multiply
+        // rows; subqueries keep one row per component and no distinct.
+        if (!filter.involves.isNullOrEmpty()) {
+            spec = spec.and(involvesSpecification(filter.involves, involvementRoles(filter.involvesRoles)))
         }
         filter.search?.let { search ->
             val pattern = "%${search.lowercase()}%"
@@ -4819,6 +4901,12 @@ class ComponentManagementServiceImpl(
     private companion object {
         private val log = org.slf4j.LoggerFactory.getLogger(ComponentManagementServiceImpl::class.java)
 
+        // SYS-101 `involvesRoles` values.
+        private const val INVOLVES_OWNER = "owner"
+        private const val INVOLVES_RELEASE_MANAGER = "releaseManager"
+        private const val INVOLVES_SECURITY_CHAMPION = "securityChampion"
+        private val INVOLVES_ALL_ROLES = setOf(INVOLVES_OWNER, INVOLVES_RELEASE_MANAGER, INVOLVES_SECURITY_CHAMPION)
+
         /** Split a multi-valued `groupPattern` on comma or pipe (legacy DSL semantics). */
         private val GROUP_ID_SPLIT = Regex("[,|]")
 
@@ -4845,5 +4933,15 @@ class ComponentManagementServiceImpl(
         private const val ROW_TYPE_BASE = "BASE"
         private const val ATTR_JAVA_VERSION = "build.javaVersion"
         private const val ATTR_MAVEN_VERSION = "build.mavenVersion"
+
+        /** The roles an `involves` filter checks: all three when none are given; an unknown role is a 400. */
+        private fun involvementRoles(requested: List<String>?): Set<String> {
+            if (requested.isNullOrEmpty()) return INVOLVES_ALL_ROLES
+            val unknown = requested.filterNot { it in INVOLVES_ALL_ROLES }
+            require(unknown.isEmpty()) {
+                "involvesRoles: unknown role(s) ${unknown.joinToString()}; expected any of ${INVOLVES_ALL_ROLES.joinToString()}"
+            }
+            return requested.toSet()
+        }
     }
 }
