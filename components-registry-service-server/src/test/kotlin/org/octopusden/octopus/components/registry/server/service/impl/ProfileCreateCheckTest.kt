@@ -12,13 +12,13 @@ import org.octopusden.octopus.components.registry.server.entity.ComponentConfigu
 import org.octopusden.octopus.components.registry.server.entity.ComponentEntity
 import org.octopusden.octopus.components.registry.server.entity.VcsSettingsEntryEntity
 import org.octopusden.octopus.components.registry.server.model.ComponentProfile
+import org.octopusden.octopus.components.registry.server.model.ComponentTemplate
 import org.octopusden.octopus.components.registry.server.service.ProfileAvailability
 import org.octopusden.octopus.components.registry.server.support.designExampleProperties
 import org.octopusden.octopus.components.registry.server.support.profileProperties
 import org.octopusden.octopus.components.registry.server.support.rule
+import org.octopusden.octopus.components.registry.server.support.standaloneTemplateProperties
 import org.octopusden.octopus.components.registry.server.util.CreateRequestPaths
-import org.octopusden.octopus.components.registry.server.template.ComponentTemplate
-import org.octopusden.octopus.components.registry.server.template.standaloneTemplateProperties
 import org.springframework.http.HttpStatus
 import org.springframework.web.server.ResponseStatusException
 

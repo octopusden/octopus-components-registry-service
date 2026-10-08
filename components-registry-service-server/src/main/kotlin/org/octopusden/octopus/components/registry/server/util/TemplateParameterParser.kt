@@ -1,4 +1,7 @@
-package org.octopusden.octopus.components.registry.server.template
+package org.octopusden.octopus.components.registry.server.util
+
+import org.octopusden.octopus.components.registry.server.model.TemplateList
+import org.octopusden.octopus.components.registry.server.model.TemplateParameter
 
 /**
  * Parses one entry of a template's `parameters` and applies the spec's parameter checks.

@@ -1,7 +1,7 @@
 package org.octopusden.octopus.components.registry.server.dto.v4
 
 import io.swagger.v3.oas.annotations.media.Schema
-import org.octopusden.octopus.components.registry.server.template.TemplateRun
+import org.octopusden.octopus.components.registry.server.service.impl.TemplateRun
 
 /**
  * A dry run's result, also the 422 body of a create that found a problem. [component],

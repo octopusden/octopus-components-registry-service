@@ -1,8 +1,10 @@
-package org.octopusden.octopus.components.registry.server.template
+package org.octopusden.octopus.components.registry.server.util
 
 import org.octopusden.octopus.components.registry.api.enums.EscrowGenerationMode
 import org.octopusden.octopus.components.registry.server.entity.ArtifactIdMode
 import org.octopusden.octopus.components.registry.server.mapper.PACKAGE_TYPE_NAMES
+import org.octopusden.octopus.components.registry.server.model.TemplateFieldKind
+import org.octopusden.octopus.components.registry.server.model.TemplateList
 import org.octopusden.octopus.components.registry.server.util.CreateRequestPaths
 import org.octopusden.octopus.escrow.BuildSystem
 
@@ -12,31 +14,6 @@ import org.octopusden.octopus.escrow.BuildSystem
  * the indexed keys under its path.
  */
 object TemplateFields {
-    enum class Kind(
-        val list: Boolean,
-    ) {
-        /** Text with expressions; filters allowed. */
-        FREE_TEXT(false),
-
-        /** A value of a registry list, or exactly `{{ NAME }}` of a `crs-list` parameter of that list. */
-        CRS_VALUE(false),
-
-        /** A login, or exactly `{{ NAME }}` of a single `person` parameter. */
-        PERSON(false),
-
-        /** Items, each free text or exactly `{{ NAME }}` of a multi-value `select`. */
-        FREE_TEXT_LIST(true),
-
-        /** Labels, or exactly `{{ NAME }}` of a `labels` parameter. */
-        CRS_LIST(true),
-
-        /** Logins, or exactly `{{ NAME }}` of a `person` parameter. */
-        PEOPLE_LIST(true),
-
-        /** A fixed value of a static set; never a parameter. */
-        FIXED_CHOICE(false),
-    }
-
     const val BUILD_SYSTEM = "baseConfiguration.build.buildSystem"
     const val ESCROW_GENERATION = "baseConfiguration.escrow.generation"
 
@@ -52,17 +29,17 @@ object TemplateFields {
             "baseConfiguration.packages[0].packageType" to PACKAGE_TYPE_NAMES,
         )
 
-    val KINDS: Map<String, Kind> =
-        CreateRequestPaths.PATHS.associateWith { Kind.FREE_TEXT } +
-            CRS_VALUE_LISTS.keys.associateWith { Kind.CRS_VALUE } +
+    val KINDS: Map<String, TemplateFieldKind> =
+        CreateRequestPaths.PATHS.associateWith { TemplateFieldKind.FREE_TEXT } +
+            CRS_VALUE_LISTS.keys.associateWith { TemplateFieldKind.CRS_VALUE } +
             mapOf(
-                "componentOwner" to Kind.PERSON,
-                "artifactIds[0].artifactTokens" to Kind.FREE_TEXT_LIST,
-                "labels" to Kind.CRS_LIST,
-                "releaseManager" to Kind.PEOPLE_LIST,
-                "securityChampion" to Kind.PEOPLE_LIST,
+                "componentOwner" to TemplateFieldKind.PERSON,
+                "artifactIds[0].artifactTokens" to TemplateFieldKind.FREE_TEXT_LIST,
+                "labels" to TemplateFieldKind.CRS_LIST,
+                "releaseManager" to TemplateFieldKind.PEOPLE_LIST,
+                "securityChampion" to TemplateFieldKind.PEOPLE_LIST,
             ) +
-            FIXED_CHOICES.keys.associateWith { Kind.FIXED_CHOICE }
+            FIXED_CHOICES.keys.associateWith { TemplateFieldKind.FIXED_CHOICE }
 
     /** The values a list has on load, or `null` for one that changes at runtime. */
     fun staticValues(list: TemplateList): Set<String>? =

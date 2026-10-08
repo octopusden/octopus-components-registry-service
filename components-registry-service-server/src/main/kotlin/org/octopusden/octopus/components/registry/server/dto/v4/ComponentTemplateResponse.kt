@@ -1,9 +1,9 @@
 package org.octopusden.octopus.components.registry.server.dto.v4
 
 import io.swagger.v3.oas.annotations.media.Schema
-import org.octopusden.octopus.components.registry.server.template.ComponentTemplate
-import org.octopusden.octopus.components.registry.server.template.ListValues
-import org.octopusden.octopus.components.registry.server.template.TemplateParameter
+import org.octopusden.octopus.components.registry.server.model.ComponentTemplate
+import org.octopusden.octopus.components.registry.server.model.TemplateParameter
+import org.octopusden.octopus.components.registry.server.service.ListValues
 
 /** `GET /rest/api/4/component-templates/{id}`: a live template and its parameters, in configured order. */
 data class ComponentTemplateResponse(

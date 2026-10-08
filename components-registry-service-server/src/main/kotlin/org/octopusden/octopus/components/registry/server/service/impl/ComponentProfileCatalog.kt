@@ -1,9 +1,9 @@
 package org.octopusden.octopus.components.registry.server.service.impl
 
 import org.octopusden.octopus.components.registry.server.model.ComponentProfile
+import org.octopusden.octopus.components.registry.server.model.ComponentTemplate
 import org.octopusden.octopus.components.registry.server.model.ProfileLoad
 import org.octopusden.octopus.components.registry.server.util.ComponentProfileParser
-import org.octopusden.octopus.components.registry.server.template.ComponentTemplate
 import java.util.concurrent.atomic.AtomicReference
 
 /**

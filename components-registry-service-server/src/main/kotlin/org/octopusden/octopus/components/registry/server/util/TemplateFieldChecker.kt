@@ -1,4 +1,10 @@
-package org.octopusden.octopus.components.registry.server.template
+package org.octopusden.octopus.components.registry.server.util
+
+import org.octopusden.octopus.components.registry.server.model.TemplateExpression
+import org.octopusden.octopus.components.registry.server.model.TemplateField
+import org.octopusden.octopus.components.registry.server.model.TemplateFieldKind
+import org.octopusden.octopus.components.registry.server.model.TemplateList
+import org.octopusden.octopus.components.registry.server.model.TemplateParameter
 
 /**
  * The spec's field checks: each value against its field kind and the parameters it uses.
@@ -28,25 +34,25 @@ internal class TemplateFieldChecker(
         (value.parameters - declared).forEach { keys.problem(key, "uses '{{ $it }}', which is not a parameter of this template") }
         val fixed = value.parameters.isEmpty()
         when (field.kind) {
-            TemplateFields.Kind.FREE_TEXT -> freeText(key, value)
-            TemplateFields.Kind.CRS_VALUE -> crsValue(key, field.path, value, fixed)
-            TemplateFields.Kind.PERSON -> if (!fixed) {
+            TemplateFieldKind.FREE_TEXT -> freeText(key, value)
+            TemplateFieldKind.CRS_VALUE -> crsValue(key, field.path, value, fixed)
+            TemplateFieldKind.PERSON -> if (!fixed) {
                 whole(
                     key,
                     value,
                     "a single person",
                 ) { it is TemplateParameter.Person && !it.multiple }
             }
-            TemplateFields.Kind.FREE_TEXT_LIST -> freeTextItem(key, value)
-            TemplateFields.Kind.CRS_LIST ->
+            TemplateFieldKind.FREE_TEXT_LIST -> freeTextItem(key, value)
+            TemplateFieldKind.CRS_LIST ->
                 if (!fixed) {
                     whole(key, value, "a crs-list of the labels list") {
                         it is TemplateParameter.CrsList &&
                             it.list == TemplateList.LABELS
                     }
                 }
-            TemplateFields.Kind.PEOPLE_LIST -> if (!fixed) whole(key, value, "a person") { it is TemplateParameter.Person }
-            TemplateFields.Kind.FIXED_CHOICE -> fixedChoice(key, field.path, value, fixed)
+            TemplateFieldKind.PEOPLE_LIST -> if (!fixed) whole(key, value, "a person") { it is TemplateParameter.Person }
+            TemplateFieldKind.FIXED_CHOICE -> fixedChoice(key, field.path, value, fixed)
         }
     }
 

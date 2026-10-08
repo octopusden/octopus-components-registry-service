@@ -1,10 +1,13 @@
-package org.octopusden.octopus.components.registry.server.template
+package org.octopusden.octopus.components.registry.server.service.impl
 
 import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.Assertions.assertFalse
 import org.junit.jupiter.api.DisplayName
 import org.junit.jupiter.api.Test
 import org.octopusden.octopus.components.registry.server.service.impl.ActiveStatus
+import org.octopusden.octopus.components.registry.server.support.EXAMPLE_DEFAULTS
+import org.octopusden.octopus.components.registry.server.support.parsedTemplate
+import org.octopusden.octopus.components.registry.server.util.TemplateFields
 import org.springframework.dao.DataIntegrityViolationException
 import org.springframework.transaction.TransactionDefinition
 import org.springframework.transaction.support.AbstractPlatformTransactionManager

@@ -2,7 +2,6 @@ package org.octopusden.octopus.components.registry.server.util
 
 import org.octopusden.octopus.components.registry.server.model.ComponentProfile
 import org.octopusden.octopus.components.registry.server.model.ProfileLoad
-import org.octopusden.octopus.components.registry.server.template.TemplateParser
 
 /**
  * Turns the flattened properties under `components-registry.component-profiles` into profiles,
@@ -44,7 +43,9 @@ object ComponentProfileParser {
         val templates = byId.filterValues { it["kind"] == ComponentProfile.TEMPLATE_KIND }.map { (id, values) ->
             TemplateParser(id, values, defaults).parse()
         }
-        val parsed = byId.filterValues { it["kind"] != ComponentProfile.TEMPLATE_KIND }.map { (id, values) -> EntryParser(id, values).parse() }
+        val parsed = byId.filterValues { it["kind"] != ComponentProfile.TEMPLATE_KIND }.map { (id, values) ->
+            EntryParser(id, values).parse()
+        }
         val problems =
             when {
                 !root.isNullOrBlank() -> listOf("$ROOT: '$root' is not a map of profiles")

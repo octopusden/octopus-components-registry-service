@@ -84,7 +84,8 @@
 ## Affected areas
 
 - `components-registry-service-server`:
-  - a new `template` package: model, parser, expressions, parameter checks, renderer, dry run;
+  - template classes in the server's layers (`model/`, `util/`, `service/`, `service/impl/`,
+    `config/`): model, parser, expressions, parameter checks, renderer, dry run;
   - a new `ComponentTemplateControllerV4`;
   - the profile parser, catalog, listing and availability;
   - `AdminControllerV4`.

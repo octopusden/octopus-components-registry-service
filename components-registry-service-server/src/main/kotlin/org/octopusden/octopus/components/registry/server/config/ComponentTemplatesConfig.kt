@@ -2,12 +2,11 @@ package org.octopusden.octopus.components.registry.server.config
 
 import org.octopusden.octopus.components.registry.server.repository.LabelRepository
 import org.octopusden.octopus.components.registry.server.service.ComponentManagementService
+import org.octopusden.octopus.components.registry.server.service.ListValues
 import org.octopusden.octopus.components.registry.server.service.impl.EmployeeDirectoryService
-import org.octopusden.octopus.components.registry.server.template.ComponentDefaultsSeed
-import org.octopusden.octopus.components.registry.server.template.ListValues
-import org.octopusden.octopus.components.registry.server.template.ParameterChecker
-import org.octopusden.octopus.components.registry.server.template.RegistryListValues
-import org.octopusden.octopus.components.registry.server.template.TemplateDryRun
+import org.octopusden.octopus.components.registry.server.service.impl.ParameterChecker
+import org.octopusden.octopus.components.registry.server.service.impl.RegistryListValues
+import org.octopusden.octopus.components.registry.server.service.impl.TemplateDryRun
 import org.springframework.context.annotation.Bean
 import org.springframework.context.annotation.Configuration
 import org.springframework.transaction.PlatformTransactionManager
@@ -36,7 +35,7 @@ class ComponentTemplatesConfig {
         TemplateDryRun(
             parameterChecker,
             lists,
-            { ComponentDefaultsSeed.from(adminConfig.componentDefaults) },
+            { adminConfig.componentDefaults.templateDefaults() },
             componentManagementService::createComponent,
             transactionManager,
         )

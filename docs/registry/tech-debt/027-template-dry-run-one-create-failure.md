@@ -28,4 +28,4 @@ already in use — sees the first, fixes it, runs the dry run again and only the
 ## References
 
 - `openspec/changes/add-component-templates/design.md` (Decision 8, Risks)
-- `template/TemplateDryRun.kt`, `template/CreateFailureFields.kt`
+- `service/impl/TemplateDryRun.kt`, `util/CreateFailureFields.kt`

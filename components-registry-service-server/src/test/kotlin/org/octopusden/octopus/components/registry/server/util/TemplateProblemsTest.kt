@@ -1,8 +1,13 @@
-package org.octopusden.octopus.components.registry.server.template
+package org.octopusden.octopus.components.registry.server.util
 
 import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.DisplayName
 import org.junit.jupiter.api.Test
+import org.octopusden.octopus.components.registry.server.model.ComponentTemplate
+import org.octopusden.octopus.components.registry.server.support.EXAMPLE_DEFAULTS
+import org.octopusden.octopus.components.registry.server.support.EXAMPLE_VALUES
+import org.octopusden.octopus.components.registry.server.support.exampleTemplate
+import org.octopusden.octopus.components.registry.server.support.parsedTemplate
 
 class TemplateProblemsTest {
     private fun rendered(

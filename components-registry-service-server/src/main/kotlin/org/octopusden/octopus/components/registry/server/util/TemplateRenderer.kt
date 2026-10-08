@@ -1,4 +1,4 @@
-package org.octopusden.octopus.components.registry.server.template
+package org.octopusden.octopus.components.registry.server.util
 
 import org.octopusden.octopus.components.registry.server.dto.v4.ArtifactIdRequest
 import org.octopusden.octopus.components.registry.server.dto.v4.BaseConfigurationRequest
@@ -11,6 +11,10 @@ import org.octopusden.octopus.components.registry.server.dto.v4.MavenArtifactReq
 import org.octopusden.octopus.components.registry.server.dto.v4.PackageRequest
 import org.octopusden.octopus.components.registry.server.dto.v4.VcsEntryRequest
 import org.octopusden.octopus.components.registry.server.model.ComponentProfile
+import org.octopusden.octopus.components.registry.server.model.ComponentTemplate
+import org.octopusden.octopus.components.registry.server.model.TemplateExpression
+import org.octopusden.octopus.components.registry.server.model.TemplateField
+import org.octopusden.octopus.components.registry.server.model.TemplateFieldKind
 
 /**
  * A rendered template: the create request, every field it sets by path, and where each came from.
@@ -28,7 +32,7 @@ data class RenderedTemplate(
 }
 
 /**
- * Turns a template, values that passed [ParameterChecker], overrides and `component-defaults`
+ * Turns a template, values that passed the parameter checks, overrides and `component-defaults`
  * into a create request, following rules R1–R8 in order: the template's fields, then defaults on
  * fields still unset, then overrides (Decision 6). Pure and deterministic.
  *
@@ -81,7 +85,7 @@ object TemplateRenderer {
                             val whole = item.wholeParameter
                             if (whole != null && whole in multiValue) values[whole].orEmpty() else listOf(text(item, values))
                         }.filter { it.isNotBlank() }
-                if (field.kind == TemplateFields.Kind.FREE_TEXT_LIST) items else items.distinct()
+                if (field.kind == TemplateFieldKind.FREE_TEXT_LIST) items else items.distinct()
             }
         }
 

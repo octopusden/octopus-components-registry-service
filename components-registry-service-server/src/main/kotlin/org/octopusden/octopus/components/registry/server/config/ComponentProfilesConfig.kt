@@ -5,7 +5,6 @@ import org.octopusden.octopus.components.registry.server.service.ProfileAvailabi
 import org.octopusden.octopus.components.registry.server.service.impl.ComponentProfileCatalog
 import org.octopusden.octopus.components.registry.server.service.impl.PermissionProfileAvailability
 import org.octopusden.octopus.components.registry.server.service.impl.ProfileCreateCheck
-import org.octopusden.octopus.components.registry.server.template.ComponentDefaultsSeed
 import org.springframework.context.annotation.Bean
 import org.springframework.context.annotation.Configuration
 import org.springframework.core.env.ConfigurableEnvironment
@@ -25,7 +24,7 @@ class ComponentProfilesConfig {
     fun componentProfileCatalog(
         source: ComponentProfilesSource,
         adminConfig: AdminConfigProperties,
-    ): ComponentProfileCatalog = ComponentProfileCatalog(source::read) { ComponentDefaultsSeed.from(adminConfig.componentDefaults) }
+    ): ComponentProfileCatalog = ComponentProfileCatalog(source::read) { adminConfig.componentDefaults.templateDefaults() }
 
     @Bean
     fun profileAvailability(permissionEvaluator: PermissionEvaluator): ProfileAvailability =

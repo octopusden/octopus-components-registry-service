@@ -1,4 +1,4 @@
-package org.octopusden.octopus.components.registry.server.template
+package org.octopusden.octopus.components.registry.server.model
 
 import org.octopusden.octopus.components.registry.server.model.ComponentProfile
 
@@ -7,7 +7,7 @@ import org.octopusden.octopus.components.registry.server.model.ComponentProfile
  * the parameters a creator fills, and the create-request fields built from them (Decision 1).
  *
  * Only a template that passed every load check exists as this type; a failed one is a
- * [org.octopusden.octopus.components.registry.server.profile.ProfileLoad.Entry] with problems.
+ * [ProfileLoad.Entry] with problems.
  * [classification] is never [ComponentProfile.Explicit.ASK].
  */
 data class ComponentTemplate(
@@ -98,10 +98,36 @@ enum class TemplateList(
     }
 }
 
+/** The kind of value a template field takes (Decision 2). */
+enum class TemplateFieldKind(
+    val list: Boolean,
+) {
+    /** Text with expressions; filters allowed. */
+    FREE_TEXT(false),
+
+    /** A value of a registry list, or exactly `{{ NAME }}` of a `crs-list` parameter of that list. */
+    CRS_VALUE(false),
+
+    /** A login, or exactly `{{ NAME }}` of a single `person` parameter. */
+    PERSON(false),
+
+    /** Items, each free text or exactly `{{ NAME }}` of a multi-value `select`. */
+    FREE_TEXT_LIST(true),
+
+    /** Labels, or exactly `{{ NAME }}` of a `labels` parameter. */
+    CRS_LIST(true),
+
+    /** Logins, or exactly `{{ NAME }}` of a `person` parameter. */
+    PEOPLE_LIST(true),
+
+    /** A fixed value of a static set; never a parameter. */
+    FIXED_CHOICE(false),
+}
+
 /** A field the template sets: one value, or the items of a list field in index order. */
 sealed interface TemplateField {
     val path: String
-    val kind: TemplateFields.Kind
+    val kind: TemplateFieldKind
     val expressions: List<TemplateExpression>
 
     val parameters: Set<String>
@@ -109,7 +135,7 @@ sealed interface TemplateField {
 
     data class Single(
         override val path: String,
-        override val kind: TemplateFields.Kind,
+        override val kind: TemplateFieldKind,
         val value: TemplateExpression,
     ) : TemplateField {
         override val expressions get() = listOf(value)
@@ -117,7 +143,7 @@ sealed interface TemplateField {
 
     data class Items(
         override val path: String,
-        override val kind: TemplateFields.Kind,
+        override val kind: TemplateFieldKind,
         val items: List<TemplateExpression>,
     ) : TemplateField {
         override val expressions get() = items

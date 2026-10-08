@@ -1,7 +1,5 @@
 package org.octopusden.octopus.components.registry.server.model
 
-import org.octopusden.octopus.components.registry.server.template.ComponentTemplate
-
 /**
  * The outcome of one load. [profiles] and [templates] are the live entries of each kind, sorted
  * by order, then id; [problems] are configuration-level. The load is [usable] when it has no configuration-level problem and

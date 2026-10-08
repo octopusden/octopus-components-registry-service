@@ -5,7 +5,7 @@ import org.junit.jupiter.api.DisplayName
 import org.junit.jupiter.api.Test
 import org.octopusden.octopus.components.registry.server.service.ProfileAvailability
 import org.octopusden.octopus.components.registry.server.support.designExampleProperties
-import org.octopusden.octopus.components.registry.server.template.standaloneTemplateProperties
+import org.octopusden.octopus.components.registry.server.support.standaloneTemplateProperties
 
 class PermissionProfileAvailabilityTest {
     private val catalog = ComponentProfileCatalog { designExampleProperties() + standaloneTemplateProperties() }
