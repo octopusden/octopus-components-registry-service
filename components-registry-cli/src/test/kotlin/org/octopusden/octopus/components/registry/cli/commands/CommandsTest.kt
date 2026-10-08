@@ -67,9 +67,11 @@ private const val URL = "--crs-url=https://crs.example"
 /** Canned `/components/as-code/search` reply (SYS-100): 2 matching components, cut at limit=1. */
 private const val SEARCH_BODY =
     """{"query":"ALPHA","regex":false,"totalComponents":2,"truncated":true,"results":[""" +
-        """{"componentKey":"alpha","archived":false,"matchCount":3,"matches":[""" +
-        """{"line":2,"text":"componentOwner = \"alpha-owner\"","path":["alpha"]},""" +
-        """{"line":8,"text":"projectKey = \"ALPHA\"","path":["alpha","\"[1.5,)\"","jira"]}]}]}"""
+        """{"id":"3f2b8c1e-0000-4000-8000-000000000001","componentKey":"alpha","archived":false,"matchCount":3,""" +
+        """"matches":[""" +
+        """{"line":2,"text":"componentOwner = \"alpha-owner\"","path":["alpha"],"ranges":[{"start":18,"end":23}]},""" +
+        """{"line":8,"text":"projectKey = \"ALPHA\"","path":["alpha","\"[1.5,)\"","jira"],""" +
+        """"ranges":[{"start":14,"end":19}]}]}]}"""
 
 class CommandsTest {
     @Test
@@ -569,5 +571,9 @@ class CommandsTest {
         assertEquals(0, result.statusCode, result.stderr)
         assertTrue(result.stdout.trimStart().startsWith("["), result.stdout)
         assertTrue(result.stdout.contains("\"componentKey\": \"alpha\""), result.stdout)
+        // The component id and the matched spans round-trip through the CLI model into the JSON output.
+        assertTrue(result.stdout.contains("\"id\": \"3f2b8c1e-0000-4000-8000-000000000001\""), result.stdout)
+        assertTrue(result.stdout.contains("\"start\": 14"), result.stdout)
+        assertTrue(result.stdout.contains("\"end\": 19"), result.stdout)
     }
 }

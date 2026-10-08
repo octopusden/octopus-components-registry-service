@@ -107,10 +107,20 @@ class ComponentCodeSearchService(
         return LineMatcher { line ->
             budget.check()
             try {
-                // Materialized inside the try: findAll is lazy, and the overflow happens while iterating.
-                val found = pattern.findAll(DeadlineCharSequence(line, budget)).take(MAX_SPANS_PER_LINE).toList()
                 // A line whose only matches are empty (e.g. `x*`) still matches; it just has nothing to mark.
-                found.takeIf { it.isNotEmpty() }?.mapNotNull { m -> m.range.takeIf { !it.isEmpty() } }
+                // Empty matches are dropped BEFORE the cap, so they can't use up the allowance and hide a
+                // real span later in the line. Materialized inside the try: findAll is lazy, and the
+                // overflow happens while iterating.
+                var matched = false
+                val spans =
+                    pattern
+                        .findAll(DeadlineCharSequence(line, budget))
+                        .onEach { matched = true }
+                        .map { it.range }
+                        .filterNot { it.isEmpty() }
+                        .take(MAX_SPANS_PER_LINE)
+                        .toList()
+                spans.takeIf { matched }
             } catch (e: StackOverflowError) {
                 throw IllegalArgumentException(TOO_COMPLEX_MESSAGE, e)
             }

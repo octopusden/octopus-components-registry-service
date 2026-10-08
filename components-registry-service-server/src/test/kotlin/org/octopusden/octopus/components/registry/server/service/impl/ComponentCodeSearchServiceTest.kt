@@ -289,6 +289,29 @@ class ComponentCodeSearchServiceTest {
     }
 
     @Test
+    @DisplayName("SYS-100: empty regex matches do not use up the span cap before a real match")
+    fun `SYS-100 empty regex matches do not hide a later real span`() {
+        val copyright =
+            RenderedComponentCode(
+                "gamma",
+                "gamma {\n    copyright = \"" + "b".repeat(60) + "zzz\"\n}\n",
+                id = UUID.randomUUID(),
+            )
+        whenever(componentManagementService.renderAllComponentsAsCode()).thenReturn(listOf(copyright))
+
+        val line =
+            service
+                .search("z*", regex = true)
+                .results
+                .single()
+                .matches
+                .single { it.text.startsWith("copyright") }
+
+        val start = line.text.indexOf("zzz")
+        assertThat(line.ranges).containsExactly(AsCodeMatchRange(start, start + 3))
+    }
+
+    @Test
     @DisplayName("SYS-100: substringSpans finds every case-insensitive, non-overlapping occurrence")
     fun `SYS-100 substringSpans finds every occurrence`() {
         assertThat(ComponentCodeSearchService.substringSpans("Org.org.ORG", "org")).containsExactly(0..2, 4..6, 8..10)
