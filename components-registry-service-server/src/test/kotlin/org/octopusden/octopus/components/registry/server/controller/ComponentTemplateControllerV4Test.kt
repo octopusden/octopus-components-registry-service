@@ -374,6 +374,21 @@ class ComponentTemplateControllerV4Test {
     }
 
     @Test
+    @DisplayName("when several checks fail, the first in order answers: Jira task key 400, template 404, use 403, override 403, path 400")
+    fun orderOfChecks() {
+        val badKey = mapOf("jiraTaskKey" to "not a key")
+        val notOverridable = mapOf("overrides" to mapOf("name" to listOf("my-name")))
+
+        components(body(extra = badKey), id = "no-such-template", jwt = viewerJwt()).andExpect(status().isBadRequest)
+        components(body(), id = "no-such-template", jwt = viewerJwt()).andExpect(status().isNotFound)
+        components(body(extra = notOverridable), jwt = viewerJwt()).andExpect(status().isForbidden)
+        switchable.overrideAllowed = false
+        components(body(extra = notOverridable)).andExpect(status().isForbidden)
+        switchable.overrideAllowed = true
+        components(body(extra = notOverridable)).andExpect(status().isBadRequest)
+    }
+
+    @Test
     @DisplayName("Decision 9: a taken key is a problem on name naming CLIENT_CODE and PLUGIN_CODE")
     fun keyTaken() {
         val code = pluginCode()

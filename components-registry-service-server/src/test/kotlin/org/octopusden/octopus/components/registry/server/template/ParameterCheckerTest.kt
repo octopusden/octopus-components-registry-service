@@ -230,11 +230,38 @@ class ParameterCheckerTest {
     }
 
     @Test
-    @DisplayName("a value given, even empty, replaces the default")
+    @DisplayName("an empty or blank value takes the default, as an absent one does; a required parameter with a default then passes")
+    fun emptyTakesDefault() {
+        val template =
+            templateWith(
+                text("SUFFIX", required = false, default = "core"),
+                select("CLIENT_CODE", listOf("ACME"), default = listOf("ACME")),
+            )
+
+        listOf(emptyList(), listOf(""), listOf("  ", "")).forEach { empty ->
+            val result = check(template, "SUFFIX" to empty, "CLIENT_CODE" to empty)
+            assertEquals(emptyList<ParameterProblem>(), result.problems, "value $empty")
+            assertEquals(mapOf("SUFFIX" to listOf("core"), "CLIENT_CODE" to listOf("ACME")), result.values, "value $empty")
+        }
+    }
+
+    @Test
+    @DisplayName("a value given replaces the default")
     fun givenValueReplacesDefault() {
         val template = templateWith(text("SUFFIX", required = false, default = "core"))
 
-        assertEquals(mapOf("SUFFIX" to emptyList<String>()), check(template, "SUFFIX" to listOf("")).values)
+        assertEquals(mapOf("SUFFIX" to listOf("api")), check(template, "SUFFIX" to listOf("api")).values)
+    }
+
+    @Test
+    @DisplayName("the same value twice on a single-value parameter counts once and passes P3")
+    fun duplicateOnSingleValue() {
+        val template = templateWith(select("CLIENT_CODE", listOf("ACME", "GLOBEX")))
+
+        val result = check(template, "CLIENT_CODE" to listOf("ACME", "ACME"))
+
+        assertEquals(emptyList<ParameterProblem>(), result.problems)
+        assertEquals(mapOf("CLIENT_CODE" to listOf("ACME")), result.values)
     }
 
     @Test
