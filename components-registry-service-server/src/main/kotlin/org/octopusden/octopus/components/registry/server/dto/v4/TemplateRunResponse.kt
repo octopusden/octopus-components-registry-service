@@ -4,8 +4,8 @@ import io.swagger.v3.oas.annotations.media.Schema
 import org.octopusden.octopus.components.registry.server.template.TemplateRun
 
 /**
- * A dry run's result, also the 422 body of a create that found a problem. [component] and
- * [sources] are absent when a parameter check failed, since rendering stops there.
+ * A dry run's result, also the 422 body of a create that found a problem. [component],
+ * [sources] and [overridden] are absent when a parameter check failed, since rendering stops there.
  */
 data class TemplateRunResponse(
     val valid: Boolean,
@@ -16,6 +16,8 @@ data class TemplateRunResponse(
         description = "For each set create-request path, the parameters its value came from; empty for a fixed or defaulted value.",
     )
     val sources: Map<String, List<String>>?,
+    @field:Schema(description = "The create-request paths an override set; their sources are empty.")
+    val overridden: List<String>?,
     val problems: List<Problem>,
 ) {
     @Schema(name = "TemplateParameterProblem")
@@ -45,6 +47,7 @@ data class TemplateRunResponse(
                     run.parameterProblems.map { ParameterProblem(it.parameter, it.check.name.substringBefore('_'), it.message) },
                 component = run.rendered?.request,
                 sources = run.rendered?.sources?.mapValues { it.value.toList() },
+                overridden = run.rendered?.overridden?.toList(),
                 problems = run.problems.map { Problem(it.fields, it.parameters.toList(), it.templateProblem, it.message) },
             )
     }

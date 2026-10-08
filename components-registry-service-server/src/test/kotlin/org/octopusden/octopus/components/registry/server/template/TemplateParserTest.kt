@@ -523,6 +523,31 @@ class TemplateParserTest {
     }
 
     @Test
+    @DisplayName("Decision 4: a required field from an optional parameter passes when a component default fills it, as rendering does")
+    fun optionalParameterWithDefaultFills() {
+        val template =
+            explicitExternal().apply {
+                at("parameters.PLUGIN_NAME")["required"] = "false"
+                at("fields")["displayName"] = "{{ PLUGIN_NAME }}"
+            }
+
+        assertEquals(emptyList<String>(), problems(template, EXAMPLE_DEFAULTS + ("displayName" to "Default name")))
+    }
+
+    @Test
+    @DisplayName("a template id that is not lowercase letters, digits and '-' is a problem, as for a profile")
+    fun badTemplateId() {
+        val problems =
+            ComponentProfileParser
+                .parse(designExampleProperties() + flatten(exampleTemplate(), "Client_Plugin"), EXAMPLE_DEFAULTS)
+                .entries
+                .single { it.id == "Client_Plugin" }
+                .problems
+
+        assertTrue(problems.any { it.startsWith("Client_Plugin: ") }, "problems: $problems")
+    }
+
+    @Test
     @DisplayName("Decision 4: a required field filled by a component default passes; the Portal's own fallback does not count")
     fun componentDefaultFillsPortalFallbackDoesNot() {
         assertEquals(emptyList<String>(), problems(exampleTemplate()))
@@ -534,13 +559,14 @@ class TemplateParserTest {
     @ValueSource(strings = ["PROVIDED", "ESCROW_PROVIDED_MANUALLY", "ESCROW_NOT_SUPPORTED", "WHISKEY", "BS2_0"])
     @DisplayName("Decision 4: a build system that needs no VCS needs no VCS path, branch or tag")
     fun noVcsNeeded(buildSystem: String) {
-        val flat =
-            flatten(exampleTemplate().apply { at("fields.baseConfiguration.build")["buildSystem"] = buildSystem }, TEMPLATE_ID) -
-                "$TEMPLATE_ID.fields.baseConfiguration.vcsEntries[0].vcsPath"
+        val template =
+            exampleTemplate().apply {
+                at("fields.baseConfiguration.build")["buildSystem"] = buildSystem
+                at("fields.baseConfiguration").remove("vcsEntries")
+                put("overridable", listOf("baseConfiguration.jira.projectKey"))
+            }
 
-        val problems = flatProblems(flat, emptyMap())
-
-        assertTrue(problems.none { it.startsWith("$TEMPLATE_ID.fields.baseConfiguration.vcsEntries") }, "problems: $problems")
+        assertEquals(emptyList<String>(), problems(template, mapOf("baseConfiguration.jira.versionFormat" to "\$major")))
     }
 
     @Test

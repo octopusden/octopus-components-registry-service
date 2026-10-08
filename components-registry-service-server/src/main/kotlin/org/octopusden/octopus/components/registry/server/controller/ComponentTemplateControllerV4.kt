@@ -1,8 +1,13 @@
 package org.octopusden.octopus.components.registry.server.controller
 
+import io.swagger.v3.oas.annotations.media.Content
+import io.swagger.v3.oas.annotations.media.Schema
+import io.swagger.v3.oas.annotations.responses.ApiResponse
+import io.swagger.v3.oas.annotations.responses.ApiResponses
 import jakarta.validation.Valid
 import org.octopusden.octopus.components.registry.core.exceptions.NotFoundException
 import org.octopusden.octopus.components.registry.server.config.ConditionalOnDatabaseEnabled
+import org.octopusden.octopus.components.registry.server.dto.v4.ComponentDetailResponse
 import org.octopusden.octopus.components.registry.server.dto.v4.ComponentTemplateResponse
 import org.octopusden.octopus.components.registry.server.dto.v4.TemplateComponentRequest
 import org.octopusden.octopus.components.registry.server.dto.v4.TemplateRunResponse
@@ -50,6 +55,26 @@ class ComponentTemplateControllerV4(
     /** `dryRun` defaults to `true`, so a caller that leaves it out never creates a component. */
     @PostMapping("/{id}/components")
     @PreAuthorize("@permissionEvaluator.hasPermission('ACCESS_COMPONENTS')")
+    @ApiResponses(
+        ApiResponse(
+            responseCode = "200",
+            description = "A dry run (`dryRun` absent or `true`), valid or not; nothing is created.",
+            content = [Content(schema = Schema(implementation = TemplateRunResponse::class))],
+        ),
+        ApiResponse(
+            responseCode = "201",
+            description = "`dryRun=false` and every check passed: the created component.",
+            content = [Content(schema = Schema(implementation = ComponentDetailResponse::class))],
+        ),
+        ApiResponse(responseCode = "400", description = "A malformed Jira task key, or an override on a path the template does not list."),
+        ApiResponse(responseCode = "403", description = "The caller may not use the template, or may not override its fields."),
+        ApiResponse(responseCode = "404", description = "The template is unknown, failed or removed."),
+        ApiResponse(
+            responseCode = "422",
+            description = "`dryRun=false` and a check failed: the dry run's body; nothing is created.",
+            content = [Content(schema = Schema(implementation = TemplateRunResponse::class))],
+        ),
+    )
     fun components(
         @PathVariable id: String,
         @RequestParam(defaultValue = "true") dryRun: Boolean,

@@ -38,11 +38,13 @@ internal class TemplateRequiredFields(
         }
     }
 
+    /** As rendering does: a field that may end up empty still takes its default. */
     private fun produced(path: String): Boolean {
-        val field = fields[path] ?: return !defaults[path].isNullOrBlank()
-        return field.expressions.any { expression ->
-            expression.parameters.any { it in required } || expression.literal().isNotBlank()
-        }
+        val fromTemplate =
+            fields[path]?.expressions.orEmpty().any { expression ->
+                expression.parameters.any { it in required } || expression.literal().isNotBlank()
+            }
+        return fromTemplate || !defaults[path].isNullOrBlank()
     }
 
     /** The value when the template fixes it or a default supplies it; `null` when a parameter or nothing gives it. */

@@ -51,7 +51,8 @@ Parameter keys:
 | `max-length` | `text` | No | Whole number above 0 |
 | `default` | All | No | A value valid for the parameter; for `person`, a login or `current-user` |
 
-A parameter name SHALL be upper-case letters, digits and `_`, starting with a letter.
+A template id SHALL be lowercase letters, digits and `-`, as a profile id is. A parameter name SHALL
+be upper-case letters, digits and `_`, starting with a letter.
 
 Field paths, and the value each field kind accepts:
 
@@ -127,7 +128,7 @@ Field checks:
 | Path | The path is not in the field table |
 | Parameter | The field uses a parameter the template does not define |
 | Kind | The field kind does not accept the parameter, as the field table says: a Person never goes into free text, and a multi-value parameter only into a list |
-| Whole value | A CRS value, Person or list item has text around `{{ NAME }}`, or a filter |
+| Whole value | A CRS value, a Person, or an item of a CRS list or people list has text around `{{ NAME }}`, or a filter |
 | Filter | A filter other than `lower` or `upper` is used |
 | Fixed value | A fixed value is not in its static list: build systems, escrow generation modes, fixed choices |
 
@@ -372,6 +373,7 @@ It SHALL return:
 - whether the input is valid;
 - every parameter problem;
 - the rendered request, and each set field's source parameters;
+- the paths an override set, whose source parameters are empty;
 - every problem found after rendering.
 
 How problems are reported:
