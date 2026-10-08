@@ -9,6 +9,7 @@ import org.junit.jupiter.api.Test
 import org.octopusden.octopus.components.registry.server.model.ProfileLoad
 import org.octopusden.octopus.components.registry.server.support.designExampleProperties
 import org.octopusden.octopus.components.registry.server.support.profileProperties
+import org.octopusden.octopus.components.registry.server.support.standaloneTemplateProperties
 import java.util.concurrent.CountDownLatch
 import java.util.concurrent.Executors
 import java.util.concurrent.TimeUnit
@@ -53,11 +54,72 @@ class ComponentProfileCatalogTest {
     }
 
     @Test
-    @DisplayName("Decision 3: a template entry next to valid profiles does not stop construction")
+    @DisplayName("Decision 3: a broken template entry next to valid profiles does not stop construction; it is not offered")
     fun templateEntryAtStartup() {
-        val catalog = ComponentProfileCatalog { designExampleProperties() + ("ww-modpack.kind" to "template") }
+        val catalog = ComponentProfileCatalog { designExampleProperties() + ("client-plugin.kind" to "template") }
 
         assertEquals(4, catalog.profiles().size)
+        assertEquals(emptyList<Any>(), catalog.templates())
+    }
+
+    @Test
+    @DisplayName("Decision 1: a usable load swaps profiles and templates together")
+    fun usableLoadSwapsBoth() {
+        val source = SwitchableSource(designExampleProperties())
+        val catalog = ComponentProfileCatalog(source::read)
+        source.properties = designExampleProperties() + ("solution.title" to "Solution (renamed)") + standaloneTemplateProperties()
+
+        catalog.reload()
+
+        assertEquals("Solution (renamed)", catalog.profiles().single { it.id == "solution" }.title)
+        assertEquals(listOf("client-plugin"), catalog.templates().map { it.id })
+        assertEquals("client-plugin", catalog.template("client-plugin")?.id)
+    }
+
+    @Test
+    @DisplayName("Decision 1: a load with an invalid regular profile keeps both, even a template whose change was valid")
+    fun invalidRegularKeepsBoth() {
+        val source = SwitchableSource(designExampleProperties() + standaloneTemplateProperties())
+        val catalog = ComponentProfileCatalog(source::read)
+        source.properties =
+            designExampleProperties() + ("dmp-bundle.order" to "ten") + standaloneTemplateProperties() +
+            ("client-plugin.title" to "Client plugin (renamed)")
+
+        catalog.reload()
+
+        assertEquals("Client plugin", catalog.templates().single().title)
+    }
+
+    @Test
+    @DisplayName("Decision 1: the catalog keeps the last load's outcome, even an unusable one")
+    fun keepsLastLoad() {
+        val source = SwitchableSource(designExampleProperties())
+        val catalog = ComponentProfileCatalog(source::read)
+        source.properties = designExampleProperties() + ("dmp-bundle.order" to "ten")
+
+        val load = catalog.reload()
+
+        assertEquals(load, catalog.lastLoad())
+        assertFalse(catalog.lastLoad().usable)
+    }
+
+    @Test
+    @DisplayName("Decision 11: the catalog keeps each entry's raw keys for the entries in use, failed ones included")
+    fun keepsRawKeys() {
+        val catalog = ComponentProfileCatalog { designExampleProperties() + ("client-plugin.kind" to "template") }
+
+        assertEquals(mapOf("kind" to "template"), catalog.rawEntries()["client-plugin"])
+        assertEquals("Title of solution", catalog.rawEntries().getValue("solution")["title"])
+    }
+
+    @Test
+    @DisplayName("Decision 4: the defaults the catalog is given count for a template's required fields")
+    fun defaultsReachTheParser() {
+        val properties = designExampleProperties() + standaloneTemplateProperties().filterKeys { !it.endsWith("vcsEntries[0].branch") }
+
+        assertEquals(emptyList<Any>(), ComponentProfileCatalog({ properties }).templates())
+        val withDefault = ComponentProfileCatalog({ properties }, { mapOf("baseConfiguration.vcsEntries[0].branch" to "main") })
+        assertEquals(listOf("client-plugin"), withDefault.templates().map { it.id })
     }
 
     @Test

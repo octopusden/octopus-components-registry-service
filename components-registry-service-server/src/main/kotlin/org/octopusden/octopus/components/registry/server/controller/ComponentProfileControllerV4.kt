@@ -17,6 +17,9 @@ class ComponentProfileControllerV4(
 ) {
     @GetMapping("/component-profiles")
     @PreAuthorize("@permissionEvaluator.hasPermission('ACCESS_COMPONENTS')")
-    fun listProfiles(): ComponentProfilesResponse =
-        ComponentProfilesResponse(catalog.profiles().map { ComponentProfileResponse.from(it, availability.evaluate(it)) })
+    fun listProfiles(): ComponentProfilesResponse {
+        val profiles = catalog.profiles().map { Triple(it.order, it.id, ComponentProfileResponse.from(it, availability.evaluate(it))) }
+        val templates = catalog.templates().map { Triple(it.order, it.id, ComponentProfileResponse.from(it, availability.evaluate(it))) }
+        return ComponentProfilesResponse((profiles + templates).sortedWith(compareBy({ it.first }, { it.second })).map { it.third })
+    }
 }

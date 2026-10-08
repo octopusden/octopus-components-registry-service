@@ -170,6 +170,11 @@ and reloaded the same way (service-config, `POST /admin/reload-config`), with fo
   patterns in syntax both accept (no `\p{…}` classes, possessive quantifiers or other Java-only
   constructs). A client that cannot compile a pattern skips its own check; CRS's answer on create
   decides.
+- **Templates are entries of the same subtree.** A `kind: template` entry is parsed and checked with
+  the profiles and swapped with them as one snapshot, so a reload that fails on a regular profile
+  keeps the previous templates too; a failed template never blocks a load. A template's `fields`
+  keys are create-request paths, read as flattened keys like rule paths: YAML nesting and lists
+  (`artifactIds[0].groupPattern`, `labels[0]`) need no bracket notation.
 
 ## Consequences
 

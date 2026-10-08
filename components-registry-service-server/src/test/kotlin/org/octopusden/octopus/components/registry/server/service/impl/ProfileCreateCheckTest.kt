@@ -11,10 +11,13 @@ import org.octopusden.octopus.components.registry.server.entity.ComponentArtifac
 import org.octopusden.octopus.components.registry.server.entity.ComponentConfigurationEntity
 import org.octopusden.octopus.components.registry.server.entity.ComponentEntity
 import org.octopusden.octopus.components.registry.server.entity.VcsSettingsEntryEntity
+import org.octopusden.octopus.components.registry.server.model.ComponentProfile
+import org.octopusden.octopus.components.registry.server.model.ComponentTemplate
 import org.octopusden.octopus.components.registry.server.service.ProfileAvailability
 import org.octopusden.octopus.components.registry.server.support.designExampleProperties
 import org.octopusden.octopus.components.registry.server.support.profileProperties
 import org.octopusden.octopus.components.registry.server.support.rule
+import org.octopusden.octopus.components.registry.server.support.standaloneTemplateProperties
 import org.octopusden.octopus.components.registry.server.util.CreateRequestPaths
 import org.springframework.http.HttpStatus
 import org.springframework.web.server.ResponseStatusException
@@ -28,9 +31,20 @@ private class Created(
     override fun valueAt(path: String): String? = values[path]
 }
 
+/** The same answer for every profile and template. */
+class FixedAvailability(
+    private val answer: ProfileAvailability.Availability,
+) : ProfileAvailability {
+    override fun evaluate(profile: ComponentProfile) = answer
+
+    override fun evaluate(template: ComponentTemplate) = answer
+
+    override fun mayOverride(template: ComponentTemplate) = answer.usable
+}
+
 class ProfileCreateCheckTest {
     private val catalog = ComponentProfileCatalog { designExampleProperties() }
-    private val check = ProfileCreateCheck(catalog) { ProfileAvailability.Availability(usable = true, reason = null) }
+    private val check = ProfileCreateCheck(catalog, FixedAvailability(ProfileAvailability.Availability(usable = true, reason = null)))
 
     private val solution = Created(
         solution = true,
@@ -51,12 +65,14 @@ class ProfileCreateCheckTest {
     }
 
     @Test
-    @DisplayName("Decision 7: a template entry named as the profile is rejected as unknown")
+    @DisplayName("Decision 7: a live template's id named as the profile is rejected as unknown")
     fun templateIdAsProfile() {
-        val withTemplate = ComponentProfileCatalog { designExampleProperties() + ("ww-modpack.kind" to "template") }
-        val templateCheck = ProfileCreateCheck(withTemplate) { ProfileAvailability.Availability(usable = true, reason = null) }
+        val withTemplate = ComponentProfileCatalog { designExampleProperties() + standaloneTemplateProperties() }
+        val templateCheck =
+            ProfileCreateCheck(withTemplate, FixedAvailability(ProfileAvailability.Availability(usable = true, reason = null)))
 
-        assertEquals("profile: unknown profile 'ww-modpack'", rejection { templateCheck.check("ww-modpack", internal) })
+        assertEquals(listOf("client-plugin"), withTemplate.templates().map { it.id })
+        assertEquals("profile: unknown profile 'client-plugin'", rejection { templateCheck.check("client-plugin", internal) })
     }
 
     @Test
@@ -64,7 +80,8 @@ class ProfileCreateCheckTest {
     fun removedProfile() {
         var properties = designExampleProperties()
         val switchable = ComponentProfileCatalog { properties }
-        val switchableCheck = ProfileCreateCheck(switchable) { ProfileAvailability.Availability(usable = true, reason = null) }
+        val switchableCheck =
+            ProfileCreateCheck(switchable, FixedAvailability(ProfileAvailability.Availability(usable = true, reason = null)))
         properties = properties.filterKeys { !it.startsWith("dmp-bundle.") }
 
         switchable.reload()
@@ -75,7 +92,8 @@ class ProfileCreateCheckTest {
     @Test
     @DisplayName("Decision 6: a profile the user may not use is refused with 403 and the reason")
     fun unusableProfile() {
-        val refusing = ProfileCreateCheck(catalog) { ProfileAvailability.Availability(usable = false, reason = "Not for you") }
+        val refusing =
+            ProfileCreateCheck(catalog, FixedAvailability(ProfileAvailability.Availability(usable = false, reason = "Not for you")))
 
         val error = assertThrows(ResponseStatusException::class.java) { refusing.check("regular-internal", internal) }
 
@@ -156,9 +174,8 @@ class ProfileCreateCheckTest {
 
         val message =
             rejection {
-                ProfileCreateCheck(
-                    strict,
-                ) { ProfileAvailability.Availability(true, null) }.check("strict", Created(distributionExternal = true))
+                ProfileCreateCheck(strict, FixedAvailability(ProfileAvailability.Availability(true, null)))
+                    .check("strict", Created(distributionExternal = true))
             }
 
         assertEquals("clientCode: Client code required.", message)

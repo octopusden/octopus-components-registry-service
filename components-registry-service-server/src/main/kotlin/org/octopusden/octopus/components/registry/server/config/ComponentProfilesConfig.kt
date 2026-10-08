@@ -19,8 +19,12 @@ class ComponentProfilesConfig {
     @Bean
     fun componentProfilesSource(environment: ConfigurableEnvironment): ComponentProfilesSource = ComponentProfilesSource(environment)
 
+    /** `component-defaults` is read on every load, so a reload sees it after the rebind that precedes it. */
     @Bean
-    fun componentProfileCatalog(source: ComponentProfilesSource): ComponentProfileCatalog = ComponentProfileCatalog(source::read)
+    fun componentProfileCatalog(
+        source: ComponentProfilesSource,
+        adminConfig: AdminConfigProperties,
+    ): ComponentProfileCatalog = ComponentProfileCatalog(source::read) { adminConfig.componentDefaults.templateDefaults() }
 
     @Bean
     fun profileAvailability(permissionEvaluator: PermissionEvaluator): ProfileAvailability =

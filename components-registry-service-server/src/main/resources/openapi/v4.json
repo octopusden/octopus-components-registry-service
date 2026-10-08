@@ -31,6 +31,68 @@
         ],
         "type" : "object"
       },
+      "AdminComponentProfileEntry" : {
+        "properties" : {
+          "configuration" : {
+            "description" : "The entry's configuration as read, in YAML.",
+            "type" : "string"
+          },
+          "id" : {
+            "type" : "string"
+          },
+          "kind" : {
+            "type" : "string"
+          },
+          "problems" : {
+            "items" : {
+              "type" : "string"
+            },
+            "type" : "array"
+          },
+          "profile" : {
+            "$ref" : "#/components/schemas/ComponentProfileResponse"
+          },
+          "status" : {
+            "enum" : [
+              "live",
+              "failed"
+            ],
+            "type" : "string"
+          },
+          "template" : {
+            "$ref" : "#/components/schemas/ComponentTemplateResponse"
+          }
+        },
+        "required" : [
+          "configuration",
+          "id",
+          "problems",
+          "status"
+        ],
+        "type" : "object"
+      },
+      "AdminComponentProfilesResponse" : {
+        "properties" : {
+          "configVersion" : {
+            "description" : "The configuration version the config server reported; absent when not served by one.",
+            "type" : "string"
+          },
+          "entries" : {
+            "items" : {
+              "$ref" : "#/components/schemas/AdminComponentProfileEntry"
+            },
+            "type" : "array"
+          },
+          "lastLoad" : {
+            "$ref" : "#/components/schemas/ComponentProfilesReloadResponse"
+          }
+        },
+        "required" : [
+          "entries",
+          "lastLoad"
+        ],
+        "type" : "object"
+      },
       "ArchiveReadinessEntry" : {
         "properties" : {
           "openIssues" : {
@@ -466,6 +528,7 @@
       "Classification" : {
         "properties" : {
           "explicit" : {
+            "description" : "Never `ask` for a template.",
             "enum" : [
               "true",
               "false",
@@ -589,6 +652,7 @@
         "type" : "object"
       },
       "ComponentCreateRequest" : {
+        "description" : "The create request the template rendered.",
         "properties" : {
           "archived" : {
             "type" : "boolean"
@@ -956,7 +1020,10 @@
             "type" : "string"
           },
           "kind" : {
-            "description" : "`regular`; templates are listed with their own kind once supported.",
+            "enum" : [
+              "regular",
+              "template"
+            ],
             "type" : "string"
           },
           "rules" : {
@@ -975,6 +1042,11 @@
           },
           "usable" : {
             "type" : "boolean"
+          },
+          "version" : {
+            "description" : "A template's version, raised by the administrator on every change; absent for a regular profile.",
+            "format" : "int32",
+            "type" : "integer"
           }
         },
         "required" : [
@@ -985,6 +1057,32 @@
           "rules",
           "title",
           "usable"
+        ],
+        "type" : "object"
+      },
+      "ComponentProfilesReloadResponse" : {
+        "description" : "The outcome of the last load or reload, applied or not.",
+        "properties" : {
+          "entries" : {
+            "items" : {
+              "$ref" : "#/components/schemas/Entry"
+            },
+            "type" : "array"
+          },
+          "problems" : {
+            "items" : {
+              "type" : "string"
+            },
+            "type" : "array"
+          },
+          "status" : {
+            "type" : "string"
+          }
+        },
+        "required" : [
+          "entries",
+          "problems",
+          "status"
         ],
         "type" : "object"
       },
@@ -1149,6 +1247,131 @@
           "status",
           "type",
           "updatedAt"
+        ],
+        "type" : "object"
+      },
+      "ComponentTemplateParameter" : {
+        "properties" : {
+          "default" : {
+            "description" : "The default values; a person parameter's `current-user` is returned as the caller.",
+            "items" : {
+              "description" : "The default values; a person parameter's `current-user` is returned as the caller.",
+              "type" : "string"
+            },
+            "type" : "array"
+          },
+          "hint" : {
+            "type" : "string"
+          },
+          "label" : {
+            "type" : "string"
+          },
+          "list" : {
+            "enum" : [
+              "build-systems",
+              "escrow-generation",
+              "labels"
+            ],
+            "type" : "string"
+          },
+          "maxLength" : {
+            "format" : "int32",
+            "type" : "integer"
+          },
+          "maxSelection" : {
+            "format" : "int32",
+            "type" : "integer"
+          },
+          "message" : {
+            "type" : "string"
+          },
+          "multiple" : {
+            "type" : "boolean"
+          },
+          "name" : {
+            "type" : "string"
+          },
+          "options" : {
+            "items" : {
+              "type" : "string"
+            },
+            "type" : "array"
+          },
+          "pattern" : {
+            "type" : "string"
+          },
+          "required" : {
+            "type" : "boolean"
+          },
+          "type" : {
+            "enum" : [
+              "text",
+              "select",
+              "crs-list",
+              "person"
+            ],
+            "type" : "string"
+          },
+          "values" : {
+            "description" : "A crs-list parameter's list, as it is at the time of the call.",
+            "items" : {
+              "description" : "A crs-list parameter's list, as it is at the time of the call.",
+              "type" : "string"
+            },
+            "type" : "array"
+          }
+        },
+        "required" : [
+          "default",
+          "label",
+          "multiple",
+          "name",
+          "required",
+          "type"
+        ],
+        "type" : "object"
+      },
+      "ComponentTemplateResponse" : {
+        "properties" : {
+          "classification" : {
+            "$ref" : "#/components/schemas/Classification"
+          },
+          "description" : {
+            "type" : "string"
+          },
+          "id" : {
+            "type" : "string"
+          },
+          "overridable" : {
+            "description" : "Create-request paths a creator may override.",
+            "items" : {
+              "description" : "Create-request paths a creator may override.",
+              "type" : "string"
+            },
+            "type" : "array"
+          },
+          "parameters" : {
+            "items" : {
+              "$ref" : "#/components/schemas/ComponentTemplateParameter"
+            },
+            "type" : "array"
+          },
+          "title" : {
+            "type" : "string"
+          },
+          "version" : {
+            "format" : "int32",
+            "type" : "integer"
+          }
+        },
+        "required" : [
+          "classification",
+          "description",
+          "id",
+          "overridable",
+          "parameters",
+          "title",
+          "version"
         ],
         "type" : "object"
       },
@@ -1432,6 +1655,31 @@
         "required" : [
           "active",
           "username"
+        ],
+        "type" : "object"
+      },
+      "Entry" : {
+        "properties" : {
+          "id" : {
+            "type" : "string"
+          },
+          "kind" : {
+            "type" : "string"
+          },
+          "problems" : {
+            "items" : {
+              "type" : "string"
+            },
+            "type" : "array"
+          },
+          "status" : {
+            "type" : "string"
+          }
+        },
+        "required" : [
+          "id",
+          "problems",
+          "status"
         ],
         "type" : "object"
       },
@@ -3248,6 +3496,150 @@
         ],
         "type" : "object"
       },
+      "TemplateComponentRequest" : {
+        "properties" : {
+          "changeComment" : {
+            "description" : "Optional comment, as on any create; recorded on the audit row.",
+            "type" : "string"
+          },
+          "jiraTaskKey" : {
+            "description" : "Optional Jira task key, as on any create; recorded on the audit row.",
+            "pattern" : "^\\s*$|^[A-Z][A-Z0-9]+-\\d+$",
+            "type" : "string"
+          },
+          "overrides" : {
+            "additionalProperties" : {
+              "description" : "Values by create-request path; only the template's overridable paths are accepted.",
+              "items" : {
+                "description" : "Values by create-request path; only the template's overridable paths are accepted.",
+                "type" : "string"
+              },
+              "type" : "array"
+            },
+            "description" : "Values by create-request path; only the template's overridable paths are accepted.",
+            "type" : "object"
+          },
+          "parameters" : {
+            "additionalProperties" : {
+              "description" : "Values by parameter name; an absent parameter takes its default.",
+              "items" : {
+                "description" : "Values by parameter name; an absent parameter takes its default.",
+                "type" : "string"
+              },
+              "type" : "array"
+            },
+            "description" : "Values by parameter name; an absent parameter takes its default.",
+            "type" : "object"
+          }
+        },
+        "required" : [
+          "overrides",
+          "parameters"
+        ],
+        "type" : "object"
+      },
+      "TemplateParameterProblem" : {
+        "properties" : {
+          "check" : {
+            "description" : "The check that failed, P1 to P9.",
+            "type" : "string"
+          },
+          "message" : {
+            "type" : "string"
+          },
+          "parameter" : {
+            "type" : "string"
+          }
+        },
+        "required" : [
+          "check",
+          "message",
+          "parameter"
+        ],
+        "type" : "object"
+      },
+      "TemplateProblem" : {
+        "properties" : {
+          "fields" : {
+            "description" : "The create-request paths the problem concerns; empty when it names none.",
+            "items" : {
+              "description" : "The create-request paths the problem concerns; empty when it names none.",
+              "type" : "string"
+            },
+            "type" : "array"
+          },
+          "message" : {
+            "type" : "string"
+          },
+          "parameters" : {
+            "description" : "The parameters to change to fix it.",
+            "items" : {
+              "description" : "The parameters to change to fix it.",
+              "type" : "string"
+            },
+            "type" : "array"
+          },
+          "templateProblem" : {
+            "description" : "True when only the template's author can fix it.",
+            "type" : "boolean"
+          }
+        },
+        "required" : [
+          "fields",
+          "message",
+          "parameters",
+          "templateProblem"
+        ],
+        "type" : "object"
+      },
+      "TemplateRunResponse" : {
+        "properties" : {
+          "component" : {
+            "$ref" : "#/components/schemas/ComponentCreateRequest"
+          },
+          "overridden" : {
+            "description" : "The create-request paths an override set; their sources are empty.",
+            "items" : {
+              "description" : "The create-request paths an override set; their sources are empty.",
+              "type" : "string"
+            },
+            "type" : "array"
+          },
+          "parameterProblems" : {
+            "items" : {
+              "$ref" : "#/components/schemas/TemplateParameterProblem"
+            },
+            "type" : "array"
+          },
+          "problems" : {
+            "items" : {
+              "$ref" : "#/components/schemas/TemplateProblem"
+            },
+            "type" : "array"
+          },
+          "sources" : {
+            "additionalProperties" : {
+              "description" : "For each set create-request path, the parameters its value came from; empty for a fixed or defaulted value.",
+              "items" : {
+                "description" : "For each set create-request path, the parameters its value came from; empty for a fixed or defaulted value.",
+                "type" : "string"
+              },
+              "type" : "array"
+            },
+            "description" : "For each set create-request path, the parameters its value came from; empty for a fixed or defaulted value.",
+            "type" : "object"
+          },
+          "valid" : {
+            "type" : "boolean"
+          }
+        },
+        "required" : [
+          "parameterProblems",
+          "problems",
+          "valid"
+        ],
+        "type" : "object"
+      },
       "User" : {
         "properties" : {
           "groups" : {
@@ -3610,6 +4002,116 @@
         },
         "tags" : [
           "auth-controller"
+        ]
+      }
+    },
+    "/rest/api/4/admin/component-profiles" : {
+      "get" : {
+        "operationId" : "componentProfiles",
+        "responses" : {
+          "200" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/AdminComponentProfilesResponse"
+                }
+              }
+            },
+            "description" : "OK"
+          },
+          "400" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description" : "Bad Request"
+          },
+          "404" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description" : "Not Found"
+          },
+          "409" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description" : "Conflict"
+          },
+          "413" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description" : "Payload Too Large"
+          },
+          "425" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description" : "Too Early"
+          },
+          "500" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description" : "Internal Server Error"
+          },
+          "501" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description" : "Not Implemented"
+          },
+          "502" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description" : "Bad Gateway"
+          },
+          "503" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description" : "Service Unavailable"
+          }
+        },
+        "tags" : [
+          "admin-controller-v-4"
         ]
       }
     },
@@ -7571,6 +8073,295 @@
         },
         "tags" : [
           "component-profile-controller-v-4"
+        ]
+      }
+    },
+    "/rest/api/4/component-templates/{id}" : {
+      "get" : {
+        "operationId" : "describe",
+        "parameters" : [
+          {
+            "in" : "path",
+            "name" : "id",
+            "required" : true,
+            "schema" : {
+              "type" : "string"
+            }
+          }
+        ],
+        "responses" : {
+          "200" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ComponentTemplateResponse"
+                }
+              }
+            },
+            "description" : "OK"
+          },
+          "400" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description" : "Bad Request"
+          },
+          "404" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description" : "Not Found"
+          },
+          "409" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description" : "Conflict"
+          },
+          "413" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description" : "Payload Too Large"
+          },
+          "425" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description" : "Too Early"
+          },
+          "500" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description" : "Internal Server Error"
+          },
+          "501" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description" : "Not Implemented"
+          },
+          "502" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description" : "Bad Gateway"
+          },
+          "503" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description" : "Service Unavailable"
+          }
+        },
+        "tags" : [
+          "component-template-controller-v-4"
+        ]
+      }
+    },
+    "/rest/api/4/component-templates/{id}/components" : {
+      "post" : {
+        "operationId" : "components",
+        "parameters" : [
+          {
+            "in" : "path",
+            "name" : "id",
+            "required" : true,
+            "schema" : {
+              "type" : "string"
+            }
+          },
+          {
+            "in" : "query",
+            "name" : "dryRun",
+            "required" : false,
+            "schema" : {
+              "default" : true,
+              "type" : "boolean"
+            }
+          }
+        ],
+        "requestBody" : {
+          "content" : {
+            "application/json" : {
+              "schema" : {
+                "$ref" : "#/components/schemas/TemplateComponentRequest"
+              }
+            }
+          },
+          "required" : true
+        },
+        "responses" : {
+          "200" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/TemplateRunResponse"
+                }
+              }
+            },
+            "description" : "A dry run (`dryRun` absent or `true`), valid or not; nothing is created."
+          },
+          "201" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ComponentDetailResponse"
+                }
+              }
+            },
+            "description" : "`dryRun=false` and every check passed: the created component."
+          },
+          "400" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description" : "A malformed Jira task key, or an override on a path the template does not list."
+          },
+          "403" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "type" : "object"
+                }
+              }
+            },
+            "description" : "The caller may not use the template, or may not override its fields."
+          },
+          "404" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description" : "The template is unknown, failed or removed."
+          },
+          "409" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description" : "Conflict"
+          },
+          "413" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description" : "Payload Too Large"
+          },
+          "422" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/TemplateRunResponse"
+                }
+              }
+            },
+            "description" : "`dryRun=false` and a check failed: the dry run's body; nothing is created."
+          },
+          "425" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description" : "Too Early"
+          },
+          "500" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description" : "Internal Server Error"
+          },
+          "501" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description" : "Not Implemented"
+          },
+          "502" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description" : "Bad Gateway"
+          },
+          "503" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description" : "Service Unavailable"
+          }
+        },
+        "tags" : [
+          "component-template-controller-v-4"
         ]
       }
     },

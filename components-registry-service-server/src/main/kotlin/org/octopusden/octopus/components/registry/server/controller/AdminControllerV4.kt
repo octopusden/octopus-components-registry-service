@@ -6,7 +6,10 @@ import io.swagger.v3.oas.annotations.responses.ApiResponse
 import io.swagger.v3.oas.annotations.responses.ApiResponses
 import org.octopusden.octopus.components.registry.server.config.AdminConfigReloader
 import org.octopusden.octopus.components.registry.server.config.ConditionalOnDatabaseEnabled
+import org.octopusden.octopus.components.registry.server.dto.v4.AdminComponentProfilesResponse
+import org.octopusden.octopus.components.registry.server.dto.v4.ComponentProfileResponse
 import org.octopusden.octopus.components.registry.server.dto.v4.ComponentProfilesReloadResponse
+import org.octopusden.octopus.components.registry.server.dto.v4.ComponentTemplateResponse
 import org.octopusden.octopus.components.registry.server.dto.v4.HistoryMigrationJobResponse
 import org.octopusden.octopus.components.registry.server.dto.v4.MigrationConflictResponse
 import org.octopusden.octopus.components.registry.server.dto.v4.MigrationJobResponse
@@ -17,16 +20,21 @@ import org.octopusden.octopus.components.registry.server.service.BatchMigrationR
 import org.octopusden.octopus.components.registry.server.service.ForceResetOutcome
 import org.octopusden.octopus.components.registry.server.service.HistoryMigrationJobService
 import org.octopusden.octopus.components.registry.server.service.ImportService
+import org.octopusden.octopus.components.registry.server.service.ListValues
 import org.octopusden.octopus.components.registry.server.service.MigrationConflictException
 import org.octopusden.octopus.components.registry.server.service.MigrationJobService
 import org.octopusden.octopus.components.registry.server.service.MigrationLifecycleGate
 import org.octopusden.octopus.components.registry.server.service.MigrationResult
 import org.octopusden.octopus.components.registry.server.service.MigrationStatus
+import org.octopusden.octopus.components.registry.server.service.ProfileAvailability
 import org.octopusden.octopus.components.registry.server.service.ValidationResult
+import org.octopusden.octopus.components.registry.server.service.impl.ComponentProfileCatalog
 import org.octopusden.octopus.components.registry.server.service.impl.ConfigValidationException
 import org.octopusden.octopus.components.registry.server.teamcity.sync.TeamcitySyncJobService
 import org.octopusden.octopus.components.registry.server.teamcity.validation.TeamcityValidationJobService
+import org.octopusden.octopus.components.registry.server.util.EntryYaml
 import org.slf4j.LoggerFactory
+import org.springframework.core.env.Environment
 import org.springframework.http.HttpStatus
 import org.springframework.http.ResponseEntity
 import org.springframework.security.access.prepost.PreAuthorize
@@ -51,6 +59,10 @@ class AdminControllerV4(
     private val teamcityValidationJobService: TeamcityValidationJobService,
     private val currentUserResolver: CurrentUserResolver,
     private val adminConfigReloader: AdminConfigReloader,
+    private val componentProfileCatalog: ComponentProfileCatalog,
+    private val profileAvailability: ProfileAvailability,
+    private val templateListValues: ListValues,
+    private val environment: Environment,
 ) {
     private val log = LoggerFactory.getLogger(AdminControllerV4::class.java)
 
@@ -117,6 +129,34 @@ class AdminControllerV4(
 
     @PostMapping("/migrate-defaults")
     fun migrateDefaults(): ResponseEntity<Map<String, Any?>> = ResponseEntity.ok(importService.migrateDefaults())
+
+    /**
+     * Every configured profile and template in use, live or failed, with its configuration as read
+     * (Decision 11). The version is the `config.client.version` property Spring Cloud Config sets.
+     */
+    @GetMapping("/component-profiles")
+    fun componentProfiles(): AdminComponentProfilesResponse {
+        val profiles = componentProfileCatalog.profiles().associateBy { it.id }
+        val templates = componentProfileCatalog.templates().associateBy { it.id }
+        val raw = componentProfileCatalog.rawEntries()
+        val caller = currentUserResolver.currentUsername()
+        return AdminComponentProfilesResponse(
+            configVersion = environment.getProperty("config.client.version"),
+            lastLoad = ComponentProfilesReloadResponse.from(componentProfileCatalog.lastLoad()),
+            entries =
+                componentProfileCatalog.entries().map { entry ->
+                    AdminComponentProfilesResponse.Entry(
+                        id = entry.id,
+                        kind = entry.kind,
+                        status = entry.status.name.lowercase(),
+                        problems = entry.problems,
+                        profile = profiles[entry.id]?.let { ComponentProfileResponse.from(it, profileAvailability.evaluate(it)) },
+                        template = templates[entry.id]?.let { ComponentTemplateResponse.from(it, templateListValues, caller) },
+                        configuration = EntryYaml.dump(entry.id, raw[entry.id].orEmpty()),
+                    )
+                },
+        )
+    }
 
     /**
      * Reload the code-as-config admin blobs (`field-config` + `component-defaults`)

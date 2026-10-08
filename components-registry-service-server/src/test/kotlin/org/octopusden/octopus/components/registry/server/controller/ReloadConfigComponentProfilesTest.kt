@@ -13,6 +13,7 @@ import org.octopusden.octopus.components.registry.server.ComponentRegistryServic
 import org.octopusden.octopus.components.registry.server.service.impl.ComponentProfileCatalog
 import org.octopusden.octopus.components.registry.server.service.impl.ConfigValidationException
 import org.octopusden.octopus.components.registry.server.support.adminJwt
+import org.octopusden.octopus.components.registry.server.support.standaloneTemplateProperties
 import org.springframework.beans.factory.annotation.Autowired
 import org.springframework.boot.test.autoconfigure.web.servlet.AutoConfigureMockMvc
 import org.springframework.boot.test.context.SpringBootTest
@@ -121,19 +122,30 @@ class ReloadConfigComponentProfilesTest {
     }
 
     @Test
-    @DisplayName("a template entry added: 200 applied, the entry listed as failed")
-    fun templateEntry() {
-        changeServiceConfig("ww-modpack.kind" to "template")
+    @DisplayName("a valid and a broken template added: 200 applied, the valid one live, the broken one failed with its problems")
+    fun templateEntries() {
+        changeServiceConfig(*standaloneTemplateProperties().toList().toTypedArray(), "broken-plugin.kind" to "template")
 
         reload()
             .andExpect(status().isOk)
             .andExpect(jsonPath("$.componentProfiles.status").value("applied"))
-            .andExpect(jsonPath("$.componentProfiles.entries[?(@.id == 'ww-modpack')].status").value("failed"))
+            .andExpect(jsonPath("$.componentProfiles.entries[?(@.id == 'client-plugin')].status").value("live"))
+            .andExpect(jsonPath("$.componentProfiles.entries[?(@.id == 'broken-plugin')].status").value("failed"))
             .andExpect(
                 jsonPath(
-                    "$.componentProfiles.entries[?(@.id == 'ww-modpack')].problems[0]",
-                ).value("ww-modpack.kind: templates are not supported yet"),
+                    "$.componentProfiles.entries[?(@.id == 'broken-plugin')].problems[0]",
+                ).value("broken-plugin.title: required"),
             )
+
+        assertEquals(listOf("client-plugin"), catalog.templates().map { it.id })
+    }
+
+    @Test
+    @DisplayName("Decision 4: a template that leaves its VCS tag to component-defaults is live after a reload")
+    fun templateUsesComponentDefaults() {
+        changeServiceConfig(*standaloneTemplateProperties().filterKeys { !it.endsWith("vcsEntries[0].tag") }.toList().toTypedArray())
+
+        reload().andExpect(jsonPath("$.componentProfiles.entries[?(@.id == 'client-plugin')].status").value("live"))
     }
 
     @Test

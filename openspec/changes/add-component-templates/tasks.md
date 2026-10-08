@@ -1,0 +1,345 @@
+## 1. Baseline
+
+- [x] 1.1 Characterization tests on what this change alters, green on the unchanged code:
+  - [x] 1.1.1 A reload with a template entry answers 200, the entry `failed` with "templates are
+        not supported yet" (becomes `live` for a valid template in section 3) — already pinned by
+        `ReloadConfigComponentProfilesTest.templateEntry`
+  - [x] 1.1.2 A create whose `name` is taken throws `IllegalArgumentException`
+        `name: a component with name '<key>' already exists` and leaves no row
+  - [x] 1.1.3 A create rolled back after `saveAndFlush` leaves no component, label dictionary row
+        or audit row (Decision 8 relies on it)
+- [x] 1.2 Re-check Decision 6's table against the Portal's `initialValues`; adjust the table if the
+      Portal changed
+  - [x] 1.2.1 The line format falls back to the minor format, as the Portal sends it; table fixed
+        (added on review)
+- [x] 1.3 Required fields by classification written into the spec and Decision 4 (added on review)
+
+## 2. Template model and parsing (Decisions 1–4)
+
+- [x] 2.1 Write failing unit tests for `TemplateParser` and `TemplateExpression`:
+  - [x] 2.1.1 The design example parses to a live template: four parameters, fourteen fields, two
+        overridable paths
+  - [x] 2.1.2 Required keys — each missing one → a problem naming it:
+    - [x] `title`, `description`, `order`, `version`, `fields`
+    - [x] `classification.external`, `classification.explicit`
+    - [x] a parameter's `label`, `type`
+  - [x] 2.1.3 Unknown keys — a problem naming the key, at each level:
+    - [x] template
+    - [x] classification; `explicit: ask` is also a problem
+    - [x] parameter
+    - [x] rule
+  - [x] 2.1.4 Parameter checks, one test each:
+    - [x] bad parameter name
+    - [x] a key that does not apply to the type
+    - [x] `multiple` on `text`, and on `crs-list`
+    - [x] `select` without options; with a repeated option
+    - [x] unknown `list`; `list: client-codes`
+    - [x] pattern that does not compile
+    - [x] `max-length` / `max-selection` not above 0
+    - [x] invalid default: not an option, not matching the pattern, too long, several values for
+          a single-value parameter
+    - [x] unused parameter
+  - [x] 2.1.5 Field checks, one test each:
+    - [x] path outside the table
+    - [x] undefined parameter
+    - [x] Person in free text
+    - [x] multi-value parameter in a non-list field
+    - [x] CRS value, Person or list item with text around `{{ NAME }}`, or with a filter
+    - [x] filter other than `lower` / `upper`
+    - [x] malformed `{{`
+    - [x] fixed build system or escrow mode not in its enum
+    - [x] fixed choice outside its values
+  - [x] 2.1.6 Whole-template checks, one test each:
+    - [x] each required field, for explicit + external and not
+    - [x] distribution: none of Maven GAV, Docker image, package → fails; `WHISKEY` → passes
+    - [x] build system from a parameter → VCS fields required
+    - [x] a required field filled by a fixed value, by a required parameter, by a component
+          default → passes
+    - [x] a required field only the Portal's fallback would fill → fails
+    - [x] no VCS needed, for each of the five build systems
+    - [x] `overridable` path not set in `fields`
+    - [x] fixed value breaking a template rule
+    - [x] `solution: true` without explicit and external
+  - [x] 2.1.7 Fixed labels, fixed people and uniqueness are not checked on load
+  - [x] 2.1.8 Several problems in one template → all reported, each naming its parameter or field
+  - [x] 2.1.9 Expressions (Jinja subset):
+    - [x] spaces inside the braces are optional
+    - [x] literal text is kept
+    - [x] `{{` without a closing match is rejected
+    - [x] a `{% … %}` tag and a `{# … #}` comment are rejected
+    - [x] an expression other than a parameter name (`{{ A ~ B }}`, `{{ 'x' }}`) is rejected
+- [x] 2.2 Implement:
+  - [x] 2.2.1 `model/ComponentTemplate.kt` — template, parameter (sealed by type), field value
+  - [x] 2.2.2 `util/TemplateFields.kt` — path → field kind table (Decision 2)
+  - [x] 2.2.3 `model/TemplateExpression.kt` and `util/TemplateExpressionParser.kt` — parse one value into literal and parameter parts
+        (rendering moves to section 5)
+  - [x] 2.2.4 `util/TemplateParser.kt` — pure; problems prefixed with the full key
+  - [x] 2.2.5 `ComponentProfileParser` hands `kind: template` to `TemplateParser`; `ProfileLoad`
+        gains `templates`
+- [x] 2.3 Confirm tests pass: `./gradlew :components-registry-service-server:test` — 1355 tests,
+      0 failures, 1 skipped (pre-existing); `TemplateExpressionTest` 15, `TemplateParserTest` 74.
+      `dbTest` for `TemplateCreateBaselineTest` 2, `ReloadConfigComponentProfilesTest` 5,
+      `ComponentProfileControllerV4Test` 9 — all green. ktlint and detekt clean.
+- [x] 2.4 Split out of `TemplateParser` to keep each file to one job (added on review):
+  - [x] 2.4.1 `util/EntryKeys.kt` — flattened keys of an entry or section, and its problem list
+  - [x] 2.4.2 `util/TemplateParameterParser.kt` — one parameter and its checks
+  - [x] 2.4.3 `util/TemplateFieldChecker.kt` — the field-kind checks
+  - [x] 2.4.4 `util/TemplateRequiredFields.kt` — the required-fields table
+  - [x] 2.4.5 `util/FieldRuleParser.kt` — rule parsing shared by profiles and templates
+- [x] 2.5 Profile tests that pinned "templates are not supported yet" now expect a broken template
+      to fail with its own problems (added on review)
+- [x] 2.6 The catalog still parses with no `component-defaults`, so a template that relies on a
+      default fails its load check until section 5 passes them in (added on review)
+
+## 3. Catalog, listing and availability (Decisions 1, 12)
+
+- [x] 3.1 Write failing tests:
+  - [x] 3.1.1 Catalog swap:
+    - [x] a usable load swaps profiles and templates together
+    - [x] a load with an invalid regular profile keeps both, including a template whose change
+          was valid
+  - [x] 3.1.2 Catalog keeps the last load's outcome and each entry's raw keys
+  - [x] 3.1.3 Reload adding a valid and a broken template → 200, `live` and `failed` (replaces
+        1.1.1's expectation)
+  - [x] 3.1.4 Startup with valid regular profiles and a broken template → starts, template absent
+  - [x] 3.1.5 Listing:
+    - [x] templates next to profiles, by `order` then id
+    - [x] kind `template`, `version`, explicit `true` / `false`, rules
+    - [x] a failed template absent
+  - [x] 3.1.6 `PermissionProfileAvailability`:
+    - [x] template usable with `CREATE_COMPONENTS`, unusable without
+    - [x] `mayOverride` follows usability
+  - [x] 3.1.7 A create naming a template id as `profile` is still 400 `profile: unknown profile`
+- [x] 3.2 Implement:
+  - [x] 3.2.1 Catalog snapshot of profiles and templates
+  - [x] 3.2.2 `ProfileAvailability.evaluate(template)` and `mayOverride`
+  - [x] 3.2.3 `ComponentProfileResponse.version` and the template mapping
+- [x] 3.3 Confirm tests pass: `test` — `ComponentProfileCatalogTest` 14, `PermissionProfileAvailabilityTest` 4,
+      `ProfileCreateCheckTest` 16; `dbTest` — `ComponentProfileControllerV4Test` 10,
+      `ProfileOnCreateTest` 17, `ReloadConfigComponentProfilesTest` 5. ktlint and detekt clean.
+- [x] 3.4 The catalog takes a `component-defaults` supplier, read on every load; tested with a
+      template whose required branch only a default fills (added on review)
+
+## 4. Parameter checks (Decision 5)
+
+- [x] 4.1 Write failing unit tests for `ParameterChecker`, with stub `ListValues` and employee
+      lookups:
+  - [x] 4.1.1 P1–P9, one failing and one passing case each
+  - [x] 4.1.2 P5 uses the template's message when set, a default message otherwise
+  - [x] 4.1.3 P6 with client codes listed as `select` options: an unlisted code fails
+  - [x] 4.1.4 P7 for each list:
+    - [x] labels against the dictionary
+    - [x] build systems and escrow modes against their enums
+  - [x] 4.1.5 Absent parameter takes its default; `current-user` resolves to the caller
+  - [x] 4.1.6 Empty optional parameter passes; a duplicate value counts once
+  - [x] 4.1.7 Employee service unavailable → P8 passes
+  - [x] 4.1.8 Several failures → all reported
+- [x] 4.2 Implement:
+  - [x] 4.2.1 `service/impl/ParameterChecker.kt`
+  - [x] 4.2.2 `service/ListValues.kt` and `service/impl/RegistryListValues.kt`: labels
+        dictionary, the two enums; `EmployeeStatus` reuses the create's `ActiveStatus`. Beans are
+        wired with the endpoint (section 6)
+- [x] 4.3 Confirm tests pass: `ParameterCheckerTest` 17, `RegistryListValuesTest` 2; ktlint and
+      detekt clean
+
+## 5. Rendering (Decision 6)
+
+- [x] 5.1 Write failing unit tests for `TemplateRenderer`:
+  - [x] 5.1.1 R1–R8, one test each, including sources per field
+  - [x] 5.1.2 The design example renders to the expected request and sources
+  - [x] 5.1.3 Same input twice → equal output
+  - [x] 5.1.4 Defaults (`ComponentDefaultsSeedTest`; applied-when-unset, copyright and VCS in
+        `TemplateRendererTest` R7):
+    - [x] each row of Decision 6's table applied only when the field is unset and the default is
+          non-blank, with no sources
+    - [x] copyright only for explicit + external
+    - [x] VCS tag and branch only when the build system needs VCS
+    - [x] minor falls back to line, line to minor; build omitted when equal to release
+    - [x] deprecated build system ignored
+    - [x] no `master` or version-format fallback
+  - [x] 5.1.5 Classification, Jira task key and comment carried; `profile` absent
+- [x] 5.2 Implement `util/TemplateRenderer.kt` and `util/ComponentDefaultsSeed.kt`
+- [x] 5.3 The catalog passes `ComponentDefaultsSeed`'s paths to `ComponentProfileParser.parse`, on
+      load and on reload, closing 2.6 (added on review)
+- [x] 5.4 Confirm tests pass: `test` — 1402 tests, 0 failures, 1 skipped (pre-existing);
+      `TemplateRendererTest` 15, `ComponentDefaultsSeedTest` 6. `dbTest` on H2 —
+      `ReloadConfigComponentProfilesTest` 6, `ComponentProfileControllerV4Test` 10,
+      `ProfileOnCreateTest` 17, `TemplateCreateBaselineTest` 2. ktlint and detekt clean.
+      `AdminControllerV4SecurityTest` needs Postgres in Docker; not run locally, left to CI
+- [x] 5.5 `v4.json` regenerated for the listing's `kind: template` and `version`, so
+      `OpenApiV4SpecTest` stays green; the `api-changelog.md` entry stays with section 10
+      (added on review)
+
+- [x] 5.6 A template rule on an unset field is checked on load against the default the renderer
+      would give it: `ComponentDefaultsSeed.applicable` shared by the renderer and
+      `TemplateParser`, so no VCS default for a build system that needs no VCS;
+      `TemplateParserTest` 75 (added on review)
+
+## 6. Describe parameters
+
+- [x] 6.1 Write failing tests for `GET /rest/api/4/component-templates/{id}`:
+  - [x] 6.1.1 Each type's settings and default
+  - [x] 6.1.2 `crs-list` current values
+  - [x] 6.1.3 `current-user` returned as the caller
+  - [x] 6.1.4 404 for a failed and for an unknown template
+  - [x] 6.1.5 403 without `ACCESS_COMPONENTS`
+- [x] 6.2 Implement `controller/ComponentTemplateControllerV4.kt` (database mode) and its DTOs
+- [x] 6.3 Confirm tests pass: `ComponentTemplateControllerV4Test` (`dbTest`, H2). The controller is
+      IO wiring, so it was written first and covered by the integration test
+
+## 7. Dry run (Decisions 7–9)
+
+- [x] 7.1 Write failing tests:
+  - [x] 7.1.1 `CreateFailureFields`:
+    - [x] one test per message prefix today's create emits, mapped to its paths
+    - [x] an unmatched message → no field
+  - [x] 7.1.2 Template rule failure attributed to its parameters; fixed field → template problem
+  - [x] 7.1.3 Through `POST …/components`, `dryRun` absent or `true`:
+    - [x] `dryRun` absent → a dry run: 200, nothing created
+    - [x] an invalid input still answers 200, `valid: false`
+    - [x] a malformed Jira task key → 400
+    - [x] parameter problems stop it
+    - [x] key taken → problem on `name` naming `CLIENT_CODE`, `PLUGIN_CODE`
+    - [x] rule and create problems both reported
+    - [x] unknown fixed label → template problem
+    - [x] inactive fixed owner → template problem
+    - [x] 404 for a failed template
+  - [x] 7.1.4 Nothing written, after a passing and after a failing dry run: no component, label,
+        audit or component-source row. A template sets no TeamCity projects, so the TeamCity
+        dictionary cannot be written (added on review)
+  - [x] 7.1.5 A 409 cross-component conflict and a 403 editability failure become problems, not
+        error responses
+- [x] 7.2 Implement:
+  - [x] 7.2.1 `util/CreateFailureFields.kt`
+  - [x] 7.2.2 `service/impl/TemplateDryRun.kt` — rollback-only `TransactionTemplate` around
+        `createComponent`
+  - [x] 7.2.3 `POST …/components` on `ComponentTemplateControllerV4` with `dryRun` (default
+        `true`), and its DTOs
+- [x] 7.3 Confirm tests pass, `dbTest` included: `CreateFailureFieldsTest` 30,
+      `TemplateProblemsTest` 9, `ComponentTemplateControllerV4Test` 27
+- [x] 7.4 `util/TemplateProblems.kt` — rule, fixed-label and create problems attributed
+      through `sources`, unit-tested apart from the transaction (added on review)
+- [x] 7.5 `config/ComponentTemplatesConfig.kt` (database mode): `ListValues` from the labels
+      dictionary, `ParameterChecker` on `EmployeeDirectoryService`, `TemplateDryRun` on today's
+      create (added on review)
+- [x] 7.6 Dry run and create require a user who may use the template (403); spec scenario added
+      (added on review)
+
+## 8. Create from a template and overrides (Decision 10)
+
+- [x] 8.1 Write failing tests through `POST /rest/api/4/component-templates/{id}/components?dryRun=false`:
+  - [x] 8.1.1 Clean input → 201; the audit row has the Jira task key and comment; the component
+        has no link to the template
+  - [x] 8.1.2 Any problem → 422 with the dry-run body, nothing created
+  - [x] 8.1.3 Malformed Jira task key → 400; blank or absent key → created
+  - [x] 8.1.4 Template removed by a reload → 404
+  - [x] 8.1.5 Overrides:
+    - [x] overridable path → created with the value
+    - [x] non-overridable path → 400 naming it
+    - [x] `mayOverride` false → 403, through a test availability rule that wraps the real one
+    - [x] invalid override → problem on that field, not a template problem (an `adminOnly`
+          Jira project key overridden by an editor)
+  - [x] 8.1.6 The same body sent without `dryRun`, then with `dryRun=false` → 200 valid, then 201
+- [x] 8.2 Implement `dryRun=false` on the same endpoint, and the committing path in
+      `TemplateDryRun`
+- [x] 8.3 Confirm tests pass: in `ComponentTemplateControllerV4Test`
+
+## 9. Administrator read (Decision 11)
+
+- [x] 9.1 Write failing tests for `GET /rest/api/4/admin/component-profiles`:
+  - [x] 9.1.1 Live and failed entries, with definition, problems and configuration text
+  - [x] 9.1.2 Configuration version present, and absent
+  - [x] 9.1.3 Last reload failed → said so, with the problems
+  - [x] 9.1.4 403 without `IMPORT_DATA`
+- [x] 9.2 Implement on `AdminControllerV4`, with the YAML dump of an entry's raw keys
+  - [x] 9.2.1 `util/EntryYaml.kt` — pure; `EntryYamlTest` 4, written first: the design example
+        round-trips (added on review)
+- [x] 9.3 Confirm tests pass: `AdminComponentProfilesTest` 4. `AdminControllerV4SecurityTest`
+      needs Postgres in Docker; not run locally, left to CI
+
+## 10. Docs and contract
+
+- [x] 10.1 Regenerate `v4.json` (`generateOpenApiDocs`); `OpenApiV4SpecTest` green
+- [x] 10.2 `docs/registry/api-changelog.md`:
+  - [x] the three new endpoints
+  - [x] `kind: template` and `version` in the listing
+  - [x] `live` templates in the reload response
+- [x] 10.3 `docs/registry/functional-spec.md` — templates, parameters, dry run, create
+- [x] 10.4 ADR-016 — templates as entries of the `component-profiles` subtree; field keys are
+      create-request paths
+- [x] 10.5 Tech-debt records, next free `TD-NNN`:
+  - [x] 10.5.1 TD-027: the dry run reports one failure of today's create rules at a time
+  - [x] 10.5.2 TD-028: no client-code list in the registry:
+    - [x] the limit: a template lists client codes by hand as `select` options, so a new client
+          needs a template change
+    - [x] removal: read the list from the service that owns client codes, as a `client-codes`
+          `crs-list`
+- [x] 10.5a TD-025 (Portal-only create rules): add the required Jira task key, which the Portal
+      enforces and the registry does not
+- [x] 10.6 Listing DTO schema text: `kind` now includes `template`
+
+## 11. Finalization
+
+- [x] 11.1 `test qualityStatic` across all modules green; coverage floors unchanged — stacked on
+      the profiles head `6568eb51`: server `test` 1451 tests, 0 failures, 1 skipped (pre-existing);
+      `dbTest` for the template and profile suites 66, 0 failures; ktlint and detekt clean; no build
+      file touched, so the floors are unchanged. Not green locally, and not caused by this change:
+  - `:components-registry-automation:test` deploys to OKD, so it is left to CI
+  - `:components-registry-automation:compileTestKotlin` cannot resolve `kotlin-test:1.9.25`; it
+    fails the same way on the profiles branch
+  - `AdminControllerV4SecurityTest` needs Postgres in Docker, so it is left to CI
+- [x] 11.2 Out-of-scope boundaries hold, checked by diff:
+  - [x] no D&S rule beyond the availability seam
+  - [x] no change to `createComponent`'s checks
+  - [x] no change to the update, import or field-override paths
+  - [x] no migration
+- [x] 11.3 Risks in `design.md` still stated:
+  - [x] the one-failure and client-code risks have their tech-debt records
+  - [x] the optional Jira task key is in TD-025
+
+## 12. Alignment review
+
+- [x] 12.1 Fixes found by the doc ↔ code ↔ FR review (added on review):
+  - [x] 12.1.1 `OpenApiV4Config` covers `/rest/api/4/component-templates/**`; `v4.json` regenerated
+        with both template endpoints, `dryRun` default `true`, and the 200 / 201 / 422 bodies;
+        `OpenApiV4SpecTest` requires the prefix
+  - [x] 12.1.2 A required field set from an optional parameter counts as produced when
+        `component-defaults` fills it, as rendering does (`TemplateParserTest`)
+  - [x] 12.1.3 A unique-index violation from a concurrent create is a problem on `name`, not a 409
+        error response (`TemplateDryRunTest`)
+  - [x] 12.1.4 An overridden path has no source parameters; the dry-run response lists
+        `overridden` (`TemplateRendererTest`, `ComponentTemplateControllerV4Test`)
+  - [x] 12.1.5 A template id is checked like a profile id (`TemplateParserTest`)
+  - [x] 12.1.6 Tests strengthened: describe returns each type's settings and default; a blank
+        Jira task key creates; refused overrides create nothing; a viewer is refused on create too;
+        a no-VCS build system leaves the template live
+- [x] 12.2 Confirm tests pass: server `test` 1454 tests, 0 failures, 1 skipped (pre-existing);
+      `dbTest` for `ComponentTemplateControllerV4Test`, `AdminComponentProfilesTest`,
+      `ReloadConfigComponentProfilesTest`, `ComponentProfileControllerV4Test`,
+      `TemplateCreateBaselineTest` 50, 0 failures; ktlint and detekt clean
+- [x] 12.3 Behaviour written into the spec on review (added on review):
+  - [x] 12.3.1 A repeated value counts once for any parameter (`ParameterCheckerTest`)
+  - [x] 12.3.2 An empty or blank value takes the default, as an absent one does
+        (`ParameterCheckerTest`)
+  - [x] 12.3.3 The order of the endpoint's 400 / 404 / 403 checks (`ComponentTemplateControllerV4Test`)
+  - [x] 12.3.4 A `labels` parameter's default is not checked on load; P7 checks it when used
+- [x] 12.4 Confirm tests pass: server `test` 1456, 0 failures, 1 skipped (pre-existing);
+      `ComponentTemplateControllerV4Test` 28; ktlint and detekt clean
+
+## 13. Code placement (Decision 14)
+
+- [x] 13.1 The classes left the `template/` package for the server's layers, as the profiles did
+      (added on review):
+  - [x] 13.1.1 `model/`: `ComponentTemplate` with the field kind as `TemplateFieldKind`, and
+        `TemplateExpression` apart from its parser, `util/TemplateExpressionParser`, so `model/`
+        imports nothing outside itself
+  - [x] 13.1.2 `util/`: parser, field checks, renderer, defaults narrowing, problems, failure
+        attribution; `FieldRuleParser` and `EntryYaml` too. `util/` imports no `service/` or
+        `config/`: the `component-defaults` mapping is `config/TemplateDefaults.templateDefaults()`
+  - [x] 13.1.3 `service/`: the `ListValues` and `EmployeeStatus` ports; `service/impl/`:
+        `ParameterChecker`, `RegistryListValues`, `TemplateDryRun`
+  - [x] 13.1.4 Tests moved with their classes; fixtures to `support/ComponentTemplateFixtures.kt`
+- [x] 13.2 Confirm tests pass: server `test` 1457 tests, 0 failures, 1 skipped (pre-existing);
+      `dbTest` for the template and profile suites 68, 0 failures; ktlint and detekt clean.
+      `pitest`, now covering the template classes in `util/`: 76% mutation score (1048 of 1386)
+      and 87% line coverage, above both floors; the template classes 528 of 612 mutants killed
