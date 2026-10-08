@@ -190,6 +190,22 @@ class ComponentCodeSearchServiceTest {
     }
 
     @Test
+    @DisplayName("SYS-100: the regex budget is checked while consuming empty matches that read no input")
+    fun `SYS-100 regex budget is enforced across empty matches`() {
+        // `(?=)` matches the empty string at every position without reading a character, so
+        // DeadlineCharSequence never charges it. One long line keeps the per-line check out of
+        // play: only the check while consuming matches can stop it (the clock jumps 1 s per read).
+        whenever(componentManagementService.renderAllComponentsAsCode())
+            .thenReturn(listOf(RenderedComponentCode("empty", "a".repeat(4_000), id = UUID.randomUUID())))
+        val tickingService =
+            ComponentCodeSearchService(componentManagementService, componentRepository, auditLogRepository, TickingClock())
+
+        assertThatThrownBy { tickingService.search("(?=)", regex = true) }
+            .isInstanceOf(IllegalArgumentException::class.java)
+            .hasMessageContaining("too expensive")
+    }
+
+    @Test
     @DisplayName("SYS-100: a regex whose recursion exhausts the stack is rejected as invalid input, not a 500")
     fun `SYS-100 regex stack exhaustion is rejected`() {
         // java.util.regex recurses once per repetition of an alternation group, so `(a|b)*z` over a

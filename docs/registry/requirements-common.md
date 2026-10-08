@@ -3357,8 +3357,9 @@ field the view shows without per-field query code.
 - Errors (`400`): `q` too short / too long, `limit` or `maxMatchesPerComponent` out of range, an
   invalid regex, a regex whose evaluation exceeds a 2 s time budget for the request, or a regex
   whose recursion exhausts the stack on a long line. The budget is one per request: it is checked
-  before every line and, within a single match, every few thousand character reads, so neither many
-  cheap lines nor one catastrophically backtracking match can outrun it.
+  before every line, every few dozen matches within a line and, within a single match, every few
+  thousand character reads, so neither many cheap lines, nor a run of empty matches that read no
+  input, nor one catastrophically backtracking match can outrun it.
 - The RMS section that `/as-code` appends is **not** searched: it is RMS data, not the
   component's configuration, and it changes on the RMS sweep.
 - **Index.** The rendered lines are held in memory per pod and rebuilt lazily. Each search first
@@ -3390,7 +3391,7 @@ field the view shows without per-field query code.
    and is rebuilt once it is older than 5 minutes.
 8. Too-short `q`, out-of-range `limit` and an invalid regex return `400`; a catastrophically
    backtracking regex fails with `400` instead of hanging; the time budget also stops a search made
-   of many cheap per-line matches; a regex that exhausts the stack fails with `400`, not `500`.
+   of many cheap per-line matches and a line of empty matches that read no input; a regex that exhausts the stack fails with `400`, not `500`.
 9. `crsctl search` maps its options to the query params, prints grep-shaped lines, emits the
    `results` array with `-o json`, and warns on STDERR when truncated.
 10. Each match carries `ranges` pointing at the matched text within `text` (indentation
@@ -3410,11 +3411,13 @@ field the view shows without per-field query code.
 `` `SYS-100 invalid input is rejected` `` (8),
 `` `SYS-100 catastrophically backtracking regex is aborted` `` (8),
 `` `SYS-100 regex budget is enforced between lines` `` (8),
+`` `SYS-100 regex budget is enforced across empty matches` `` (8),
 `` `SYS-100 regex stack exhaustion is rejected` `` (8),
 `` `SYS-100 indexLines keeps blank lines so positions equal line numbers` `` (1),
 `` `SYS-100 substring match reports ranges relative to the trimmed text` `` (10),
 `` `SYS-100 regex match reports the matched spans` `` (10),
 `` `SYS-100 empty regex matches yield no ranges` `` (10),
+`` `SYS-100 empty regex matches do not hide a later real span` `` (10),
 `` `SYS-100 substringSpans finds every occurrence` `` (10);
 `ComponentAsCodeSearchIntegrationTest` (H2 `ft-db`) —
 `` `SYS-100 a value from the as-code view is found at its as-code line` `` (1, 10),
@@ -3453,8 +3456,10 @@ only components where the user holds both roles. The Portal's "Mine" filter need
 3. `involvesRoles` narrows to the chosen roles, OR across them.
 4. `involves` combines with `archived` via AND.
 5. An unknown `involvesRoles` value returns `400`.
+6. Several `involves` users are ORed; paging through the result returns each component once and
+   `totalElements` counts each component once.
 
 **Test method:** `ListComponentsInvolvesFilterTest` (H2 `ft-db`) —
 `` `SYS-101 involves matches any role` `` (1), `` `SYS-101 no duplicate rows` `` (2),
 `` `SYS-101 involvesRoles narrows` `` (3), `` `SYS-101 combines with archived` `` (4),
-`` `SYS-101 unknown role is 400` `` (5); `CommandsTest` — `` `SYS-101 components list maps --involves and --involves-role` ``.
+`` `SYS-101 unknown role is 400` `` (5), `` `SYS-101 several users paginate without duplicates` `` (6); `CommandsTest` — `` `SYS-101 components list maps --involves and --involves-role` ``.

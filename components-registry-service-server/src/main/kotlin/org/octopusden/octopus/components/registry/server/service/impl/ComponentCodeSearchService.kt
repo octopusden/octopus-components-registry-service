@@ -109,14 +109,17 @@ class ComponentCodeSearchService(
             try {
                 // A line whose only matches are empty (e.g. `x*`) still matches; it just has nothing to mark.
                 // Empty matches are dropped BEFORE the cap, so they can't use up the allowance and hide a
-                // real span later in the line. Materialized inside the try: findAll is lazy, and the
-                // overflow happens while iterating.
+                // real span later in the line, and the budget is charged per match: an empty match may read no
+                // input, so DeadlineCharSequence alone would never stop a pattern like `(?=)` repeated.
+                // Materialized inside the try: findAll is lazy, and the overflow happens while iterating.
                 var matched = false
                 val spans =
                     pattern
                         .findAll(DeadlineCharSequence(line, budget))
-                        .onEach { matched = true }
-                        .map { it.range }
+                        .onEach {
+                            matched = true
+                            budget.onMatch()
+                        }.map { it.range }
                         .filterNot { it.isEmpty() }
                         .take(MAX_SPANS_PER_LINE)
                         .toList()
@@ -246,14 +249,23 @@ class ComponentCodeSearchService(
     ) {
         private var reads = 0L
 
+        private var matches = 0L
+
         fun check() = require(!clock.instant().isAfter(deadline)) { TOO_EXPENSIVE_MESSAGE }
 
         fun onRead() {
             if (++reads % CHECK_INTERVAL == 0L) check()
         }
 
+        fun onMatch() {
+            if (++matches % MATCH_CHECK_INTERVAL == 0L) check()
+        }
+
         private companion object {
             const val CHECK_INTERVAL = 10_000L
+
+            // Far smaller than the read interval: a single match can be expensive without reading input.
+            const val MATCH_CHECK_INTERVAL = 64L
         }
     }
 

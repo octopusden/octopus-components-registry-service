@@ -58,6 +58,7 @@ class ListComponentsInvolvesFilterTest {
     }
 
     private lateinit var me: String
+    private lateinit var other: String
     private lateinit var owned: String
     private lateinit var asRm: String
     private lateinit var asSc: String
@@ -105,7 +106,7 @@ class ListComponentsInvolvesFilterTest {
     @BeforeEach
     fun seed() {
         me = uniqueName("sys101-me")
-        val other = uniqueName("sys101-other")
+        other = uniqueName("sys101-other")
         owned = uniqueName("sys101-owned")
         asRm = uniqueName("sys101-as-rm")
         asSc = uniqueName("sys101-as-sc")
@@ -135,6 +136,34 @@ class ListComponentsInvolvesFilterTest {
                 .response.contentAsString
         val names = objectMapper.readTree(body)["content"].map { it["name"].asText() }
         assertEquals(1, names.count { it == allThree })
+    }
+
+    @Test
+    @DisplayName("SYS-101 several users: OR across users, each component once across pages, exact total")
+    fun `SYS-101 several users paginate without duplicates`() {
+        // `me` and `other` overlap on asRm (both RMs) and between them cover all five seeded
+        // components; both names are unique to this test, so no other data matches.
+        val pages =
+            (0..2).map { page ->
+                val body =
+                    mvc
+                        .perform(
+                            get("/rest/api/4/components")
+                                .with(viewerJwt())
+                                .param("involves", "$me,$other")
+                                .param("sort", "componentKey,asc")
+                                .param("size", "2")
+                                .param("page", page.toString()),
+                        ).andExpect(status().isOk)
+                        .andReturn()
+                        .response.contentAsString
+                objectMapper.readTree(body)
+            }
+        val names = pages.flatMap { page -> page["content"].map { it["name"].asText() } }
+
+        pages.forEach { assertEquals(5L, it["totalElements"].asLong()) }
+        assertEquals(5, names.size)
+        assertEquals(setOf(owned, asRm, asSc, allThree, unrelated), names.toSet())
     }
 
     @Test
