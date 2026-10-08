@@ -37,7 +37,10 @@ refresh it with `./gradlew :components-registry-service-server:generateOpenApiDo
     default `current-user` comes back as the caller. `404` for a failed or unknown template.
   - **`POST /rest/api/4/component-templates/{id}/components` added** (`ACCESS_COMPONENTS`, and a
     template the caller may use: `CREATE_COMPONENTS`; database mode). Body: `parameters` and
-    `overrides` (maps to lists of strings), `jiraTaskKey` and `changeComment` as on any create.
+    `overrides` (maps to lists of strings), `jiraTaskKey` and `changeComment` as on any create. A
+    parameter left out, empty or blank takes its default; a repeated value counts once.
+    - When several request checks fail, the first answers: `jiraTaskKey` `400`, template `404`,
+      use `403`, override `403`, override path `400`.
     - `dryRun` absent or `true` → `200` with `valid`, `parameterProblems` (`parameter`, `check`
       `P1`–`P9`, `message`), the rendered `component`, `sources` (path → parameters), `overridden`
       (the paths an override set) and `problems`

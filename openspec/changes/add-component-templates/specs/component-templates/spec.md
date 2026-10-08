@@ -161,6 +161,7 @@ Required fields, by classification:
 Not checked on load, because they depend on data that changes at runtime:
 
 - Fixed labels; the dry run checks them against the labels dictionary.
+- A `labels` parameter's default; P7 checks it at the dry run, when the default is used.
 - Fixed people; the dry run's create step checks them, as on any create.
 - Uniqueness, such as a fixed name already taken; the dry run's create step checks it.
 
@@ -259,9 +260,10 @@ be reported against its parameter, with a message a creator can act on.
 
 How values are taken:
 
-- An absent parameter SHALL take its default.
-- An empty optional parameter SHALL pass and add nothing.
-- A value given twice for a multi-value parameter SHALL count once.
+- Blank values SHALL be dropped, and a value given twice SHALL count once, for any parameter: a
+  single-value parameter given the same value twice passes P3.
+- A parameter absent, empty, or given only blank values SHALL take its default.
+- An empty optional parameter without a default SHALL pass and add nothing.
 - When the employee service cannot be reached, P8 SHALL pass, as on create.
 
 #### Scenario: Pattern with the template's message
@@ -346,6 +348,21 @@ Jira task key and a comment, and a `dryRun` query parameter:
 - A malformed Jira task key SHALL be rejected with 400 on both, so a dry run finds it before the
   create.
 - A failed, removed or unknown template SHALL answer 404 on both.
+- When several of these fail, the first in this order SHALL answer:
+
+  | Order | Check | Status |
+  |---|---|---|
+  | 1 | Jira task key pattern | 400 |
+  | 2 | Template live | 404 |
+  | 3 | User may use the template | 403 |
+  | 4 | User may override, when the request has overrides | 403 |
+  | 5 | Every override path is overridable | 400 |
+
+  Only then do the dry-run steps run.
+
+#### Scenario: Order of the checks
+- **WHEN** a request with a malformed Jira task key names an unknown template
+- **THEN** the response is 400
 
 #### Scenario: No dryRun means a dry run
 - **WHEN** a request without `dryRun` passes every check

@@ -219,8 +219,8 @@ A dry run with `CLIENT_CODE=ACME`, `PLUGIN_CODE=CORE`, `PLUGIN_NAME=Core API`, o
   uses, with the same `ActiveStatus`:
   - inactive or unknown fails;
   - unavailable or disabled passes, as on create.
-- A value given twice for a multi-value parameter counts once.
-- An absent parameter takes its default; `current-user` is the caller's login from
+- Blank values are dropped and a value given twice counts once, for any parameter.
+- A parameter absent, empty or only blank takes its default; `current-user` is the caller's login from
   `CurrentUserResolver`.
 
 ### 6. Rendering is pure and records sources

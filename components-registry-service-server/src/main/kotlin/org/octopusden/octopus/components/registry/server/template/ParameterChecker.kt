@@ -42,9 +42,10 @@ data class ParameterValues(
 
 /**
  * Checks submitted values against a template's parameters with every check P1–P9 (Decision 5)
- * and reports every failure. An absent parameter takes its default, [TemplateParameter.CURRENT_USER]
- * being the caller; a parameter given, even empty, does not. An empty optional parameter passes.
- * When the employee service cannot answer, P8 passes, as on create.
+ * and reports every failure. Blank values are dropped and a repeated value counts once, for any
+ * parameter. A parameter absent or left empty takes its default, [TemplateParameter.CURRENT_USER]
+ * being the caller; an empty optional parameter without a default passes and adds nothing. When
+ * the employee service cannot answer, P8 passes, as on create.
  */
 class ParameterChecker(
     private val lists: ListValues,
@@ -58,8 +59,8 @@ class ParameterChecker(
         val problems = mutableListOf<ParameterProblem>()
         val values =
             template.parameters.associate { parameter ->
-                val given = submitted[parameter.name]?.filter { it.isNotBlank() }?.distinct()
-                val value = given ?: defaultOf(parameter, caller)
+                val given = submitted[parameter.name].orEmpty().filter { it.isNotBlank() }.distinct()
+                val value = given.ifEmpty { defaultOf(parameter, caller) }
                 problems += Checks(parameter, value).run()
                 parameter.name to value
             }

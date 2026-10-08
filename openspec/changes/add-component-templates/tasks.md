@@ -317,3 +317,11 @@
       `dbTest` for `ComponentTemplateControllerV4Test`, `AdminComponentProfilesTest`,
       `ReloadConfigComponentProfilesTest`, `ComponentProfileControllerV4Test`,
       `TemplateCreateBaselineTest` 50, 0 failures; ktlint and detekt clean
+- [x] 12.3 Behaviour written into the spec on review (added on review):
+  - [x] 12.3.1 A repeated value counts once for any parameter (`ParameterCheckerTest`)
+  - [x] 12.3.2 An empty or blank value takes the default, as an absent one does
+        (`ParameterCheckerTest`)
+  - [x] 12.3.3 The order of the endpoint's 400 / 404 / 403 checks (`ComponentTemplateControllerV4Test`)
+  - [x] 12.3.4 A `labels` parameter's default is not checked on load; P7 checks it when used
+- [x] 12.4 Confirm tests pass: server `test` 1456, 0 failures, 1 skipped (pre-existing);
+      `ComponentTemplateControllerV4Test` 28; ktlint and detekt clean
