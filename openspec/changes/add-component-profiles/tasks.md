@@ -82,8 +82,8 @@
         (no separate snapshot type), load in the initializer, `reload()` returning the outcome
   - [x] 3.2.1a `config/ComponentProfilesConfig.kt` — source and catalog as beans in every mode,
         not `@ConfigurationProperties` (added on review)
-  - [x] 3.2.2 `AdminControllerV4.reloadConfig` — `refresh()`, then `catalog.reload()` in a
-        `finally`; add `componentProfiles`; 422 on a failed load (Decision 4). Response part is
+  - [x] 3.2.2 `AdminControllerV4.reloadConfig` — `refresh()`, then `catalog.reload()` whatever the
+        refresh's outcome (now through `config/AdminConfigReloader`); add `componentProfiles`; 422 on a failed load (Decision 4). Response part is
         `dto/v4/ComponentProfilesReloadResponse`
 - [x] 3.3 Add a minimal valid profile set to every configuration that starts the server: test,
       integration-test, smoke, `-test-db*`, `ft-db`, `no-db`, dev profiles and the client
@@ -119,7 +119,8 @@
   - [x] 4.1.4 After an applied reload that changes a pattern, the listing and a create with that
         profile both use the new pattern. Listing half here; the create half is 5.1.10, once
         create checks the profile
-- [x] 4.2 Implement `service/impl/ProfileAvailability.kt`, response DTOs and
+- [x] 4.2 Implement `service/ProfileAvailability.kt` (interface) and
+      `service/impl/PermissionProfileAvailability.kt`, response DTOs and
       `controller/ComponentProfileControllerV4.kt`. Response: `{ profiles: [...] }`
       (`dto/v4/ComponentProfileResponse.kt`), each with `usable` and `unusableReason`
   - [x] 4.2.1 `OpenApiV4Config` matches `/rest/api/4/component-profiles` and `v4.json` is
@@ -242,3 +243,10 @@
       `required`), a removed Kotlin null-check intrinsic, and the inlined `none {}` skipping its
       empty-collection fast path. Added `ComponentProfileParserTest.entriesById`: entry order by id
       was unpinned (dropping the sort failed no test; seen red)
+- [x] 8.7 Review of the layer move (added on review):
+  - [x] 8.7.1 `model/` imported `util/` (`ComponentProfileParser.TEMPLATE_KIND` in `ProfileLoad`, a
+        KDoc link in `ComponentProfile`) while `util/` imports `model/` — a new package cycle against
+        TD-016. The kinds are now `ComponentProfile.REGULAR_KIND` / `TEMPLATE_KIND`; `model/` imports
+        nothing from the server, and the listing DTO uses the constant instead of a literal
+  - [x] 8.7.2 `ProfileAvailability` is an interface, so it moved to `service/` beside the other
+        service interfaces; `PermissionProfileAvailability` stays in `service/impl/`

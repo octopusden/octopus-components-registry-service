@@ -1,6 +1,7 @@
 package org.octopusden.octopus.components.registry.server.service.impl
 
 import org.octopusden.octopus.components.registry.server.model.ComponentProfile
+import org.octopusden.octopus.components.registry.server.service.ProfileAvailability
 import org.springframework.http.HttpStatus
 import org.springframework.web.server.ResponseStatusException
 

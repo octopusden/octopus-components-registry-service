@@ -2,7 +2,7 @@ package org.octopusden.octopus.components.registry.server.dto.v4
 
 import io.swagger.v3.oas.annotations.media.Schema
 import org.octopusden.octopus.components.registry.server.model.ComponentProfile
-import org.octopusden.octopus.components.registry.server.service.impl.ProfileAvailability
+import org.octopusden.octopus.components.registry.server.service.ProfileAvailability
 
 /** `GET /rest/api/4/component-profiles`: the live profiles in order, for the current user. */
 data class ComponentProfilesResponse(
@@ -47,7 +47,7 @@ data class ComponentProfileResponse(
             availability: ProfileAvailability.Availability,
         ) = ComponentProfileResponse(
             id = profile.id,
-            kind = "regular",
+            kind = ComponentProfile.REGULAR_KIND,
             title = profile.title,
             description = profile.description,
             classification =

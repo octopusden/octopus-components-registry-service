@@ -153,9 +153,9 @@ Creates against it:
 - No refresh listener: the outcome belongs to one request, so passing it through shared state
   would let two concurrent reloads read each other's result. The admin endpoint is the only
   refresh path (`/actuator/refresh` is not exposed).
-- `catalog.reload()` runs in a `finally`, so the profiles are reloaded even when
-  `ConfigRefreshListener` throws `ConfigValidationException` for `field-config`; that 422 then
-  also carries `componentProfiles`. Any other refresh failure — a `field-config` value the rebinder
+- `catalog.reload()` runs whatever the refresh's outcome (the refresh is wrapped in `runCatching`),
+  so the profiles are reloaded even when `ConfigRefreshListener` throws
+  `ConfigValidationException` for `field-config`; that 422 then also carries `componentProfiles`. Any other refresh failure — a `field-config` value the rebinder
   cannot bind, say — answers 500 `config-refresh` with the message and `componentProfiles`, so the
   administrator sees whether the profiles changed. (added on review)
 - A failed profile load answers 422 with `error: component-profiles` and the same body, matching
@@ -225,8 +225,11 @@ No feature package; each class sits in the layer the server already uses for its
   rule regex and `order`, and the API shape (`dto/v4/ComponentProfileResponse`,
   `ComponentProfilesReloadResponse`) is mapped from them so it can change independently.
 - `util/` — `ComponentProfileParser`, `CreateRequestPaths`: pure functions, no Spring. Inside the
-  PIT mutation scope.
-- `service/impl/` — `ComponentProfileCatalog`, `ProfileAvailability`, `ProfileCreateCheck`,
+  PIT mutation scope. They depend on `model/`, never the reverse: the entry kinds (`regular`,
+  `template`) are `ComponentProfile` constants, so the move adds no `model` ↔ `util` package cycle
+  (TD-016).
+- `service/` — `ProfileAvailability`, the interface, beside the server's other service interfaces.
+- `service/impl/` — `ComponentProfileCatalog`, `PermissionProfileAvailability`, `ProfileCreateCheck`,
   `CreatedComponent`: beside the other create checks (`PersonFieldValidator`,
   `DistributionCoordinateGuard`).
 - `config/` — `ComponentProfilesSource` (reads the Spring `Environment`), `ComponentProfilesConfig`

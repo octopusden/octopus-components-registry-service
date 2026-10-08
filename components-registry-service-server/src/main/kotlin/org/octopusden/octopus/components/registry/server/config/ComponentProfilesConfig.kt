@@ -1,9 +1,9 @@
 package org.octopusden.octopus.components.registry.server.config
 
 import org.octopusden.octopus.components.registry.server.security.PermissionEvaluator
+import org.octopusden.octopus.components.registry.server.service.ProfileAvailability
 import org.octopusden.octopus.components.registry.server.service.impl.ComponentProfileCatalog
 import org.octopusden.octopus.components.registry.server.service.impl.PermissionProfileAvailability
-import org.octopusden.octopus.components.registry.server.service.impl.ProfileAvailability
 import org.octopusden.octopus.components.registry.server.service.impl.ProfileCreateCheck
 import org.springframework.context.annotation.Bean
 import org.springframework.context.annotation.Configuration

@@ -1,7 +1,5 @@
 package org.octopusden.octopus.components.registry.server.model
 
-import org.octopusden.octopus.components.registry.server.util.ComponentProfileParser
-
 /**
  * The outcome of one load. [profiles] are the live profiles sorted by order, then id; [problems]
  * are configuration-level. The load is [usable] when it has no configuration-level problem and
@@ -13,7 +11,7 @@ data class ProfileLoad(
     val problems: List<String>,
 ) {
     val usable: Boolean
-        get() = problems.isEmpty() && entries.none { it.status == Entry.Status.FAILED && it.kind != ComponentProfileParser.TEMPLATE_KIND }
+        get() = problems.isEmpty() && entries.none { it.status == Entry.Status.FAILED && it.kind != ComponentProfile.TEMPLATE_KIND }
 
     /** One configured entry as loaded: its [kind] as written (null when absent) and every problem found. */
     data class Entry(

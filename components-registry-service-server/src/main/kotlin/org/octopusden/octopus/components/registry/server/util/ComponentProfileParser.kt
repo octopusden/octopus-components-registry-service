@@ -21,8 +21,6 @@ object ComponentProfileParser {
     private val REQUIRED_KEYS = listOf("kind", "title", "description", "order", EXTERNAL, EXPLICIT)
     private val PROFILE_KEYS = REQUIRED_KEYS.toSet() + SOLUTION
     private const val RULES = "rules."
-    const val REGULAR_KIND = "regular"
-    const val TEMPLATE_KIND = "template"
 
     fun parse(properties: Map<String, String>): ProfileLoad {
         val parsed =
@@ -30,7 +28,13 @@ object ComponentProfileParser {
                 .groupBy({ it.key.substringBefore('.') }, { it.key.substringAfter('.', "") to it.value })
                 .map { (id, keyValues) -> EntryParser(id, keyValues.toMap()).parse() }
         val problems =
-            if (parsed.none { it.first.kind == REGULAR_KIND }) listOf("at least one regular profile is required") else emptyList()
+            if (parsed.none { it.first.kind == ComponentProfile.REGULAR_KIND }) {
+                listOf(
+                    "at least one regular profile is required",
+                )
+            } else {
+                emptyList()
+            }
         return ProfileLoad(
             profiles = parsed.mapNotNull { it.second }.sortedWith(compareBy({ it.order }, { it.id })),
             entries = parsed.map { it.first }.sortedBy { it.id },
@@ -46,7 +50,7 @@ object ComponentProfileParser {
 
         fun parse(): Pair<ProfileLoad.Entry, ComponentProfile?> {
             val kind = values["kind"]
-            if (kind == TEMPLATE_KIND) {
+            if (kind == ComponentProfile.TEMPLATE_KIND) {
                 return ProfileLoad.Entry(id, kind, ProfileLoad.Entry.Status.FAILED, listOf("$id.kind: templates are not supported yet")) to
                     null
             }
@@ -65,7 +69,7 @@ object ComponentProfileParser {
                 .filter { it !in PROFILE_KEYS && !it.startsWith(RULES) }
                 .forEach { problems += if (it.isEmpty()) "$id: must hold profile keys, not a value" else "$id.$it: unknown key" }
             REQUIRED_KEYS.filter { it !in values }.forEach { problems += "$id.$it: required" }
-            if (kind != null && kind != REGULAR_KIND) problems += "$id.kind: '$kind' is not one of regular, template"
+            if (kind != null && kind != ComponentProfile.REGULAR_KIND) problems += "$id.kind: '$kind' is not one of regular, template"
         }
 
         private fun readProfile(): ComponentProfile? {
