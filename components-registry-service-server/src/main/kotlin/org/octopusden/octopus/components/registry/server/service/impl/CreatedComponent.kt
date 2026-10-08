@@ -1,7 +1,8 @@
-package org.octopusden.octopus.components.registry.server.profile
+package org.octopusden.octopus.components.registry.server.service.impl
 
 import org.octopusden.octopus.components.registry.server.entity.ComponentConfigurationEntity
 import org.octopusden.octopus.components.registry.server.entity.ComponentEntity
+import org.octopusden.octopus.components.registry.server.util.CreateRequestPaths
 
 /**
  * A component as a create will store it: trimmed, hidden fields dropped, blanks cleared. The

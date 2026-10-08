@@ -1,5 +1,6 @@
-package org.octopusden.octopus.components.registry.server.profile
+package org.octopusden.octopus.components.registry.server.config
 
+import org.octopusden.octopus.components.registry.server.util.ComponentProfileParser
 import org.springframework.core.env.ConfigurableEnvironment
 import org.springframework.core.env.EnumerablePropertySource
 

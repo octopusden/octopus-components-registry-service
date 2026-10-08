@@ -42,7 +42,7 @@ component's key and solution flag can disagree.
 
 ## References
 
-- `profile/ProfileCreateCheck.kt`, `profile/CreatedComponent.kt`
+- `service/impl/ProfileCreateCheck.kt`, `service/impl/CreatedComponent.kt`
 - `SolutionKeyWithoutProfileTest` — pins today's behavior for creates without a profile, renames
   and flag changes
 - `openspec/changes/add-component-profiles/proposal.md` (Out of scope) and `design.md` (Risks)

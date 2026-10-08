@@ -4,9 +4,9 @@ import org.assertj.core.api.Assertions.assertThat
 import org.junit.jupiter.api.DisplayName
 import org.junit.jupiter.api.Test
 import org.mockito.Mockito.mock
-import org.octopusden.octopus.components.registry.server.profile.ComponentProfileCatalog
-import org.octopusden.octopus.components.registry.server.profile.ComponentProfilesException
 import org.octopusden.octopus.components.registry.server.security.PermissionEvaluator
+import org.octopusden.octopus.components.registry.server.service.impl.ComponentProfileCatalog
+import org.octopusden.octopus.components.registry.server.service.impl.ComponentProfilesException
 import org.springframework.boot.test.context.runner.ApplicationContextRunner
 
 class ComponentProfilesConfigTest {

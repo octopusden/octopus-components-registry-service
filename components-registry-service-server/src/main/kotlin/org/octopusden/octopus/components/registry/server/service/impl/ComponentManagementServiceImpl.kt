@@ -71,8 +71,6 @@ import org.octopusden.octopus.components.registry.server.mapper.numericVersionCo
 import org.octopusden.octopus.components.registry.server.mapper.toDetailResponse
 import org.octopusden.octopus.components.registry.server.mapper.toFieldOverrideResponse
 import org.octopusden.octopus.components.registry.server.mapper.toSummaryResponse
-import org.octopusden.octopus.components.registry.server.profile.EntityCreatedComponent
-import org.octopusden.octopus.components.registry.server.profile.ProfileCreateCheck
 import org.octopusden.octopus.components.registry.server.repository.ComponentArtifactMappingRepository
 import org.octopusden.octopus.components.registry.server.repository.ComponentArtifactMappingTokenRepository
 import org.octopusden.octopus.components.registry.server.repository.ComponentBuildToolBeanRepository

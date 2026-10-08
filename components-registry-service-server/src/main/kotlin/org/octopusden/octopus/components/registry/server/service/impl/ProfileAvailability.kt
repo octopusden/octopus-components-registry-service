@@ -1,4 +1,6 @@
-package org.octopusden.octopus.components.registry.server.profile
+package org.octopusden.octopus.components.registry.server.service.impl
+
+import org.octopusden.octopus.components.registry.server.model.ComponentProfile
 
 /**
  * Whether the current user may use a profile (Decision 6). The listing and the create check both

@@ -7,11 +7,11 @@ import org.junit.jupiter.api.extension.ExtendWith
 import org.octopusden.octopus.components.registry.server.controller.AdminControllerV4
 import org.octopusden.octopus.components.registry.server.controller.ComponentControllerV4
 import org.octopusden.octopus.components.registry.server.controller.ComponentsRegistryServiceController
-import org.octopusden.octopus.components.registry.server.profile.ComponentProfileCatalog
 import org.octopusden.octopus.components.registry.server.service.ComponentManagementService
 import org.octopusden.octopus.components.registry.server.service.ComponentRegistryResolver
 import org.octopusden.octopus.components.registry.server.service.ComponentsRegistryService
 import org.octopusden.octopus.components.registry.server.service.ImportService
+import org.octopusden.octopus.components.registry.server.service.impl.ComponentProfileCatalog
 import org.octopusden.octopus.components.registry.server.service.impl.ComponentRegistryResolverImpl
 import org.octopusden.octopus.components.registry.server.service.impl.ComponentRoutingResolver
 import org.octopusden.octopus.components.registry.server.service.impl.ConfigSyncService

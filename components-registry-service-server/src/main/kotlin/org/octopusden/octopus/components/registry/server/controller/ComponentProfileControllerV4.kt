@@ -2,8 +2,8 @@ package org.octopusden.octopus.components.registry.server.controller
 
 import org.octopusden.octopus.components.registry.server.dto.v4.ComponentProfileResponse
 import org.octopusden.octopus.components.registry.server.dto.v4.ComponentProfilesResponse
-import org.octopusden.octopus.components.registry.server.profile.ComponentProfileCatalog
-import org.octopusden.octopus.components.registry.server.profile.ProfileAvailability
+import org.octopusden.octopus.components.registry.server.service.impl.ComponentProfileCatalog
+import org.octopusden.octopus.components.registry.server.service.impl.ProfileAvailability
 import org.springframework.security.access.prepost.PreAuthorize
 import org.springframework.web.bind.annotation.GetMapping
 import org.springframework.web.bind.annotation.RequestMapping

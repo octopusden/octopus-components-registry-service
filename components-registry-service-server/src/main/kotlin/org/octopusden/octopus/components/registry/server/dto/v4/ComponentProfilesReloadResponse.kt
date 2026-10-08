@@ -1,6 +1,6 @@
 package org.octopusden.octopus.components.registry.server.dto.v4
 
-import org.octopusden.octopus.components.registry.server.profile.ProfileLoad
+import org.octopusden.octopus.components.registry.server.model.ProfileLoad
 
 /** The `componentProfiles` part of a `POST /admin/reload-config` response. */
 data class ComponentProfilesReloadResponse(

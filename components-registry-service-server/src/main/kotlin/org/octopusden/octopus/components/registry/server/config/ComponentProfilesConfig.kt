@@ -1,11 +1,10 @@
 package org.octopusden.octopus.components.registry.server.config
 
-import org.octopusden.octopus.components.registry.server.profile.ComponentProfileCatalog
-import org.octopusden.octopus.components.registry.server.profile.ComponentProfilesSource
-import org.octopusden.octopus.components.registry.server.profile.PermissionProfileAvailability
-import org.octopusden.octopus.components.registry.server.profile.ProfileAvailability
-import org.octopusden.octopus.components.registry.server.profile.ProfileCreateCheck
 import org.octopusden.octopus.components.registry.server.security.PermissionEvaluator
+import org.octopusden.octopus.components.registry.server.service.impl.ComponentProfileCatalog
+import org.octopusden.octopus.components.registry.server.service.impl.PermissionProfileAvailability
+import org.octopusden.octopus.components.registry.server.service.impl.ProfileAvailability
+import org.octopusden.octopus.components.registry.server.service.impl.ProfileCreateCheck
 import org.springframework.context.annotation.Bean
 import org.springframework.context.annotation.Configuration
 import org.springframework.core.env.ConfigurableEnvironment

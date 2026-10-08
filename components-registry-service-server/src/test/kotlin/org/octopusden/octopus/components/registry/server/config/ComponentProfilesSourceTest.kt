@@ -1,9 +1,10 @@
-package org.octopusden.octopus.components.registry.server.profile
+package org.octopusden.octopus.components.registry.server.config
 
 import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.Assertions.assertTrue
 import org.junit.jupiter.api.DisplayName
 import org.junit.jupiter.api.Test
+import org.octopusden.octopus.components.registry.server.util.ComponentProfileParser
 import org.springframework.boot.context.properties.source.ConfigurationPropertySources
 import org.springframework.boot.env.YamlPropertySourceLoader
 import org.springframework.core.env.MapPropertySource

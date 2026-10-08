@@ -1,4 +1,6 @@
-package org.octopusden.octopus.components.registry.server.profile
+package org.octopusden.octopus.components.registry.server.model
+
+import org.octopusden.octopus.components.registry.server.util.CreateRequestPaths
 
 /** A `regular` start-page profile read from `components-registry.component-profiles`. */
 data class ComponentProfile(

@@ -1,4 +1,4 @@
-package org.octopusden.octopus.components.registry.server.profile
+package org.octopusden.octopus.components.registry.server.service.impl
 
 import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.Assertions.assertThrows
@@ -11,6 +11,10 @@ import org.octopusden.octopus.components.registry.server.entity.ComponentArtifac
 import org.octopusden.octopus.components.registry.server.entity.ComponentConfigurationEntity
 import org.octopusden.octopus.components.registry.server.entity.ComponentEntity
 import org.octopusden.octopus.components.registry.server.entity.VcsSettingsEntryEntity
+import org.octopusden.octopus.components.registry.server.support.designExampleProperties
+import org.octopusden.octopus.components.registry.server.support.profileProperties
+import org.octopusden.octopus.components.registry.server.support.rule
+import org.octopusden.octopus.components.registry.server.util.CreateRequestPaths
 import org.springframework.http.HttpStatus
 import org.springframework.web.server.ResponseStatusException
 

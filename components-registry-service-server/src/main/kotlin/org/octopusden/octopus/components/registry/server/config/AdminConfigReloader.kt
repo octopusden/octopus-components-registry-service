@@ -1,7 +1,7 @@
 package org.octopusden.octopus.components.registry.server.config
 
-import org.octopusden.octopus.components.registry.server.profile.ComponentProfileCatalog
-import org.octopusden.octopus.components.registry.server.profile.ProfileLoad
+import org.octopusden.octopus.components.registry.server.model.ProfileLoad
+import org.octopusden.octopus.components.registry.server.service.impl.ComponentProfileCatalog
 import org.springframework.beans.factory.annotation.Autowired
 import org.springframework.cloud.context.refresh.ContextRefresher
 import org.springframework.stereotype.Component

@@ -1,4 +1,6 @@
-package org.octopusden.octopus.components.registry.server.profile
+package org.octopusden.octopus.components.registry.server.model
+
+import org.octopusden.octopus.components.registry.server.util.ComponentProfileParser
 
 /**
  * The outcome of one load. [profiles] are the live profiles sorted by order, then id; [problems]

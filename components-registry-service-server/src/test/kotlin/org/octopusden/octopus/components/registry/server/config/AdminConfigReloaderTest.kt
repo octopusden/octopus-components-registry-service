@@ -4,8 +4,8 @@ import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.Assertions.assertTrue
 import org.junit.jupiter.api.DisplayName
 import org.junit.jupiter.api.Test
-import org.octopusden.octopus.components.registry.server.profile.ComponentProfileCatalog
-import org.octopusden.octopus.components.registry.server.profile.designExampleProperties
+import org.octopusden.octopus.components.registry.server.service.impl.ComponentProfileCatalog
+import org.octopusden.octopus.components.registry.server.support.designExampleProperties
 import java.util.concurrent.Callable
 import java.util.concurrent.CountDownLatch
 import java.util.concurrent.Executors

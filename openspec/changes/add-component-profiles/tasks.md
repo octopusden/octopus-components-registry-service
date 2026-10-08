@@ -35,15 +35,15 @@
   - [x] 2.2.4 Numbers and booleans arrive typed or as strings; absent subtree → empty map. The
         source hands the parser the resolved string either way (design Decision 1)
 - [x] 2.3 Implement:
-  - [x] 2.3.1 `profile/ComponentProfile.kt` — profile, classification (`Explicit` with `ASK`),
+  - [x] 2.3.1 `model/ComponentProfile.kt` — profile, classification (`Explicit` with `ASK`),
         field rule
-  - [x] 2.3.2 `profile/CreateRequestPaths.kt` — the free-text path list and `read(request, path)`
+  - [x] 2.3.2 `util/CreateRequestPaths.kt` — the free-text path list and `read(request, path)`
         (Decision 8); one test per listed path reading the value from a create request
-  - [x] 2.3.3 `profile/ComponentProfileParser.kt` — pure parse to profiles + entry statuses +
+  - [x] 2.3.3 `util/ComponentProfileParser.kt` — pure parse to profiles + entry statuses +
         configuration problems
-  - [x] 2.3.4 `profile/ComponentProfilesSource.kt` — flat keys from the enumerable property
+  - [x] 2.3.4 `config/ComponentProfilesSource.kt` — flat keys from the enumerable property
         sources, highest precedence first
-- [x] 2.4 Confirm tests pass. `./gradlew :components-registry-service-server:test --tests "*.profile.*"`:
+- [x] 2.4 Confirm tests pass. `./gradlew :components-registry-service-server:test --tests "*ComponentProfile*" --tests "*CreateRequestPaths*"`:
       `ComponentProfileParserTest` 39, `ComponentProfilesSourceTest` 8, `CreateRequestPathsTest`
       23, all green. Full module `test`: 1235 tests, 0 failures, 1 skipped. `detekt` and
       `ktlintCheck` clean
@@ -78,7 +78,7 @@
         `ComponentProfilesException` saying why, like an unusable one; it used to escape as the raw
         read error (added on review)
 - [x] 3.2 Implement:
-  - [x] 3.2.1 `profile/ComponentProfileCatalog.kt` — `AtomicReference` over the live profile list
+  - [x] 3.2.1 `service/impl/ComponentProfileCatalog.kt` — `AtomicReference` over the live profile list
         (no separate snapshot type), load in the initializer, `reload()` returning the outcome
   - [x] 3.2.1a `config/ComponentProfilesConfig.kt` — source and catalog as beans in every mode,
         not `@ConfigurationProperties` (added on review)
@@ -119,7 +119,7 @@
   - [x] 4.1.4 After an applied reload that changes a pattern, the listing and a create with that
         profile both use the new pattern. Listing half here; the create half is 5.1.10, once
         create checks the profile
-- [x] 4.2 Implement `profile/ProfileAvailability.kt`, response DTOs and
+- [x] 4.2 Implement `service/impl/ProfileAvailability.kt`, response DTOs and
       `controller/ComponentProfileControllerV4.kt`. Response: `{ profiles: [...] }`
       (`dto/v4/ComponentProfileResponse.kt`), each with `usable` and `unusableReason`
   - [x] 4.2.1 `OpenApiV4Config` matches `/rest/api/4/component-profiles` and `v4.json` is
@@ -158,10 +158,10 @@
       ADR-016, functional spec, changelog and the `FieldRule.pattern` schema description state that a
       pattern uses syntax both accept, and that a client which cannot compile one skips its check;
       `v4.json` regenerated (added on review)
-- [x] 5.2 Implement: `ComponentCreateRequest.profile`; `profile/ProfileCreateCheck.kt` (lookup,
+- [x] 5.2 Implement: `ComponentCreateRequest.profile`; `service/impl/ProfileCreateCheck.kt` (lookup,
       availability, classification, rules); call it from `createComponent` before the flush
   - [x] 5.2.1 `v4.json` regenerated for `ComponentCreateRequest.profile`
-  - [x] 5.2.2 `profile/CreatedComponent.kt` — the check reads the entity and base row the create
+  - [x] 5.2.2 `service/impl/CreatedComponent.kt` — the check reads the entity and base row the create
         built, not the request (changed during implementation, design Decision 8); its reader map
         is pinned to `CreateRequestPaths.PATHS`
 - [x] 5.3 Confirm tests pass. `ProfileCreateCheckTest` 14/14; `ProfileOnCreateTest` 17/17 (H2);
@@ -231,3 +231,9 @@
       `ReloadConfigComponentProfilesTest` 6/6 on H2
 - [x] 8.4 Server `test` 1271, 0 failures, 1 skipped; `detekt`, `ktlintCheck` clean.
       `AdminControllerV4SecurityTest` needs Testcontainers Postgres (no Docker locally) — CI
+- [x] 8.5 The classes left the `profile/` package for the server's layers (design Decision 9):
+      `model/`, `util/`, `service/impl/`, `config/`; test fixtures moved to
+      `support/ComponentProfileFixtures.kt`. No behavior change. Server `test`, `detekt`,
+      `ktlintCheck` clean; H2 `dbTest` profile classes green. `ComponentProfileParser` and
+      `CreateRequestPaths` now sit in the PIT scope: `pitest` 60% mutation / 84% line coverage,
+      above both floors; parser 70 of 74 mutants killed, `CreateRequestPaths` 50 of 50

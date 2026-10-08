@@ -1,4 +1,4 @@
-package org.octopusden.octopus.components.registry.server.profile
+package org.octopusden.octopus.components.registry.server.util
 
 import org.octopusden.octopus.components.registry.server.dto.v4.ComponentCreateRequest
 

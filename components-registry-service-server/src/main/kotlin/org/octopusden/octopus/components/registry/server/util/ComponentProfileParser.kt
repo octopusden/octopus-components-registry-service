@@ -1,4 +1,7 @@
-package org.octopusden.octopus.components.registry.server.profile
+package org.octopusden.octopus.components.registry.server.util
+
+import org.octopusden.octopus.components.registry.server.model.ComponentProfile
+import org.octopusden.octopus.components.registry.server.model.ProfileLoad
 
 /**
  * Turns the flattened properties under `components-registry.component-profiles` into profiles,

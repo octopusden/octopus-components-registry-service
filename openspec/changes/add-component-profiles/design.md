@@ -217,6 +217,23 @@ Creates against it:
   paths name the first entry because that is the one a profile or template sets.
 - The templates change reuses it to name the parameters behind a failing field.
 
+### 9. Code placement follows the server's layers
+
+No feature package; each class sits in the layer the server already uses for its kind.
+
+- `model/` — `ComponentProfile`, `ProfileLoad`: internal data. Not DTOs: they carry the compiled
+  rule regex and `order`, and the API shape (`dto/v4/ComponentProfileResponse`,
+  `ComponentProfilesReloadResponse`) is mapped from them so it can change independently.
+- `util/` — `ComponentProfileParser`, `CreateRequestPaths`: pure functions, no Spring. Inside the
+  PIT mutation scope.
+- `service/impl/` — `ComponentProfileCatalog`, `ProfileAvailability`, `ProfileCreateCheck`,
+  `CreatedComponent`: beside the other create checks (`PersonFieldValidator`,
+  `DistributionCoordinateGuard`).
+- `config/` — `ComponentProfilesSource` (reads the Spring `Environment`), `ComponentProfilesConfig`
+  (the beans), `AdminConfigReloader`.
+
+(changed on review: the classes first lived in one `profile/` package)
+
 ## Out of Scope
 
 - See proposal. Technically: no new table, no migration, no change to `registry_config`.
