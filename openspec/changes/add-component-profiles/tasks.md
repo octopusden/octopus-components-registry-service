@@ -237,3 +237,8 @@
       `ktlintCheck` clean; H2 `dbTest` profile classes green. `ComponentProfileParser` and
       `CreateRequestPaths` now sit in the PIT scope: `pitest` 60% mutation / 84% line coverage,
       above both floors; parser 70 of 74 mutants killed, `CreateRequestPaths` 50 of 50
+- [x] 8.6 The four parser mutants PIT leaves alive are equivalent — no test can tell them apart:
+      `order()` / `text()` returning `0` / `""` for a missing key (the entry already fails with
+      `required`), a removed Kotlin null-check intrinsic, and the inlined `none {}` skipping its
+      empty-collection fast path. Added `ComponentProfileParserTest.entriesById`: entry order by id
+      was unpinned (dropping the sort failed no test; seen red)

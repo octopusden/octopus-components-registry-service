@@ -51,6 +51,14 @@ class ComponentProfileParserTest {
     }
 
     @Test
+    @DisplayName("entries are listed by id, whatever order they are configured in")
+    fun entriesById() {
+        val result = ComponentProfileParser.parse(profileProperties("beta") + profileProperties("alpha", kind = "template"))
+
+        assertEquals(listOf("alpha", "beta"), result.entries.map { it.id })
+    }
+
+    @Test
     @DisplayName("a rule on a dotted, indexed path keeps the whole path")
     fun dottedRulePath() {
         val result =
