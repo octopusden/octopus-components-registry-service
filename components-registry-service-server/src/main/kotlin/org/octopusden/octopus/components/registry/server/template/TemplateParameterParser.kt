@@ -47,39 +47,39 @@ internal class TemplateParameterParser(
     }
 
     private fun default(multiple: Boolean): List<String> =
-        keys.list("default").also {
-            if (!multiple && it.size > 1) keys.problem("default", "several values for a single-value parameter")
+        keys.list(DEFAULT).also {
+            if (!multiple && it.size > 1) keys.problem(DEFAULT, "several values for a single-value parameter")
         }
 
     private fun text(common: Common): TemplateParameter.Text {
-        val pattern = keys["pattern"]
+        val pattern = keys[PATTERN]
         val regex =
             pattern?.let {
                 runCatching { Regex(it) }.getOrNull().also { regex ->
-                    if (regex == null) keys.problem("pattern", "'$pattern' is not a valid regular expression")
+                    if (regex == null) keys.problem(PATTERN, "'$pattern' is not a valid regular expression")
                 }
             }
-        val maxLength = keys.number("max-length", positive = true)
+        val maxLength = keys.number(MAX_LENGTH, positive = true)
         val default = default(multiple = false).singleOrNull()
         if (default != null) {
-            if (regex != null && !regex.matches(default)) keys.problem("default", "'$default' does not match the pattern")
-            if (maxLength != null && default.length > maxLength) keys.problem("default", "'$default' is longer than $maxLength")
+            if (regex != null && !regex.matches(default)) keys.problem(DEFAULT, "'$default' does not match the pattern")
+            if (maxLength != null && default.length > maxLength) keys.problem(DEFAULT, "'$default' is longer than $maxLength")
         }
         return TemplateParameter.Text(name, common.label, common.hint, common.required, pattern, keys["message"], maxLength, default)
     }
 
     private fun select(common: Common): TemplateParameter.Select {
-        val multiple = keys.bool("multiple") ?: false
-        val options = keys.list("options")
+        val multiple = keys.bool(MULTIPLE) ?: false
+        val options = keys.list(OPTIONS)
         when {
-            options.isEmpty() -> keys.problem("options", "required, with at least one option")
-            options.size != options.toSet().size -> keys.problem("options", "repeats an option")
+            options.isEmpty() -> keys.problem(OPTIONS, "required, with at least one option")
+            options.size != options.toSet().size -> keys.problem(OPTIONS, "repeats an option")
         }
-        val maxSelection = keys.number("max-selection", positive = true)
-        if (maxSelection != null && !multiple) keys.problem("max-selection", "applies only with multiple: true")
+        val maxSelection = keys.number(MAX_SELECTION, positive = true)
+        if (maxSelection != null && !multiple) keys.problem(MAX_SELECTION, "applies only with multiple: true")
         val default = default(multiple)
-        default.filter { it !in options }.forEach { keys.problem("default", "'$it' is not one of the options") }
-        if (maxSelection != null && default.size > maxSelection) keys.problem("default", "more than max-selection ($maxSelection) values")
+        default.filter { it !in options }.forEach { keys.problem(DEFAULT, "'$it' is not one of the options") }
+        if (maxSelection != null && default.size > maxSelection) keys.problem(DEFAULT, "more than max-selection ($maxSelection) values")
         return TemplateParameter.Select(name, common.label, common.hint, common.required, multiple, options, maxSelection, default)
     }
 
@@ -90,13 +90,13 @@ internal class TemplateParameterParser(
                 ?: return null.also { keys.problem("list", "'$key' is not one of ${TemplateList.entries.joinToString { it.key }}") }
         val default = default(list.multiple)
         TemplateFields.staticValues(list)?.let { allowed ->
-            default.filter { it !in allowed }.forEach { keys.problem("default", "'$it' is not in the ${list.key} list") }
+            default.filter { it !in allowed }.forEach { keys.problem(DEFAULT, "'$it' is not in the ${list.key} list") }
         }
         return TemplateParameter.CrsList(name, common.label, common.hint, common.required, list, default)
     }
 
     private fun person(common: Common): TemplateParameter.Person {
-        val multiple = keys.bool("multiple") ?: false
+        val multiple = keys.bool(MULTIPLE) ?: false
         return TemplateParameter.Person(name, common.label, common.hint, common.required, multiple, default(multiple))
     }
 
@@ -105,14 +105,20 @@ internal class TemplateParameterParser(
         private const val SELECT = "select"
         private const val CRS_LIST = "crs-list"
         private const val PERSON = "person"
+        private const val DEFAULT = "default"
+        private const val MULTIPLE = "multiple"
+        private const val OPTIONS = "options"
+        private const val MAX_SELECTION = "max-selection"
+        private const val PATTERN = "pattern"
+        private const val MAX_LENGTH = "max-length"
         private val NAME = Regex("[A-Z][A-Z0-9_]*")
-        private val COMMON_KEYS = setOf("label", "hint", "type", "required", "default")
+        private val COMMON_KEYS = setOf("label", "hint", "type", "required", DEFAULT)
         private val TYPE_KEYS =
             mapOf(
-                TEXT to setOf("pattern", "message", "max-length"),
-                SELECT to setOf("options", "multiple", "max-selection"),
+                TEXT to setOf(PATTERN, "message", MAX_LENGTH),
+                SELECT to setOf(OPTIONS, MULTIPLE, MAX_SELECTION),
                 CRS_LIST to setOf("list"),
-                PERSON to setOf("multiple"),
+                PERSON to setOf(MULTIPLE),
             )
     }
 }
