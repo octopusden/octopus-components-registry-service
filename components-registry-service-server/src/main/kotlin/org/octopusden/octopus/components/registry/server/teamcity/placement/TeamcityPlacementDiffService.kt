@@ -103,7 +103,8 @@ data class PlacementDiffResult(
  * row with nothing on either side (no Checkout Directory, checkout-root Build Working Directory)
  * is out of scope entirely — ADR-001 keeps single-root Checkout Directories out of the
  * escrow-facing `main` name — and never appears
- * in the result, not even as "in sync".
+ * in the result, not even as "in sync". The exception: a `CONFLICT` or `UNEXPRESSIBLE` derivation
+ * produces no values for the filter to judge, so such a row is always reported (like `TC_ERROR`).
  */
 @ConditionalOnDatabaseEnabled
 @Service
@@ -207,7 +208,10 @@ class TeamcityPlacementDiffService(
             derivedForScope?.sourcePath,
             derivation.buildWorkingDirectory,
         )
-        if (!inScope) return null
+        // CONFLICT / UNEXPRESSIBLE derive no values, so the filter can't judge them -- like TC_ERROR
+        // and ROOTS_MISMATCH they are always reported, never dropped.
+        val alwaysReported = derivation.status == PlacementRowStatus.CONFLICT || derivation.status == PlacementRowStatus.UNEXPRESSIBLE
+        if (!inScope && !alwaysReported) return null
 
         val (status, extraNotes) = finalizeStatus(componentId, placementEntries, entries, row.buildWorkingDirectory, derivation)
         return toRowDiff(

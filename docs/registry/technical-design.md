@@ -487,7 +487,9 @@ fallback).
     single-root row only when a Checkout Directory or a non-root Build Working Directory exists on
     either side (current or derived) — a lone root needing nothing never appears, not even as "in
     sync" (keeps single-root Checkout Directories, which would rename `main` in the escrow export,
-    out of scope per ADR-001).
+    out of scope per ADR-001). The filter judges derived values only, so a single-root row whose
+    derivation is `CONFLICT` or `UNEXPRESSIBLE` (it derives none) is always reported, like
+    `TC_ERROR` and `ROOTS_MISMATCH`.
   - **Status per row:** `RESOLVED` (apply-able), `INVALID`, `CONFLICT`, `UNEXPRESSIBLE`,
     `NO_CHAIN`, `OUTSIDE_TEMPLATES`, `COMPILE_PAUSED`, `MANUAL_EDIT`, `IN_SYNC`, `TC_ERROR` (a
     TeamCity fetch failure; a 403 is recognised and reported as "no permission to read VCS root

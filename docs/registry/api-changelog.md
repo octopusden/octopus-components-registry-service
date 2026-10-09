@@ -55,7 +55,8 @@ refresh it with `./gradlew :components-registry-service-server:generateOpenApiDo
     `VCS_ROOTS_DIFFER_FROM_REGISTRY` (severity `WARNING`; reports extra roots and registry roots no
     compile configuration attaches), a new `type` value on `teamcity-validations` findings.
     Only the current (BASE) configuration of non-archived components is diffed; archived components
-    and version-range (`vcs.settings`) rows are not in the report. Repository matching is by the full canonical VCS URL, host included
+    and version-range (`vcs.settings`) rows are not in the report. A single-root row needing nothing
+    is left out too, except `CONFLICT` and `UNEXPRESSIBLE` rows, which are always reported. Repository matching is by the full canonical VCS URL, host included
     (previously host-agnostic, a false-positive-match risk across TeamCity hosts).
   - `POST /sync` (`IMPORT_DATA`, body `{"diffId": "...", "componentIds": [...]}`) / `GET /sync/job`
     — applies the named Diff's `RESOLVED` rows for the given components, re-deriving first and
