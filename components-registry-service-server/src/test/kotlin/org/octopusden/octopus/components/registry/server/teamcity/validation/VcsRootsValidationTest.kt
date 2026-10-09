@@ -162,7 +162,7 @@ class VcsRootsValidationTest {
     }
 
     @Test
-    fun `a shared project is judged per component, like the Diff (RED)`() {
+    fun `a shared project with differing roots flags neither component, like the Diff (RED)`() {
         val a = comp("comp-one")
         val b = comp("comp-two")
         val rows = listOf(baseRow(a, app), baseRow(b, appB))
@@ -173,10 +173,56 @@ class VcsRootsValidationTest {
         val findings = validationFindings(rows, listOf(line(a, "P"), line(b, "P")), projects)
         val statuses = diffStatuses(rows, mapOf(a.id!! to listOf("P"), b.id!! to listOf("P")), projects)
 
+        assertTrue(statuses.values.none { it == PlacementDiffRowStatus.ROOTS_MISMATCH })
+        assertTrue(findings.isEmpty())
+    }
+
+    @Test
+    fun `a tooling root on the component's own configuration is still flagged by both (RED)`() {
+        val a = comp("comp-one")
+        val b = comp("comp-two")
+        val rows = listOf(baseRow(a, app), baseRow(b, appB))
+        val projects = mapOf(
+            "P" to project(
+                compileBuildType("bt1", roots = listOf(app to "", tooling to "")),
+                compileBuildType("bt2", roots = listOf(appB to "")),
+            ),
+        )
+
+        val findings = validationFindings(rows, listOf(line(a, "P"), line(b, "P")), projects)
+        val statuses = diffStatuses(rows, mapOf(a.id!! to listOf("P"), b.id!! to listOf("P")), projects)
+
         assertEquals(PlacementDiffRowStatus.ROOTS_MISMATCH, statuses["comp-one"])
-        assertEquals(PlacementDiffRowStatus.ROOTS_MISMATCH, statuses["comp-two"])
+        assertTrue(statuses["comp-two"] != PlacementDiffRowStatus.ROOTS_MISMATCH)
         val message = findings.getValue("P")!!
-        assertTrue(message.contains("comp-one") && message.contains("comp-two"))
+        assertTrue(message.contains("comp-one") && !message.contains("comp-two"))
+    }
+
+    @Test
+    fun `a failing registry lookup degrades to no roots finding instead of aborting the run (RED)`() {
+        val configRepo = mock<ComponentConfigurationRepository>()
+        whenever(configRepo.findAllRowsWithVcsEntries()).thenThrow(IllegalStateException("db down"))
+        val a = comp("comp-one")
+        val versionLines = mock<VersionLineRepository>()
+        whenever(versionLines.findDistinctLinkedProjectIds()).thenReturn(listOf("P"))
+        whenever(versionLines.findByProjectIdsWithComponent(any())).thenReturn(listOf(line(a, "P")))
+        val validations = mock<TeamcityValidationRepository>()
+        whenever(validations.findDistinctStoredProjectIds()).thenReturn(emptyList())
+        val tx = mock<TransactionTemplate>()
+        val catalog = object : TemplateCatalog {
+            override val gradleBuildTemplateId = "CDGradleBuild"
+            override val mavenBuildTemplateId = "CDJavaMavenBuild"
+            override val releaseFamilyTemplateIds = emptySet<String>()
+
+            override fun defaultBuildStepId(templateId: String): String? = null
+        }
+        val projects = mapOf("P" to project(compileBuildType("bt1", roots = listOf(app to ""))))
+        val service =
+            TeamcityValidationService(versionLines, configRepo, validations, fetcher(projects), TeamcityProjectMapper(), catalog, tx)
+
+        val result = service.validate()
+
+        assertEquals(1, result.succeeded)
     }
 
     @Test
