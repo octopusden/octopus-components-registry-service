@@ -258,7 +258,7 @@ private fun noCompileConfigDerivation(
             PlacementDerivation(PlacementRowStatus.NO_CHAIN, result, bwd, notes + "no chain configuration found")
     }
 
-/** A repository a compile configuration attaches that the registry does not list, with the build types that attach it. */
+/** A repository a compile configuration of the component attaches that the registry does not list, with the build types that attach it. */
 data class ExtraVcsRoot(
     val repo: String,
     val buildTypeIds: List<String>,
@@ -279,7 +279,13 @@ fun compareVcsRoots(
     val registryKeys = registryVcsPaths.map { repoKey(it) }.toSet()
     val attached = compileConfigs.flatMap { cc -> cc.vcsRootEntries.map { it.url to cc.buildTypeId } }
     val attachedKeys = attached.map { repoKey(it.first) }.toSet()
-    val extra = attached
+    // Only a configuration attaching one of the component's own repositories is judged (same rule as
+    // derive()'s `hit`): a sibling component's or an old version line's configuration in a shared or
+    // other project must not make its roots "extra".
+    val judged = compileConfigs
+        .filter { cc -> cc.vcsRootEntries.any { repoKey(it.url) in registryKeys } }
+        .flatMap { cc -> cc.vcsRootEntries.map { it.url to cc.buildTypeId } }
+    val extra = judged
         .filter { repoKey(it.first) !in registryKeys }
         .groupBy({ repoKey(it.first) }, { it })
         .values

@@ -39,7 +39,14 @@ class TeamcityValidationService(
         val knownProjectIds = versionLineRepository.findDistinctLinkedProjectIdsSafely()
         log.info { "TC validation starting: ${knownProjectIds.size} project ids in scope" }
 
-        val componentsByProject = registryRootsByProject(knownProjectIds)
+        // The roots check is an add-on: a registry lookup failure drops it, not the whole run.
+        val componentsByProject =
+            try {
+                registryRootsByProject(knownProjectIds)
+            } catch (e: Exception) {
+                log.error(e) { "TC validation: registry roots lookup failed; skipping the VCS roots check" }
+                emptyMap()
+            }
 
         var succeeded = 0
         var failed = 0
