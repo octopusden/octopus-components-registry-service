@@ -988,6 +988,31 @@
         ],
         "type" : "object"
       },
+      "ComponentProfilesReloadResponse" : {
+        "properties" : {
+          "entries" : {
+            "items" : {
+              "$ref" : "#/components/schemas/Entry"
+            },
+            "type" : "array"
+          },
+          "problems" : {
+            "items" : {
+              "type" : "string"
+            },
+            "type" : "array"
+          },
+          "status" : {
+            "type" : "string"
+          }
+        },
+        "required" : [
+          "entries",
+          "problems",
+          "status"
+        ],
+        "type" : "object"
+      },
       "ComponentProfilesResponse" : {
         "properties" : {
           "profiles" : {
@@ -1432,6 +1457,31 @@
         "required" : [
           "active",
           "username"
+        ],
+        "type" : "object"
+      },
+      "Entry" : {
+        "properties" : {
+          "id" : {
+            "type" : "string"
+          },
+          "kind" : {
+            "type" : "string"
+          },
+          "problems" : {
+            "items" : {
+              "type" : "string"
+            },
+            "type" : "array"
+          },
+          "status" : {
+            "type" : "string"
+          }
+        },
+        "required" : [
+          "id",
+          "problems",
+          "status"
         ],
         "type" : "object"
       },
@@ -2783,6 +2833,46 @@
           "javaWarnings",
           "mavenActualRanges",
           "mavenWarnings"
+        ],
+        "type" : "object"
+      },
+      "ReloadConfigFailureResponse" : {
+        "properties" : {
+          "componentProfiles" : {
+            "$ref" : "#/components/schemas/ComponentProfilesReloadResponse"
+          },
+          "error" : {
+            "type" : "string"
+          },
+          "message" : {
+            "type" : "string"
+          }
+        },
+        "required" : [
+          "error",
+          "message"
+        ],
+        "type" : "object"
+      },
+      "ReloadConfigResponse" : {
+        "properties" : {
+          "changedKeys" : {
+            "items" : {
+              "type" : "string"
+            },
+            "type" : "array"
+          },
+          "componentProfiles" : {
+            "$ref" : "#/components/schemas/ComponentProfilesReloadResponse"
+          },
+          "status" : {
+            "type" : "string"
+          }
+        },
+        "required" : [
+          "changedKeys",
+          "componentProfiles",
+          "status"
         ],
         "type" : "object"
       },
@@ -5767,14 +5857,11 @@
             "content" : {
               "*/*" : {
                 "schema" : {
-                  "additionalProperties" : {
-                    "type" : "object"
-                  },
-                  "type" : "object"
+                  "$ref" : "#/components/schemas/ReloadConfigResponse"
                 }
               }
             },
-            "description" : "OK"
+            "description" : "Configuration refreshed and component profiles applied"
           },
           "400" : {
             "content" : {
@@ -5816,6 +5903,16 @@
             },
             "description" : "Payload Too Large"
           },
+          "422" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ReloadConfigFailureResponse"
+                }
+              }
+            },
+            "description" : "`config-validation`: a service-config value is invalid. `component-profiles`: the component profiles are not usable and the profiles in use are kept."
+          },
           "425" : {
             "content" : {
               "*/*" : {
@@ -5830,11 +5927,11 @@
             "content" : {
               "*/*" : {
                 "schema" : {
-                  "$ref" : "#/components/schemas/ErrorResponse"
+                  "$ref" : "#/components/schemas/ReloadConfigFailureResponse"
                 }
               }
             },
-            "description" : "Internal Server Error"
+            "description" : "`config-refresh`: the refresh failed for another reason; the component profiles were reloaded all the same."
           },
           "501" : {
             "content" : {

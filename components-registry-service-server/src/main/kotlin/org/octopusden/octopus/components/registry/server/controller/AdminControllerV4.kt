@@ -10,6 +10,8 @@ import org.octopusden.octopus.components.registry.server.dto.v4.ComponentProfile
 import org.octopusden.octopus.components.registry.server.dto.v4.HistoryMigrationJobResponse
 import org.octopusden.octopus.components.registry.server.dto.v4.MigrationConflictResponse
 import org.octopusden.octopus.components.registry.server.dto.v4.MigrationJobResponse
+import org.octopusden.octopus.components.registry.server.dto.v4.ReloadConfigFailureResponse
+import org.octopusden.octopus.components.registry.server.dto.v4.ReloadConfigResponse
 import org.octopusden.octopus.components.registry.server.dto.v4.TeamcitySyncJobResponse
 import org.octopusden.octopus.components.registry.server.dto.v4.TeamcityValidationJobResponse
 import org.octopusden.octopus.components.registry.server.security.CurrentUserResolver
@@ -137,7 +139,26 @@ class AdminControllerV4(
      * `config-validation` answers 500 `config-refresh`.
      */
     @PostMapping("/reload-config")
-    fun reloadConfig(): ResponseEntity<Map<String, Any?>> {
+    @ApiResponses(
+        ApiResponse(
+            responseCode = "200",
+            description = "Configuration refreshed and component profiles applied",
+            content = [Content(schema = Schema(implementation = ReloadConfigResponse::class))],
+        ),
+        ApiResponse(
+            responseCode = "422",
+            description = "`config-validation`: a service-config value is invalid. `component-profiles`: the " +
+                "component profiles are not usable and the profiles in use are kept.",
+            content = [Content(schema = Schema(implementation = ReloadConfigFailureResponse::class))],
+        ),
+        ApiResponse(
+            responseCode = "500",
+            description = "`config-refresh`: the refresh failed for another reason; the component profiles were " +
+                "reloaded all the same.",
+            content = [Content(schema = Schema(implementation = ReloadConfigFailureResponse::class))],
+        ),
+    )
+    fun reloadConfig(): ResponseEntity<Any> {
         val outcome = adminConfigReloader.reload()
         val profileLoad = outcome.profiles
         val profiles = ComponentProfilesReloadResponse.from(profileLoad)
@@ -147,15 +168,19 @@ class AdminControllerV4(
             refreshFailure != null -> refreshFailed(refreshFailure, profiles)
             !profileLoad.usable ->
                 ResponseEntity.status(HttpStatus.UNPROCESSABLE_ENTITY).body(
-                    mapOf(
-                        "error" to "component-profiles",
-                        "message" to "Component profiles are not usable; the profiles in use are kept",
-                        "componentProfiles" to profiles,
+                    ReloadConfigFailureResponse(
+                        error = "component-profiles",
+                        message = "Component profiles are not usable; the profiles in use are kept",
+                        componentProfiles = profiles,
                     ),
                 )
             else ->
                 ResponseEntity.ok(
-                    mapOf("status" to "reloaded", "changedKeys" to outcome.refresh.getOrThrow().sorted(), "componentProfiles" to profiles),
+                    ReloadConfigResponse(
+                        status = "reloaded",
+                        changedKeys = outcome.refresh.getOrThrow().sorted(),
+                        componentProfiles = profiles,
+                    ),
                 )
         }
     }
@@ -166,7 +191,7 @@ class AdminControllerV4(
      * message instead of an opaque 500; the DB cache is left untouched (no-clobber).
      */
     @ExceptionHandler(ConfigValidationException::class)
-    fun handleConfigValidation(e: ConfigValidationException): ResponseEntity<Map<String, Any?>> = configValidationFailed(e, null)
+    fun handleConfigValidation(e: ConfigValidationException): ResponseEntity<Any> = configValidationFailed(e, null)
 
     /**
      * Any other refresh failure — a value Spring cannot bind, say. The profiles were reloaded all the
@@ -175,13 +200,13 @@ class AdminControllerV4(
     private fun refreshFailed(
         e: Throwable,
         profiles: ComponentProfilesReloadResponse,
-    ): ResponseEntity<Map<String, Any?>> {
+    ): ResponseEntity<Any> {
         log.error("Configuration refresh failed; component profiles reloaded with status {}", profiles.status, e)
         return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body(
-            mapOf(
-                "error" to "config-refresh",
-                "message" to (e.message ?: "Configuration refresh failed"),
-                "componentProfiles" to profiles,
+            ReloadConfigFailureResponse(
+                error = "config-refresh",
+                message = e.message ?: "Configuration refresh failed",
+                componentProfiles = profiles,
             ),
         )
     }
@@ -189,13 +214,13 @@ class AdminControllerV4(
     private fun configValidationFailed(
         e: ConfigValidationException,
         profiles: ComponentProfilesReloadResponse?,
-    ): ResponseEntity<Map<String, Any?>> =
+    ): ResponseEntity<Any> =
         ResponseEntity.status(HttpStatus.UNPROCESSABLE_ENTITY).body(
-            buildMap {
-                put("error", "config-validation")
-                put("message", e.message ?: "Invalid configuration")
-                profiles?.let { put("componentProfiles", it) }
-            },
+            ReloadConfigFailureResponse(
+                error = "config-validation",
+                message = e.message ?: "Invalid configuration",
+                componentProfiles = profiles,
+            ),
         )
 
     /**

@@ -160,6 +160,10 @@ Creates against it:
   administrator sees whether the profiles changed. (added on review)
 - A failed profile load answers 422 with `error: component-profiles` and the same body, matching
   the existing `config-validation` 422.
+- Every reload response is typed and published in `v4.json`: `ReloadConfigResponse` for 200,
+  `ReloadConfigFailureResponse` (`error`, `message`, `componentProfiles`) for 422 and 500. The 500
+  replaces the generic `ErrorResponse`, whose required `errorMessage` the body does not carry.
+  (changed on review)
 - A template entry is `failed` with "templates are not supported yet" and never blocks a load.
 
 ### 5. Validation rules per entry

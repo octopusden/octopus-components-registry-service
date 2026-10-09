@@ -250,3 +250,8 @@
         nothing from the server, and the listing DTO uses the constant instead of a literal
   - [x] 8.7.2 `ProfileAvailability` is an interface, so it moved to `service/` beside the other
         service interfaces; `PermissionProfileAvailability` stays in `service/impl/`
+- [x] 8.7 The new 500 `config-refresh` body did not match its published schema: `v4.json` still
+      pointed the 500 at the generic `ErrorResponse`, whose `errorMessage` is required. The reload
+      responses are now typed — `ReloadConfigResponse` (200), `ReloadConfigFailureResponse`
+      (422, 500) — and declared on the endpoint (design Decision 4); JSON unchanged.
+      `OpenApiV4SpecTest` red before regenerating `v4.json`, green after; changelog updated
