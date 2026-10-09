@@ -3,6 +3,8 @@ package org.octopusden.octopus.components.registry.server.controller
 import org.junit.jupiter.api.BeforeEach
 import org.junit.jupiter.api.Test
 import org.mockito.kotlin.any
+import org.mockito.kotlin.spy
+import org.mockito.kotlin.doAnswer
 import org.mockito.kotlin.mock
 import org.mockito.kotlin.whenever
 import org.octopusden.octopus.components.registry.server.security.CurrentUserResolver
@@ -48,13 +50,15 @@ class TeamcityPlacementControllerV4ContractTest {
     private val diffService = mock<TeamcityPlacementDiffService>()
     private val syncService = mock<TeamcityPlacementSyncService>()
     private lateinit var diffJobs: TeamcityPlacementDiffJobServiceImpl
+    private lateinit var syncJobs: TeamcityPlacementSyncJobServiceImpl
+    private lateinit var users: CurrentUserResolver
     private lateinit var mvc: MockMvc
 
     @BeforeEach
     fun setUp() {
         diffJobs = TeamcityPlacementDiffJobServiceImpl(diffService, diffExecutor, gate)
-        val syncJobs = TeamcityPlacementSyncJobServiceImpl(syncService, syncExecutor, gate)
-        val users = mock<CurrentUserResolver>()
+        syncJobs = TeamcityPlacementSyncJobServiceImpl(syncService, syncExecutor, gate)
+        users = mock<CurrentUserResolver>()
         whenever(users.currentUsername()).thenReturn("alice")
         whenever(diffService.runDiff()).thenReturn(PlacementDiffResult(Instant.now(), emptyList()))
         whenever(syncService.sync(any(), any(), any(), any())).thenReturn(PlacementSyncResult("alice", 0, 0, 0, 0, emptyList()))
@@ -165,6 +169,33 @@ class TeamcityPlacementControllerV4ContractTest {
     fun `a Sync before any Diff completed answers the placement-diff-stale code (RED)`() {
         sync("nothing-yet")
             .andExpect(status().isConflict)
+            .andExpect(jsonPath("$.errorCode").value("placement-diff-stale"))
+    }
+
+    @Test
+    fun `the stale check reads the last completed Diff under the gate, not before it (Codex re-review, RED)`() {
+        // A Diff completing between the request's read and the Sync's claim must make the Sync
+        // stale. Simulated with a spy: the old Diff is "last completed" while the gate is free,
+        // the newer one once the Sync holds the gate.
+        val first = completedDiff()
+        val firstState = diffJobs.lastCompleted()!!
+        completedDiff()
+        val secondState = diffJobs.lastCompleted()!!
+        val racing = spy(diffJobs)
+        doAnswer { if (gate.current()?.kind == MigrationLifecycleGate.JobKind.TC_PLACEMENT_SYNC) secondState else firstState }
+            .whenever(racing)
+            .lastCompleted()
+        val racingMvc = MockMvcBuilders
+            .standaloneSetup(TeamcityPlacementControllerV4(racing, syncJobs, users))
+            .setControllerAdvice(ControllerExceptionHandler())
+            .build()
+
+        racingMvc
+            .perform(
+                post("$base/sync")
+                    .contentType(MediaType.APPLICATION_JSON)
+                    .content("""{"diffId":"$first","componentIds":["${UUID.randomUUID()}"]}"""),
+            ).andExpect(status().isConflict)
             .andExpect(jsonPath("$.errorCode").value("placement-diff-stale"))
     }
 }
