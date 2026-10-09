@@ -136,5 +136,15 @@ class PlacementEditHistory(
          * field it writes — the provenance marker above, and the rollback trace (technical-design.md
          * §6.8): every row a Sync job wrote carries its job id right after this prefix. */
         const val SYNC_CHANGE_COMMENT_PREFIX = "sync from TeamCity"
+
+        /** The REST write endpoints call this on every user-supplied `changeComment`, so the
+         * provenance tag above can only come from `TeamcityPlacementSyncService`, which calls the
+         * service layer directly and never passes through a controller. Case-insensitive after trim,
+         * matching how the stored comment is trimmed. */
+        fun requireNotReserved(changeComment: String?) {
+            require(changeComment?.trim()?.startsWith(SYNC_CHANGE_COMMENT_PREFIX, ignoreCase = true) != true) {
+                "changeComment must not start with the reserved prefix '$SYNC_CHANGE_COMMENT_PREFIX'"
+            }
+        }
     }
 }

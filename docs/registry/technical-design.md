@@ -558,7 +558,14 @@ fallback).
   appended to the fixed tag `PlacementEditHistory.isCheckoutDirectoryManuallySet` /
   `isSourcePathManuallySet` / `isBuildWorkingDirectoryManuallySet` key on (owner review: earlier
   versions used a bare, untagged-by-run string, which the provenance rule above could not use to
-  identify a re-syncable write, and which carried no rollback grouping key either). The triggering
+  identify a re-syncable write, and which carried no rollback grouping key either). The tag is
+  unforgeable from outside: `ComponentControllerV4`'s create (`POST /components`), update
+  (`PATCH /components/{id}`) and supported-versions (`PUT .../supported-versions`) endpoints — the
+  v4 writes that accept a `changeComment` — reject a user-supplied one that starts with it
+  (case-insensitive, after trim) with 400 (`PlacementEditHistory.requireNotReserved`). Sync calls
+  `ComponentManagementService` directly and never passes through a controller, so it is the only
+  writer that can set it; both the provenance rule above and the rollback query below can therefore
+  trust the prefix. The triggering
   user's `SecurityContext` reaches the write despite running on a different pool thread via
   `org.springframework.security.task.DelegatingSecurityContextTaskExecutor` wrapping
   `migrationExecutor` (owner review simplification: replaces a hand-rolled
