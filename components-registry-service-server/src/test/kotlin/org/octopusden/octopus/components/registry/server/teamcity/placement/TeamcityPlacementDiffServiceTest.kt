@@ -337,6 +337,39 @@ class TeamcityPlacementDiffServiceTest {
         assertTrue(svc.runDiff().rows.isEmpty())
     }
 
+    private fun singleRootRow(comp: ComponentEntity): ComponentConfigurationEntity {
+        val row = ComponentConfigurationEntity(id = UUID.randomUUID(), component = comp, rowType = "BASE")
+        row.vcsEntries += VcsSettingsEntryEntity(componentConfiguration = row, name = "main", vcsPath = appId, sortOrder = 0)
+        return row
+    }
+
+    @Test
+    fun `a single-root row TeamCity places where CRS cannot express it is reported, not dropped (RED)`() {
+        val comp = component()
+        val bt = compileBuildType("compileA", workDir = "%PARAM%/x", roots = listOf(appId to "+:a => b\n+:c => d"))
+        val svc = service(
+            listOf(singleRootRow(comp)),
+            mapOf(comp.id!! to listOf("P")),
+            FakeEnrichedTcProjectFetcher(mapOf("P" to project(bt))),
+        )
+
+        assertEquals(listOf(PlacementDiffRowStatus.UNEXPRESSIBLE), svc.runDiff().rows.map { it.status })
+    }
+
+    @Test
+    fun `a single-root row whose compile configurations disagree is reported, not dropped (RED)`() {
+        val comp = component()
+        val a = compileBuildType("a", roots = listOf(appId to ""))
+        val b = compileBuildType("b", roots = listOf(appId to "+:mapper"))
+        val svc = service(
+            listOf(singleRootRow(comp)),
+            mapOf(comp.id!! to listOf("P")),
+            FakeEnrichedTcProjectFetcher(mapOf("P" to project(a, b))),
+        )
+
+        assertEquals(listOf(PlacementDiffRowStatus.CONFLICT), svc.runDiff().rows.map { it.status })
+    }
+
     @Test
     fun `a single-root row with a derived source path only, no checkout directory, is in scope`() {
         // ADR-001 allows a lone root with an empty Checkout Directory but a non-empty Source Path
