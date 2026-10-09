@@ -125,8 +125,9 @@ class TeamcityPlacementControllerV4(
     fun startSync(
         @RequestBody request: TeamcityPlacementSyncRequest,
     ): ResponseEntity<TeamcityPlacementSyncJobResponse> {
+        val latest = latestReport()
         val outcome =
-            syncJobService.startAsync(currentUserResolver.currentUsername(), request.componentIds, request.diffId, latestReport())
+            syncJobService.startAsync(currentUserResolver.currentUsername(), request.componentIds, request.diffId) { latest }
         val httpStatus = if (outcome.isNewlyStarted) HttpStatus.ACCEPTED else HttpStatus.CONFLICT
         return ResponseEntity.status(httpStatus).body(TeamcityPlacementSyncJobResponse.from(outcome.state))
     }
