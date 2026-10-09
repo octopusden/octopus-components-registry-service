@@ -47,7 +47,9 @@ refresh it with `./gradlew :components-registry-service-server:generateOpenApiDo
     `INVALID` instead. A repository attached twice within ONE build type with two different
     RESOLVABLE rules is `CONFLICT` (same as two build types disagreeing), not `UNEXPRESSIBLE`.
     `ROOTS_MISMATCH` (new): a BASE row whose compile configurations attach VCS roots the registry
-    does not list (typically a shared tooling repository); `notes` names the repository and build
+    does not list (typically a shared tooling repository) — only configurations that attach at
+    least one of the component's own repositories are judged, so siblings in a shared project and
+    old version lines on another project are not flagged; `notes` names the repository and build
     type ids. Takes precedence over `INVALID` and the derived-value checks, is never `RESOLVED` and
     never offered to Sync. The same comparison backs the new TeamCity Validation type
     `VCS_ROOTS_DIFFER_FROM_REGISTRY` (severity `WARNING`; reports extra roots and registry roots no

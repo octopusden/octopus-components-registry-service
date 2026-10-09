@@ -422,7 +422,11 @@ IO edges; the module stays `server → component-validation` (one-way dependency
   non-archived component linked to the validated project, its BASE-row VCS paths are compared
   (`compareVcsRoots`, shared with the Diff) with the compile configurations of ALL the projects that
   component is linked to, so a shared project and a component spanning several projects give the
-  same verdict as the Diff. Extra and missing roots are reported by `group/repo` and build
+  same verdict as the Diff. A root counts as extra only on a compile configuration that attaches at
+  least one of the component's own registry repositories (derive()'s `hit` rule), so a sibling
+  component's configuration in a shared project, or an old version line on another project, is not
+  flagged; a tooling repository on the component's own configuration still is. The registry lookup
+  is wrapped: a failure there skips the roots check for the run instead of aborting it. Extra and missing roots are reported by `group/repo` and build
   configuration id, naming the component. The store keeps one row per `(project, type)`, so several
   components' findings are merged into one message. If a component has no compile configuration at
   all, nothing is compared (the Diff reports `NO_CHAIN` for it); if one of its other projects cannot
@@ -490,9 +494,11 @@ fallback).
     entries" rather than a raw exception; reported for every linked row, single-root ones too,
     since without the chain nothing is derived to decide scope).
   - **`ROOTS_MISMATCH`:** `compareVcsRoots` (in `PlacementRules.kt`, using `repoKey`) compares the
-    row's registry VCS paths with the roots of the non-paused compile configurations. Roots TeamCity
-    attaches that the registry lacks (a shared tooling repository) make the row `ROOTS_MISMATCH`,
-    checked before scope, `INVALID` and derived-value checks; never `RESOLVED`, never synced. Roots
+    row's registry VCS paths with the roots of the non-paused compile configurations. Roots a
+    configuration attaches that the registry lacks (a shared tooling repository) make the row `ROOTS_MISMATCH`,
+    but only configurations that attach at least one of the row's repositories are judged (a sibling
+    component's configuration in a shared project, or an old version line on another project, is
+    not). Checked before scope, `INVALID` and derived-value checks; never `RESOLVED`, never synced. Roots
     the registry lists but no compile configuration attaches keep the existing "not attached in any
     chain configuration" note. The same function drives the TeamCity Validation finding
     `VCS_ROOTS_DIFFER_FROM_REGISTRY` (§6.7).
