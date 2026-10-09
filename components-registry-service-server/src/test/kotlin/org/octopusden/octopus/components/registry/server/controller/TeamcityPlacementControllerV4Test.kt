@@ -3,6 +3,9 @@ package org.octopusden.octopus.components.registry.server.controller
 import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.Assertions.assertTrue
 import org.junit.jupiter.api.Test
+import org.mockito.kotlin.any
+import org.mockito.kotlin.argumentCaptor
+import org.mockito.kotlin.eq
 import org.mockito.kotlin.mock
 import org.mockito.kotlin.verify
 import org.mockito.kotlin.whenever
@@ -69,13 +72,15 @@ class TeamcityPlacementControllerV4Test {
             errorMessage = null,
         )
         val stamped = diffState.result!!.copy(diffId = "D2")
-        whenever(syncJobService.startAsync("alice", listOf(componentId), "D2", stamped))
+        whenever(syncJobService.startAsync(eq("alice"), eq(listOf(componentId)), eq("D2"), any()))
             .thenReturn(StartPlacementSyncResult(syncState, isNewlyStarted = true))
 
         val response = controller.startSync(TeamcityPlacementSyncRequest(diffId = "D2", componentIds = listOf(componentId)))
 
         assertEquals(HttpStatus.ACCEPTED, response.statusCode)
-        verify(syncJobService).startAsync("alice", listOf(componentId), "D2", stamped)
+        val latest = argumentCaptor<() -> PlacementDiffResult?>()
+        verify(syncJobService).startAsync(eq("alice"), eq(listOf(componentId)), eq("D2"), latest.capture())
+        assertEquals(stamped, latest.firstValue())
     }
 
     @Test

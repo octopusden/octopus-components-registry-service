@@ -38,7 +38,7 @@ interface TeamcityPlacementSyncJobService {
         triggeredBy: String,
         componentIds: List<UUID>,
         requestedDiffId: String,
-        latestDiff: PlacementDiffResult?,
+        latestDiff: () -> PlacementDiffResult?,
     ): StartPlacementSyncResult
 
     fun current(): TeamcityPlacementSyncJobState?
