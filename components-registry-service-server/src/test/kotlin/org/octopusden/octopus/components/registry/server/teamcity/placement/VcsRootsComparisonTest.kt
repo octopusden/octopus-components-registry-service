@@ -6,6 +6,7 @@ import org.junit.jupiter.api.Test
 class VcsRootsComparisonTest {
     private val app = "ssh://h/prj/app-one.git"
     private val tooling = "ssh://h/tools/shared-tooling.git"
+    private val appB = "ssh://h/prj/app-two.git"
 
     private fun config(
         id: String,
@@ -25,6 +26,14 @@ class VcsRootsComparisonTest {
 
         assertEquals(listOf(ExtraVcsRoot("tools/shared-tooling", listOf("bt1", "bt2"))), result.extra)
         assertEquals(emptyList<String>(), result.missing)
+    }
+
+    @Test
+    fun `a configuration attaching none of the component's repositories is not judged (RED)`() {
+        // bt2 belongs to a sibling component or an old version line: its roots are not "extra".
+        val result = compareVcsRoots(listOf(app), listOf(config("bt1", app), config("bt2", appB, tooling)))
+
+        assertEquals(emptyList<ExtraVcsRoot>(), result.extra)
     }
 
     @Test
