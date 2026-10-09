@@ -3,10 +3,7 @@ package org.octopusden.octopus.components.registry.server.controller
 import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.Assertions.assertTrue
 import org.junit.jupiter.api.Test
-import org.junit.jupiter.api.assertThrows
-import org.mockito.kotlin.any
 import org.mockito.kotlin.mock
-import org.mockito.kotlin.never
 import org.mockito.kotlin.verify
 import org.mockito.kotlin.whenever
 import org.octopusden.octopus.components.registry.server.dto.v4.TeamcityPlacementSyncRequest
@@ -25,7 +22,6 @@ import org.octopusden.octopus.components.registry.server.teamcity.placement.Team
 import org.octopusden.octopus.components.registry.server.teamcity.placement.TeamcityPlacementSyncJobState
 import org.springframework.http.HttpHeaders
 import org.springframework.http.HttpStatus
-import org.springframework.web.server.ResponseStatusException
 import java.time.Instant
 import java.util.UUID
 
@@ -55,20 +51,7 @@ class TeamcityPlacementControllerV4Test {
         )
 
     @Test
-    fun `a sync naming a replaced diff id is refused with 409 before anything is considered`() {
-        // Diff ran twice (D1, then D2); the request still names D1.
-        whenever(diffJobService.current()).thenReturn(completedDiff("D2"))
-
-        val ex = assertThrows<ResponseStatusException> {
-            controller.startSync(TeamcityPlacementSyncRequest(diffId = "D1", componentIds = listOf(UUID.randomUUID())))
-        }
-
-        assertEquals(HttpStatus.CONFLICT, ex.statusCode)
-        verify(syncJobService, never()).startAsync(any(), any(), any())
-    }
-
-    @Test
-    fun `a sync naming the current diff id proceeds, passing the SAME diff result down (owner review finding 1 hardening, RED)`() {
+    fun `a sync passes the last completed diff result, stamped with its id, down to the job service (owner review finding 1 hardening)`() {
         // Codex second-pass finding: re-fetching diffJobService.current() inside the async job
         // (rather than threading through the exact result the id-check validated) reopens the
         // TOCTOU window the diffId check exists to close -- a new Diff completing between the
@@ -76,7 +59,7 @@ class TeamcityPlacementControllerV4Test {
         // result. startAsync must receive the SAME PlacementDiffResult instance the check read.
         val componentId = UUID.randomUUID()
         val diffState = completedDiff("D2")
-        whenever(diffJobService.current()).thenReturn(diffState)
+        whenever(diffJobService.lastCompleted()).thenReturn(diffState)
         val syncState = TeamcityPlacementSyncJobState(
             id = "S1",
             state = JobState.RUNNING,
@@ -85,72 +68,19 @@ class TeamcityPlacementControllerV4Test {
             result = null,
             errorMessage = null,
         )
-        whenever(syncJobService.startAsync("alice", listOf(componentId), diffState.result!!))
+        val stamped = diffState.result!!.copy(diffId = "D2")
+        whenever(syncJobService.startAsync("alice", listOf(componentId), "D2", stamped))
             .thenReturn(StartPlacementSyncResult(syncState, isNewlyStarted = true))
 
         val response = controller.startSync(TeamcityPlacementSyncRequest(diffId = "D2", componentIds = listOf(componentId)))
 
         assertEquals(HttpStatus.ACCEPTED, response.statusCode)
-        verify(syncJobService).startAsync("alice", listOf(componentId), diffState.result!!)
-    }
-
-    @Test
-    fun `no diff has ever run yet, so any requested id is refused`() {
-        whenever(diffJobService.current()).thenReturn(null)
-
-        val ex = assertThrows<ResponseStatusException> {
-            controller.startSync(TeamcityPlacementSyncRequest(diffId = "D1", componentIds = listOf(UUID.randomUUID())))
-        }
-
-        assertEquals(HttpStatus.CONFLICT, ex.statusCode)
-        verify(syncJobService, never()).startAsync(any(), any(), any())
-    }
-
-    @Test
-    fun `a diff id matching a RUNNING (not yet completed) diff is refused -- no result to sync against`() {
-        // The id column alone isn't enough: a fresh Diff run immediately publishes a new id with
-        // a null result while it's still RUNNING. Matching that id must not be treated as "the
-        // caller's diffId is current" -- there is no completed result to bind the write to yet.
-        val running = TeamcityPlacementDiffJobState(
-            id = "D3",
-            state = JobState.RUNNING,
-            startedAt = Instant.now(),
-            finishedAt = null,
-            result = null,
-            errorMessage = null,
-        )
-        whenever(diffJobService.current()).thenReturn(running)
-
-        val ex = assertThrows<ResponseStatusException> {
-            controller.startSync(TeamcityPlacementSyncRequest(diffId = "D3", componentIds = listOf(UUID.randomUUID())))
-        }
-
-        assertEquals(HttpStatus.CONFLICT, ex.statusCode)
-        verify(syncJobService, never()).startAsync(any(), any(), any())
-    }
-
-    @Test
-    fun `a new Diff replaces the latest result -- the old diffId is refused while reports reflect the new one (finding 4)`() {
-        val d1 = completedDiff("D1")
-        whenever(diffJobService.current()).thenReturn(d1)
-        assertEquals("D1", controller.getReportJson().body!!.diffId)
-
-        // A second Diff completes, replacing the in-memory result.
-        val d2 = completedDiff("D2")
-        whenever(diffJobService.current()).thenReturn(d2)
-
-        val ex = assertThrows<ResponseStatusException> {
-            controller.startSync(TeamcityPlacementSyncRequest(diffId = "D1", componentIds = listOf(UUID.randomUUID())))
-        }
-        assertEquals(HttpStatus.CONFLICT, ex.statusCode)
-        verify(syncJobService, never()).startAsync(any(), any(), any())
-        // The report endpoints already reflect D2, not the replaced D1.
-        assertEquals("D2", controller.getReportJson().body!!.diffId)
+        verify(syncJobService).startAsync("alice", listOf(componentId), "D2", stamped)
     }
 
     @Test
     fun `the diff report names the Diff run it came from, so a Sync can bind to the report shown (review P1-3, RED)`() {
-        whenever(diffJobService.current()).thenReturn(completedDiff("D7"))
+        whenever(diffJobService.lastCompleted()).thenReturn(completedDiff("D7"))
 
         val body = controller.getReportJson().body!!
 
@@ -185,7 +115,7 @@ class TeamcityPlacementControllerV4Test {
             sourceBuildTypeIds = emptyList(),
             notes = listOf("can't be derived"),
         )
-        whenever(diffJobService.current()).thenReturn(
+        whenever(diffJobService.lastCompleted()).thenReturn(
             completedDiff("D1").copy(result = PlacementDiffResult(Instant.now(), listOf(row))),
         )
 
