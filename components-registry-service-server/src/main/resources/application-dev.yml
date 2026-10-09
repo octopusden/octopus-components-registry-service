@@ -16,3 +16,38 @@ octopus-security:
       - IMPORT_DATA
       - ACCESS_AUDIT
       - EDIT_METADATA
+
+components-registry:
+  component-profiles:
+    regular-external:
+      kind: regular
+      title: Regular external component
+      description: An ordinary component delivered to the client, explicitly or as part of another component.
+      order: 10
+      classification: { external: true, explicit: ask }
+      rules:
+        name: { pattern: "^(?!.*(solution|dmp-bundle)).*$", message: "A regular component's key cannot contain solution or dmp-bundle. Choose the Solution or DMP Bundle profile." }
+    regular-internal:
+      kind: regular
+      title: Regular internal component
+      description: An ordinary component for internal use only, not delivered to the client.
+      order: 20
+      classification: { external: false, explicit: ask }
+      rules:
+        name: { pattern: "^(?!.*(solution|dmp-bundle)).*$", message: "A regular component's key cannot contain solution or dmp-bundle. Choose the Solution or DMP Bundle profile." }
+    solution:
+      kind: regular
+      title: Solution
+      description: A top-level component that groups and ships other components together.
+      order: 30
+      classification: { solution: true, external: true, explicit: true }
+      rules:
+        name: { pattern: "^[a-z][a-z0-9-]*-solution(-[a-z0-9-]+)?$", message: "A solution key contains -solution, e.g. payments-solution." }
+    dmp-bundle:
+      kind: regular
+      title: DMP Bundle
+      description: A bundle component, also a solution, shipped as one distribution.
+      order: 40
+      classification: { solution: true, external: true, explicit: true }
+      rules:
+        name: { pattern: "^[a-z][a-z0-9_-]*dmp-bundle[a-z0-9-]*$", message: "A DMP bundle key contains dmp-bundle, e.g. payments-dmp-bundle." }

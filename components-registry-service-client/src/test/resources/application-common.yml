@@ -4,6 +4,13 @@ server:
 components-registry:
   vcs:
     enabled: false
+  component-profiles:
+    regular-internal:
+      kind: regular
+      title: Regular internal component
+      description: An ordinary component for internal use only, not delivered to the client.
+      order: 20
+      classification: { external: false, explicit: ask }
   work-dir: ${COMPONENTS_REGISTRY_SERVICE_TEST_DATA_DIR}/components-registry/common
   copyright-path: ${components-registry.work-dir}/copyrights
   main-groovy-file: Aggregator.groovy

@@ -142,6 +142,35 @@ to `ConfigSyncService`. Full removal of `component-resolver-core` / the migratio
 Groovy stack is a **separate follow-up** (gated on migration being complete across
 all installations).
 
+### Component profiles (third subtree)
+
+`components-registry.component-profiles` — the Create-component start-page profiles — is delivered
+and reloaded the same way (service-config, `POST /admin/reload-config`), with four differences:
+
+- **Read from the property sources, not bound.** `ComponentProfilesSource` takes the keys under the
+  prefix exactly as written from the environment's enumerable property sources, the
+  highest-precedence value winning per key. Binding would rename an id such as `regular_external`,
+  split a dotted rule path into nested maps and drop unknown keys — so, **unlike `field-config`,
+  rule paths need no bracket notation**: `baseConfiguration.jira.projectKey:` is one key.
+- **Checked before use, applied whole.** `ComponentProfileParser` checks every entry and reports
+  every problem. `ComponentProfileCatalog` replaces the profiles in use only with a usable result
+  (at least one valid `regular` profile, every `regular` profile valid); otherwise it keeps them, and
+  the reload answers `422 component-profiles`. A reload is still not atomic across subtrees:
+  `field-config` and `component-defaults` are applied even when the profiles fail
+  ([TD-026](../tech-debt/026-reload-not-atomic-across-config-subtrees.md)).
+- **No DB cache; startup fails without them.** The catalog holds the profiles in memory in every
+  mode, and CRS does not start without a usable set. `reloadConfig` reloads them itself after the
+  refresh, also when the refresh fails, and reports them as `componentProfiles`;
+  `AdminConfigReloader` runs refresh and profile load as one critical section, so overlapping
+  reloads cannot mix two revisions. Values are read from the property source holding the exact
+  key, never through the relaxed `Environment` lookup. No-db mode has no reload endpoint, so its
+  profiles change with a restart.
+- **Rule patterns serve two regex engines.** CRS checks a rule's `pattern` with Java; the listing
+  hands the same text to the Portal, which checks it with JavaScript while the user types. Write
+  patterns in syntax both accept (no `\p{…}` classes, possessive quantifiers or other Java-only
+  constructs). A client that cannot compile a pattern skips its own check; CRS's answer on create
+  decides.
+
 ## Consequences
 
 ### Positive
@@ -170,4 +199,5 @@ all installations).
 ## References
 - `AdminConfigProperties`, `ConfigSyncService`, `ConfigRefreshListener`
 - `ConfigControllerV4` (410 writers), `AdminControllerV4#reloadConfig`
+- `ComponentProfilesSource`, `ComponentProfileParser`, `ComponentProfileCatalog`, `ComponentProfilesConfig`
 - service-config: `components-registry-service{,-cloud-qa,-cloud-prod}.yml`

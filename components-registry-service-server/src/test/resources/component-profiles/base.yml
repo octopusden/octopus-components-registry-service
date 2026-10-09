@@ -1,0 +1,14 @@
+components-registry:
+  component-profiles:
+    solution:
+      kind: regular
+      title: Solution
+      description: A top-level component that groups and ships other components together.
+      order: 30
+      classification: { solution: true, external: true, explicit: true }
+      rules:
+        name: { pattern: "^[a-z][a-z0-9-]*-solution(-[a-z0-9-]+)?$", message: "A solution key contains -solution, e.g. payments-solution." }
+        baseConfiguration.mavenArtifacts[0].artifactPattern: { pattern: "^pay-.*$", message: "Starts with pay-." }
+  field-config:
+    component:
+      displayName: { visibility: editable }

@@ -18,6 +18,35 @@ refresh it with `./gradlew :components-registry-service-server:generateOpenApiDo
 
 ## Unreleased
 
+- **Create-component profiles from configuration.** The start-page profiles are configured in
+  service-config under `components-registry.component-profiles` and checked when CRS starts and on
+  reload; CRS does not start without at least one valid `regular` profile.
+  - **`GET /rest/api/4/component-profiles` added** (`ACCESS_COMPONENTS`): `{ profiles: [...] }`, the
+    live profiles in `order`, then id. Each carries `id`, `kind` (`regular`), `title`,
+    `description`, `classification` (`external`, `explicit` as `true` / `false` / `ask`,
+    `solution`), `rules` (`path`, `pattern`, `message`; `[]` when none; `pattern` is written for
+    both Java and JavaScript regular expressions — a client that cannot compile one skips its own
+    check), `usable` and, when not usable, `unusableReason`. A profile is usable for a caller with `CREATE_COMPONENTS`.
+  - **`ComponentCreateRequest.profile` added** (optional; blank = absent). When given, the create
+    fails with `400` and `errorMessage` `profile: …` when the profile is not configured, or when the
+    classification the create stores (hidden fields dropped; absent = `false`) differs from the
+    profile's, naming the flag (`explicit: ask` takes either value); with `403` and the reason when
+    the caller may not use it; and with `400` `<path>: <rule message>` when a field rule fails. A
+    rule matches the whole stored value (trimmed; absent = empty); a `[0]` path checks the first
+    list entry only.
+  - **`POST /rest/api/4/admin/reload-config`** responses gain `componentProfiles`: `status`
+    (`applied` / `failed`), `problems` and `entries` (`id`, `kind`, `status` `live` / `failed`,
+    `problems`). Profiles that are not usable are kept as they were and the reload answers `422`
+    with `error: component-profiles`; an invalid `field-config` still answers `422`
+    `config-validation`, now also carrying `componentProfiles`; any other refresh failure answers
+    `500` with `error: config-refresh`, the message and `componentProfiles` — this 500 no longer
+    carries the generic `ErrorResponse` (`errorMessage`). The responses are published as
+    `ReloadConfigResponse` (200) and `ReloadConfigFailureResponse` (`error`, `message`,
+    `componentProfiles`; 422 and 500). `status` and `changedKeys` are unchanged. Overlapping
+    reloads run one after the other.
+  - **No behavior change for existing clients:** a create without `profile`, a rename and a
+    solution-flag change are validated exactly as before.
+
 - **`GET /meta/release-managers` and `GET /meta/security-champions` added.** Two new
   `ACCESS_COMPONENTS` endpoints return the sorted, distinct release-manager and security-champion
   usernames currently assigned to at least one component the v4 list shows (blank values excluded), as

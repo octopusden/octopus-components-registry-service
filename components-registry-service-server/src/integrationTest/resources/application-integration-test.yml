@@ -16,6 +16,13 @@ server:
 components-registry:
   vcs:
     enabled: false
+  component-profiles:
+    regular-internal:
+      kind: regular
+      title: Regular internal component
+      description: An ordinary component for internal use only, not delivered to the client.
+      order: 20
+      classification: { external: false, explicit: ask }
   groovy-path: # will be set via system property
   work-dir: # will be set via system property
   main-groovy-file: Aggregator.groovy
