@@ -94,8 +94,8 @@ class TeamcityPlacementControllerV4(
      *  3. `diffId` is not the last completed Diff, or none has completed -- `ErrorResponse` with
      *     `errorCode` `placement-diff-stale`; nothing is written. Diff keeps only that one
      *     completed result (ADR-002 decision 1), so a Sync acts on the result the user looked at.
-     * The check in 3 runs under the gate and against the exact [PlacementDiffResult] read here --
-     * not re-fetched when the async job runs (owner review finding 1 hardening): re-fetching later
+     * The check in 3 reads the last completed Diff under the gate and hands that exact
+     * [PlacementDiffResult] to the job -- not re-fetched when the async job runs (owner review finding 1 hardening): re-fetching later
      * would reopen the race this check exists to close. Otherwise 202 on a freshly-started run.
      */
     @PostMapping("/sync")
@@ -125,9 +125,9 @@ class TeamcityPlacementControllerV4(
     fun startSync(
         @RequestBody request: TeamcityPlacementSyncRequest,
     ): ResponseEntity<TeamcityPlacementSyncJobResponse> {
-        val latest = latestReport()
+        // latestReport is called under the gate: a Diff completing before the claim makes this Sync stale.
         val outcome =
-            syncJobService.startAsync(currentUserResolver.currentUsername(), request.componentIds, request.diffId) { latest }
+            syncJobService.startAsync(currentUserResolver.currentUsername(), request.componentIds, request.diffId, ::latestReport)
         val httpStatus = if (outcome.isNewlyStarted) HttpStatus.ACCEPTED else HttpStatus.CONFLICT
         return ResponseEntity.status(httpStatus).body(TeamcityPlacementSyncJobResponse.from(outcome.state))
     }
