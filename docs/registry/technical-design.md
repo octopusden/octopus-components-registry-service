@@ -542,18 +542,26 @@ fallback).
     synced once could never resolve `RESOLVED` again even after a legitimate further TeamCity
     change — fixed by owner review. An unreadable audit query still fails closed (the exception
     propagates; nothing here swallows it into "not manual").
-  - **Result** is in-memory only, the latest completed run, held by the job service, and carries
-    this run's own id (`TeamcityPlacementDiffJobState.id`) — see Sync's `diffId` below.
+  - **Result** is in-memory only, held by the job service, and carries this run's own id
+    (`TeamcityPlacementDiffJobState.id`) — see Sync's `diffId` below. The job service keeps
+    `lastCompleted` apart from the `current` slot (set only on COMPLETED): the report endpoints and
+    Sync's `diffId` check read `lastCompleted`, so the report stays readable while a newer Diff
+    runs and survives that run failing.
 - **Sync:** requires the id of the Diff run it acts on (`diffId`) and applies the selected component
-  ids' `RESOLVED` rows from THAT run. `TeamcityPlacementControllerV4` refuses the whole request with
-  `409` — before the async job is even submitted, so nothing is written and no component is
-  individually skipped — when `diffId` does not match the latest COMPLETED
-  `TeamcityPlacementDiffJobService.current()`'s id (a `diffId` matching a still-RUNNING Diff, whose
-  `result` is still null, is refused the same way): Diff keeps no history, so a Sync must always act
-  on the result the caller actually looked at, never on one a later Diff has since replaced. The
-  exact `PlacementDiffResult` read for that check is passed straight through into the async job
-  (owner-review hardening) — never re-fetched once the work actually runs, closing a TOCTOU window
-  where a new Diff completing in between could let Sync silently act on an unvalidated result.
+  ids' `RESOLVED` rows from THAT run. Nothing is written and no component is individually skipped
+  when the request is refused with `409`, which has three distinct bodies, decided in this order
+  inside `TeamcityPlacementSyncJobServiceImpl.startAsync` (via `AsyncJobLifecycle.claimAndSubmit`):
+  1. another admin job holds the cross-kind gate — a RUNNING Diff included, whose result is not
+     final — `MigrationConflictResponse` (`code` e.g. `tc-placement-diff-running`);
+  2. a Sync is already running — the same-kind attach, the running job's response (`kind: "job"`);
+  3. `diffId` is not `lastCompleted`'s id, or no Diff has completed — `PlacementDiffStaleException`,
+     mapped in `ControllerExceptionHandler` to `ErrorResponse(errorMessage = "diff replaced, re-run
+     Diff", errorCode = "placement-diff-stale")`.
+  The `diffId` comparison runs after the gate is won (a `beforePublish` hook, gate released if it
+  throws), so what it read cannot change before the job is published. Diff keeps no history, so a
+  Sync must always act on the result the caller actually looked at, never on one a later Diff has
+  since replaced. The exact `PlacementDiffResult` read for that check is passed straight through
+  into the async job (owner-review hardening) — never re-fetched once the work actually runs.
   Given a current `diffId`, `TeamcityPlacementSyncService` re-reads TeamCity/the registry and
   re-derives before writing; a row whose fresh derivation differs from the Diff snapshot is skipped
   ("changed since diff") rather than applied blind. The write carries the component `version` read

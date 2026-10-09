@@ -11,6 +11,7 @@ import org.octopusden.octopus.components.registry.server.service.ServiceEventSou
 import org.octopusden.octopus.components.registry.server.service.ServiceEventStatus
 import org.octopusden.octopus.components.registry.server.service.ServiceEventType
 import org.octopusden.octopus.components.registry.server.teamcity.placement.PlacementDiffResult
+import org.octopusden.octopus.components.registry.server.teamcity.placement.PlacementDiffStaleException
 import org.octopusden.octopus.components.registry.server.teamcity.placement.StartPlacementSyncResult
 import org.octopusden.octopus.components.registry.server.teamcity.placement.TeamcityPlacementSyncJobService
 import org.octopusden.octopus.components.registry.server.teamcity.placement.TeamcityPlacementSyncJobState
@@ -60,13 +61,16 @@ class TeamcityPlacementSyncJobServiceImpl(
     override fun startAsync(
         triggeredBy: String,
         componentIds: List<UUID>,
-        latestDiff: PlacementDiffResult,
+        requestedDiffId: String,
+        latestDiff: PlacementDiffResult?,
     ): StartPlacementSyncResult {
         val outcome =
             try {
                 lifecycle.claimAndSubmit(
                     buildCandidate = ::buildCandidate,
-                    work = { jobId -> runSync(jobId, triggeredBy, componentIds, latestDiff) },
+                    // latestDiff is non-null once beforePublish passed; the null branch is unreachable.
+                    work = { jobId -> latestDiff?.let { runSync(jobId, triggeredBy, componentIds, it) } },
+                    beforePublish = { if (latestDiff?.diffId != requestedDiffId) throw PlacementDiffStaleException() },
                 )
             } catch (rejected: RejectedExecutionException) {
                 serviceEventRecorder.recordInstant(

@@ -13,6 +13,7 @@ import org.octopusden.octopus.components.registry.server.config.PayloadTooLargeE
 import org.octopusden.octopus.components.registry.server.dto.v4.MigrationConflictResponse
 import org.octopusden.octopus.components.registry.server.service.MigrationConflictException
 import org.octopusden.octopus.components.registry.server.service.MigrationLifecycleGate
+import org.octopusden.octopus.components.registry.server.teamcity.placement.PlacementDiffStaleException
 import org.slf4j.Logger
 import org.slf4j.LoggerFactory
 import org.springframework.http.HttpEntity
@@ -123,6 +124,14 @@ class ControllerExceptionHandler {
      * same-kind conflict is NOT routed through an exception at all — `startAsync` returns
      * `isNewlyStarted=false` with the existing job state so the SPA can attach.
      */
+    /** A Sync named a replaced (or never-completed) Diff: 409 with a machine-readable code. */
+    @ExceptionHandler(PlacementDiffStaleException::class)
+    @ResponseStatus(HttpStatus.CONFLICT)
+    fun placementDiffStaleExceptionHandler(e: PlacementDiffStaleException): HttpEntity<ErrorResponse> {
+        log.warn(e.localizedMessage)
+        return HttpEntity(ErrorResponse(e.localizedMessage, PlacementDiffStaleException.ERROR_CODE))
+    }
+
     @ExceptionHandler(MigrationConflictException::class)
     fun migrationConflictExceptionHandler(e: MigrationConflictException): ResponseEntity<MigrationConflictResponse> {
         val code =

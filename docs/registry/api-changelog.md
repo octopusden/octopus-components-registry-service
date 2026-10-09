@@ -34,7 +34,9 @@ refresh it with `./gradlew :components-registry-service-server:generateOpenApiDo
   - `GET /diff/report.json` / `.../report.html` / `.../report.csv` — the latest completed run's
     rows (`PlacementDiffResult`, whose `diffId` names the Diff run — the id a Sync request must
     send), readable by anyone who can view components (no `IMPORT_DATA`
-    needed for the report itself). 404 until a Diff has completed at least once. Per row: status
+    needed for the report itself). The reports always serve the **latest completed** run: a newer
+    Diff that is still running, or that failed, does not replace it. 404 until a Diff has completed
+    at least once. Per row: status
     (`RESOLVED`, `INVALID`, `CONFLICT`, `UNEXPRESSIBLE`, `NO_CHAIN`, `OUTSIDE_TEMPLATES`,
     `COMPILE_PAUSED`, `MANUAL_EDIT`, `IN_SYNC`, `TC_ERROR`, `ROOTS_MISMATCH`), current and derived
     Checkout Directory / Source Path per VCS entry, current and derived Build Working Directory,
@@ -60,10 +62,17 @@ refresh it with `./gradlew :components-registry-service-server:generateOpenApiDo
     (previously host-agnostic, a false-positive-match risk across TeamCity hosts).
   - `POST /sync` (`IMPORT_DATA`, body `{"diffId": "...", "componentIds": [...]}`) / `GET /sync/job`
     — applies the named Diff's `RESOLVED` rows for the given components, re-deriving first and
-    skipping any row that changed since the Diff snapshot. **`diffId` is now required**: if it does
-    not match the latest COMPLETED Diff, the whole request is refused with `409` and nothing is
-    written (Diff keeps no history, so a stale `diffId` means the result the caller saw has been
-    replaced — run Diff again; a `diffId` matching a still-RUNNING Diff is refused the same way).
+    skipping any row that changed since the Diff snapshot. **`diffId` is now required**: it must be the id of the latest COMPLETED Diff (what the
+    reports show), or the whole request is refused with `409` and nothing is written (Diff keeps no
+    history, so a stale `diffId` means the result the caller saw has been replaced — run Diff
+    again). `POST /sync` has three distinct `409` bodies, decided in this order: (1) another admin
+    job holds the gate, a RUNNING Diff included — `MigrationConflictResponse`
+    `{code, message, activeKind, activeJobId}` (for example `code: "tc-placement-diff-running"`);
+    (2) a Sync is already running — the in-flight `TeamcityPlacementSyncJobResponse`
+    (`kind: "job"`); (3) `diffId` is not the latest completed Diff, or none has completed —
+    `ErrorResponse` `{"errorMessage": "diff replaced, re-run Diff", "errorCode":
+    "placement-diff-stale"}`. Clients should branch on `errorCode` for (3), `code` for (1) and
+    `kind` for (2), never on message text.
     Writes go through the same v4 write path a human PATCH uses, tagging `changeComment` as
     `"sync from TeamCity (job <jobId>)"` — the Sync run's own id, so its audit rows can be selected
     for rollback. That tag is reserved: `POST /components`, `PATCH /components/{id}` and

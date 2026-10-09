@@ -7095,7 +7095,7 @@
           "required" : true
         },
         "responses" : {
-          "200" : {
+          "202" : {
             "content" : {
               "*/*" : {
                 "schema" : {
@@ -7103,7 +7103,7 @@
                 }
               }
             },
-            "description" : "OK"
+            "description" : "A new Sync job was started"
           },
           "400" : {
             "content" : {
@@ -7129,11 +7129,21 @@
             "content" : {
               "*/*" : {
                 "schema" : {
-                  "$ref" : "#/components/schemas/ErrorResponse"
+                  "oneOf" : [
+                    {
+                      "$ref" : "#/components/schemas/MigrationConflictResponse"
+                    },
+                    {
+                      "$ref" : "#/components/schemas/TeamcityPlacementSyncJobResponse"
+                    },
+                    {
+                      "$ref" : "#/components/schemas/ErrorResponse"
+                    }
+                  ]
                 }
               }
             },
-            "description" : "Conflict"
+            "description" : "Three body shapes, in this order. (1) Another admin job holds the gate, a running Diff included: MigrationConflictResponse {code, message, activeKind, activeJobId}. (2) A Sync is already running: the in-flight TeamcityPlacementSyncJobResponse (kind \"job\"). (3) diffId is not the last completed Diff, or none has completed: ErrorResponse {errorMessage: \"diff replaced, re-run Diff\", errorCode: \"placement-diff-stale\"}, nothing written."
           },
           "413" : {
             "content" : {

@@ -66,7 +66,12 @@ class TeamcityPlacementDiffJobServiceImpl(
         }
     }
 
+    @Volatile
+    private var lastCompleted: TeamcityPlacementDiffJobState? = null
+
     override fun current(): TeamcityPlacementDiffJobState? = lifecycle.current()
+
+    override fun lastCompleted(): TeamcityPlacementDiffJobState? = lastCompleted
 
     private fun buildCandidate(jobId: String): TeamcityPlacementDiffJobState =
         TeamcityPlacementDiffJobState(
@@ -91,7 +96,10 @@ class TeamcityPlacementDiffJobServiceImpl(
         )
         try {
             val result = diffService.runDiff()
-            lifecycle.update(jobId) { current -> current.copy(state = JobState.COMPLETED, finishedAt = Instant.now(), result = result) }
+            val completed = lifecycle.update(jobId) { current ->
+                current.copy(state = JobState.COMPLETED, finishedAt = Instant.now(), result = result)
+            }
+            if (completed?.id == jobId) lastCompleted = completed
             LOG.info("TeamCity placement diff job {} COMPLETED: {} row(s)", jobId, result.rows.size)
             serviceEventRecorder.recordFinish(
                 type = ServiceEventType.TEAMCITY_PLACEMENT_DIFF,
