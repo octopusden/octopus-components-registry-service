@@ -86,6 +86,10 @@ class AsyncJobLifecycle<TState : Any>(
      *  4. Publish the candidate via [AtomicReference.compareAndSet]. If the CAS races
      *     and loses (defensive — should be unreachable while we hold the gate),
      *     release the gate and retry.
+     *  4a. [beforePublish] runs once the gate is won and before the candidate is published, so a
+     *      caller's own precondition is checked only AFTER the Attached / cross-kind answers
+     *      (and under the gate, so what it read cannot change before the work starts). If it
+     *      throws, the gate is released and the exception propagates.
      *  5. Hand the runnable to the executor as `executor.execute { work(jobId) }`.
      *     A `SyncTaskExecutor` (used in tests) runs the work to completion before
      *     this call returns; a real async executor returns immediately while the
@@ -98,6 +102,7 @@ class AsyncJobLifecycle<TState : Any>(
     fun claimAndSubmit(
         buildCandidate: (jobId: String) -> TState,
         work: (jobId: String) -> Unit,
+        beforePublish: () -> Unit = {},
     ): ClaimOutcome<TState> {
         while (true) {
             val existing = state.get()
@@ -117,6 +122,14 @@ class AsyncJobLifecycle<TState : Any>(
                 // not yet published its state. Retry — the next iteration will
                 // see RUNNING and return Attached.
                 continue
+            }
+
+            var preconditionHeld = false
+            try {
+                beforePublish()
+                preconditionHeld = true
+            } finally {
+                if (!preconditionHeld) gate.release(jobId)
             }
 
             if (!state.compareAndSet(existing, candidate)) {

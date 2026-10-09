@@ -10,7 +10,7 @@ import java.time.Instant
  * Wire shape for `POST /admin/teamcity-placement/diff` and `GET /admin/teamcity-placement/diff/job`.
  * `result` (the full row-by-row diff) is populated only once COMPLETED; the SPA's table reads it
  * from here or from the dedicated report endpoints (`.../diff/report.{json,html,csv}`), which serve
- * the same in-memory latest run.
+ * the latest COMPLETED run (a newer RUNNING or FAILED run does not replace it there).
  */
 data class TeamcityPlacementDiffJobResponse(
     val id: String,

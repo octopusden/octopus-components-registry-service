@@ -122,7 +122,7 @@ class TeamcityPlacementControllerV4SecurityTest {
     @DisplayName("admin JWT POST /sync with the current diffId -> 202")
     fun postSyncAdminReturns202() {
         val diff = completedDiff("D1")
-        `when`(diffJobService.current()).thenReturn(diff)
+        `when`(diffJobService.lastCompleted()).thenReturn(diff)
         val syncState = TeamcityPlacementSyncJobState(
             id = "S1",
             state = JobState.RUNNING,
@@ -131,7 +131,7 @@ class TeamcityPlacementControllerV4SecurityTest {
             result = null,
             errorMessage = null,
         )
-        `when`(syncJobService.startAsync("alice", emptyList(), diff.result!!))
+        `when`(syncJobService.startAsync("alice", emptyList(), "D1", diff.result!!.copy(diffId = "D1")))
             .thenReturn(StartPlacementSyncResult(syncState, isNewlyStarted = true))
 
         mvc
@@ -190,7 +190,7 @@ class TeamcityPlacementControllerV4SecurityTest {
     @Test
     @DisplayName("viewer JWT GET /diff/report.json -> 200 (component read is enough)")
     fun getReportJsonViewerReturns200() {
-        `when`(diffJobService.current()).thenReturn(completedDiff())
+        `when`(diffJobService.lastCompleted()).thenReturn(completedDiff())
 
         mvc
             .perform(get("/rest/api/4/admin/teamcity-placement/diff/report.json").with(viewerJwt()))
@@ -201,7 +201,7 @@ class TeamcityPlacementControllerV4SecurityTest {
     @Test
     @DisplayName("viewer JWT GET /diff/report.html -> 200, text/html (component read is enough)")
     fun getReportHtmlViewerReturns200() {
-        `when`(diffJobService.current()).thenReturn(completedDiff())
+        `when`(diffJobService.lastCompleted()).thenReturn(completedDiff())
 
         mvc
             .perform(get("/rest/api/4/admin/teamcity-placement/diff/report.html").with(viewerJwt()))
@@ -212,7 +212,7 @@ class TeamcityPlacementControllerV4SecurityTest {
     @Test
     @DisplayName("viewer JWT GET /diff/report.csv -> 200, text/csv (component read is enough)")
     fun getReportCsvViewerReturns200() {
-        `when`(diffJobService.current()).thenReturn(completedDiff())
+        `when`(diffJobService.lastCompleted()).thenReturn(completedDiff())
 
         mvc
             .perform(get("/rest/api/4/admin/teamcity-placement/diff/report.csv").with(viewerJwt()))
@@ -223,7 +223,7 @@ class TeamcityPlacementControllerV4SecurityTest {
     @Test
     @DisplayName("admin JWT GET /diff/report.json -> 200 (IMPORT_DATA is also enough)")
     fun getReportJsonAdminReturns200() {
-        `when`(diffJobService.current()).thenReturn(completedDiff())
+        `when`(diffJobService.lastCompleted()).thenReturn(completedDiff())
 
         mvc
             .perform(get("/rest/api/4/admin/teamcity-placement/diff/report.json").with(adminJwt()))
