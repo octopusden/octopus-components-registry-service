@@ -3,9 +3,9 @@ package org.octopusden.octopus.components.registry.server.controller
 import org.junit.jupiter.api.BeforeEach
 import org.junit.jupiter.api.Test
 import org.mockito.kotlin.any
-import org.mockito.kotlin.spy
 import org.mockito.kotlin.doAnswer
 import org.mockito.kotlin.mock
+import org.mockito.kotlin.spy
 import org.mockito.kotlin.whenever
 import org.octopusden.octopus.components.registry.server.security.CurrentUserResolver
 import org.octopusden.octopus.components.registry.server.service.MigrationLifecycleGate
