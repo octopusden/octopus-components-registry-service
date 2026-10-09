@@ -117,13 +117,6 @@ class ControllerExceptionHandler {
         return HttpEntity(ErrorResponse(e.localizedMessage, ErrorCodes.UNIQUENESS_VIOLATION))
     }
 
-    /**
-     * Cross-kind admin-job gate conflicts (`MigrationLifecycleGate`) — global so it covers every
-     * controller whose jobs share the gate (components/history migration, TeamCity resync/
-     * validation, TeamCity placement Diff/Sync), not just the one that happened to throw. A
-     * same-kind conflict is NOT routed through an exception at all — `startAsync` returns
-     * `isNewlyStarted=false` with the existing job state so the SPA can attach.
-     */
     /** A Sync named a replaced (or never-completed) Diff: 409 with a machine-readable code. */
     @ExceptionHandler(PlacementDiffStaleException::class)
     @ResponseStatus(HttpStatus.CONFLICT)
@@ -132,6 +125,13 @@ class ControllerExceptionHandler {
         return HttpEntity(ErrorResponse(e.localizedMessage, PlacementDiffStaleException.ERROR_CODE))
     }
 
+    /**
+     * Cross-kind admin-job gate conflicts (`MigrationLifecycleGate`) — global so it covers every
+     * controller whose jobs share the gate (components/history migration, TeamCity resync/
+     * validation, TeamCity placement Diff/Sync), not just the one that happened to throw. A
+     * same-kind conflict is NOT routed through an exception at all — `startAsync` returns
+     * `isNewlyStarted=false` with the existing job state so the SPA can attach.
+     */
     @ExceptionHandler(MigrationConflictException::class)
     fun migrationConflictExceptionHandler(e: MigrationConflictException): ResponseEntity<MigrationConflictResponse> {
         val code =

@@ -81,7 +81,8 @@ class TeamcityPlacementControllerV4(
             .body(PlacementReportRenderer.toCsv(report))
     }
 
-    private fun latestReport(): PlacementDiffResult? = diffJobService.lastCompleted()?.let { state -> state.result?.copy(diffId = state.id) }
+    private fun latestReport(): PlacementDiffResult? =
+        diffJobService.lastCompleted()?.let { state -> state.result?.copy(diffId = state.id) }
 
     /**
      * Applies the last COMPLETED Diff's resolved rows for [request]'s component ids ("select all
