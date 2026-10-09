@@ -5,6 +5,8 @@ import org.junit.jupiter.api.DisplayName
 import org.junit.jupiter.api.Tag
 import org.junit.jupiter.api.Test
 import org.mockito.Mockito.`when`
+import org.mockito.kotlin.any
+import org.mockito.kotlin.eq
 import org.octopusden.cloud.commons.security.client.AuthServerClient
 import org.octopusden.octopus.components.registry.server.ComponentRegistryServiceApplication
 import org.octopusden.octopus.components.registry.server.service.JobState
@@ -131,7 +133,7 @@ class TeamcityPlacementControllerV4SecurityTest {
             result = null,
             errorMessage = null,
         )
-        `when`(syncJobService.startAsync("alice", emptyList(), "D1", diff.result!!.copy(diffId = "D1")))
+        `when`(syncJobService.startAsync(eq("alice"), eq(emptyList()), eq("D1"), any()))
             .thenReturn(StartPlacementSyncResult(syncState, isNewlyStarted = true))
 
         mvc

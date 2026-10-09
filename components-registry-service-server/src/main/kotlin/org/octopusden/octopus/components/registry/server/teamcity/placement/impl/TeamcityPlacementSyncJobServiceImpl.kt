@@ -62,15 +62,20 @@ class TeamcityPlacementSyncJobServiceImpl(
         triggeredBy: String,
         componentIds: List<UUID>,
         requestedDiffId: String,
-        latestDiff: PlacementDiffResult?,
+        latestDiff: () -> PlacementDiffResult?,
     ): StartPlacementSyncResult {
+        // Read once, under the gate (beforePublish), and handed as-is to the work.
+        var checked: PlacementDiffResult? = null
         val outcome =
             try {
                 lifecycle.claimAndSubmit(
                     buildCandidate = ::buildCandidate,
-                    // latestDiff is non-null once beforePublish passed; the null branch is unreachable.
-                    work = { jobId -> latestDiff?.let { runSync(jobId, triggeredBy, componentIds, it) } },
-                    beforePublish = { if (latestDiff?.diffId != requestedDiffId) throw PlacementDiffStaleException() },
+                    // checked is non-null once beforePublish passed; the null branch is unreachable.
+                    work = { jobId -> checked?.let { runSync(jobId, triggeredBy, componentIds, it) } },
+                    beforePublish = {
+                        checked = latestDiff()
+                        if (checked?.diffId != requestedDiffId) throw PlacementDiffStaleException()
+                    },
                 )
             } catch (rejected: RejectedExecutionException) {
                 serviceEventRecorder.recordInstant(

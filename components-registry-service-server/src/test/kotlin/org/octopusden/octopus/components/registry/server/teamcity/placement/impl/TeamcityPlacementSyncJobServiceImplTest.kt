@@ -46,7 +46,7 @@ class TeamcityPlacementSyncJobServiceImplTest {
                 MigrationLifecycleGate(),
             )
 
-            service.startAsync("alice", listOf(UUID.randomUUID()), "D1", PlacementDiffResult(Instant.now(), emptyList(), diffId = "D1"))
+            service.startAsync("alice", listOf(UUID.randomUUID()), "D1") { PlacementDiffResult(Instant.now(), emptyList(), diffId = "D1") }
 
             assertEquals(auth, observedAuth.get(5, TimeUnit.SECONDS))
         } finally {
