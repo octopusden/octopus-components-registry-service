@@ -45,6 +45,9 @@ class TeamcityPlacementDiffJobServiceImpl(
             },
         )
 
+    @Volatile
+    private var lastCompleted: TeamcityPlacementDiffJobState? = null
+
     override fun startAsync(triggeredBy: String): StartPlacementDiffResult {
         val outcome =
             try {
@@ -65,9 +68,6 @@ class TeamcityPlacementDiffJobServiceImpl(
             is AsyncJobLifecycle.ClaimOutcome.Started -> StartPlacementDiffResult(outcome.state, isNewlyStarted = true)
         }
     }
-
-    @Volatile
-    private var lastCompleted: TeamcityPlacementDiffJobState? = null
 
     override fun current(): TeamcityPlacementDiffJobState? = lifecycle.current()
 

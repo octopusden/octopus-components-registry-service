@@ -77,7 +77,9 @@ class TeamcityPlacementControllerV4ContractTest {
 
     private fun sync(diffId: String) =
         mvc.perform(
-            post("$base/sync").contentType(MediaType.APPLICATION_JSON).content("""{"diffId":"$diffId","componentIds":["${UUID.randomUUID()}"]}"""),
+            post("$base/sync")
+                .contentType(MediaType.APPLICATION_JSON)
+                .content("""{"diffId":"$diffId","componentIds":["${UUID.randomUUID()}"]}"""),
         )
 
     @Test
