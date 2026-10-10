@@ -91,6 +91,7 @@
 | SYS-096 | `GET /components/{idOrName}/archive-readiness` — read-only pre-flight for the archive/delete flow, gated by the same authorization as `deleteComponent` (`ACCESS_COMPONENTS` + `canDeleteComponent`); resolves by id or name identically to `getComponent`; returns one entry per external target (VCS repository, TeamCity project, Jira open issues, Jira project) with outcome `COMPLETED`/`NOT_COMPLETED`/`UNKNOWN`, a reason for the latter two, and a `reasonKind` classifying what an `UNKNOWN` entry needs; `ready` is false iff any entry is `NOT_COMPLETED` or `UNKNOWN` | High | unit + integration-test | ✅ Tested |
 | SYS-097 | The explicit+external "≥1 distribution coordinate" rule is not applied when the component's **BASE** build system is `WHISKEY` (case-insensitive; per-range build-system overrides are ignored). Applies on create, component PATCH and the `/field-overrides` endpoints; non-WHISKEY explicit+external components still require a coordinate, including after being switched off WHISKEY | High | integration-test | ✅ Tested |
 | SYS-098 | A component configuration may declare one or more **generic HTTP-URL artifacts** under `distribution.generic`; each artifact is a path string stored verbatim in DB (V10 migration, table `distribution_generic_artifacts`). The path must match `GENERIC_ENTRY` regex (no dots-only segments, no commas, no traversal sequences); the only allowed `${…}` placeholders are `${version}`, `${major}`, `${minor}`, `${service}`, `${fix}`, and `${build}` — any other placeholder (including SpEL expressions such as `T(…).method()`) is rejected with 400. The `generic` field of `DistributionDTO` is the comma-joined CSV of paths sorted by `sort_order`; it is `null` when no artifacts are set (`@JsonInclude(NON_NULL)`) and silently ignored by older clients (`@JsonIgnoreProperties(ignoreUnknown = true)`) | High | unit + integration-test | ✅ Tested |
+| SYS-099 | TeamCity placement Diff/Sync (`/admin/teamcity-placement`): Diff is a read-only report over the BASE rows of non-archived components; Sync writes only the `RESOLVED` rows of the last completed Diff (named by `diffId`, else 409 `placement-diff-stale`) through the normal v4 write path, tagged `sync from TeamCity (job <id>)`, a prefix user writes cannot set; single-root `CONFLICT`/`UNEXPRESSIBLE` rows are always reported; VCS roots that the component's own compile configurations attach but the registry lacks yield `ROOTS_MISMATCH` and the `VCS_ROOTS_DIFFER_FROM_REGISTRY` validation warning | High | unit + integration-test | ✅ Tested |
 
 ---
 
@@ -3316,3 +3317,72 @@ at least one distribution coordinate`, so these components could not be edited a
 `` `SYS-097 field-override create on explicit-external WHISKEY without coordinate is accepted` `` (3),
 `` `SYS-097 switching explicit-external without coordinate off WHISKEY is rejected` `` (4),
 `create_explicitExternal_noCoordinate_badRequest` (5, pre-existing).
+
+### SYS-099: TeamCity placement Diff/Sync
+
+**Priority:** High
+**Test layer:** unit + integration-test
+**Status:** ✅ Tested
+
+**Motivation:**
+A component's VCS placement (Checkout Directory, Source Path, Build Working Directory; ADR-001)
+is already encoded in the TeamCity compile configurations of its linked project(s). Operators need
+a read-only report of where the registry differs from TeamCity, and a safe way to apply the
+unambiguous differences without overwriting manual edits or acting on a report that has since
+been replaced.
+
+**Description:**
+- `POST /rest/api/4/admin/teamcity-placement/diff` starts a read-only Diff job; its report is
+  readable by anyone who can view components. `POST .../sync` applies selected rows and requires
+  `IMPORT_DATA`.
+- Sync re-derives each selected row and writes through `ComponentManagementService`, so it passes
+  the same validation as a human PATCH.
+
+**Acceptance criteria:**
+1. Diff scope: only the BASE configuration row of a non-archived component is diffed; archived
+   components and version-range (`vcs.settings` marker) rows are left out of the report.
+2. Provenance: a placement field is `MANUAL_EDIT` (never overwritten) when the last audited change
+   to that field is a user write not tagged `sync from TeamCity`; it is overwritable when no audit
+   row ever changed it or the last change was a Sync write. Checkout Directory and Source Path are
+   judged independently.
+3. The `sync from TeamCity` change-comment prefix is reserved: `POST /components`,
+   `PATCH /components/{id}` and `PUT /components/{id}/supported-versions` answer 400 for a
+   user-supplied `changeComment` starting with it (case-insensitive, after trim). The check stays
+   in the controller, because Sync calls the service directly.
+4. Sync is bound to the last completed Diff: the request's `diffId` must equal that Diff's id,
+   otherwise nothing is written and the answer is 409 `ErrorResponse` with `errorCode`
+   `placement-diff-stale` (also when no Diff has completed). The three 409 shapes are decided in
+   this order: a running Sync (the running job, `kind: "job"`), then another admin job holding the
+   cross-kind gate (a running Diff included; `MigrationConflictResponse`), then the stale `diffId`.
+   The `diffId` is read under the gate.
+5. The report is that of the last completed Diff: it stays readable while a newer Diff runs and
+   after a newer Diff fails, and a Sync naming it is still accepted.
+6. A single-root row whose derivation is `CONFLICT` or `UNEXPRESSIBLE`, or whose TeamCity read
+   failed (`TC_ERROR`), is always reported, even when the scope filter would drop a single-root row
+   with no placement on either side.
+7. `ROOTS_MISMATCH`: a row whose compile configurations attach VCS roots the registry does not
+   list is reported as `ROOTS_MISMATCH` and never synced; the TeamCity Validation type
+   `VCS_ROOTS_DIFFER_FROM_REGISTRY` reports the same comparison as a WARNING. Only configurations
+   that attach at least one of the component's own repositories are judged.
+8. Sync writes only rows that are still `RESOLVED` after its own re-derivation: `INVALID`,
+   `MANUAL_EDIT` and every other status is skipped even when selected. Every written field is
+   recorded in the rollback trace (`fieldChanges`: component, row, root, field, before, after) and
+   the write carries the Sync job's id in `changeComment`.
+
+**Test method:**
+`ComponentControllerV4ReservedCommentTest` — `` `SYS-099 PATCH with the reserved sync comment is a 400` `` and the other reserved-comment tests (3);
+`TeamcityPlacementControllerV4ContractTest` — `` `SYS-099 a stale diffId on an idle gate answers the placement-diff-stale code` ``,
+`` `SYS-099 a Sync while a Sync runs answers the running job (kind job)` ``,
+`` `SYS-099 a Sync while another admin job runs answers the gate's conflict` `` (4),
+`` `SYS-099 the report stays readable while a new Diff runs` ``,
+`` `SYS-099 a failed Diff keeps the previous report` `` (5);
+`TeamcityPlacementDiffServiceTest` — `` `SYS-099 an archived component is left out of the Diff entirely` ``,
+`` `SYS-099 a version-range override (vcs_settings marker) row is left out of the Diff` `` (1),
+`` `SYS-099 a manually re-saved value is reported as manual edit, not overwritten` `` (2),
+`` `SYS-099 a single-root row TeamCity places where CRS cannot express it is reported, not dropped` `` (6),
+`` `SYS-099 a compile configuration attaching an extra tooling root is a roots mismatch, not invalid` `` (7);
+`PlacementEditHistoryTest` — `` `SYS-099 a user edit after a sync is manual again` `` (2);
+`PlacementRulesTest` — `` `SYS-099 only derived statuses are scope-filtered, any other status is always reported` `` (6);
+`VcsRootsComparisonTest` and `VcsRootsValidationTest` — `SYS-099 ...` tests (7);
+`TeamcityPlacementSyncServiceTest` — `` `SYS-099 an invalid row is skipped even if selected` ``,
+`` `SYS-099 an applied row's before and after values are recorded per field` `` (8).

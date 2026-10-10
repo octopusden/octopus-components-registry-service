@@ -55,7 +55,10 @@ refresh it with `./gradlew :components-registry-service-server:generateOpenApiDo
     type ids. Takes precedence over `INVALID` and the derived-value checks, is never `RESOLVED` and
     never offered to Sync. The same comparison backs the new TeamCity Validation type
     `VCS_ROOTS_DIFFER_FROM_REGISTRY` (severity `WARNING`; reports extra roots and registry roots no
-    compile configuration attaches), a new `type` value on `teamcity-validations` findings.
+    compile configuration attaches), a new `type` value on `teamcity-validations` findings. TeamCity
+    Validation output therefore now includes `VCS_ROOTS_DIFFER_FROM_REGISTRY` warnings, which raises
+    `projectsWithIssues` for components whose own compile configurations attach extra (for example
+    tooling) repositories.
     Only the current (BASE) configuration of non-archived components is diffed; archived components
     and version-range (`vcs.settings`) rows are not in the report. A single-root row needing nothing
     is left out too, except `CONFLICT` and `UNEXPRESSIBLE` rows, which are always reported. Repository matching is by the full canonical VCS URL, host included
@@ -65,14 +68,13 @@ refresh it with `./gradlew :components-registry-service-server:generateOpenApiDo
     skipping any row that changed since the Diff snapshot. **`diffId` is now required**: it must be the id of the latest COMPLETED Diff (what the
     reports show), or the whole request is refused with `409` and nothing is written (Diff keeps no
     history, so a stale `diffId` means the result the caller saw has been replaced — run Diff
-    again). `POST /sync` has three distinct `409` bodies, decided in this order: (1) another admin
-    job holds the gate, a RUNNING Diff included — `MigrationConflictResponse`
-    `{code, message, activeKind, activeJobId}` (for example `code: "tc-placement-diff-running"`);
-    (2) a Sync is already running — the in-flight `TeamcityPlacementSyncJobResponse`
-    (`kind: "job"`); (3) `diffId` is not the latest completed Diff, or none has completed —
+    again). `POST /sync` has three distinct `409` bodies, decided in this order: (1) a Sync is
+    already running — the in-flight `TeamcityPlacementSyncJobResponse` (`kind: "job"`); (2) another
+    admin job holds the gate, a RUNNING Diff included — `MigrationConflictResponse`
+    `{code, message, activeKind, activeJobId}` (for example `code: "tc-placement-diff-running"`); (3) `diffId` is not the latest completed Diff, or none has completed —
     `ErrorResponse` `{"errorMessage": "diff replaced, re-run Diff", "errorCode":
-    "placement-diff-stale"}`. Clients should branch on `errorCode` for (3), `code` for (1) and
-    `kind` for (2), never on message text.
+    "placement-diff-stale"}`. Clients should branch on `errorCode` for (3), `code` for (2) and
+    `kind` for (1), never on message text.
     Writes go through the same v4 write path a human PATCH uses, tagging `changeComment` as
     `"sync from TeamCity (job <jobId>)"` — the Sync run's own id, so its audit rows can be selected
     for rollback. That tag is reserved: `POST /components`, `PATCH /components/{id}` and
