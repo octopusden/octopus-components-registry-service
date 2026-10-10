@@ -97,7 +97,7 @@ class TeamcityPlacementDiffJobServiceImpl(
         try {
             val result = diffService.runDiff()
             val completed = lifecycle.update(jobId) { current ->
-                current.copy(state = JobState.COMPLETED, finishedAt = Instant.now(), result = result)
+                current.copy(state = JobState.COMPLETED, finishedAt = Instant.now(), result = result.copy(diffId = jobId))
             }
             if (completed?.id == jobId) lastCompleted = completed
             LOG.info("TeamCity placement diff job {} COMPLETED: {} row(s)", jobId, result.rows.size)

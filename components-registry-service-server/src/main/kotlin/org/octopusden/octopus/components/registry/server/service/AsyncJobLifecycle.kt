@@ -86,10 +86,7 @@ class AsyncJobLifecycle<TState : Any>(
      *  4. Publish the candidate via [AtomicReference.compareAndSet]. If the CAS races
      *     and loses (defensive — should be unreachable while we hold the gate),
      *     release the gate and retry.
-     *  4a. [beforePublish] runs once the gate is won and before the candidate is published, so a
-     *      caller's own precondition is checked only AFTER the Attached / cross-kind answers
-     *      (and under the gate, so what it read cannot change before the work starts). If it
-     *      throws, the gate is released and the exception propagates.
+     *  4a. [beforePublish] runs under the gate, before publishing; its value goes to `work`. If it throws, the gate is released.
      *  5. Hand the runnable to the executor as `executor.execute { work(jobId) }`.
      *     A `SyncTaskExecutor` (used in tests) runs the work to completion before
      *     this call returns; a real async executor returns immediately while the
@@ -102,7 +99,13 @@ class AsyncJobLifecycle<TState : Any>(
     fun claimAndSubmit(
         buildCandidate: (jobId: String) -> TState,
         work: (jobId: String) -> Unit,
-        beforePublish: () -> Unit = {},
+    ): ClaimOutcome<TState> = claimAndSubmit(buildCandidate, { jobId, _: Unit -> work(jobId) }, {})
+
+    /** [claimAndSubmit] with a precondition whose result [T] is handed to [work]. */
+    fun <T> claimAndSubmit(
+        buildCandidate: (jobId: String) -> TState,
+        work: (jobId: String, checked: T) -> Unit,
+        beforePublish: () -> T,
     ): ClaimOutcome<TState> {
         while (true) {
             val existing = state.get()
@@ -124,13 +127,7 @@ class AsyncJobLifecycle<TState : Any>(
                 continue
             }
 
-            var preconditionHeld = false
-            try {
-                beforePublish()
-                preconditionHeld = true
-            } finally {
-                if (!preconditionHeld) gate.release(jobId)
-            }
+            val checked = releasingGateOnFailure(jobId, beforePublish)
 
             if (!state.compareAndSet(existing, candidate)) {
                 // Defensive: with the gate held no other startAsync can overwrite
@@ -142,7 +139,7 @@ class AsyncJobLifecycle<TState : Any>(
             LOG.info("Starting {} job {}", jobKind, jobId)
             @Suppress("TooGenericExceptionCaught") // Throwable so executor rejection ALWAYS unwinds the slot.
             try {
-                executor.execute { work(jobId) }
+                executor.execute { work(jobId, checked) }
             } catch (rejected: Throwable) {
                 LOG.error("Failed to submit {} job {} to executor", jobKind, jobId, rejected)
                 gate.release(jobId)
@@ -155,6 +152,19 @@ class AsyncJobLifecycle<TState : Any>(
             return ClaimOutcome.Started(state.get() ?: candidate)
         }
     }
+
+    private fun <T> releasingGateOnFailure(
+        jobId: String,
+        block: () -> T,
+    ): T =
+        try {
+            block()
+        } catch (
+            @Suppress("TooGenericExceptionCaught") t: Throwable,
+        ) {
+            gate.release(jobId)
+            throw t
+        }
 
     /**
      * id-guarded transition. The [transform] runs only if the slot still carries

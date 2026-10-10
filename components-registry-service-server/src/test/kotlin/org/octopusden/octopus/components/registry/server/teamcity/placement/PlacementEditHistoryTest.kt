@@ -2,6 +2,7 @@ package org.octopusden.octopus.components.registry.server.teamcity.placement
 
 import org.junit.jupiter.api.Assertions.assertFalse
 import org.junit.jupiter.api.Assertions.assertTrue
+import org.junit.jupiter.api.DisplayName
 import org.junit.jupiter.api.Test
 import org.mockito.kotlin.mock
 import org.mockito.kotlin.whenever
@@ -10,7 +11,7 @@ import org.octopusden.octopus.components.registry.server.repository.AuditLogRepo
 import java.util.UUID
 
 /**
- * Provenance rule (owner review): a placement FIELD (checkoutDirectory, sourcePath, or Build
+ * Provenance rule: a placement FIELD (checkoutDirectory, sourcePath, or Build
  * Working Directory -- tracked independently, not as a bundle) is manual only if its LAST audited
  * change is a real user write that is NOT tagged as a sync
  * (`PlacementEditHistory.SYNC_CHANGE_COMMENT_PREFIX`). A field with no audit record at all — a null
@@ -80,7 +81,8 @@ class PlacementEditHistoryTest {
     }
 
     @Test
-    fun `the last change being a real untagged user write is manual`() {
+    @DisplayName("SYS-099: the last change being a real untagged user write is manual")
+    fun `SYS-099 the last change being a real untagged user write is manual`() {
         stub(row(vcsSnapshot(null, null), vcsSnapshot("app", null)))
         assertTrue(history().isCheckoutDirectoryManuallySet(componentId, appVcsPath))
     }
@@ -92,7 +94,8 @@ class PlacementEditHistoryTest {
     }
 
     @Test
-    fun `TeamCity changing after a sync still resolves on re-diff (only the LAST change is looked at)`() {
+    @DisplayName("SYS-099: TeamCity changing after a sync still resolves on re-diff (only the LAST change is looked at)")
+    fun `SYS-099 TeamCity changing after a sync still resolves on re-diff (only the LAST change is looked at)`() {
         // Newest first: the user's edit is now further back than the sync that followed it, so the
         // sync (tagged) is what decides.
         val userEdit = row(vcsSnapshot(null, null), vcsSnapshot("app", null))
@@ -102,7 +105,8 @@ class PlacementEditHistoryTest {
     }
 
     @Test
-    fun `a user edit after a sync is manual again`() {
+    @DisplayName("SYS-099: a user edit after a sync is manual again")
+    fun `SYS-099 a user edit after a sync is manual again`() {
         val sync = row(vcsSnapshot("app", null), vcsSnapshot("app2", null), changeComment = "sync from TeamCity (job=diff-2)")
         val userEdit = row(vcsSnapshot("app2", null), vcsSnapshot("custom", null))
         stub(userEdit, sync)
@@ -158,11 +162,12 @@ class PlacementEditHistoryTest {
     }
 
     @Test
-    fun `checkoutDirectory and sourcePath are tracked independently (owner review finding 2 hardening, RED)`() {
-        // Codex second-pass finding: the old (checkoutDirectory, sourcePath) PAIR-based comparison
-        // let a Sync write that touches ONLY sourcePath "launder" an earlier MANUAL checkoutDirectory
-        // edit -- since the pair as a whole differs on the sync row, the pair-based check found its
-        // sync tag and called the WHOLE entry non-manual, silently permitting Sync to later overwrite
+    @DisplayName("SYS-099: checkoutDirectory and sourcePath are tracked independently")
+    fun `SYS-099 checkoutDirectory and sourcePath are tracked independently`() {
+        // A PAIR-based (checkoutDirectory, sourcePath) comparison would let a Sync write that touches
+        // ONLY sourcePath "launder" an earlier MANUAL checkoutDirectory edit: the pair as a whole
+        // differs on the sync row, so the pair-based check would find its sync tag and call the
+        // WHOLE entry non-manual, silently permitting Sync to later overwrite
         // the user's checkoutDirectory too. Each field must be judged by its OWN last-changing row.
         val userEditsCdOnly = row(vcsSnapshot(cd = null, sp = null), vcsSnapshot(cd = "custom", sp = null))
         val syncEditsSpOnly = row(
@@ -177,7 +182,7 @@ class PlacementEditHistoryTest {
     }
 
     @Test
-    fun `a placement set when the component was created is manual (review P1-2, RED)`() {
+    fun `a placement set when the component was created is manual`() {
         val create = row(old = null, new = vcsSnapshot(cd = "app", sp = "svc", bwd = "app/svc"), action = "CREATE")
         whenever(
             auditLogRepository.findByEntityTypeAndEntityIdAndActionInOrderByChangedAtDesc(

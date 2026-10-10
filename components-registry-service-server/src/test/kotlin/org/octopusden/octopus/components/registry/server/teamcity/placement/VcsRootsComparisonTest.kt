@@ -1,6 +1,7 @@
 package org.octopusden.octopus.components.registry.server.teamcity.placement
 
 import org.junit.jupiter.api.Assertions.assertEquals
+import org.junit.jupiter.api.DisplayName
 import org.junit.jupiter.api.Test
 
 class VcsRootsComparisonTest {
@@ -21,7 +22,8 @@ class VcsRootsComparisonTest {
     }
 
     @Test
-    fun `a tooling root attached by TeamCity only is extra, with its build types`() {
+    @DisplayName("SYS-099: a tooling root attached by TeamCity only is extra, with its build types")
+    fun `SYS-099 a tooling root attached by TeamCity only is extra, with its build types`() {
         val result = compareVcsRoots(listOf(app), listOf(config("bt1", app, tooling), config("bt2", tooling, app)))
 
         assertEquals(listOf(ExtraVcsRoot("tools/shared-tooling", listOf("bt1", "bt2"))), result.extra)
@@ -29,7 +31,8 @@ class VcsRootsComparisonTest {
     }
 
     @Test
-    fun `a configuration attaching none of the component's repositories is not judged (RED)`() {
+    @DisplayName("SYS-099: a configuration attaching none of the component's repositories is not judged")
+    fun `SYS-099 a configuration attaching none of the component's repositories is not judged`() {
         // bt2 belongs to a sibling component or an old version line: its roots are not "extra".
         val result = compareVcsRoots(listOf(app), listOf(config("bt1", app), config("bt2", appB, tooling)))
 

@@ -6,18 +6,15 @@ import org.octopusden.octopus.components.registry.server.util.VcsUrlCanonicalize
  * ONB-002: pure derivation of VCS root placement (Checkout Directory / Source Path / Build
  * Working Directory, ADR-001) from a component's TeamCity compile build configurations.
  *
- * A direct Kotlin port of the read-only one-off `placement_import.py` (and its
- * per-locator-error-handling successor) used to seed ADR-001's rev. 3 import, scoped down to what
- * the ONB-002 Diff/Sync jobs need: compile configurations only (`CDGradleBuild` /
+ * Scoped to what the ONB-002 Diff/Sync jobs need: compile configurations only (`CDGradleBuild` /
  * `CDJavaMavenBuild`, non-paused), no `CDRelease` / `CdReleaseCandidateNew` fallback — the design
- * brief reads only the linked projects' compile build types. Dropping the release fallback also
- * drops Python's `release-only` status; what Python called `partial` (a row where every compile
- * configuration agrees on SOME entries but never attaches at least one entry at all) folds into
- * PlacementRowStatus.UNEXPRESSIBLE here — both mean "cannot be safely applied", and the per-entry
+ * brief reads only the linked projects' compile build types. A row where every compile
+ * configuration agrees on SOME entries but never attaches at least one entry at all is
+ * PlacementRowStatus.UNEXPRESSIBLE — both mean "cannot be safely applied", and the per-entry
  * `notes` still say which entry is missing.
  *
  * No framework dependency on purpose: this is exercised entirely by PlacementRulesTest with
- * plain JUnit, one case per ported Python test.
+ * plain JUnit.
  */
 
 /** One registry VCS entry as read from `vcs_settings_entries`, current CRS-stored placement included. */
@@ -48,13 +45,20 @@ data class TcCompileConfig(
     val workDir: String?,
 )
 
-enum class PlacementRowStatus {
-    RESOLVED,
+/**
+ * [scopeFiltered]: the status carries derived values (or none by design), so a single-root row with
+ * nothing on either side may be dropped from the Diff. A status that is NOT scope-filtered is
+ * always reported; a new status is reported by default.
+ */
+enum class PlacementRowStatus(
+    val scopeFiltered: Boolean = false,
+) {
+    RESOLVED(scopeFiltered = true),
     CONFLICT,
     UNEXPRESSIBLE,
-    NO_CHAIN,
-    OUTSIDE_TEMPLATES,
-    COMPILE_PAUSED,
+    NO_CHAIN(scopeFiltered = true),
+    OUTSIDE_TEMPLATES(scopeFiltered = true),
+    COMPILE_PAUSED(scopeFiltered = true),
 }
 
 data class DeriveInput(
@@ -82,16 +86,14 @@ private val CHECKOUT_RULE_PATTERN = Regex("""^\+:\s*(\S+?)(?:\s*=>\s*(\S+))?$"""
  * Matches a TeamCity VCS root URL to a registry `vcsPath` by their FULL canonical form (scheme
  * ignored, host INCLUDED, Git-case-insensitive, trailing `.git` stripped) — the same rule
  * [VcsUrlCanonicalizer] already applies to cross-component VCS-path comparisons, reused here rather
- * than re-implemented. The Python one-off `placement_import.py`'s `repo_key` kept only the last two
- * path segments and dropped the host entirely, silently matching same-named repositories on
- * different hosts; that bug is deliberately not ported.
+ * than re-implemented. Matching on only the last two
+ * path segments would silently match same-named repositories on different hosts.
  */
 fun repoKey(url: String?): String = VcsUrlCanonicalizer.canonicalize(url ?: "")
 
 /**
  * One checkout rule of a TeamCity VCS root entry -> a [PlacementValue], or `null` when the rule is
- * not one agent-side checkout can express (and so this model has no field for it). Port of
- * `placement_import.py`'s `parse_rule`.
+ * not one agent-side checkout can express (and so this model has no field for it)..
  */
 fun parseCheckoutRule(rules: String?): PlacementValue? {
     val lines = (rules ?: "").lines().map { it.trim() }.filter { it.isNotEmpty() }
@@ -122,8 +124,7 @@ sealed interface WorkDirParse {
 }
 
 /**
- * `WORK_DIR` -> a Build Working Directory. Port of `placement_import.py`'s `parse_work_dir`, minus
- * its segment-shape / leading-`/` rejection (spec-conformance review, Codex second-pass finding):
+ * `WORK_DIR` -> a Build Working Directory. It does not reject a segment shape or a leading `/`:
  * those are CRS VALIDATION rules (`util.VcsPlacementValidator.validateBuildWorkingDirectory`'s
  * `isPlainRelativePath`), not SHAPES this engine can't parse — pre-empting that check here would
  * repeat the exact mistake `PlacementRules.checkRules` was deleted for. A `%`-containing value (a
@@ -149,11 +150,12 @@ private fun scanCompileConfigs(input: DeriveInput): CompileConfigScan {
     val entries = input.entries
     val perEntrySeen = mutableMapOf<Int, MutableSet<PlacementValue>>()
     val unexpressible = mutableSetOf<Int>()
-    // Spec-conformance finding 2: a repository attached twice in ONE build type with two
+    // A repository attached twice in ONE build type with two
     // DIFFERENT resolvable interpretations is a CONFLICT (same as two build types disagreeing),
     // not UNEXPRESSIBLE -- reserved for a rule SHAPE that can't be parsed at all.
     val conflictingWithinBuildType = mutableSetOf<Int>()
     val workDirSeen = mutableSetOf<WorkDirParse>()
+    val registryKeys = entries.map { repoKey(it.vcsPath) }.toSet()
 
     for (bt in input.compileConfigs) {
         // Keyed by every checkout rule seen for that repo in this one build type, PARSED first
@@ -164,29 +166,27 @@ private fun scanCompileConfigs(input: DeriveInput): CompileConfigScan {
         // still unexpressible.
         val attached: Map<String, List<PlacementValue?>> =
             bt.vcsRootEntries.groupBy({ repoKey(it.url) }, { parseCheckoutRule(it.checkoutRules) })
-        var hit = false
         entries.forEachIndexed { i, row ->
             val parsedRules = attached[repoKey(row.vcsPath)] ?: return@forEachIndexed
-            hit = true
             val distinct = parsedRules.filterNotNull().toSet()
             when {
                 // ANY unparseable rule for this repo in this build type is a SHAPE problem —
                 // stays UNEXPRESSIBLE regardless of what else attaches the same repository
-                // (Codex second-pass finding: a null parse must not be treated as just another
-                // "distinct value" that a resolvable duplicate could turn into a CONFLICT).
+                // (a null parse must not be treated as just another "distinct value" that a
+                // resolvable duplicate could turn into a CONFLICT).
                 parsedRules.any { it == null } -> unexpressible.add(i)
                 distinct.size > 1 -> conflictingWithinBuildType.add(i)
                 else -> perEntrySeen.getOrPut(i) { mutableSetOf() }.add(distinct.single())
             }
         }
-        if (hit) workDirSeen.add(parseWorkDir(bt.workDir))
+        if (bt.attachesAnyOf(registryKeys)) workDirSeen.add(parseWorkDir(bt.workDir))
     }
     return CompileConfigScan(perEntrySeen, unexpressible, conflictingWithinBuildType, workDirSeen)
 }
 
 /**
  * Derive the placement of one configuration row's VCS entries from its component's compile build
- * configurations. Port of `placement_import.py`'s `derive` (compile-only — see file kdoc).
+ * configurations.
  */
 @Suppress("CyclomaticComplexMethod", "LongMethod", "NestedBlockDepth")
 fun derive(input: DeriveInput): PlacementDerivation {
@@ -232,7 +232,7 @@ fun derive(input: DeriveInput): PlacementDerivation {
         unexpressible.isNotEmpty() || workDirUnexpressible -> PlacementRowStatus.UNEXPRESSIBLE
         notes.any { it.contains("disagree") } -> PlacementRowStatus.CONFLICT
         result.size == entries.size && resolvedWorkDir != null -> PlacementRowStatus.RESOLVED
-        else -> PlacementRowStatus.UNEXPRESSIBLE // Python's "partial": some entry never attached anywhere known.
+        else -> PlacementRowStatus.UNEXPRESSIBLE // some entry never attached anywhere known.
     }
 
     return PlacementDerivation(status, result, bwd, notes)
@@ -258,6 +258,9 @@ private fun noCompileConfigDerivation(
             PlacementDerivation(PlacementRowStatus.NO_CHAIN, result, bwd, notes + "no chain configuration found")
     }
 
+/** A compile configuration belongs to a component when it attaches at least one of the component's own repositories. */
+private fun TcCompileConfig.attachesAnyOf(registryKeys: Set<String>): Boolean = vcsRootEntries.any { repoKey(it.url) in registryKeys }
+
 /** A repository a compile configuration of the component attaches that the registry does not list, with the build types that attach it. */
 data class ExtraVcsRoot(
     val repo: String,
@@ -279,11 +282,10 @@ fun compareVcsRoots(
     val registryKeys = registryVcsPaths.map { repoKey(it) }.toSet()
     val attached = compileConfigs.flatMap { cc -> cc.vcsRootEntries.map { it.url to cc.buildTypeId } }
     val attachedKeys = attached.map { repoKey(it.first) }.toSet()
-    // Only a configuration attaching one of the component's own repositories is judged (same rule as
-    // derive()'s `hit`): a sibling component's or an old version line's configuration in a shared or
-    // other project must not make its roots "extra".
+    // A sibling component's or an old version line's configuration in a shared or other project must
+    // not make its roots "extra".
     val judged = compileConfigs
-        .filter { cc -> cc.vcsRootEntries.any { repoKey(it.url) in registryKeys } }
+        .filter { it.attachesAnyOf(registryKeys) }
         .flatMap { cc -> cc.vcsRootEntries.map { it.url to cc.buildTypeId } }
     val extra = judged
         .filter { repoKey(it.first) !in registryKeys }

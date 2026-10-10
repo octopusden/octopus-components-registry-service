@@ -14,7 +14,7 @@ import org.octopusden.octopus.infrastructure.teamcity.client.dto.TeamcityVcsRoot
  */
 class EnrichedTcProjectFetcherFieldsTest {
     @Test
-    fun `a vcs-root-entry shaped exactly to the requested fields deserializes (QA Diff TC_ERROR, RED)`() {
+    fun `a vcs-root-entry shaped exactly to the requested fields deserializes`() {
         val vcsRootSelector = "vcs-root-entry(id,checkout-rules,vcs-root(id,name,href,properties(property(name,value))))"
         assertTrue(CachingEnrichedTcProjectFetcher.FIELDS.contains(vcsRootSelector), "FIELDS must request $vcsRootSelector")
         // Only the columns vcsRootSelector names, as TeamCity returns them.

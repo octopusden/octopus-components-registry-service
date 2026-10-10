@@ -20,7 +20,7 @@ import java.util.concurrent.CompletableFuture
 import java.util.concurrent.TimeUnit
 
 /**
- * Owner review of PR #510 (finding 7): the caller's `SecurityContext` must reach the background
+ * The caller's `SecurityContext` must reach the background
  * work even though it runs on a DIFFERENT thread (`migrationExecutor` is a real pool, not the
  * `SyncTaskExecutor` most job-service tests use) -- `ComponentManagementServiceImpl` resolves
  * `audit_log.changed_by` from `SecurityContextHolder` at write time, so without this every write

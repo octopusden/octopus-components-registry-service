@@ -29,7 +29,7 @@ import java.time.Instant
 import java.util.UUID
 
 /**
- * Owner review of PR #510 (finding 1): a Sync request names the Diff result it acts on; if that id
+ * A Sync request names the Diff result it acts on; if that id
  * no longer matches the latest Diff, the whole request must be refused (409) before any component
  * is even considered -- never silently applied against a replaced Diff.
  */
@@ -49,13 +49,13 @@ class TeamcityPlacementControllerV4Test {
             state = JobState.COMPLETED,
             startedAt = Instant.now(),
             finishedAt = Instant.now(),
-            result = PlacementDiffResult(Instant.now(), emptyList()),
+            result = PlacementDiffResult(Instant.now(), emptyList(), diffId = id),
             errorMessage = null,
         )
 
     @Test
-    fun `a sync passes the last completed diff result, stamped with its id, down to the job service (owner review finding 1 hardening)`() {
-        // Codex second-pass finding: re-fetching diffJobService.current() inside the async job
+    fun `a sync passes the last completed diff result, stamped with its id, down to the job service`() {
+        // Re-fetching diffJobService.current() inside the async job
         // (rather than threading through the exact result the id-check validated) reopens the
         // TOCTOU window the diffId check exists to close -- a new Diff completing between the
         // check and the (async) work running would let Sync silently act on an unvalidated
@@ -71,7 +71,6 @@ class TeamcityPlacementControllerV4Test {
             result = null,
             errorMessage = null,
         )
-        val stamped = diffState.result!!.copy(diffId = "D2")
         whenever(syncJobService.startAsync(eq("alice"), eq(listOf(componentId)), eq("D2"), any()))
             .thenReturn(StartPlacementSyncResult(syncState, isNewlyStarted = true))
 
@@ -80,11 +79,11 @@ class TeamcityPlacementControllerV4Test {
         assertEquals(HttpStatus.ACCEPTED, response.statusCode)
         val latest = argumentCaptor<() -> PlacementDiffResult?>()
         verify(syncJobService).startAsync(eq("alice"), eq(listOf(componentId)), eq("D2"), latest.capture())
-        assertEquals(stamped, latest.firstValue())
+        assertEquals(diffState.result, latest.firstValue())
     }
 
     @Test
-    fun `the diff report names the Diff run it came from, so a Sync can bind to the report shown (review P1-3, RED)`() {
+    fun `the diff report names the Diff run it came from, so a Sync can bind to the report shown`() {
         whenever(diffJobService.lastCompleted()).thenReturn(completedDiff("D7"))
 
         val body = controller.getReportJson().body!!
@@ -93,7 +92,7 @@ class TeamcityPlacementControllerV4Test {
     }
 
     @Test
-    fun `diff report HTML and CSV have the right content type and escape or format correctly (spec-conformance finding 4 coverage)`() {
+    fun `diff report HTML and CSV have the right content type and escape or format correctly`() {
         val row = PlacementRowDiff(
             componentId = UUID.randomUUID(),
             componentKey = "comp-one",
@@ -139,7 +138,7 @@ class TeamcityPlacementControllerV4Test {
     }
 
     @Test
-    fun `sync report CSV has the right content type (spec-conformance finding 4 coverage)`() {
+    fun `sync report CSV has the right content type`() {
         val syncState = TeamcityPlacementSyncJobState(
             id = "S1",
             state = JobState.COMPLETED,

@@ -36,12 +36,11 @@ class TeamcityPlacementSyncJobServiceImpl(
     private val lifecycle =
         AsyncJobLifecycle<TeamcityPlacementSyncJobState>(
             jobKind = JobKind.TC_PLACEMENT_SYNC,
-            // Owner review finding 7 (simplification): wraps the plain `migrationExecutor`, which
+            // Wraps the plain `migrationExecutor`, which
             // does not propagate SecurityContext on its own. DelegatingSecurityContextTaskExecutor
             // captures SecurityContextHolder's context at `.execute()` time (the calling / HTTP
             // request thread, inside claimAndSubmit below) and installs + clears it around the
-            // submitted work on whichever thread actually runs it — the same effect the previous
-            // manual capture/set/clear achieved, without hand-rolling it here.
+            // submitted work on whichever thread actually runs it.
             // ComponentManagementServiceImpl resolves `audit_log.changed_by` from
             // SecurityContextHolder at write time, so this is what keeps a Sync write attributed to
             // the triggering user instead of "system".
@@ -64,17 +63,14 @@ class TeamcityPlacementSyncJobServiceImpl(
         requestedDiffId: String,
         latestDiff: () -> PlacementDiffResult?,
     ): StartPlacementSyncResult {
-        // Read once, under the gate (beforePublish), and handed as-is to the work.
-        var checked: PlacementDiffResult? = null
         val outcome =
             try {
                 lifecycle.claimAndSubmit(
                     buildCandidate = ::buildCandidate,
-                    // checked is non-null once beforePublish passed; the null branch is unreachable.
-                    work = { jobId -> checked?.let { runSync(jobId, triggeredBy, componentIds, it) } },
+                    work = { jobId, diff -> runSync(jobId, triggeredBy, componentIds, diff) },
+                    // Read once, under the gate, and handed as-is to the work.
                     beforePublish = {
-                        checked = latestDiff()
-                        if (checked?.diffId != requestedDiffId) throw PlacementDiffStaleException()
+                        latestDiff()?.takeIf { it.diffId == requestedDiffId } ?: throw PlacementDiffStaleException()
                     },
                 )
             } catch (rejected: RejectedExecutionException) {
