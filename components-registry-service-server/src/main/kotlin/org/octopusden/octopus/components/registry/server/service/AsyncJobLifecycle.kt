@@ -136,20 +136,27 @@ class AsyncJobLifecycle<TState : Any>(
                 continue
             }
 
-            LOG.info("Starting {} job {}", jobKind, jobId)
-            @Suppress("TooGenericExceptionCaught") // Throwable so executor rejection ALWAYS unwinds the slot.
-            try {
-                executor.execute { work(jobId, checked) }
-            } catch (rejected: Throwable) {
-                LOG.error("Failed to submit {} job {} to executor", jobKind, jobId, rejected)
-                gate.release(jobId)
-                state.updateAndGet { current ->
-                    if (current == null || getId(current) != jobId) current else markRejected(current, rejected)
-                }
-                throw rejected
-            }
-
+            submit(jobId) { work(jobId, checked) }
             return ClaimOutcome.Started(state.get() ?: candidate)
+        }
+    }
+
+    /** Hands [task] to the executor; a rejection releases the gate, marks the slot FAILED and rethrows. */
+    private fun submit(
+        jobId: String,
+        task: () -> Unit,
+    ) {
+        LOG.info("Starting {} job {}", jobKind, jobId)
+        @Suppress("TooGenericExceptionCaught") // Throwable so executor rejection ALWAYS unwinds the slot.
+        try {
+            executor.execute { task() }
+        } catch (rejected: Throwable) {
+            LOG.error("Failed to submit {} job {} to executor", jobKind, jobId, rejected)
+            gate.release(jobId)
+            state.updateAndGet { current ->
+                if (current == null || getId(current) != jobId) current else markRejected(current, rejected)
+            }
+            throw rejected
         }
     }
 
