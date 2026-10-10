@@ -86,6 +86,7 @@ class AsyncJobLifecycle<TState : Any>(
      *  4. Publish the candidate via [AtomicReference.compareAndSet]. If the CAS races
      *     and loses (defensive — should be unreachable while we hold the gate),
      *     release the gate and retry.
+     *  4a. [beforePublish] runs under the gate, before publishing; its value goes to `work`. If it throws, the gate is released.
      *  5. Hand the runnable to the executor as `executor.execute { work(jobId) }`.
      *     A `SyncTaskExecutor` (used in tests) runs the work to completion before
      *     this call returns; a real async executor returns immediately while the
@@ -98,6 +99,13 @@ class AsyncJobLifecycle<TState : Any>(
     fun claimAndSubmit(
         buildCandidate: (jobId: String) -> TState,
         work: (jobId: String) -> Unit,
+    ): ClaimOutcome<TState> = claimAndSubmit(buildCandidate, { jobId, _: Unit -> work(jobId) }, {})
+
+    /** [claimAndSubmit] with a precondition whose result [T] is handed to [work]. */
+    fun <T> claimAndSubmit(
+        buildCandidate: (jobId: String) -> TState,
+        work: (jobId: String, checked: T) -> Unit,
+        beforePublish: () -> T,
     ): ClaimOutcome<TState> {
         while (true) {
             val existing = state.get()
@@ -119,6 +127,8 @@ class AsyncJobLifecycle<TState : Any>(
                 continue
             }
 
+            val checked = releasingGateOnFailure(jobId, beforePublish)
+
             if (!state.compareAndSet(existing, candidate)) {
                 // Defensive: with the gate held no other startAsync can overwrite
                 // the slot, so this branch should be unreachable in practice.
@@ -126,22 +136,42 @@ class AsyncJobLifecycle<TState : Any>(
                 continue
             }
 
-            LOG.info("Starting {} job {}", jobKind, jobId)
-            @Suppress("TooGenericExceptionCaught") // Throwable so executor rejection ALWAYS unwinds the slot.
-            try {
-                executor.execute { work(jobId) }
-            } catch (rejected: Throwable) {
-                LOG.error("Failed to submit {} job {} to executor", jobKind, jobId, rejected)
-                gate.release(jobId)
-                state.updateAndGet { current ->
-                    if (current == null || getId(current) != jobId) current else markRejected(current, rejected)
-                }
-                throw rejected
-            }
-
+            submit(jobId) { work(jobId, checked) }
             return ClaimOutcome.Started(state.get() ?: candidate)
         }
     }
+
+    /** Hands [task] to the executor; a rejection releases the gate, marks the slot FAILED and rethrows. */
+    private fun submit(
+        jobId: String,
+        task: () -> Unit,
+    ) {
+        LOG.info("Starting {} job {}", jobKind, jobId)
+        @Suppress("TooGenericExceptionCaught") // Throwable so executor rejection ALWAYS unwinds the slot.
+        try {
+            executor.execute { task() }
+        } catch (rejected: Throwable) {
+            LOG.error("Failed to submit {} job {} to executor", jobKind, jobId, rejected)
+            gate.release(jobId)
+            state.updateAndGet { current ->
+                if (current == null || getId(current) != jobId) current else markRejected(current, rejected)
+            }
+            throw rejected
+        }
+    }
+
+    private fun <T> releasingGateOnFailure(
+        jobId: String,
+        block: () -> T,
+    ): T =
+        try {
+            block()
+        } catch (
+            @Suppress("TooGenericExceptionCaught") t: Throwable,
+        ) {
+            gate.release(jobId)
+            throw t
+        }
 
     /**
      * id-guarded transition. The [transform] runs only if the slot still carries

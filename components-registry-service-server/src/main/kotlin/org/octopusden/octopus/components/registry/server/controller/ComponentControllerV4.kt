@@ -29,6 +29,7 @@ import org.octopusden.octopus.components.registry.server.security.PermissionEval
 import org.octopusden.octopus.components.registry.server.service.ComponentManagementService
 import org.octopusden.octopus.components.registry.server.service.archivereadiness.ArchiveReadinessService
 import org.octopusden.octopus.components.registry.server.service.impl.EmployeeDirectoryService
+import org.octopusden.octopus.components.registry.server.teamcity.placement.PlacementEditHistory
 import org.octopusden.octopus.escrow.BuildSystem
 import org.octopusden.octopus.escrow.RepositoryType
 import org.slf4j.LoggerFactory
@@ -250,7 +251,10 @@ class ComponentControllerV4(
     )
     fun createComponent(
         @Valid @RequestBody request: ComponentCreateRequest,
-    ): ComponentDetailResponse = withCanEdit(componentManagementService.createComponent(request))
+    ): ComponentDetailResponse {
+        PlacementEditHistory.requireNotReserved(request.changeComment)
+        return withCanEdit(componentManagementService.createComponent(request))
+    }
 
     @GetMapping
     @PreAuthorize("@permissionEvaluator.hasPermission('ACCESS_COMPONENTS')")
@@ -446,7 +450,10 @@ class ComponentControllerV4(
     fun updateComponent(
         @PathVariable id: UUID,
         @Valid @RequestBody request: ComponentUpdateRequest,
-    ): ComponentDetailResponse = withCanEdit(componentManagementService.updateComponent(id, request))
+    ): ComponentDetailResponse {
+        PlacementEditHistory.requireNotReserved(request.changeComment)
+        return withCanEdit(componentManagementService.updateComponent(id, request))
+    }
 
     @DeleteMapping("/{id}")
     @ResponseStatus(HttpStatus.NO_CONTENT)
@@ -534,7 +541,10 @@ class ComponentControllerV4(
     fun setSupportedVersions(
         @PathVariable id: UUID,
         @Valid @RequestBody request: SupportedVersionsRequest,
-    ): SupportedVersionsResponse = componentManagementService.setSupportedVersions(id, request)
+    ): SupportedVersionsResponse {
+        PlacementEditHistory.requireNotReserved(request.changeComment)
+        return componentManagementService.setSupportedVersions(id, request)
+    }
 
     companion object {
         // Numeric-aware version order: compare dot-separated segments as integers so

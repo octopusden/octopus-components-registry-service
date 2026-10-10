@@ -23,6 +23,72 @@ refresh it with `./gradlew :components-registry-service-server:generateOpenApiDo
   usernames currently assigned to at least one component the v4 list shows (blank values excluded), as
   `List<String>` like `/meta/owners`. They list the values the existing `?releaseManager=` and
   `?securityChampion=` filters can match; each list holds only its own role.
+- **TeamCity placement Diff/Sync admin endpoints (ONB-002).** New surface under
+  `rest/api/4/admin/teamcity-placement`, merging right after the VCS entry placement fields below
+  (it reads and writes `sourcePath`/`checkoutDirectory`/`buildWorkingDirectory`):
+  - `POST /diff` / `GET /diff/job` — start (`IMPORT_DATA`) and poll a read-only run that derives
+    each component's VCS placement from its linked TeamCity project(s)' compile build
+    configurations and compares it to the registry's current values. 202 on a freshly-started run,
+    409 on a same-kind attach or a cross-kind conflict with another admin job, same shape as every
+    other admin job (`TeamcityPlacementDiffJobResponse`, `kind: "job"`).
+  - `GET /diff/report.json` / `.../report.html` / `.../report.csv` — the latest completed run's
+    rows (`PlacementDiffResult`, whose `diffId` names the Diff run — the id a Sync request must
+    send), readable by anyone who can view components (no `IMPORT_DATA`
+    needed for the report itself). The reports always serve the **latest completed** run: a newer
+    Diff that is still running, or that failed, does not replace it. 404 until a Diff has completed
+    at least once. Per row: status
+    (`RESOLVED`, `INVALID`, `CONFLICT`, `UNEXPRESSIBLE`, `NO_CHAIN`, `OUTSIDE_TEMPLATES`,
+    `COMPILE_PAUSED`, `MANUAL_EDIT`, `IN_SYNC`, `TC_ERROR`, `ROOTS_MISMATCH`), current and derived
+    Checkout Directory / Source Path per VCS entry, current and derived Build Working Directory,
+    the source TeamCity build type ids, and human-readable notes. `INVALID`: the derived values
+    parse fine but fail the SAME CRS validation a v4 write runs (Source Path shape, reserved/
+    duplicate Checkout Directory names, at most one root at the checkout root, name uniqueness,
+    Build Working Directory rules); `notes` carries the validation message. `UNEXPRESSIBLE` is
+    narrower now: only a checkout-rule or `WORK_DIR` SHAPE that can't be parsed at all (a remap,
+    several rules on one entry, `%VAR%`) — a value that parses but fails CRS validation is
+    `INVALID` instead. A repository attached twice within ONE build type with two different
+    RESOLVABLE rules is `CONFLICT` (same as two build types disagreeing), not `UNEXPRESSIBLE`.
+    `ROOTS_MISMATCH` (new): a BASE row whose compile configurations attach VCS roots the registry
+    does not list (typically a shared tooling repository) — only configurations that attach at
+    least one of the component's own repositories are judged, so siblings in a shared project and
+    old version lines on another project are not flagged; `notes` names the repository and build
+    type ids. Takes precedence over `INVALID` and the derived-value checks, is never `RESOLVED` and
+    never offered to Sync. The same comparison backs the new TeamCity Validation type
+    `VCS_ROOTS_DIFFER_FROM_REGISTRY` (severity `WARNING`; reports extra roots and registry roots no
+    compile configuration attaches), a new `type` value on `teamcity-validations` findings. TeamCity
+    Validation output therefore now includes `VCS_ROOTS_DIFFER_FROM_REGISTRY` warnings, which raises
+    `projectsWithIssues` for components whose own compile configurations attach extra (for example
+    tooling) repositories.
+    Only the current (BASE) configuration of non-archived components is diffed; archived components
+    and version-range (`vcs.settings`) rows are not in the report. A single-root row needing nothing
+    is left out too, except `CONFLICT` and `UNEXPRESSIBLE` rows, which are always reported. Repository matching is by the full canonical VCS URL, host included
+    (previously host-agnostic, a false-positive-match risk across TeamCity hosts).
+  - `POST /sync` (`IMPORT_DATA`, body `{"diffId": "...", "componentIds": [...]}`) / `GET /sync/job`
+    — applies the named Diff's `RESOLVED` rows for the given components, re-deriving first and
+    skipping any row that changed since the Diff snapshot. **`diffId` is now required**: it must be the id of the latest COMPLETED Diff (what the
+    reports show), or the whole request is refused with `409` and nothing is written (Diff keeps no
+    history, so a stale `diffId` means the result the caller saw has been replaced — run Diff
+    again). `POST /sync` has three distinct `409` bodies, decided in this order: (1) a Sync is
+    already running — the in-flight `TeamcityPlacementSyncJobResponse` (`kind: "job"`); (2) another
+    admin job holds the gate, a RUNNING Diff included — `MigrationConflictResponse`
+    `{code, message, activeKind, activeJobId}` (for example `code: "tc-placement-diff-running"`); (3) `diffId` is not the latest completed Diff, or none has completed —
+    `ErrorResponse` `{"errorMessage": "diff replaced, re-run Diff", "errorCode":
+    "placement-diff-stale"}`. Clients should branch on `errorCode` for (3), `code` for (2) and
+    `kind` for (1), never on message text.
+    Writes go through the same v4 write path a human PATCH uses, tagging `changeComment` as
+    `"sync from TeamCity (job <jobId>)"` — the Sync run's own id, so its audit rows can be selected
+    for rollback. That tag is reserved: `POST /components`, `PATCH /components/{id}` and
+    `PUT /components/{id}/supported-versions` now answer `400` when a user-supplied `changeComment`
+    starts with `sync from TeamCity` (case-insensitive, after trim). A value the
+    ADR-001 `V8__` migration set automatically, or one whose last audited change was a Sync itself,
+    is overwritable; a value set by a real user edit never is (re-syncing after TeamCity changes
+    again no longer gets permanently stuck reporting `MANUAL_EDIT` against Sync's own prior write) —
+    Checkout Directory and Source Path are tracked independently for this, so a Sync write to one
+    field never "covers" a manual edit of the other. `PlacementSyncResult` gains `fieldChanges`: one
+    entry per field actually written (`componentKey`, `rowLabel`, `root`, `field`, `before`,
+    `after`) — the rollback trace, also available as `GET /sync/report.csv` (`IMPORT_DATA`, same
+    shape as the Diff CSV).
+
 - **VCS entry placement (`sourcePath`, `checkoutDirectory`), Build Working Directory and derived
   names.** `VcsEntryRequest` / `VcsEntryResponse` (base configuration and `vcs.settings` marker rows
   alike) gain two optional fields: `sourcePath`, the repository directory that belongs to the

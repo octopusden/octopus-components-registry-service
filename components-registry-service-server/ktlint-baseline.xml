@@ -40,6 +40,14 @@
         <error line="3220" column="17" source="standard:property-naming" />
         <error line="3229" column="17" source="standard:property-naming" />
         <error line="3266" column="17" source="standard:property-naming" />
+        <error line="3037" column="17" source="standard:property-naming" />
+        <error line="3042" column="17" source="standard:property-naming" />
+        <error line="3051" column="17" source="standard:property-naming" />
+        <error line="3088" column="17" source="standard:property-naming" />
+        <error line="3025" column="17" source="standard:property-naming" />
+        <error line="3030" column="17" source="standard:property-naming" />
+        <error line="3039" column="17" source="standard:property-naming" />
+        <error line="3076" column="17" source="standard:property-naming" />
     </file>
     <file name="src/main/kotlin/org/octopusden/octopus/components/registry/server/service/impl/ImportServiceImpl.kt">
         <error line="2731" column="1" source="standard:no-consecutive-comments" />
