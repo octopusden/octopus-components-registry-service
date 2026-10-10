@@ -36,11 +36,10 @@ import java.nio.file.Paths
 import java.time.Instant
 
 /**
- * Spec-conformance review of PR #510, finding 4: pins the auth gate on
+ * Pins the auth gate on
  * `rest/api/4/admin/teamcity-placement` end to end, through a real MockMvc dispatch (so
  * `@GetMapping(produces = ...)` content negotiation is actually exercised, unlike the plain-mock
- * [TeamcityPlacementControllerV4Test]). The permission model itself is owner-confirmed as-is and
- * NOT changed by this test: running Diff, running Sync, and the Sync CSV all require
+ * [TeamcityPlacementControllerV4Test]). The permission model: running Diff, running Sync, and the Sync CSV all require
  * `IMPORT_DATA`; the Diff report (json/html/csv) needs only component read access.
  */
 @AutoConfigureMockMvc

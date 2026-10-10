@@ -5,7 +5,7 @@ import org.octopusden.octopus.escrow.RepositoryType
 
 /**
  * ADR-001 rev. 3 placement validation over a row's final VCS entries — extracted from
- * `ComponentManagementServiceImpl` (owner review of PR #510, finding 4) so the TeamCity placement
+ * `ComponentManagementServiceImpl` so the TeamCity placement
  * Diff job can run the SAME checks a real v4 write runs against a row's TeamCity-derived values,
  * to tell RESOLVED (apply-able) from INVALID (would be rejected), without duplicating the rule.
  *
@@ -30,8 +30,7 @@ object VcsPlacementValidator {
     ): String = if (RepositoryType.valueOf(repositoryType ?: "GIT").isCaseSensitive) vcsPath else vcsPath.lowercase()
 
     /**
-     * ADR-001 decision 4 name-derivation rule, shared (owner review of PR #510, finding 4
-     * hardening) between a real v4 write (`ComponentManagementServiceImpl.replaceVcsEntries`) and
+     * ADR-001 decision 4 name-derivation rule, shared between a real v4 write (`ComponentManagementServiceImpl.replaceVcsEntries`) and
      * the TeamCity placement Diff job's INVALID check — both must derive a row's candidate names
      * the SAME way, or Diff can flag a row INVALID that the real write would actually accept: an
      * unplaced entry's kept name that collides with a NEW checkout directory is excluded and falls

@@ -8,7 +8,7 @@ import java.util.UUID
 
 /**
  * Tells a placement value that is safe for Sync to overwrite from one that isn't — the "never
- * overwrite a manual edit" rule (owner review, revised): a field is manual only if its LAST
+ * overwrite a manual edit" rule: a field is manual only if its LAST
  * audited change was a real user write, not one tagged as coming from Sync itself
  * ([SYNC_CHANGE_COMMENT_PREFIX]). A field with NO audit record that ever touched it — a null
  * value, the ADR-001 V8 migration's raw-SQL back-fill (which bypassed the app and left no
@@ -32,7 +32,7 @@ import java.util.UUID
 class PlacementEditHistory(
     private val auditLogRepository: AuditLogRepository,
 ) {
-    /** Tracked independently of [isSourcePathManuallySet] (owner review finding 2 hardening): a
+    /** Tracked independently of [isSourcePathManuallySet]: a
      * Sync write touching only `sourcePath` must not "launder" an earlier manual
      * `checkoutDirectory` edit into overwritable just because it shares an audit row with a
      * sync-tagged change to the OTHER field. */

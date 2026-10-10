@@ -19,19 +19,11 @@ data class StartPlacementSyncResult(
 )
 
 /**
- * ONB-002: async wrapper around [TeamcityPlacementSyncService.sync]. [startAsync]'s [latestDiff]
- * is the exact Diff result the request's `diffId` is validated against (owner review finding 1
- * hardening): the caller reads [TeamcityPlacementDiffJobService.lastCompleted] ONCE, stamps its id
- * into the result's `diffId`, and passes that SAME result object through here — never re-fetched
- * once the job actually runs. A re-fetch would reopen the TOCTOU window the `diffId` check exists
- * to close: a new Diff completing between the check and the (async) work running would otherwise
- * let Sync silently act on a result the caller never validated.
- *
- * Order of answers (PR #510 review): a cross-kind gate conflict (including a RUNNING Diff) throws
- * [org.octopusden.octopus.components.registry.server.service.MigrationConflictException]; a RUNNING
- * Sync is returned as an attach (`isNewlyStarted = false`); only then is [requestedDiffId] compared
- * with [latestDiff]'s `diffId`, throwing [PlacementDiffStaleException] on a mismatch or when no
- * Diff has completed ([latestDiff] `null`).
+ * ONB-002: async wrapper around [TeamcityPlacementSyncService.sync]. [startAsync] reads
+ * [latestDiff] ONCE, under the gate, checks its `diffId` against [requestedDiffId] (throwing
+ * [PlacementDiffStaleException] on a mismatch or when it is `null`) and runs the job on that same
+ * result; re-reading it later would reopen the race the check closes. The 409 answers are listed
+ * on `TeamcityPlacementControllerV4.startSync`.
  */
 interface TeamcityPlacementSyncJobService {
     fun startAsync(

@@ -101,7 +101,7 @@ object PlacementReportRenderer {
         return lines.joinToString("\r\n") + "\r\n"
     }
 
-    /** Rollback trace (owner review finding 6 / ADR-002 decision 5): one row per field a Sync run
+    /** Rollback trace (ADR-002 decision 5): one row per field a Sync run
      * actually wrote, before and after -- what an operator rolling back that run reads to restore
      * each field's prior value (technical-design.md §6.8, "Rolling back a Sync"). */
     fun toSyncReportCsv(result: PlacementSyncResult): String {
