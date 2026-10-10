@@ -9,9 +9,9 @@ import java.util.UUID
 
 class PlacementReportRendererTest {
     @Test
-    fun `HTML report escapes an apostrophe the same way Spring's HtmlUtils does (owner review finding 7, RED)`() {
-        // Owner review: the hand-rolled esc() only replaces &, <, >, " -- never a single quote,
-        // which is attacker-controlled (a component key, a note) and can still break out of a
+    fun `HTML report escapes an apostrophe the same way Spring's HtmlUtils does`() {
+        // A hand-rolled esc() replacing only &, <, >, " would miss a single quote, and a single quote
+        // is attacker-controlled (a component key, a note) and can break out of a
         // single-quoted HTML attribute. Spring's HtmlUtils.htmlEscape covers it.
         val row = PlacementRowDiff(
             componentId = UUID.randomUUID(),
@@ -33,7 +33,7 @@ class PlacementReportRendererTest {
     }
 
     @Test
-    fun `diff report CSV has the expected header row (spec-conformance finding 4 coverage)`() {
+    fun `diff report CSV has the expected header row`() {
         val csv = PlacementReportRenderer.toCsv(PlacementDiffResult(Instant.now(), emptyList()))
 
         val header = csv.trim().split("\r\n").single()
@@ -46,7 +46,7 @@ class PlacementReportRendererTest {
     }
 
     @Test
-    fun `diff report CSV escapes a comma in a note by quoting the cell (spec-conformance finding 4 coverage)`() {
+    fun `diff report CSV escapes a comma in a note by quoting the cell`() {
         val row = PlacementRowDiff(
             componentId = UUID.randomUUID(),
             componentKey = "comp-one",
@@ -105,7 +105,7 @@ class PlacementReportRendererTest {
     }
 
     @Test
-    fun `CSV neutralises a cell that a spreadsheet would run as a formula (independent review finding 1)`() {
+    fun `CSV neutralises a cell that a spreadsheet would run as a formula`() {
         // A VCS URL is written by component editors, the CSV is read by anyone with view access.
         val result = PlacementSyncResult(
             triggeredBy = "alice",

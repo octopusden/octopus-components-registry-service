@@ -1,5 +1,6 @@
 package org.octopusden.octopus.components.registry.server.controller
 
+import org.junit.jupiter.api.DisplayName
 import org.junit.jupiter.api.Test
 import org.mockito.kotlin.any
 import org.mockito.kotlin.mock
@@ -18,7 +19,7 @@ import org.springframework.test.web.servlet.setup.MockMvcBuilders
 import java.util.UUID
 
 /**
- * Owner review of PR #510: the "sync from TeamCity" change-comment prefix is the provenance tag
+ * The "sync from TeamCity" change-comment prefix is the provenance tag
  * `PlacementEditHistory` trusts, so a REST client must not be able to forge it on any v4 write that
  * accepts a `changeComment`. If the guard is missing the request reaches the (stubbed-to-fail)
  * service and answers 500 (the stub's failure) instead of 400.
@@ -42,7 +43,8 @@ class ComponentControllerV4ReservedCommentTest {
     private fun comment(prefix: String) = """"changeComment":"$prefix (job ${UUID.randomUUID()})""""
 
     @Test
-    fun `PATCH with the reserved sync comment is a 400`() {
+    @DisplayName("SYS-099: PATCH with the reserved sync comment is a 400")
+    fun `SYS-099 PATCH with the reserved sync comment is a 400`() {
         mvc
             .perform(
                 patch("/rest/api/4/components/$id")
@@ -54,7 +56,8 @@ class ComponentControllerV4ReservedCommentTest {
     }
 
     @Test
-    fun `the reserved prefix is matched case-insensitively after trim`() {
+    @DisplayName("SYS-099: the reserved prefix is matched case-insensitively after trim")
+    fun `SYS-099 the reserved prefix is matched case-insensitively after trim`() {
         mvc
             .perform(
                 patch("/rest/api/4/components/$id")
@@ -64,7 +67,8 @@ class ComponentControllerV4ReservedCommentTest {
     }
 
     @Test
-    fun `POST create with the reserved sync comment is a 400`() {
+    @DisplayName("SYS-099: POST create with the reserved sync comment is a 400")
+    fun `SYS-099 POST create with the reserved sync comment is a 400`() {
         mvc
             .perform(
                 post("/rest/api/4/components")
@@ -75,7 +79,8 @@ class ComponentControllerV4ReservedCommentTest {
     }
 
     @Test
-    fun `PUT supported-versions with the reserved sync comment is a 400`() {
+    @DisplayName("SYS-099: PUT supported-versions with the reserved sync comment is a 400")
+    fun `SYS-099 PUT supported-versions with the reserved sync comment is a 400`() {
         mvc
             .perform(
                 put("/rest/api/4/components/$id/supported-versions")

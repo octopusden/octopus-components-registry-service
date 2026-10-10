@@ -24,7 +24,7 @@ data class PlacementComponentSyncOutcome(
     val rows: List<PlacementRowSyncOutcome>,
 )
 
-/** One written field's rollback trace (owner review finding 6): [root] is the affected VCS entry's
+/** One written field's rollback trace: [root] is the affected VCS entry's
  * name for `checkoutDirectory` / `sourcePath`, or `""` for the row-level `buildWorkingDirectory`. */
 data class PlacementFieldChange(
     val componentKey: String,
@@ -146,8 +146,7 @@ class TeamcityPlacementSyncService(
     }
 
     /** Always a BASE row here — a marker (per-range `vcs.settings`) row never reaches this point;
-     * see the report-only check in [applyOrSkip]. Returns the field-level before/after trace (owner
-     * review finding 6) for every field that actually changed. */
+     * see the report-only check in [applyOrSkip]. Returns the field-level before/after trace for every field that actually changed. */
     private fun applyRow(
         componentId: UUID,
         row: PlacementRowDiff,

@@ -81,33 +81,22 @@ class TeamcityPlacementControllerV4(
             .body(PlacementReportRenderer.toCsv(report))
     }
 
-    private fun latestReport(): PlacementDiffResult? =
-        diffJobService.lastCompleted()?.let { state -> state.result?.copy(diffId = state.id) }
+    private fun latestReport(): PlacementDiffResult? = diffJobService.lastCompleted()?.result
 
     /**
-     * Applies the last COMPLETED Diff's resolved rows for [request]'s component ids ("select all
-     * resolved" from the Portal table). The 409 answers, in the order they are decided:
-     *  1. another admin job holds the gate -- a RUNNING Diff included (its result is not final) --
-     *     `MigrationConflictResponse` (`code` such as `tc-placement-diff-running`), mapped globally;
-     *  2. a Sync is already running -- the running job's `TeamcityPlacementSyncJobResponse`
-     *     (`kind: "job"`), the same-kind attach;
-     *  3. `diffId` is not the last completed Diff, or none has completed -- `ErrorResponse` with
-     *     `errorCode` `placement-diff-stale`; nothing is written. Diff keeps only that one
-     *     completed result (ADR-002 decision 1), so a Sync acts on the result the user looked at.
-     * The check in 3 reads the last completed Diff under the gate and hands that exact
-     * [PlacementDiffResult] to the job -- not re-fetched when the async job runs (owner review finding 1 hardening): re-fetching later
-     * would reopen the race this check exists to close. Otherwise 202 on a freshly-started run.
+     * Applies the last COMPLETED Diff's resolved rows for [request]'s component ids. 202 on a
+     * freshly-started run; the 409 shapes are described on the `@ApiResponses` below.
      */
     @PostMapping("/sync")
     @ApiResponses(
         ApiResponse(responseCode = "202", description = "A new Sync job was started"),
         ApiResponse(
             responseCode = "409",
-            description = "Three body shapes, in this order. (1) Another admin job holds the gate, a running Diff " +
-                "included: MigrationConflictResponse {code, message, activeKind, activeJobId}. (2) A Sync is already " +
-                "running: the in-flight TeamcityPlacementSyncJobResponse (kind \"job\"). (3) diffId is not the last " +
+            description = "Three body shapes, checked in this order. (1) A Sync is already running: the in-flight " +
+                "TeamcityPlacementSyncJobResponse (kind \"job\"). (2) Another admin job holds the gate, a running Diff " +
+                "included: MigrationConflictResponse {code, message, activeKind, activeJobId}. (3) diffId is not the last " +
                 "completed Diff, or none has completed: ErrorResponse {errorMessage: \"diff replaced, re-run Diff\", " +
-                "errorCode: \"placement-diff-stale\"}, nothing written.",
+                "errorCode: \"placement-diff-stale\"}, nothing written; Diff keeps only that one result (ADR-002 decision 1).",
             content = [
                 Content(
                     schema = Schema(
@@ -140,7 +129,7 @@ class TeamcityPlacementControllerV4(
         return ResponseEntity.ok(TeamcityPlacementSyncJobResponse.from(state))
     }
 
-    /** The latest Sync run's rollback trace (owner review finding 6 / ADR-002 decision 5): one row
+    /** The latest Sync run's rollback trace (ADR-002 decision 5): one row
      * per field it wrote, before and after. 404 until a Sync has completed at least once. Same
      * `IMPORT_DATA` gate as the rest of Sync -- this is what Sync wrote, not a public report. */
     @GetMapping("/sync/report.csv")

@@ -4,6 +4,7 @@ import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.Assertions.assertNotNull
 import org.junit.jupiter.api.Assertions.assertNull
 import org.junit.jupiter.api.Assertions.assertTrue
+import org.junit.jupiter.api.DisplayName
 import org.junit.jupiter.api.Test
 import org.mockito.kotlin.any
 import org.mockito.kotlin.argumentCaptor
@@ -45,7 +46,8 @@ class VcsRootsValidationTest {
     ) = TcCompileConfig(id, urls.map { TcVcsRootEntry(it, "") }, null)
 
     @Test
-    fun `an extra root is a WARNING naming the repository and the build type (RED)`() {
+    @DisplayName("SYS-099: an extra root is a WARNING naming the repository and the build type")
+    fun `SYS-099 an extra root is a WARNING naming the repository and the build type`() {
         val result = VcsRootsValidation.check("comp-one", listOf(app), listOf(config("bt1", app, tooling)))
 
         assertNotNull(result)
@@ -55,7 +57,7 @@ class VcsRootsValidationTest {
     }
 
     @Test
-    fun `a missing root is a WARNING naming the repository (RED)`() {
+    fun `a missing root is a WARNING naming the repository`() {
         val result = VcsRootsValidation.check("comp-one", listOf(app, tooling), listOf(config("bt1", app)))
 
         assertEquals(Status.WARNING, result?.status)
@@ -149,7 +151,8 @@ class VcsRootsValidationTest {
     }
 
     @Test
-    fun `components sharing a project with the same roots get no finding (RED)`() {
+    @DisplayName("SYS-099: components sharing a project with the same roots get no finding")
+    fun `SYS-099 components sharing a project with the same roots get no finding`() {
         val a = comp("comp-one")
         val b = comp("comp-two")
         val findings = validationFindings(
@@ -162,7 +165,8 @@ class VcsRootsValidationTest {
     }
 
     @Test
-    fun `a shared project with differing roots flags neither component, like the Diff (RED)`() {
+    @DisplayName("SYS-099: a shared project with differing roots flags neither component, like the Diff")
+    fun `SYS-099 a shared project with differing roots flags neither component, like the Diff`() {
         val a = comp("comp-one")
         val b = comp("comp-two")
         val rows = listOf(baseRow(a, app), baseRow(b, appB))
@@ -178,7 +182,7 @@ class VcsRootsValidationTest {
     }
 
     @Test
-    fun `a tooling root on the component's own configuration is still flagged by both (RED)`() {
+    fun `a tooling root on the component's own configuration is still flagged by both`() {
         val a = comp("comp-one")
         val b = comp("comp-two")
         val rows = listOf(baseRow(a, app), baseRow(b, appB))
@@ -199,7 +203,7 @@ class VcsRootsValidationTest {
     }
 
     @Test
-    fun `a failing registry lookup degrades to no roots finding instead of aborting the run (RED)`() {
+    fun `a failing registry lookup degrades to no roots finding instead of aborting the run`() {
         val configRepo = mock<ComponentConfigurationRepository>()
         whenever(configRepo.findAllRowsWithVcsEntries()).thenThrow(IllegalStateException("db down"))
         val a = comp("comp-one")
@@ -226,7 +230,7 @@ class VcsRootsValidationTest {
     }
 
     @Test
-    fun `a component spanning two projects has no false missing root, like the Diff (RED)`() {
+    fun `a component spanning two projects has no false missing root, like the Diff`() {
         val a = comp("comp-one")
         val rows = listOf(baseRow(a, app, appB))
         val split = mapOf(

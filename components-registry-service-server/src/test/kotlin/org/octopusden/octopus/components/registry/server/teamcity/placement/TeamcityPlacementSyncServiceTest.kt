@@ -1,6 +1,7 @@
 package org.octopusden.octopus.components.registry.server.teamcity.placement
 
 import org.junit.jupiter.api.Assertions.assertEquals
+import org.junit.jupiter.api.DisplayName
 import org.junit.jupiter.api.Test
 import org.mockito.kotlin.any
 import org.mockito.kotlin.argumentCaptor
@@ -83,7 +84,7 @@ class TeamcityPlacementSyncServiceTest {
         val captor = argumentCaptor<ComponentUpdateRequest>()
         verify(cms).updateComponent(org.mockito.kotlin.eq(componentId), captor.capture())
         assertEquals(5L, captor.firstValue.version)
-        // Owner review finding 6 (rollback trace): the Sync job's own id rides in the audit
+        // Rollback trace: the Sync job's own id rides in the audit
         // change_comment, alongside the fixed provenance tag PlacementEditHistory keys on.
         assertEquals("sync from TeamCity (job job-42)", captor.firstValue.changeComment)
         assertEquals(true, captor.firstValue.changeComment!!.startsWith(PlacementEditHistory.SYNC_CHANGE_COMMENT_PREFIX))
@@ -92,7 +93,7 @@ class TeamcityPlacementSyncServiceTest {
     }
 
     @Test
-    fun `the write carries the version the re-derivation read, so a later manual edit conflicts (review P1-1, RED)`() {
+    fun `the write carries the version the re-derivation read, so a later manual edit conflicts`() {
         // The fresh re-derivation read the component at version 4; a manual edit then bumped it to 5.
         // Writing with a version re-read at write time (5) would silently overwrite that edit.
         val diffRow = row(PlacementDiffRowStatus.RESOLVED, componentVersion = 4L)
@@ -110,7 +111,7 @@ class TeamcityPlacementSyncServiceTest {
     }
 
     @Test
-    fun `an unrelated edit between Diff and Sync does not skip the row, the write uses the fresh version (Codex re-review, RED)`() {
+    fun `an unrelated edit between Diff and Sync does not skip the row, the write uses the fresh version`() {
         // Only the version moved (e.g. a description edit): the fresh re-derivation is otherwise
         // identical, so the row is still safe to apply, locked on the version read with it.
         val snapshotRow = row(PlacementDiffRowStatus.RESOLVED, componentVersion = 4L)
@@ -127,7 +128,8 @@ class TeamcityPlacementSyncServiceTest {
     }
 
     @Test
-    fun `an applied row's before and after values are recorded per field (owner review finding 6, RED)`() {
+    @DisplayName("SYS-099: an applied row's before and after values are recorded per field")
+    fun `SYS-099 an applied row's before and after values are recorded per field`() {
         val diffRow = row(PlacementDiffRowStatus.RESOLVED, derivedBwd = "app/build")
         val diffService = diffServiceReturning(listOf(diffRow))
         val (svc, _) = service(diffService)
@@ -168,7 +170,8 @@ class TeamcityPlacementSyncServiceTest {
     }
 
     @Test
-    fun `a manual-edit row is skipped, never written`() {
+    @DisplayName("SYS-099: a manual-edit row is skipped, never written")
+    fun `SYS-099 a manual-edit row is skipped, never written`() {
         val diffRow = row(PlacementDiffRowStatus.MANUAL_EDIT)
         val diffService = diffServiceReturning(listOf(diffRow))
         val (svc, cms) = service(diffService)
@@ -188,9 +191,9 @@ class TeamcityPlacementSyncServiceTest {
     }
 
     @Test
-    fun `an invalid row is skipped even if selected (spec-conformance finding 4 coverage)`() {
-        // Already correct (freshRow.status != RESOLVED already covers it) -- missing only a
-        // dedicated test per the spec-conformance review's checklist.
+    @DisplayName("SYS-099: an invalid row is skipped even if selected")
+    fun `SYS-099 an invalid row is skipped even if selected`() {
+        // Covered by the freshRow.status != RESOLVED check.
         val diffRow = row(PlacementDiffRowStatus.INVALID)
         val diffService = diffServiceReturning(listOf(diffRow))
         val (svc, cms) = service(diffService)

@@ -3,6 +3,7 @@ package org.octopusden.octopus.components.registry.server.teamcity.placement
 import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.Assertions.assertNull
 import org.junit.jupiter.api.Assertions.assertTrue
+import org.junit.jupiter.api.DisplayName
 import org.junit.jupiter.api.Test
 import org.mockito.kotlin.mock
 import org.mockito.kotlin.whenever
@@ -217,7 +218,8 @@ class TeamcityPlacementDiffServiceTest {
     }
 
     @Test
-    fun `a manually re-saved value is reported as manual edit, not overwritten`() {
+    @DisplayName("SYS-099: a manually re-saved value is reported as manual edit, not overwritten")
+    fun `SYS-099 a manually re-saved value is reported as manual edit, not overwritten`() {
         val comp = component()
         val row = multiRootRow(comp, currentAppCd = "custom-name")
         val bt = compileBuildType("compileA", roots = listOf(gatewayId to "", appId to "+:. => app-one"))
@@ -280,7 +282,8 @@ class TeamcityPlacementDiffServiceTest {
     }
 
     @Test
-    fun `a TeamCity error on a single-root row is reported, not dropped (QA Diff, RED)`() {
+    @DisplayName("SYS-099: a TeamCity error on a single-root row is reported, not dropped")
+    fun `SYS-099 a TeamCity error on a single-root row is reported, not dropped`() {
         // Without the chain nothing is derived, so the single-root scope filter can't tell whether
         // the row is in scope; dropping it hid that most projects failed to read.
         val comp = component()
@@ -300,7 +303,8 @@ class TeamcityPlacementDiffServiceTest {
     }
 
     @Test
-    fun `a compile configuration attaching an extra tooling root is a roots mismatch, not invalid (RED)`() {
+    @DisplayName("SYS-099: a compile configuration attaching an extra tooling root is a roots mismatch, not invalid")
+    fun `SYS-099 a compile configuration attaching an extra tooling root is a roots mismatch, not invalid`() {
         val comp = component()
         val row = ComponentConfigurationEntity(id = UUID.randomUUID(), component = comp, rowType = "BASE")
         row.vcsEntries += VcsSettingsEntryEntity(componentConfiguration = row, name = "main", vcsPath = appId, sortOrder = 0)
@@ -344,7 +348,8 @@ class TeamcityPlacementDiffServiceTest {
     }
 
     @Test
-    fun `a single-root row TeamCity places where CRS cannot express it is reported, not dropped (RED)`() {
+    @DisplayName("SYS-099: a single-root row TeamCity places where CRS cannot express it is reported, not dropped")
+    fun `SYS-099 a single-root row TeamCity places where CRS cannot express it is reported, not dropped`() {
         val comp = component()
         val bt = compileBuildType("compileA", workDir = "%PARAM%/x", roots = listOf(appId to "+:a => b\n+:c => d"))
         val svc = service(
@@ -357,7 +362,8 @@ class TeamcityPlacementDiffServiceTest {
     }
 
     @Test
-    fun `a single-root row whose compile configurations disagree is reported, not dropped (RED)`() {
+    @DisplayName("SYS-099: a single-root row whose compile configurations disagree is reported, not dropped")
+    fun `SYS-099 a single-root row whose compile configurations disagree is reported, not dropped`() {
         val comp = component()
         val a = compileBuildType("a", roots = listOf(appId to ""))
         val b = compileBuildType("b", roots = listOf(appId to "+:mapper"))
@@ -405,7 +411,7 @@ class TeamcityPlacementDiffServiceTest {
     }
 
     @Test
-    fun `a single-root row whose derived checkout directory has no build working directory is invalid (spec-conformance finding 3, RED)`() {
+    fun `a single-root row whose derived checkout directory has no build working directory is invalid`() {
         // Same shape without WORK_DIR: still in scope (a derived CD exists), but ADR-001's rule --
         // every root has a Checkout Directory, so a Build Working Directory is required, and none
         // was derived -- is a CRS VALIDATION rule (VcsPlacementValidator.validateBuildWorkingDirectory),
@@ -427,10 +433,9 @@ class TeamcityPlacementDiffServiceTest {
     }
 
     @Test
-    fun `a WORK_DIR containing a parent-directory segment is invalid, not unexpressible (Codex finding, RED)`() {
-        // Codex second-pass finding: parseWorkDir used to reject "a/../b" itself (Unexpressible),
-        // pre-empting VcsPlacementValidator's own segment-shape check (`..` is explicitly a CRS
-        // VALIDATION rule per the spec, not a parse-shape failure) from ever running. It must parse
+    fun `a WORK_DIR containing a parent-directory segment is invalid, not unexpressible`() {
+        // `..` is a CRS VALIDATION rule, not a parse-shape failure, so parseWorkDir must not reject
+        // it itself (Unexpressible) ahead of VcsPlacementValidator's own check. It must parse
         // to a plain Path and be downgraded to INVALID here instead, with the validator's message.
         val comp = component()
         val row = ComponentConfigurationEntity(id = UUID.randomUUID(), component = comp, rowType = "BASE")
@@ -448,7 +453,7 @@ class TeamcityPlacementDiffServiceTest {
     }
 
     @Test
-    fun `two roots at the checkout root is invalid, not unexpressible (spec-conformance finding 3, RED)`() {
+    fun `two roots at the checkout root is invalid, not unexpressible`() {
         // "At most one root at the checkout root" is a CRS validation rule
         // (VcsPlacementValidator.validateVcsPlacement's rootEntry check), not a rule-shape problem
         // -- both roots parse cleanly, they just conflict with each other under CRS's own rules.
@@ -465,7 +470,7 @@ class TeamcityPlacementDiffServiceTest {
     }
 
     @Test
-    fun `a derived source path outside the row is invalid (owner review finding 4, RED)`() {
+    fun `a derived source path outside the row is invalid`() {
         // `+:../outside` parses to a plain Source Path of "../outside" (parseCheckoutRule has no
         // opinion on its shape) -- but the SAME v4 write path a human PATCH uses rejects a
         // Source Path containing "..", so this must be reported INVALID, not RESOLVED.
@@ -481,10 +486,9 @@ class TeamcityPlacementDiffServiceTest {
     }
 
     @Test
-    fun `a kept name that WOULD collide falls back to main exactly as a real write would (owner review finding 4 hardening, RED)`() {
-        // Codex second-pass finding: the first version of this check built its candidate names as
-        // `derived checkoutDirectory ?: kept name` -- no exclusion, no fallback -- so it flagged
-        // this row INVALID. But ComponentManagementServiceImpl.replaceVcsEntries (the REAL write)
+    fun `a kept name that WOULD collide falls back to main exactly as a real write would`() {
+        // Building candidate names as `derived checkoutDirectory ?: kept name` -- no exclusion, no
+        // fallback -- would flag this row INVALID. But ComponentManagementServiceImpl.replaceVcsEntries (the REAL write)
         // excludes a kept name that collides with a NEW checkout directory and falls back to
         // "main" instead of failing -- so the real write would ACCEPT this row (GATEWAY ends up
         // named "main", not colliding with APP's "app-one"). Diff's candidate must derive names
@@ -515,8 +519,8 @@ class TeamcityPlacementDiffServiceTest {
         // The "main" fallback ITSELF can collide: if some entry's derived Checkout Directory is
         // literally "main", an unplaced root whose kept name collides (so it falls back to the
         // hardcoded default "main") lands on the SAME name as that other root -- a real v4 write
-        // would reject this exactly the same way. Regression guard for the hardening above: the
-        // fix must not overcorrect into treating every collision as fallback-safe.
+        // would reject this exactly the same way. The fallback
+        // must not overcorrect into treating every collision as fallback-safe.
         val comp = component()
         val row = ComponentConfigurationEntity(id = UUID.randomUUID(), component = comp, rowType = "BASE")
         row.vcsEntries += VcsSettingsEntryEntity(componentConfiguration = row, name = "main", vcsPath = gatewayId, sortOrder = 0)
@@ -530,7 +534,8 @@ class TeamcityPlacementDiffServiceTest {
     }
 
     @Test
-    fun `a version-range override (vcs_settings marker) row is left out of the Diff (owner decision, RED)`() {
+    @DisplayName("SYS-099: a version-range override (vcs_settings marker) row is left out of the Diff")
+    fun `SYS-099 a version-range override (vcs_settings marker) row is left out of the Diff`() {
         // Only the current (base) configuration is diffed; version ranges are not touched.
         val comp = component()
         val row = ComponentConfigurationEntity(
@@ -547,7 +552,8 @@ class TeamcityPlacementDiffServiceTest {
     }
 
     @Test
-    fun `an archived component is left out of the Diff entirely (QA Diff, owner decision, RED)`() {
+    @DisplayName("SYS-099: an archived component is left out of the Diff entirely")
+    fun `SYS-099 an archived component is left out of the Diff entirely`() {
         // On QA, archived components made up 60% of the report and can never be synced.
         val comp = component(archived = true)
         val row = multiRootRow(comp)

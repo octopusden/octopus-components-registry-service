@@ -85,7 +85,7 @@ data class PlacementRowDiff(
 data class PlacementDiffResult(
     val generatedAt: Instant,
     val rows: List<PlacementRowDiff>,
-    /** The Diff run this result belongs to — what a Sync request must name. Set on the report endpoint. */
+    /** The Diff run this result belongs to — what a Sync request must name. Set by the job service when the run completes. */
     val diffId: String? = null,
 )
 
@@ -103,8 +103,8 @@ data class PlacementDiffResult(
  * row with nothing on either side (no Checkout Directory, checkout-root Build Working Directory)
  * is out of scope entirely — ADR-001 keeps single-root Checkout Directories out of the
  * escrow-facing `main` name — and never appears
- * in the result, not even as "in sync". The exception: a `CONFLICT` or `UNEXPRESSIBLE` derivation
- * produces no values for the filter to judge, so such a row is always reported (like `TC_ERROR`).
+ * in the result, not even as "in sync". The filter applies only to [PlacementRowStatus.scopeFiltered]
+ * statuses; any other (`CONFLICT`, `UNEXPRESSIBLE`, ...) is always reported, like `TC_ERROR`.
  */
 @ConditionalOnDatabaseEnabled
 @Service
@@ -208,10 +208,9 @@ class TeamcityPlacementDiffService(
             derivedForScope?.sourcePath,
             derivation.buildWorkingDirectory,
         )
-        // CONFLICT / UNEXPRESSIBLE derive no values, so the filter can't judge them -- like TC_ERROR
-        // and ROOTS_MISMATCH they are always reported, never dropped.
-        val alwaysReported = derivation.status == PlacementRowStatus.CONFLICT || derivation.status == PlacementRowStatus.UNEXPRESSIBLE
-        if (!inScope && !alwaysReported) return null
+        // Statuses the filter can't judge (CONFLICT / UNEXPRESSIBLE derive no values) are always
+        // reported, like TC_ERROR and ROOTS_MISMATCH.
+        if (!inScope && derivation.status.scopeFiltered) return null
 
         val (status, extraNotes) = finalizeStatus(componentId, placementEntries, entries, row.buildWorkingDirectory, derivation)
         return toRowDiff(
@@ -285,15 +284,15 @@ class TeamcityPlacementDiffService(
         if (differingEntries.isEmpty() && !bwdDiffers) {
             return PlacementDiffRowStatus.IN_SYNC to emptyList()
         }
-        // Owner review finding 4 (ADR-002 decision 3): RESOLVED requires the derived values to
+        // ADR-002 decision 3: RESOLVED requires the derived values to
         // ALSO pass the same validation a real v4 write runs. This is the ONLY place that runs it
-        // (spec-conformance finding 3): PlacementRules.derive's pure engine no longer pre-empts it
-        // with its own narrower check — UNEXPRESSIBLE there is reserved for a rule/WORK_DIR shape
+        // (PlacementRules.derive's pure engine does not pre-empt it
+        // with its own narrower check): UNEXPRESSIBLE there is reserved for a rule/WORK_DIR shape
         // that can't be parsed at all; a value that parses fine but fails a CRS validation rule
         // (root uniqueness, reserved/duplicate name, Source Path shape, BWD rules) surfaces as
         // RESOLVED from derive() and is downgraded to INVALID right here instead. Names are derived
         // by the SAME rule the real write uses
-        // (VcsPlacementValidator.deriveNames — owner review finding 4 hardening): building the
+        // (VcsPlacementValidator.deriveNames): building the
         // candidate as `derived.checkoutDirectory ?: e.name`, with no exclusion/fallback, could flag
         // a row INVALID that a real write would accept (an unplaced entry's kept name colliding with
         // a new Checkout Directory falls back to "main", not a validation failure).
@@ -323,7 +322,7 @@ class TeamcityPlacementDiffService(
         if (invalidMessage != null) {
             return PlacementDiffRowStatus.INVALID to listOf(invalidMessage.message ?: "invalid placement")
         }
-        // Owner review finding 2 hardening: checked per FIELD, not per entry — a Sync write that
+        // Checked per FIELD, not per entry — a Sync write that
         // touched only sourcePath must not "launder" an earlier manual checkoutDirectory edit on
         // the same entry into overwritable.
         val manualEntry = entries.indices.any { i ->
