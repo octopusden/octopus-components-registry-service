@@ -3341,8 +3341,9 @@ field the view shows without per-field query code.
 - Params: `q` (required; trimmed; 2–200 characters), `regex` (default `false`), `archived`
   (omitted = both), `limit` (1–1000, default 100), `maxMatchesPerComponent` (1–1000, default 20).
 - Matching is line-based over each component's FULL as-code text: case-insensitive substring, or
-  with `regex=true` a case-insensitive regular expression. Archived components are included unless
-  `archived` narrows them out.
+  with `regex=true` a case-insensitive regular expression in RE2 syntax (no lookarounds or
+  backreferences; repetition counts up to 1000), which guarantees matching in time linear in the
+  input. Archived components are included unless `archived` narrows them out.
 - Response `AsCodeSearchResponse {query, regex, totalComponents, truncated, results}`. `results`
   are `AsCodeSearchHit {id, componentKey, archived, matchCount, matches}` sorted by component key (`id` is the
   component UUID, the id the v4 write endpoints are addressed by), cut at
@@ -3355,11 +3356,13 @@ field the view shows without per-field query code.
   by the server's own matcher — so a client highlights regex hits exactly instead of re-running
   the pattern in a different regex engine. Empty matches are omitted; at most 50 spans per line.
 - Errors (`400`): `q` too short / too long, `limit` or `maxMatchesPerComponent` out of range, an
-  invalid regex, a regex whose evaluation exceeds a 2 s time budget for the request, or a regex
-  whose recursion exhausts the stack on a long line. The budget is one per request: it is checked
-  before every line, every few dozen matches within a line and, within a single match, every few
-  thousand character reads, so neither many cheap lines, nor a run of empty matches that read no
-  input, nor one catastrophically backtracking match can outrun it.
+  invalid regex (including constructs outside RE2), a regex whose nested repetitions compile to more
+  than 2000 RE2 instructions (estimated from the pattern text before compiling, so an exploding
+  pattern is never built), or a regex whose evaluation exceeds a 2 s time budget for the
+  request. The budget is one per request: it is checked before every line and every few thousand
+  character reads within a line. RE2 does at most program-size work per character read, so no
+  single match can run on without reading input, and neither many cheap lines nor one long line
+  can outrun the budget.
 - The RMS section that `/as-code` appends is **not** searched: it is RMS data, not the
   component's configuration, and it changes on the RMS sweep.
 - **Index.** The rendered lines are held in memory per pod and rebuilt lazily. Each search first
@@ -3389,9 +3392,10 @@ field the view shows without per-field query code.
    old one.
 7. The index is not rebuilt while the stamp is unchanged, is rebuilt when any stamp component moves,
    and is rebuilt once it is older than 5 minutes.
-8. Too-short `q`, out-of-range `limit` and an invalid regex return `400`; a catastrophically
-   backtracking regex fails with `400` instead of hanging; the time budget also stops a search made
-   of many cheap per-line matches and a line of empty matches that read no input; a regex that exhausts the stack fails with `400`, not `500`.
+8. Too-short `q`, out-of-range `limit` and an invalid regex return `400`; a regex that backtracks
+   catastrophically in the JDK engine runs in linear time (RE2); constructs outside RE2
+   (lookarounds, backreferences) and oversized programs fail with `400`; the time budget stops a
+   search made of many cheap per-line matches and a long line of empty matches.
 9. `crsctl search` maps its options to the query params, prints grep-shaped lines, emits the
    `results` array with `-o json`, and warns on STDERR when truncated.
 10. Each match carries `ranges` pointing at the matched text within `text` (indentation
@@ -3409,10 +3413,12 @@ field the view shows without per-field query code.
 `` `SYS-100 index is reused while the stamp holds and rebuilt when it moves` `` (7),
 `` `SYS-100 index older than MAX_INDEX_AGE is rebuilt` `` (7),
 `` `SYS-100 invalid input is rejected` `` (8),
-`` `SYS-100 catastrophically backtracking regex is aborted` `` (8),
+`` `SYS-100 backtracking-prone regex runs in linear time` `` (8),
 `` `SYS-100 regex budget is enforced between lines` `` (8),
 `` `SYS-100 regex budget is enforced across empty matches` `` (8),
-`` `SYS-100 regex stack exhaustion is rejected` `` (8),
+`` `SYS-100 regex constructs outside RE2 are rejected` `` (8),
+`` `SYS-100 oversized regex program is rejected` `` (8),
+`` `SYS-100 estimateProgramSize` `` (8),
 `` `SYS-100 indexLines keeps blank lines so positions equal line numbers` `` (1),
 `` `SYS-100 substring match reports ranges relative to the trimmed text` `` (10),
 `` `SYS-100 regex match reports the matched spans` `` (10),

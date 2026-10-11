@@ -9,7 +9,7 @@ import java.util.UUID
 data class AsCodeSearchResponse(
     /** The trimmed query that was matched. */
     val query: String,
-    /** `true` when [query] was matched as a case-insensitive regular expression. */
+    /** `true` when [query] was matched as a case-insensitive regular expression (RE2 syntax). */
     val regex: Boolean,
     /** Number of components with at least one matching line, BEFORE [results] is cut at `limit`. */
     val totalComponents: Int,

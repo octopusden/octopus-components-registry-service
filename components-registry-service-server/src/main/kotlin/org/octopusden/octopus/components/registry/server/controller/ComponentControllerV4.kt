@@ -381,7 +381,7 @@ class ComponentControllerV4(
     /**
      * Global text search over every component's FULL as-code view (SYS-100) — the replacement
      * for grepping the Groovy DSL files. Case-insensitive substring by default; `regex=true`
-     * matches `q` as a case-insensitive regular expression. `archived` narrows to archived /
+     * matches `q` as a case-insensitive regular expression in RE2 syntax. `archived` narrows to archived /
      * active components (omitted = both). Results are grouped by component, sorted by key.
      *
      * Two path segments (`/as-code/search`) rather than `/search` so the literal never shadows

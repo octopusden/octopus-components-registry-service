@@ -117,7 +117,7 @@ crsctl --env dev -o json component get my-component | jq '{owner: .componentOwne
 ```
 
 Which components declare a given Maven group (searches every component's as-code text;
-case-insensitive substring, `--regex` for a regular expression):
+case-insensitive substring, `--regex` for an RE2 regular expression):
 
 ```
 crsctl --env dev -o json search 'org.example.foo' --limit 1000 | jq -r '.[].componentKey'

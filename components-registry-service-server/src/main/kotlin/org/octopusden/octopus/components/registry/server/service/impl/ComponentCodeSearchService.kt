@@ -1,5 +1,7 @@
 package org.octopusden.octopus.components.registry.server.service.impl
 
+import com.google.re2j.Pattern
+import com.google.re2j.PatternSyntaxException
 import org.octopusden.octopus.components.registry.server.config.ConditionalOnDatabaseEnabled
 import org.octopusden.octopus.components.registry.server.dto.v4.AsCodeMatchRange
 import org.octopusden.octopus.components.registry.server.dto.v4.AsCodeSearchHit
@@ -16,7 +18,6 @@ import java.time.Duration
 import java.time.Instant
 import java.util.UUID
 import java.util.concurrent.atomic.AtomicReference
-import java.util.regex.PatternSyntaxException
 
 /**
  * Global text search over the components' as-code view (SYS-100) — the DB-era replacement for
@@ -94,13 +95,15 @@ class ComponentCodeSearchService(
      * Case-insensitive substring matcher, or — for [pattern] — a regex matcher bounded by one
      * [RegexBudget] for the whole request. The budget starts now, i.e. AFTER the index is ready, so
      * a rebuild never counts against it. It is checked before every line (many cheap lines must not
-     * outrun it) and, through [DeadlineCharSequence], inside a single expensive match (catastrophic
-     * backtracking). A pattern whose recursion exhausts the stack on a long line is reported as
-     * invalid input too, instead of escaping as a StackOverflowError.
+     * outrun it) and, through [DeadlineCharSequence], every few thousand character reads within a
+     * line. RE2 runs in time linear in the input and does a bounded amount of work per character
+     * read (at most the compiled program size, capped by [MAX_PROGRAM_SIZE]), so the read check
+     * also bounds a single match: no pattern can keep the thread busy without reading input.
+     * A StackOverflowError is still reported as invalid input, as a backstop.
      */
     private fun lineMatcher(
         q: String,
-        pattern: Regex?,
+        pattern: Pattern?,
     ): LineMatcher {
         if (pattern == null) return LineMatcher { line -> substringSpans(line, q).ifEmpty { null } }
         val budget = RegexBudget(clock.instant().plus(REGEX_TIME_BUDGET), clock)
@@ -108,21 +111,15 @@ class ComponentCodeSearchService(
             budget.check()
             try {
                 // A line whose only matches are empty (e.g. `x*`) still matches; it just has nothing to mark.
-                // Empty matches are dropped BEFORE the cap, so they can't use up the allowance and hide a
-                // real span later in the line, and the budget is charged per match: an empty match may read no
-                // input, so DeadlineCharSequence alone would never stop a pattern like `(?=)` repeated.
-                // Materialized inside the try: findAll is lazy, and the overflow happens while iterating.
+                // Empty matches are skipped BEFORE the cap, so they can't use up the allowance and hide a
+                // real span later in the line.
+                val m = pattern.matcher(DeadlineCharSequence(line, budget))
                 var matched = false
-                val spans =
-                    pattern
-                        .findAll(DeadlineCharSequence(line, budget))
-                        .onEach {
-                            matched = true
-                            budget.onMatch()
-                        }.map { it.range }
-                        .filterNot { it.isEmpty() }
-                        .take(MAX_SPANS_PER_LINE)
-                        .toList()
+                val spans = mutableListOf<IntRange>()
+                while (spans.size < MAX_SPANS_PER_LINE && m.find()) {
+                    matched = true
+                    if (m.end() > m.start()) spans += m.start() until m.end()
+                }
                 spans.takeIf { matched }
             } catch (e: StackOverflowError) {
                 throw IllegalArgumentException(TOO_COMPLEX_MESSAGE, e)
@@ -177,12 +174,25 @@ class ComponentCodeSearchService(
         return AsCodeSearchLine(line = lineNumber, text = text, path = line.path, ranges = ranges)
     }
 
-    private fun compilePattern(q: String): Regex =
-        try {
-            Regex(q, RegexOption.IGNORE_CASE)
-        } catch (e: PatternSyntaxException) {
-            throw IllegalArgumentException("Invalid regular expression: ${e.description}", e)
-        }
+    /**
+     * RE2 syntax (no lookarounds or backreferences, repetition counts up to 1000): it guarantees
+     * linear-time matching, which the JDK engine cannot. Nested repetitions still multiply the
+     * compiled program, and with it the work per character and the matcher's recursion depth, so
+     * the program size is capped too. RE2/J builds the whole program while compiling (a 31-character
+     * triple-nested `{1000}` exhausts the heap there), so a cheap estimate rejects such patterns
+     * BEFORE compiling; the exact size is checked after.
+     */
+    private fun compilePattern(q: String): Pattern {
+        require(estimateProgramSize(q) <= MAX_ESTIMATED_PROGRAM_SIZE) { TOO_COMPLEX_MESSAGE }
+        val pattern =
+            try {
+                Pattern.compile(q, Pattern.CASE_INSENSITIVE)
+            } catch (e: PatternSyntaxException) {
+                throw IllegalArgumentException("Invalid regular expression: ${e.description}", e)
+            }
+        require(pattern.programSize() <= MAX_PROGRAM_SIZE) { TOO_COMPLEX_MESSAGE }
+        return pattern
+    }
 
     private fun currentIndex(): SearchIndex {
         val stamp = readStamp()
@@ -249,30 +259,21 @@ class ComponentCodeSearchService(
     ) {
         private var reads = 0L
 
-        private var matches = 0L
-
         fun check() = require(!clock.instant().isAfter(deadline)) { TOO_EXPENSIVE_MESSAGE }
 
         fun onRead() {
             if (++reads % CHECK_INTERVAL == 0L) check()
         }
 
-        fun onMatch() {
-            if (++matches % MATCH_CHECK_INTERVAL == 0L) check()
-        }
-
         private companion object {
             const val CHECK_INTERVAL = 10_000L
-
-            // Far smaller than the read interval: a single match can be expensive without reading input.
-            const val MATCH_CHECK_INTERVAL = 64L
         }
     }
 
     /**
-     * A CharSequence view that charges every read to the request's [RegexBudget]. `java.util.regex`
-     * reads input exclusively through [get], so this bounds even exponential backtracking within a
-     * single line; the clock itself is consulted only every few thousand reads.
+     * A CharSequence view that charges every read to the request's [RegexBudget]. The RE2 matcher
+     * reads input exclusively through [get], so this bounds the work within a single line; the clock
+     * itself is consulted only every few thousand reads.
      */
     private class DeadlineCharSequence(
         private val delegate: CharSequence,
@@ -303,10 +304,118 @@ class ComponentCodeSearchService(
         val MAX_INDEX_AGE: Duration = Duration.ofMinutes(5)
         private val REGEX_TIME_BUDGET: Duration = Duration.ofSeconds(2)
 
+        /** Compiled RE2 instructions; bounds the per-character work and the matcher's recursion depth. */
+        const val MAX_PROGRAM_SIZE = 2000
+
+        /** Pre-compile guard on [estimateProgramSize]: generous, it only has to keep compiling cheap. */
+        private const val MAX_ESTIMATED_PROGRAM_SIZE = 20_000L
+        private val REPEAT = Regex("""\{(\d+)(,(\d*))?}""")
+
         /** Highlight spans reported per line; matching beyond this many spans adds nothing to read. */
         const val MAX_SPANS_PER_LINE = 50
         private const val TOO_EXPENSIVE_MESSAGE = "Regular expression is too expensive to evaluate; simplify the pattern"
         private const val TOO_COMPLEX_MESSAGE = "Regular expression is too complex to evaluate; simplify the pattern"
+
+        /**
+         * An upper-bound estimate of the RE2 program [q] compiles to, from the pattern text alone: every
+         * atom counts 1, a sequence or alternation adds, and a counted repetition `{n}` / `{n,m}` / `{n,}`
+         * multiplies the atom or group before it by its largest count. Escapes (incl. `\p{..}`, `\x{..}`,
+         * `\Q..\E`) and character classes are single atoms. Saturates instead of overflowing.
+         */
+        internal fun estimateProgramSize(q: String): Long {
+            val estimate = ProgramSizeEstimate()
+            var i = 0
+            while (i < q.length) i = estimate.consume(q, i)
+            return estimate.total()
+        }
+
+        /** Running state of [estimateProgramSize]: one size per open group, innermost last. */
+        private class ProgramSizeEstimate {
+            private val sums = ArrayDeque(listOf(0L))
+
+            /** Size of the atom or group a following repetition applies to. */
+            private var last = 0L
+
+            /** Consumes the token at [i]; returns the index just past it. */
+            fun consume(
+                q: String,
+                i: Int,
+            ): Int =
+                when (q[i]) {
+                    '\\' -> skipEscape(q, i).also { atom(1) }
+                    '[' -> skipClass(q, i).also { atom(1) }
+                    '(' -> (i + 1).also { sums.addLast(0L) }
+                    ')' -> (i + 1).also { atom((if (sums.size > 1) sums.removeLast() else 0L).coerceAtLeast(1)) }
+                    '{' -> repeat(q, i)
+                    else -> (i + 1).also { atom(1) }
+                }
+
+            fun total(): Long = sums.fold(0L, ::saturatingAdd)
+
+            private fun atom(size: Long) {
+                grow(size)
+                last = size
+            }
+
+            private fun grow(size: Long) = sums.addLast(saturatingAdd(sums.removeLast(), size))
+
+            /** A counted repetition multiplies the preceding atom by its largest count; any other `{` is a literal. */
+            private fun repeat(
+                q: String,
+                i: Int,
+            ): Int {
+                val match = REPEAT.matchAt(q, i) ?: return (i + 1).also { atom(1) }
+                val (min, _, max) = match.destructured
+                val count = (max.ifEmpty { min }.toLongOrNull() ?: Long.MAX_VALUE).coerceAtLeast(1)
+                val extra = saturatingMultiply(last, count - 1)
+                grow(extra)
+                last = saturatingAdd(last, extra)
+                return i + match.value.length
+            }
+        }
+
+        /** Index just past the escape starting at [start] (`\x`, `\p{..}`, `\x{..}`, `\Q..\E`). */
+        private fun skipEscape(
+            q: String,
+            start: Int,
+        ): Int {
+            val next = start + 1
+            return when {
+                next >= q.length -> q.length
+                q[next] == 'Q' -> q.indexOf("\\E", next).let { if (it < 0) q.length else it + 2 }
+                next + 1 < q.length && q[next + 1] == '{' -> q.indexOf('}', next).let { if (it < 0) q.length else it + 1 }
+                else -> next + 1
+            }
+        }
+
+        /** Index just past the character class starting at [start]; a leading `]` or `^]` is literal. */
+        private fun skipClass(
+            q: String,
+            start: Int,
+        ): Int {
+            var i = start + 1
+            if (i < q.length && q[i] == '^') i++
+            if (i < q.length && q[i] == ']') i++
+            while (i < q.length && q[i] != ']') {
+                i =
+                    when {
+                        q[i] == '\\' -> i + 2
+                        q.startsWith("[:", i) -> q.indexOf(":]", i).let { if (it < 0) q.length else it + 2 }
+                        else -> i + 1
+                    }
+            }
+            return (i + 1).coerceAtMost(q.length)
+        }
+
+        private fun saturatingAdd(
+            a: Long,
+            b: Long,
+        ): Long = if (a > Long.MAX_VALUE - b) Long.MAX_VALUE else a + b
+
+        private fun saturatingMultiply(
+            a: Long,
+            b: Long,
+        ): Long = if (a != 0L && b > Long.MAX_VALUE / a) Long.MAX_VALUE else a * b
 
         /** Case-insensitive, non-overlapping occurrences of [q] in [line] (inclusive ranges), capped. */
         internal fun substringSpans(

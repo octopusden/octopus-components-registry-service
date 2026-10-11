@@ -164,7 +164,7 @@ Print the component's as-code (Groovy-style) source verbatim. Output is raw `tex
 Search the as-code text of **every** component (SYS-100) — the replacement for grepping the old
 Groovy DSL files: artifact/group patterns, version ranges, VCS URLs, Jira keys, docker images,
 people, … Case-insensitive substring; `--regex` treats the query as a case-insensitive regular
-expression. Options: `--archived <true|false>` (default: both), `--limit <n>` (components, server
+expression in RE2 syntax (no lookarounds or backreferences). Options: `--archived <true|false>` (default: both), `--limit <n>` (components, server
 default 100), `--max-matches <n>` (lines per component, server default 20). Anonymous.
 
 Table output is grep-shaped, one line per match, with the enclosing block path when the match is

@@ -28,12 +28,12 @@ class SearchCommand :
         name = "search",
         help =
             "Search the as-code text of every component (artifacts, versions, VCS URLs, people, ...). " +
-                "Case-insensitive substring; --regex for a regular expression.",
+                "Case-insensitive substring; --regex for a regular expression (RE2 syntax).",
     ) {
     private val ctx by requireObject<CliContext>()
 
     private val query by argument("query", help = "Text to find (at least 2 characters).")
-    private val regex by option("--regex", help = "Treat the query as a case-insensitive regular expression.").flag()
+    private val regex by option("--regex", help = "Treat the query as a case-insensitive regular expression (RE2 syntax).").flag()
     private val archived by option("--archived", help = "Only archived (true) or only active (false) components.").boolean()
     private val limit by option("--limit", help = "Maximum number of components to return (server default 100).").int()
     private val maxMatches by option(

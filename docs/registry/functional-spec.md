@@ -228,15 +228,16 @@ images, people and every other rendered field are found without a per-field filt
   (omitted = both), `limit` (components, 1–1000, default 100), `maxMatchesPerComponent` (1–1000,
   default 20).
 - **Matching**: line by line, case-insensitive substring; `regex=true` treats `q` as a
-  case-insensitive regular expression (bounded by a 2 s evaluation budget per request). The RMS
+  case-insensitive regular expression in RE2 syntax — linear-time matching; no lookarounds or
+  backreferences; bounded by a 2 s evaluation budget per request. The RMS
   section of the as-code view is not searched.
 - **Output**: JSON `{query, regex, totalComponents, truncated, results[]}`; each result is
   `{id, componentKey, archived, matchCount, matches[]}` (sorted by key; `id` is the component UUID), each match
   `{line, text, path, ranges}` — the 1-based line in the FULL as-code view, the line without
   indentation, the enclosing block headers (e.g. the version range a match sits in), and the
   matched spans of the text (`{start, end}`, end exclusive) for highlighting.
-- **400** for an invalid `q` / `limit` / `maxMatchesPerComponent`, an invalid regex, or a regex over
-  the time budget.
+- **400** for an invalid `q` / `limit` / `maxMatchesPerComponent`, an invalid or non-RE2 regex, a
+  regex that compiles to an oversized program, or a regex over the time budget.
 - **Freshness**: an edit is visible to the next search on every pod (the in-memory index is rebuilt
   when the DB change stamp moves); writes that bypass both the component rows and the audit log are
   picked up within 5 minutes.

@@ -27,7 +27,7 @@ refresh it with `./gradlew :components-registry-service-server:generateOpenApiDo
   FULL as-code view (`GET /components/{id}/as-code`), the replacement for grepping the Groovy DSL
   files. `ACCESS_COMPONENTS`. Params: `q` (required, 2–200 characters after trimming;
   case-insensitive substring), `regex` (default `false`; `true` matches `q` as a case-insensitive
-  regular expression), `archived` (omitted = both), `limit` (components returned, 1–1000, default
+  regular expression in RE2 syntax — no lookarounds or backreferences), `archived` (omitted = both), `limit` (components returned, 1–1000, default
   100), `maxMatchesPerComponent` (1–1000, default 20). Returns `AsCodeSearchResponse`
   `{query, regex, totalComponents, truncated, results}`; each `AsCodeSearchHit` is
   `{id, componentKey, archived, matchCount, matches}` sorted by key (`id` = component UUID), and each `AsCodeSearchLine` is
@@ -35,7 +35,7 @@ refresh it with `./gradlew :components-registry-service-server:generateOpenApiDo
   indentation, the enclosing block headers outermost first, and the matched spans of `text`
   (`AsCodeMatchRange {start, end}`, end exclusive) as found by the server's matcher, for exact
   highlighting of regex hits too. `400` for a bad `q`/`limit`, an
-  invalid regex, or a regex that exceeds the per-request evaluation time budget or exhausts the stack. The RMS section of the as-code
+  invalid or non-RE2 regex, a regex that compiles to an oversized program, or a regex that exceeds the per-request evaluation time budget. The RMS section of the as-code
   view is not searched. Results may lag an edit that bypasses the component tables and the audit log
   (e.g. TeamCity version-line sync) by up to 5 minutes.
 - **`GET /meta/release-managers` and `GET /meta/security-champions` added.** Two new

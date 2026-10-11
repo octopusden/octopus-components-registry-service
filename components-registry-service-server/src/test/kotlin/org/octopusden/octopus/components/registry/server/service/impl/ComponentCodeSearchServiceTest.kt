@@ -5,6 +5,7 @@ import org.assertj.core.api.Assertions.assertThatThrownBy
 import org.junit.jupiter.api.BeforeEach
 import org.junit.jupiter.api.DisplayName
 import org.junit.jupiter.api.Test
+import org.junit.jupiter.api.Timeout
 import org.mockito.kotlin.mock
 import org.mockito.kotlin.times
 import org.mockito.kotlin.verify
@@ -161,19 +162,19 @@ class ComponentCodeSearchServiceTest {
     }
 
     @Test
-    @DisplayName("SYS-100: a catastrophically backtracking regex is aborted instead of pinning the thread")
-    fun `SYS-100 catastrophically backtracking regex is aborted`() {
-        // Deterministic: the clock jumps 1 s on every read, so the 2 s budget is spent after a few
-        // deadline checks, and `a*a*a*b` over a long run of `a` needs far more than the 10 000
-        // character reads between checks (cubic backtracking) — no JDK-regex internals, no real wait.
+    @DisplayName("SYS-100: patterns that backtrack catastrophically in the JDK engine run in linear time")
+    fun `SYS-100 backtracking-prone regex runs in linear time`() {
+        // `(a|aa)*c`, `(a*)*b` and `(a|b)*z` are exponential or overflow the stack under java.util.regex
+        // on a long run of `a`; RE2 answers in one linear pass. A real clock: the 2 s budget would fail
+        // the test as "too expensive" if matching were not linear.
         whenever(componentManagementService.renderAllComponentsAsCode())
-            .thenReturn(listOf(RenderedComponentCode("evil", "a".repeat(200) + "\n", id = UUID.randomUUID())))
-        val tickingService =
-            ComponentCodeSearchService(componentManagementService, componentRepository, auditLogRepository, TickingClock())
+            .thenReturn(listOf(RenderedComponentCode("long", "a".repeat(100_000) + "\n", id = UUID.randomUUID())))
+        val realClockService =
+            ComponentCodeSearchService(componentManagementService, componentRepository, auditLogRepository, Clock.systemUTC())
 
-        assertThatThrownBy { tickingService.search("a*a*a*b", regex = true) }
-            .isInstanceOf(IllegalArgumentException::class.java)
-            .hasMessageContaining("too expensive")
+        listOf("(a|aa)*c", "(a*)*b", "(a|b)*z", "a*a*a*b").forEach { q ->
+            assertThat(realClockService.search(q, regex = true).results).describedAs(q).isEmpty()
+        }
     }
 
     @Test
@@ -190,43 +191,61 @@ class ComponentCodeSearchServiceTest {
     }
 
     @Test
-    @DisplayName("SYS-100: the regex budget is checked while consuming empty matches that read no input")
+    @DisplayName("SYS-100: the regex budget is checked within one line, across a run of empty matches")
     fun `SYS-100 regex budget is enforced across empty matches`() {
-        // `(?=)` matches the empty string at every position without reading a character, so
-        // DeadlineCharSequence never charges it. One long line keeps the per-line check out of
-        // play: only the check while consuming matches can stop it (the clock jumps 1 s per read).
+        // `z*` matches the empty string at every position of a long line. One line keeps the per-line
+        // check out of play: only the read check inside the line can stop it (1 s per clock read).
         whenever(componentManagementService.renderAllComponentsAsCode())
             .thenReturn(listOf(RenderedComponentCode("empty", "a".repeat(4_000), id = UUID.randomUUID())))
         val tickingService =
             ComponentCodeSearchService(componentManagementService, componentRepository, auditLogRepository, TickingClock())
 
-        assertThatThrownBy { tickingService.search("(?=)", regex = true) }
+        assertThatThrownBy { tickingService.search("z*", regex = true) }
             .isInstanceOf(IllegalArgumentException::class.java)
             .hasMessageContaining("too expensive")
     }
 
     @Test
-    @DisplayName("SYS-100: a regex whose recursion exhausts the stack is rejected as invalid input, not a 500")
-    fun `SYS-100 regex stack exhaustion is rejected`() {
-        // java.util.regex recurses once per repetition of an alternation group, so `(a|b)*z` over a
-        // long run of `a` overflows the stack long before the time budget is spent. A real clock
-        // keeps the test bounded: if no overflow happened, the budget would fail it as "too expensive".
-        whenever(componentManagementService.renderAllComponentsAsCode())
-            .thenReturn(
-                listOf(
-                    RenderedComponentCode(
-                        "deep",
-                        "deep {\n    copyright = \"" + "a".repeat(100_000) + "\"\n}\n",
-                        id = UUID.randomUUID(),
-                    ),
-                ),
-            )
-        val realClockService =
-            ComponentCodeSearchService(componentManagementService, componentRepository, auditLogRepository, Clock.systemUTC())
+    @DisplayName("SYS-100: RE2 syntax — lookarounds, backreferences and repetition counts over 1000 are 400")
+    fun `SYS-100 regex constructs outside RE2 are rejected`() {
+        // Lookarounds are what let a JDK-regex match spin without reading input.
+        listOf("(?=a)b", "(?<!a)b", "(a)\\1", "a{1001}").forEach { q ->
+            assertThatThrownBy { service.search(q, regex = true) }
+                .describedAs(q)
+                .isInstanceOf(IllegalArgumentException::class.java)
+                .hasMessageContaining("Invalid regular expression")
+        }
+    }
 
-        assertThatThrownBy { realClockService.search("(a|b)*z", regex = true) }
-            .isInstanceOf(IllegalArgumentException::class.java)
-            .hasMessageContaining("too complex")
+    @Test
+    @Timeout(10)
+    @DisplayName("SYS-100: a regex whose nested repetitions compile to an oversized program is rejected, without compiling it")
+    fun `SYS-100 oversized regex program is rejected`() {
+        // Each count is legal, but nesting multiplies the compiled program, and with it the work per
+        // character and the matcher's recursion depth. The triple-nested `{1000}` (31 characters) would
+        // exhaust the heap inside RE2/J's compile; the pre-compile estimate rejects it first.
+        listOf(
+            "(?:(?:a?){70}){70}",
+            "(?:(?:(?:a){1000}){1000}){1000}",
+            "(?:(?:a){1000}){1000}".repeat(9),
+            "(?:(?=)){2147483647}",
+        ).forEach { q ->
+            assertThatThrownBy { service.search(q, regex = true) }
+                .describedAs(q)
+                .isInstanceOf(IllegalArgumentException::class.java)
+                .hasMessageContaining("too complex")
+        }
+        assertThat(service.search("(?:(?:a?){30}){30}x", regex = true).results).isNotNull()
+    }
+
+    @Test
+    @DisplayName("SYS-100: estimateProgramSize adds sequences and multiplies nested repetitions")
+    fun `SYS-100 estimateProgramSize`() {
+        assertThat(ComponentCodeSearchService.estimateProgramSize("abc")).isEqualTo(3)
+        assertThat(ComponentCodeSearchService.estimateProgramSize("[a-z]{5}\\p{L}{3}")).isEqualTo(8)
+        assertThat(ComponentCodeSearchService.estimateProgramSize("(?:ab{10}){10}")).isGreaterThanOrEqualTo(110)
+        assertThat(ComponentCodeSearchService.estimateProgramSize("a{,5}")).isEqualTo(5) // not a repeat: literal
+        assertThat(ComponentCodeSearchService.estimateProgramSize("(?:(?:a{1000}){1000}){1000}")).isGreaterThan(1_000_000_000)
     }
 
     @Test
