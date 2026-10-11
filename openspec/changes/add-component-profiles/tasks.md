@@ -55,7 +55,7 @@
         `regular` profile keeps the whole previous snapshot, including profiles whose change was
         valid, and returns the problems
   - [x] 3.1.2 Context with no `regular` profile, or an invalid one, fails to start with the
-        problems in the message
+        problems in the message (no subtree at all now starts empty — 8.8)
   - [x] 3.1.3 Context with valid profiles and a template entry starts
   - [x] 3.1.4 `POST /admin/reload-config` after a valid change → 200 with
         `componentProfiles.status: applied`, `status` and `changedKeys` unchanged
@@ -255,3 +255,11 @@
       responses are now typed — `ReloadConfigResponse` (200), `ReloadConfigFailureResponse`
       (422, 500) — and declared on the endpoint (design Decision 4); JSON unchanged.
       `OpenApiV4SpecTest` red before regenerating `v4.json`, green after; changelog updated
+- [x] 8.8 A missing `component-profiles` subtree stopped CRS, so stacks in other repos that run
+      the CRS image with their own configuration (teamcity-automation, release-management-service,
+      dms-ui, the Portal e2e) would fail on their next CRS bump. An absent subtree now starts with
+      no profiles; a present subtree still needs a valid `regular` profile, and a reload after the
+      subtree is removed applies no profiles (design Decisions 2 and 3, spec "Subtree absent",
+      "Subtree removed"). Seen red first: parser, catalog and context tests; added
+      `ReloadConfigComponentProfilesTest.removedSubtreeAppliesEmpty` (H2). Proposal, design, spec,
+      `functional-spec.md` §7.4, ADR-016 and the changelog aligned

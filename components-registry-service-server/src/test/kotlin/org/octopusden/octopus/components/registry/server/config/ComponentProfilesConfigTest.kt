@@ -26,15 +26,26 @@ class ComponentProfilesConfigTest {
         )
 
     @Test
-    @DisplayName("Decision 3: a context without any profile fails to start, saying a regular profile is required")
-    fun noProfileFailsStartup() {
+    @DisplayName("Decision 3: a context without the profile subtree starts with no profiles")
+    fun noSubtreeStarts() {
         runner.run { context ->
-            assertThat(context).hasFailed()
-            assertThat(context.startupFailure)
-                .rootCause()
-                .isInstanceOf(ComponentProfilesException::class.java)
-                .hasMessageContaining("at least one regular profile is required")
+            assertThat(context).hasNotFailed()
+            assertThat(context.getBean(ComponentProfileCatalog::class.java).profiles()).isEmpty()
         }
+    }
+
+    @Test
+    @DisplayName("Decision 3: a context whose subtree holds only a template entry fails to start, saying a regular profile is required")
+    fun onlyTemplateFailsStartup() {
+        runner
+            .withPropertyValues("components-registry.component-profiles.ww-modpack.kind=template")
+            .run { context ->
+                assertThat(context).hasFailed()
+                assertThat(context.startupFailure)
+                    .rootCause()
+                    .isInstanceOf(ComponentProfilesException::class.java)
+                    .hasMessageContaining("at least one regular profile is required")
+            }
     }
 
     @Test

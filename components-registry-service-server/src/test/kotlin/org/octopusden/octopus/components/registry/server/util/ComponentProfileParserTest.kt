@@ -107,12 +107,14 @@ class ComponentProfileParserTest {
     }
 
     @Test
-    @DisplayName("no properties at all: the configuration is not usable")
+    @DisplayName("no properties at all: usable, with no profiles")
     fun empty() {
         val result = ComponentProfileParser.parse(emptyMap())
 
-        assertFalse(result.usable)
-        assertEquals(listOf("at least one regular profile is required"), result.problems)
+        assertTrue(result.usable)
+        assertEquals(emptyList<String>(), result.problems)
+        assertEquals(emptyList<ComponentProfile>(), result.profiles)
+        assertEquals(emptyList<ProfileLoad.Entry>(), result.entries)
     }
 
     private fun entryOf(

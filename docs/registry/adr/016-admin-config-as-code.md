@@ -154,12 +154,14 @@ and reloaded the same way (service-config, `POST /admin/reload-config`), with fo
   rule paths need no bracket notation**: `baseConfiguration.jira.projectKey:` is one key.
 - **Checked before use, applied whole.** `ComponentProfileParser` checks every entry and reports
   every problem. `ComponentProfileCatalog` replaces the profiles in use only with a usable result
-  (at least one valid `regular` profile, every `regular` profile valid); otherwise it keeps them, and
-  the reload answers `422 component-profiles`. A reload is still not atomic across subtrees:
+  (no subtree, or at least one valid `regular` profile with every `regular` profile valid); otherwise
+  it keeps them, and the reload answers `422 component-profiles`. A removed subtree applies no
+  profiles. A reload is still not atomic across subtrees:
   `field-config` and `component-defaults` are applied even when the profiles fail
   ([TD-026](../tech-debt/026-reload-not-atomic-across-config-subtrees.md)).
-- **No DB cache; startup fails without them.** The catalog holds the profiles in memory in every
-  mode, and CRS does not start without a usable set. `reloadConfig` reloads them itself after the
+- **No DB cache; startup fails on a broken set.** The catalog holds the profiles in memory in every
+  mode. CRS does not start with a broken subtree; without one it starts with no profiles, so
+  stacks running the CRS image with their own configuration need no change. `reloadConfig` reloads them itself after the
   refresh, also when the refresh fails, and reports them as `componentProfiles`;
   `AdminConfigReloader` runs refresh and profile load as one critical section, so overlapping
   reloads cannot mix two revisions. Values are read from the property source holding the exact

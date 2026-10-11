@@ -9,9 +9,10 @@ import java.util.concurrent.atomic.AtomicReference
  * The profiles in use, replaced only as a whole and only by a usable load (Decision 2).
  *
  * Construction loads once and throws [ComponentProfilesException] when the result is not usable,
- * so a context that creates this bean does not start without usable profiles (Decision 3).
- * [reload] reads again and returns its own outcome; an unusable or unreadable result leaves the
- * profiles in use untouched. The environment is read only here, never on a request.
+ * so a context that creates this bean does not start with a broken profile subtree (Decision 3); an
+ * absent subtree is usable and leaves the catalog empty. [reload] reads again and returns its own
+ * outcome; an unusable or unreadable result leaves the profiles in use untouched, while a removed
+ * subtree applies no profiles. The environment is read only here, never on a request.
  */
 class ComponentProfileCatalog(
     private val read: () -> Map<String, String>,

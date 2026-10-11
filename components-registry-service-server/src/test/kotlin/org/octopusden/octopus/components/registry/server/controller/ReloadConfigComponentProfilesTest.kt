@@ -19,10 +19,13 @@ import org.springframework.boot.test.context.SpringBootTest
 import org.springframework.boot.test.mock.mockito.MockBean
 import org.springframework.cloud.context.refresh.ContextRefresher
 import org.springframework.core.env.ConfigurableEnvironment
+import org.springframework.core.env.EnumerablePropertySource
 import org.springframework.core.env.MapPropertySource
+import org.springframework.core.env.PropertySource
 import org.springframework.test.annotation.DirtiesContext
 import org.springframework.test.context.ActiveProfiles
 import org.springframework.test.web.servlet.MockMvc
+import org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get
 import org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post
 import org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath
 import org.springframework.test.web.servlet.result.MockMvcResultMatchers.status
@@ -69,9 +72,13 @@ class ReloadConfigComponentProfilesTest {
         System.setProperty("COMPONENTS_REGISTRY_SERVICE_TEST_DATA_DIR", testResourcesPath.toString())
     }
 
+    private val removedSources = mutableListOf<PropertySource<*>>()
+
     @AfterEach
     fun restore() {
         environment.propertySources.remove(OVERRIDES)
+        removedSources.forEach { environment.propertySources.replace(it.name, it) }
+        removedSources.clear()
         reset(contextRefresher)
         catalog.reload()
     }
@@ -79,6 +86,18 @@ class ReloadConfigComponentProfilesTest {
     private fun changeServiceConfig(vararg values: Pair<String, String>) {
         environment.propertySources.remove(OVERRIDES)
         environment.propertySources.addFirst(MapPropertySource(OVERRIDES, values.associate { (key, value) -> PREFIX + key to value }))
+    }
+
+    /** Every property source keeps its other keys; only the profile subtree disappears, as when it is deleted from service-config. */
+    private fun removeProfileSubtree() {
+        environment.propertySources
+            .filterIsInstance<EnumerablePropertySource<*>>()
+            .filter { source -> source.propertyNames.any { it.startsWith(PREFIX) } }
+            .forEach { source ->
+                removedSources += source
+                val kept = source.propertyNames.filterNot { it.startsWith(PREFIX) }.associateWith { source.getProperty(it) }
+                environment.propertySources.replace(source.name, MapPropertySource(source.name, kept))
+            }
     }
 
     private fun reload() = mvc.perform(post("/rest/api/4/admin/reload-config").with(adminJwt()))
@@ -134,6 +153,22 @@ class ReloadConfigComponentProfilesTest {
                     "$.componentProfiles.entries[?(@.id == 'ww-modpack')].problems[0]",
                 ).value("ww-modpack.kind: templates are not supported yet"),
             )
+    }
+
+    @Test
+    @DisplayName("the profile subtree removed: 200 applied with no entries, and the listing returns no profiles")
+    fun removedSubtreeAppliesEmpty() {
+        removeProfileSubtree()
+
+        reload()
+            .andExpect(status().isOk)
+            .andExpect(jsonPath("$.componentProfiles.status").value("applied"))
+            .andExpect(jsonPath("$.componentProfiles.entries").isEmpty)
+
+        mvc
+            .perform(get("/rest/api/4/component-profiles").with(adminJwt()))
+            .andExpect(status().isOk)
+            .andExpect(jsonPath("$.profiles").isEmpty)
     }
 
     @Test

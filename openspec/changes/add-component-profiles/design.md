@@ -116,9 +116,10 @@ Creates against it:
 - `ComponentProfileCatalog` holds the live profiles, an immutable list, in an `AtomicReference`;
   `profiles()` hands a reader that list. Built as a bean by `config/ComponentProfilesConfig`, not
   a `@ConfigurationProperties` bean (Decision 1).
-- A load either replaces the whole snapshot or leaves it untouched: no `regular` profile or an
-  invalid one keeps every profile in use, including ones whose change was valid. A failed
-  template entry does not stop a load.
+- A load either replaces the whole snapshot or leaves it untouched: a present subtree with no
+  `regular` profile, or an invalid one, keeps every profile in use, including ones whose change
+  was valid. A failed template entry does not stop a load. A removed subtree is a usable load with
+  no profiles, so it applies an empty snapshot. (changed on review)
 - Spring refreshes the environment before anyone can validate it, so the catalog never reads the
   environment on a request — only on load.
 - Readers (listing, create) take the snapshot once per call, so a reload mid-request cannot mix
@@ -126,10 +127,15 @@ Creates against it:
 - The listing and the create check read the same snapshot, so the field rules the Portal gets are
   exactly the rules a create with that profile is checked against.
 
-### 3. Startup fails loudly
+### 3. Startup fails loudly on a broken subtree, not a missing one
 
-- The catalog loads in its initializer. Unreadable subtree, no `regular` profile or an invalid
-  one → `ComponentProfilesException` with every problem → the context does not start.
+- The catalog loads in its initializer. Unreadable subtree, a present subtree with no `regular`
+  profile, or an invalid one → `ComponentProfilesException` with every problem → the context does
+  not start.
+- An absent subtree starts with an empty catalog: the listing returns `[]`, a create naming a
+  profile gets `400 unknown profile`, and a create without one is unchanged. Other repos run the
+  CRS image in their functional-test stacks with their own configuration and no profiles; a
+  missing subtree must not stop them on a version bump. (changed on review)
 - Works the same in no-db mode; the catalog does not touch the database. `AdminControllerV4` is
   `@ConditionalOnDatabaseEnabled`, so no-db mode has no reload endpoint: its profiles change only
   with a restart, like the other admin configuration. (found during implementation)
@@ -137,8 +143,8 @@ Creates against it:
   problem: at startup it fails with `ComponentProfilesException` like any unusable load; on reload
   it keeps the profiles in use.
 - The bundled `application.yml` carries no profiles — they are installation data, and a bundled
-  map could not be shrunk by service-config (Spring merges maps by key). Every test and dev
-  profile that starts the server gets a minimal profile set instead.
+  map could not be shrunk by service-config (Spring merges maps by key). The test and dev
+  configurations carry a profile set so they exercise the feature.
 
 ### 4. Reload result
 
@@ -250,8 +256,11 @@ No feature package; each class sits in the layer the server already uses for its
 - **A reload is not atomic across subtrees.** `field-config` and `component-defaults` are already
   rebound when the profiles fail; only the profiles keep their previous snapshot. Accepted: the
   existing subtrees already behave this way, and the response says which part failed. TD-026.
-- **Startup depends on service-config.** A missing subtree stops CRS. Accepted: the requirement
-  prefers a loud failure to an empty start page; the rollout note orders the deploys.
+- **A missing subtree starts CRS with no profiles.** A deployment that forgets the profiles, or a
+  reload after the subtree is deleted, silently offers none: the Portal shows no profile choice
+  and creates naming one are rejected. Accepted: it keeps today's create behavior and spares the
+  downstream test stacks a config change; a present but broken subtree still stops CRS, and the
+  reload response shows `entries: []`. (changed on review)
 - **The key rules hold only for creates that name a profile.** An API create without `profile`, a
   rename or a solution-flag change can still produce a key that breaks them. Accepted: it keeps
   today's behavior for every existing client; enforcing them everywhere is a separate change.

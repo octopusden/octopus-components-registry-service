@@ -34,11 +34,33 @@ class ComponentProfileCatalogTest {
     }
 
     @Test
-    @DisplayName("Decision 3: no regular profile at construction throws")
-    fun noRegularAtStartup() {
-        val error = assertThrows(ComponentProfilesException::class.java) { ComponentProfileCatalog { emptyMap() } }
+    @DisplayName("Decision 3: no profile subtree at construction starts with no profiles")
+    fun absentAtStartup() {
+        val catalog = ComponentProfileCatalog { emptyMap() }
+
+        assertEquals(emptyList<Any>(), catalog.profiles())
+    }
+
+    @Test
+    @DisplayName("Decision 3: a subtree with only template entries at construction throws, a regular profile being required")
+    fun onlyTemplatesAtStartup() {
+        val error =
+            assertThrows(ComponentProfilesException::class.java) { ComponentProfileCatalog { mapOf("ww-modpack.kind" to "template") } }
 
         assertTrue(requireNotNull(error.message).contains("at least one regular profile is required"))
+    }
+
+    @Test
+    @DisplayName("Decision 2: a reload after the subtree is removed applies no profiles")
+    fun removedSubtreeReloadAppliesEmpty() {
+        val source = SwitchableSource(designExampleProperties())
+        val catalog = ComponentProfileCatalog(source::read)
+        source.properties = emptyMap()
+
+        val load = catalog.reload()
+
+        assertTrue(load.usable)
+        assertEquals(emptyList<Any>(), catalog.profiles())
     }
 
     @Test

@@ -45,8 +45,9 @@ A field rule's path SHALL be one of these create-request paths: `name`, `display
 `baseConfiguration.packages[0].packageName`. A path with `[0]` SHALL apply to the first entry of
 that list only. A path SHALL be written as-is in the YAML key, without bracket notation.
 
-Each problem SHALL name the profile id and the key concerned. The configuration SHALL contain
-at least one `regular` profile, and every `regular` profile SHALL be valid. An entry of kind
+Each problem SHALL name the profile id and the key concerned. An absent subtree SHALL mean no
+profiles. A subtree that is present SHALL contain at least one `regular` profile, and every
+`regular` profile SHALL be valid. An entry of kind
 `template` SHALL be marked failed with the problem "templates are not supported yet", SHALL NOT be
 checked further, and SHALL NOT affect the rest of the configuration.
 
@@ -101,13 +102,19 @@ checked further, and SHALL NOT affect the rest of the configuration.
 - **WHEN** one profile lacks `title` and has `kind: special`
 - **THEN** both problems are reported
 
-### Requirement: Startup requires usable profiles
+### Requirement: Startup requires usable profiles when they are configured
 
-The registry SHALL NOT start when the profile subtree cannot be read, holds no `regular` profile,
-or holds an invalid `regular` profile, and SHALL report every problem found.
+The registry SHALL NOT start when the profile subtree cannot be read, is present but holds no
+`regular` profile, or holds an invalid `regular` profile, and SHALL report every problem found.
+When the subtree is absent the registry SHALL start with no profiles.
+
+#### Scenario: Subtree absent
+- **WHEN** the registry starts and the configuration has no profile subtree
+- **THEN** the registry starts, the listing returns no profiles, a create naming a profile is
+  rejected as unknown, and a create without `profile` works as before
 
 #### Scenario: No regular profile
-- **WHEN** the registry starts and the subtree is absent or holds only template entries
+- **WHEN** the registry starts and the subtree holds only template entries
 - **THEN** startup fails with a message saying at least one `regular` profile is required
 
 #### Scenario: Invalid regular profile
@@ -121,8 +128,9 @@ or holds an invalid `regular` profile, and SHALL report every problem found.
 ### Requirement: Reload applies usable profiles and keeps the previous ones otherwise
 
 `POST /rest/api/4/admin/reload-config` SHALL re-read the profiles. When the result is usable the
-registry SHALL use it at once; when it cannot be read, holds no `regular` profile or holds an
-invalid `regular` profile, the registry SHALL keep the profiles in use unchanged and answer 422
+registry SHALL use it at once — a removed subtree is usable and leaves no profiles; when it cannot
+be read, is present but holds no `regular` profile, or holds an invalid `regular` profile, the
+registry SHALL keep the profiles in use unchanged and answer 422
 with `error: component-profiles` and the problems. Either way the response SHALL carry
 `componentProfiles` with `status` (`applied` or `failed`), configuration-level `problems`, and
 every entry with its id, kind, status (`live` or `failed`) and problems — also when the rest of the
@@ -137,6 +145,12 @@ a single configuration revision, even while another reload runs.
 #### Scenario: Profile removed
 - **WHEN** a profile is removed in service-config and the configuration is reloaded
 - **THEN** the listing no longer returns it and a create naming it is rejected as unknown
+
+#### Scenario: Subtree removed
+- **WHEN** the whole profile subtree is removed in service-config and the configuration is
+  reloaded
+- **THEN** the response has `componentProfiles.status: applied` with no entries, the listing
+  returns no profiles and a create naming a profile is rejected as unknown
 
 #### Scenario: Invalid regular profile among valid changes
 - **WHEN** a reload changes one profile's title and makes another `regular` profile invalid

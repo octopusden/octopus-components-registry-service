@@ -18,16 +18,18 @@
   spec): a missing required key, an unknown key, a value outside the allowed values, an invalid
   rule pattern, a rule without a message, or a rule on a path outside the list makes the entry
   invalid, naming the key.
-- At least one valid `regular` profile is required, and every `regular` profile must be valid.
+- No subtree means no profiles. A subtree that is present needs at least one valid `regular`
+  profile, and every `regular` profile must be valid.
 - `kind: template` entries are accepted as a kind but are not offered yet: each is reported as
   failed with "templates are not supported yet". Templates land in their own change.
 
 **Startup and reload**
-- CRS fails to start when the subtree cannot be read, has no `regular` profile, or has an invalid
-  one, and reports why.
+- CRS fails to start when the subtree cannot be read, is present with no `regular` profile, or
+  has an invalid one, and reports why. Without the subtree CRS starts with no profiles.
 - `POST /rest/api/4/admin/reload-config` re-reads the profiles. A usable result replaces the
-  profiles in use at once. One with no `regular` profile or an invalid one is not applied: CRS
-  keeps the profiles in use and the reload answers 422 with the reasons.
+  profiles in use at once; a removed subtree applies no profiles. One with no `regular` profile or
+  an invalid one is not applied: CRS keeps the profiles in use and the reload answers 422 with the
+  reasons.
 - The reload response lists every entry with its status (`live` or `failed`) and its problems.
 
 **Listing for the current user**
@@ -69,8 +71,9 @@ None.
   `ComponentManagementServiceImpl`. The update path is unchanged.
 - **No behavior change for existing API clients:** a create without `profile`, a rename and a
   solution-flag change are checked exactly as today.
-- **Startup now requires configuration:** CRS does not start without at least one valid
-  `regular` profile. service-config must carry the profiles before this version is deployed.
+- **Startup needs valid profiles only when they are configured:** a present but broken subtree
+  stops CRS; without one CRS starts with no profiles, so stacks that run the CRS image with their
+  own configuration (functional-test stacks in other repos) need no change.
 - `POST /admin/reload-config` response gains the profile result; the existing `status` and
   `changedKeys` stay.
 - v4 contract change → `docs/registry/api-changelog.md` entry and regenerated `v4.json`;
@@ -104,5 +107,5 @@ ships.
 ## Rollout note
 
 - Merge and deploy the service-config change with the four profiles first; a CRS version from this
-  change does not start without them.
+  change started without them offers no profiles until they are added and reloaded.
 - Existing components are never re-checked against the rules, so no data clean-up is needed.

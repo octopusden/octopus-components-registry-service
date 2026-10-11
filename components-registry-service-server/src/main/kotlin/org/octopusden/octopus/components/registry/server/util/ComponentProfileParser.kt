@@ -10,7 +10,8 @@ import org.octopusden.octopus.components.registry.server.model.ProfileLoad
  * Input keys are relative to that prefix (`solution.classification.external`,
  * `solution.rules.artifactIds[0].groupPattern.pattern`) and values are the strings the
  * environment resolves. Every problem is collected, each prefixed with the full key it concerns.
- * A template entry is failed without further checks. Pure: no Spring, no IO.
+ * A template entry is failed without further checks. No properties at all is a usable load with no
+ * profiles; any configured entry requires at least one `regular` profile. Pure: no Spring, no IO.
  */
 object ComponentProfileParser {
     private val ID = Regex("[a-z0-9-]+")
@@ -28,7 +29,7 @@ object ComponentProfileParser {
                 .groupBy({ it.key.substringBefore('.') }, { it.key.substringAfter('.', "") to it.value })
                 .map { (id, keyValues) -> EntryParser(id, keyValues.toMap()).parse() }
         val problems =
-            if (parsed.none { it.first.kind == ComponentProfile.REGULAR_KIND }) {
+            if (parsed.isNotEmpty() && parsed.none { it.first.kind == ComponentProfile.REGULAR_KIND }) {
                 listOf(
                     "at least one regular profile is required",
                 )
