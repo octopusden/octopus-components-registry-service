@@ -74,7 +74,7 @@ Base URLs for links are configurable per deployment via `registry_config` (same 
 
 **UI — Create Component dialog:**
 
-1. **Profile selection** — the start page offers the profiles from `GET /rest/api/4/component-profiles` (see 7.4). A profile sets the classification (external, explicit, solution) and carries field rules, such as the Solution key pattern; the create sends its id as `profile`. Pre-filling build, VCS and escrow settings from a profile is a later feature (templates); component defaults still pre-fill the rest.
+1. **Profile selection** — the start page offers the profiles from `GET /rest/api/4/component-profiles` (see 7.4). A profile sets the classification (external, explicit, solution) and carries field rules, such as the Solution key pattern; the create sends its id as `profile`. When CRS returns no profiles, the dialog says so and goes straight to the wizard without one: the classification is set there, no `profile` is sent and no field rules apply. Pre-filling build, VCS and escrow settings from a profile is a later feature (templates); component defaults still pre-fill the rest.
 2. **Component name** (required) + **display name** (optional; required for explicit+external components)
 3. **Owner** — pre-filled with current user
 4. **TeamCity integration** — optional checkbox "Create TeamCity project". When checked, user selects a parent TeamCity project from a dropdown/search. On component creation, the system calls TeamCity API to create a sub-project. (Out of scope for initial implementation — documented as future integration point.)
