@@ -132,6 +132,12 @@ Creates against it:
 - The catalog loads in its initializer. Unreadable subtree, a present subtree with no `regular`
   profile, or an invalid one → `ComponentProfilesException` with every problem → the context does
   not start.
+- YAML flattens the subtree's root to the key `components-registry.component-profiles` itself when
+  it is not a map: `{}`, `[]` and no value become an empty value, a plain value stays as written, a
+  list becomes `…component-profiles[0]`. `ComponentProfilesSource` reads the root and the indexed
+  keys too, so the parser can tell them from absence: an empty root counts as absent, a plain value
+  or a list is a configuration problem that stops startup and keeps the profiles on reload.
+  (changed on review: these used to read as absent and silently cleared the profiles)
 - An absent subtree starts with an empty catalog: the listing returns `[]`, a create naming a
   profile gets `400 unknown profile`, and a create without one is unchanged. Other repos run the
   CRS image in their functional-test stacks with their own configuration and no profiles; a

@@ -20,8 +20,9 @@ refresh it with `./gradlew :components-registry-service-server:generateOpenApiDo
 
 - **Create-component profiles from configuration.** The start-page profiles are configured in
   service-config under `components-registry.component-profiles` and checked when CRS starts and on
-  reload. Without the subtree CRS starts with no profiles; a subtree that is present needs at
-  least one valid `regular` profile, or CRS does not start.
+  reload. Without the subtree, or with it written empty, CRS starts with no profiles; a subtree
+  written as a plain value or a list, or holding entries without a valid `regular` profile, stops
+  CRS.
   - **`GET /rest/api/4/component-profiles` added** (`ACCESS_COMPONENTS`): `{ profiles: [...] }`, the
     live profiles in `order`, then id. Each carries `id`, `kind` (`regular`), `title`,
     `description`, `classification` (`external`, `explicit` as `true` / `false` / `ask`,

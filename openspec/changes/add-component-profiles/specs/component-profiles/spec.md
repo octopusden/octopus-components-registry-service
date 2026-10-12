@@ -45,9 +45,10 @@ A field rule's path SHALL be one of these create-request paths: `name`, `display
 `baseConfiguration.packages[0].packageName`. A path with `[0]` SHALL apply to the first entry of
 that list only. A path SHALL be written as-is in the YAML key, without bracket notation.
 
-Each problem SHALL name the profile id and the key concerned. An absent subtree SHALL mean no
-profiles. A subtree that is present SHALL contain at least one `regular` profile, and every
-`regular` profile SHALL be valid. An entry of kind
+Each problem SHALL name the profile id and the key concerned. An absent subtree, or one written
+empty (`{}`, `[]` or no value), SHALL mean no profiles. A subtree written as a plain value or a
+list SHALL be invalid. A subtree that holds entries SHALL contain at least one `regular` profile,
+and every `regular` profile SHALL be valid. An entry of kind
 `template` SHALL be marked failed with the problem "templates are not supported yet", SHALL NOT be
 checked further, and SHALL NOT affect the rest of the configuration.
 
@@ -113,6 +114,11 @@ When the subtree is absent the registry SHALL start with no profiles.
 - **THEN** the registry starts, the listing returns no profiles, a create naming a profile is
   rejected as unknown, and a create without `profile` works as before
 
+#### Scenario: Subtree written as a value
+- **WHEN** the registry starts and the subtree is written as a plain value, such as
+  `component-profiles: broken`, or as a list
+- **THEN** startup fails with the problem naming the subtree
+
 #### Scenario: No regular profile
 - **WHEN** the registry starts and the subtree holds only template entries
 - **THEN** startup fails with a message saying at least one `regular` profile is required
@@ -151,6 +157,11 @@ a single configuration revision, even while another reload runs.
   reloaded
 - **THEN** the response has `componentProfiles.status: applied` with no entries, the listing
   returns no profiles and a create naming a profile is rejected as unknown
+
+#### Scenario: Subtree turned into a value
+- **WHEN** a reload finds the subtree written as a plain value or a list
+- **THEN** the response is 422 with `componentProfiles.status: failed` and the problem, and the
+  profiles in use are kept
 
 #### Scenario: Invalid regular profile among valid changes
 - **WHEN** a reload changes one profile's title and makes another `regular` profile invalid

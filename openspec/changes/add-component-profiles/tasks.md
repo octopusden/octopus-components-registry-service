@@ -263,3 +263,10 @@
       "Subtree removed"). Seen red first: parser, catalog and context tests; added
       `ReloadConfigComponentProfilesTest.removedSubtreeAppliesEmpty` (H2). Proposal, design, spec,
       `functional-spec.md` §7.4, ADR-016 and the changelog aligned
+- [x] 8.9 A subtree written as a plain value (`component-profiles: broken`) flattened to the root key
+      itself, which the source did not read, so it loaded as absent: startup passed and a reload
+      cleared the profiles. The source now reads the root and indexed keys; an empty root (`{}`,
+      `[]`, no value) counts as absent, a plain value or a list stops startup and keeps the
+      profiles on reload (design Decision 3, spec "Subtree written as a value", "Subtree turned
+      into a value"). Seen red first with real YAML sources for startup and reload — which also
+      showed `{}`/`[]` arrive as empty map/list objects, not blank strings

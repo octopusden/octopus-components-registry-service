@@ -6,7 +6,9 @@ import org.springframework.core.env.EnumerablePropertySource
 
 /**
  * Reads the profile subtree as the flattened `key → value` map [ComponentProfileParser] expects,
- * keys relative to [PREFIX].
+ * keys relative to [PREFIX]. A value on [ROOT] itself arrives under the key `""`, blank for an empty
+ * subtree (`{}`, `[]`, nothing) and as written for a plain value (`component-profiles: x`); a list
+ * arrives as `[0]`, `[1]`… The parser must tell those from an absent subtree.
  *
  * Property names are taken as written rather than bound through `Binder`: binding would split a
  * dotted rule path such as `baseConfiguration.jira.projectKey` into nested maps and treat `[0]`
@@ -26,13 +28,21 @@ class ComponentProfilesSource(
             .filterIsInstance<EnumerablePropertySource<*>>()
             .forEach { source ->
                 source.propertyNames
-                    .filter { it.startsWith(PREFIX) }
-                    .forEach { name -> values.putIfAbsent(name.removePrefix(PREFIX), source.getProperty(name)?.toString().orEmpty()) }
+                    .filter { it == ROOT || it.startsWith(PREFIX) || it.startsWith("$ROOT[") }
+                    .forEach { name -> values.putIfAbsent(name.removePrefix(ROOT).removePrefix("."), text(source.getProperty(name))) }
             }
         return values.mapValues { (_, value) -> environment.resolveRequiredPlaceholders(value) }
     }
 
+    private fun text(value: Any?): String =
+        when {
+            value is Map<*, *> && value.isEmpty() -> ""
+            value is Collection<*> && value.isEmpty() -> ""
+            else -> value?.toString().orEmpty()
+        }
+
     companion object {
-        const val PREFIX = "components-registry.component-profiles."
+        const val ROOT = "components-registry.component-profiles"
+        const val PREFIX = "$ROOT."
     }
 }

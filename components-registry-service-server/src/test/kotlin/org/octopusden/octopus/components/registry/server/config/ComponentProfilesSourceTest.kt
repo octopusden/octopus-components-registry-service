@@ -1,9 +1,15 @@
 package org.octopusden.octopus.components.registry.server.config
 
 import org.junit.jupiter.api.Assertions.assertEquals
+import org.junit.jupiter.api.Assertions.assertFalse
+import org.junit.jupiter.api.Assertions.assertThrows
 import org.junit.jupiter.api.Assertions.assertTrue
 import org.junit.jupiter.api.DisplayName
 import org.junit.jupiter.api.Test
+import org.junit.jupiter.params.ParameterizedTest
+import org.junit.jupiter.params.provider.ValueSource
+import org.octopusden.octopus.components.registry.server.service.impl.ComponentProfileCatalog
+import org.octopusden.octopus.components.registry.server.service.impl.ComponentProfilesException
 import org.octopusden.octopus.components.registry.server.util.ComponentProfileParser
 import org.springframework.boot.context.properties.source.ConfigurationPropertySources
 import org.springframework.boot.env.YamlPropertySourceLoader
@@ -65,6 +71,52 @@ class ComponentProfilesSourceTest {
     @DisplayName("an absent subtree reads as an empty map")
     fun absentSubtree() {
         assertEquals(emptyMap<String, String>(), ComponentProfilesSource(StandardEnvironment()).read())
+    }
+
+    @ParameterizedTest
+    @ValueSource(strings = ["root-empty-map.yml", "root-empty-list.yml", "root-null.yml"])
+    @DisplayName("a subtree written empty reads as a blank root value and loads as no profiles")
+    fun emptySubtree(resource: String) {
+        val properties = ComponentProfilesSource(environment(resource)).read()
+
+        assertEquals(mapOf("" to ""), properties)
+        assertEquals(emptyList<Any>(), ComponentProfileCatalog { properties }.profiles())
+    }
+
+    @Test
+    @DisplayName("a subtree written as a plain value stops startup, naming the value")
+    fun scalarSubtreeAtStartup() {
+        val source = ComponentProfilesSource(environment("root-scalar.yml"))
+
+        val error = assertThrows(ComponentProfilesException::class.java) { ComponentProfileCatalog(source::read) }
+
+        assertTrue(requireNotNull(error.message).contains("components-registry.component-profiles: 'broken' is not a map of profiles"))
+    }
+
+    @Test
+    @DisplayName("a subtree written as a list stops startup, the list entry being no profile id")
+    fun listSubtreeAtStartup() {
+        val source = ComponentProfilesSource(environment("root-list.yml"))
+
+        val error = assertThrows(ComponentProfilesException::class.java) { ComponentProfileCatalog(source::read) }
+
+        assertTrue(requireNotNull(error.message).contains("[0]: an id consists of lowercase letters, digits and '-'"), error.message)
+    }
+
+    @Test
+    @DisplayName("a subtree turned into a plain value is not applied on reload; the profiles in use are kept")
+    fun scalarSubtreeOnReload() {
+        val environment = environment("base.yml")
+        val catalog = ComponentProfileCatalog(ComponentProfilesSource(environment)::read)
+        val before = catalog.profiles()
+        YamlPropertySourceLoader()
+            .load("root-scalar.yml", ClassPathResource("component-profiles/root-scalar.yml"))
+            .forEach { environment.propertySources.addFirst(it) }
+
+        val load = catalog.reload()
+
+        assertFalse(load.usable)
+        assertEquals(before, catalog.profiles())
     }
 
     @Test

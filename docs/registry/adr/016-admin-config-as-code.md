@@ -160,7 +160,8 @@ and reloaded the same way (service-config, `POST /admin/reload-config`), with fo
   `field-config` and `component-defaults` are applied even when the profiles fail
   ([TD-026](../tech-debt/026-reload-not-atomic-across-config-subtrees.md)).
 - **No DB cache; startup fails on a broken set.** The catalog holds the profiles in memory in every
-  mode. CRS does not start with a broken subtree; without one it starts with no profiles, so
+  mode. CRS does not start with a broken subtree, a plain value or list in its place included;
+  without one, or with it written empty, it starts with no profiles, so
   stacks running the CRS image with their own configuration need no change. `reloadConfig` reloads them itself after the
   refresh, also when the refresh fails, and reports them as `componentProfiles`;
   `AdminConfigReloader` runs refresh and profile load as one critical section, so overlapping

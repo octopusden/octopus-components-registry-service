@@ -10,8 +10,9 @@ import org.octopusden.octopus.components.registry.server.model.ProfileLoad
  * Input keys are relative to that prefix (`solution.classification.external`,
  * `solution.rules.artifactIds[0].groupPattern.pattern`) and values are the strings the
  * environment resolves. Every problem is collected, each prefixed with the full key it concerns.
- * A template entry is failed without further checks. No properties at all is a usable load with no
- * profiles; any configured entry requires at least one `regular` profile. Pure: no Spring, no IO.
+ * A template entry is failed without further checks. No properties at all, or only a blank root
+ * (key `""`), is a usable load with no profiles; a non-blank root is a configuration problem, and any
+ * configured entry requires at least one `regular` profile. Pure: no Spring, no IO.
  */
 object ComponentProfileParser {
     private val ID = Regex("[a-z0-9-]+")
@@ -22,19 +23,21 @@ object ComponentProfileParser {
     private val REQUIRED_KEYS = listOf("kind", "title", "description", "order", EXTERNAL, EXPLICIT)
     private val PROFILE_KEYS = REQUIRED_KEYS.toSet() + SOLUTION
     private const val RULES = "rules."
+    private const val ROOT = "components-registry.component-profiles"
 
     fun parse(properties: Map<String, String>): ProfileLoad {
+        val root = properties[""]
         val parsed =
-            properties.entries
+            (properties - "")
+                .entries
                 .groupBy({ it.key.substringBefore('.') }, { it.key.substringAfter('.', "") to it.value })
                 .map { (id, keyValues) -> EntryParser(id, keyValues.toMap()).parse() }
         val problems =
-            if (parsed.isNotEmpty() && parsed.none { it.first.kind == ComponentProfile.REGULAR_KIND }) {
-                listOf(
-                    "at least one regular profile is required",
-                )
-            } else {
-                emptyList()
+            when {
+                !root.isNullOrBlank() -> listOf("$ROOT: '$root' is not a map of profiles")
+                parsed.isNotEmpty() && parsed.none { it.first.kind == ComponentProfile.REGULAR_KIND } ->
+                    listOf("at least one regular profile is required")
+                else -> emptyList()
             }
         return ProfileLoad(
             profiles = parsed.mapNotNull { it.second }.sortedWith(compareBy({ it.order }, { it.id })),

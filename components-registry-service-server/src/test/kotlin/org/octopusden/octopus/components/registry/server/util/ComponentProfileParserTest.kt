@@ -117,6 +117,24 @@ class ComponentProfileParserTest {
         assertEquals(emptyList<ProfileLoad.Entry>(), result.entries)
     }
 
+    @Test
+    @DisplayName("a root written as a plain value makes the configuration unusable, naming the value")
+    fun scalarRoot() {
+        val result = ComponentProfileParser.parse(mapOf("" to "broken"))
+
+        assertFalse(result.usable)
+        assertEquals(listOf("components-registry.component-profiles: 'broken' is not a map of profiles"), result.problems)
+    }
+
+    @Test
+    @DisplayName("a blank root next to profiles is ignored")
+    fun blankRootWithProfiles() {
+        val result = ComponentProfileParser.parse(designExampleProperties() + ("" to ""))
+
+        assertTrue(result.usable, "${result.problems} ${result.entries}")
+        assertEquals(4, result.entries.size)
+    }
+
     private fun entryOf(
         properties: Map<String, String>,
         id: String,
