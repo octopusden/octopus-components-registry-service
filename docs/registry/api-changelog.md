@@ -48,7 +48,8 @@ refresh it with `./gradlew :components-registry-service-server:generateOpenApiDo
 - **Component templates.** A `kind: template` entry under `components-registry.component-profiles`
   is now read: fixed classification, parameters, fields built from them, overridable paths and
   optional field rules. A template is checked on load and reload; a broken one is `failed`, is not
-  offered, and never blocks a load.
+  offered, and never blocks a load. A template counts as a configured entry: a subtree with
+  templates but no `regular` profile does not start CRS, and a reload of it answers `422`.
   - **`GET /rest/api/4/component-profiles`** lists live templates next to the regular profiles, in
     one `order`, then id: `kind` `template` and a new `version` (absent for a regular profile). A
     client that assumed every entry is `regular` must branch on `kind`. A template's

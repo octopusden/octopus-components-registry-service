@@ -12,9 +12,11 @@ import org.octopusden.octopus.components.registry.server.model.ComponentProfile
 import org.octopusden.octopus.components.registry.server.model.ProfileLoad
 import org.octopusden.octopus.components.registry.server.support.SOLUTION_NAME_MESSAGE
 import org.octopusden.octopus.components.registry.server.support.SOLUTION_NAME_PATTERN
+import org.octopusden.octopus.components.registry.server.support.TEMPLATE_ID
 import org.octopusden.octopus.components.registry.server.support.designExampleProperties
 import org.octopusden.octopus.components.registry.server.support.profileProperties
 import org.octopusden.octopus.components.registry.server.support.rule
+import org.octopusden.octopus.components.registry.server.support.standaloneTemplateProperties
 
 class ComponentProfileParserTest {
     @Test
@@ -104,6 +106,16 @@ class ComponentProfileParserTest {
 
         assertFalse(result.usable)
         assertEquals(listOf("at least one regular profile is required"), result.problems)
+    }
+
+    @Test
+    @DisplayName("a valid template with no regular profile: not usable, the template counts as an entry")
+    fun onlyLiveTemplate() {
+        val result = ComponentProfileParser.parse(standaloneTemplateProperties())
+
+        assertFalse(result.usable)
+        assertEquals(listOf("at least one regular profile is required"), result.problems)
+        assertEquals(listOf(TEMPLATE_ID), result.templates.map { it.id })
     }
 
     @Test

@@ -9,10 +9,8 @@ returns live templates next to the regular profiles.
 ### Requirement: Profiles are read from configuration
 
 The registry SHALL read every profile from `components-registry.component-profiles`, a map of
-profile id → profile.
-
-- A profile id SHALL be lowercase letters, digits and `-`.
-- A profile SHALL accept only these keys:
+profile id → profile. A profile id SHALL consist of lowercase letters, digits and `-`. A profile
+SHALL accept only these keys, with these values:
 
 | Key | Required | Allowed values |
 |---|---|---|
@@ -25,33 +23,32 @@ profile id → profile.
 | `classification.solution` | No, default `false` | `true`, `false`; `true` requires `external: true` and `explicit: true` |
 | `rules` | No | Map of field path → field rule |
 
-A field rule SHALL accept only these keys:
+A field rule SHALL accept only these keys, with these values:
 
 | Key | Required | Allowed values |
 |---|---|---|
 | `pattern` | Yes | A regular expression that compiles; the whole field value must match it. Written in syntax both Java and JavaScript accept (see the listing requirement) |
 | `message` | Yes | Non-blank text |
 
-A field rule's path SHALL be one of these create-request paths:
+A field rule's path SHALL be one of these create-request paths: `name`, `displayName`,
+`clientCode`, `artifactIds[0].groupPattern`, `baseConfiguration.build.buildTasks`,
+`baseConfiguration.vcsEntries[0].vcsPath`, `baseConfiguration.vcsEntries[0].branch`,
+`baseConfiguration.vcsEntries[0].tag`, `baseConfiguration.jira.projectKey`,
+`baseConfiguration.jira.versionPrefix`, `baseConfiguration.jira.versionFormat`,
+`baseConfiguration.jira.lineVersionFormat`, `baseConfiguration.jira.minorVersionFormat`,
+`baseConfiguration.jira.releaseVersionFormat`, `baseConfiguration.jira.buildVersionFormat`,
+`baseConfiguration.mavenArtifacts[0].groupPattern`,
+`baseConfiguration.mavenArtifacts[0].artifactPattern`,
+`baseConfiguration.dockerImages[0].imageName`, `baseConfiguration.dockerImages[0].flavor`,
+`baseConfiguration.packages[0].packageName`. A path with `[0]` SHALL apply to the first entry of
+that list only. A path SHALL be written as-is in the YAML key, without bracket notation.
 
-| Area | Paths |
-|---|---|
-| Component | `name`, `displayName`, `clientCode`, `artifactIds[0].groupPattern` |
-| Build | `baseConfiguration.build.buildTasks` |
-| VCS | `baseConfiguration.vcsEntries[0].vcsPath`, `.branch`, `.tag` |
-| Jira | `baseConfiguration.jira.projectKey`, `.versionPrefix`, `.versionFormat`, `.lineVersionFormat`, `.minorVersionFormat`, `.releaseVersionFormat`, `.buildVersionFormat` |
-| Distribution | `baseConfiguration.mavenArtifacts[0].groupPattern`, `.artifactPattern`; `baseConfiguration.dockerImages[0].imageName`, `.flavor`; `baseConfiguration.packages[0].packageName` |
-
-- A path with `[0]` SHALL apply to the first entry of that list only.
-- A path SHALL be written as-is in the YAML key, without bracket notation.
-
-The configuration as a whole:
-
-- Each problem SHALL name the profile id and the key concerned.
-- The configuration SHALL contain at least one `regular` profile, and every `regular` profile
-  SHALL be valid.
-- An entry of kind `template` SHALL be read and checked as the component-templates specification
-  states; a failed template SHALL NOT affect the rest of the configuration.
+Each problem SHALL name the profile id and the key concerned. An absent subtree, or one written
+empty (`{}`, `[]` or no value), SHALL mean no profiles. A subtree written as a plain value or a
+list SHALL be invalid. A subtree that holds entries SHALL contain at least one `regular` profile,
+and every `regular` profile SHALL be valid; a template counts as an entry. An entry of kind
+`template` SHALL be read and checked as the component-templates specification states; a failed
+template SHALL NOT affect the rest of the configuration.
 
 #### Scenario: Valid regular profiles only
 - **WHEN** the subtree holds four valid `regular` profiles and nothing else
@@ -104,16 +101,24 @@ The configuration as a whole:
 - **WHEN** one profile lacks `title` and has `kind: special`
 - **THEN** both problems are reported
 
-### Requirement: Startup requires usable profiles
+### Requirement: Startup requires usable profiles when they are configured
 
-The registry SHALL NOT start, and SHALL report every problem found, when the profile subtree:
+The registry SHALL NOT start when the profile subtree cannot be read, is present but holds no
+`regular` profile, or holds an invalid `regular` profile, and SHALL report every problem found.
+When the subtree is absent the registry SHALL start with no profiles.
 
-- cannot be read;
-- holds no `regular` profile; or
-- holds an invalid `regular` profile.
+#### Scenario: Subtree absent
+- **WHEN** the registry starts and the configuration has no profile subtree
+- **THEN** the registry starts, the listing returns no profiles, a create naming a profile is
+  rejected as unknown, and a create without `profile` works as before
+
+#### Scenario: Subtree written as a value
+- **WHEN** the registry starts and the subtree is written as a plain value, such as
+  `component-profiles: broken`, or as a list
+- **THEN** startup fails with the problem naming the subtree
 
 #### Scenario: No regular profile
-- **WHEN** the registry starts and the subtree is absent or holds only template entries
+- **WHEN** the registry starts and the subtree holds only template entries
 - **THEN** startup fails with a message saying at least one `regular` profile is required
 
 #### Scenario: Invalid regular profile
@@ -127,18 +132,16 @@ The registry SHALL NOT start, and SHALL report every problem found, when the pro
 
 ### Requirement: Reload applies usable profiles and keeps the previous ones otherwise
 
-`POST /rest/api/4/admin/reload-config` SHALL re-read the profiles and templates.
-
-- When the result is usable, the registry SHALL use it at once, profiles and templates together.
-- When it cannot be read, holds no `regular` profile or holds an invalid `regular` profile, the
-  registry SHALL keep the profiles and templates in use unchanged, and answer 422 with
-  `error: component-profiles` and the problems.
-
-Either way, the response SHALL carry `componentProfiles` with:
-
-- `status`: `applied` or `failed`;
-- `problems`: the configuration-level problems;
-- every entry, with its id, kind, status (`live` or `failed`) and problems.
+`POST /rest/api/4/admin/reload-config` SHALL re-read the profiles and templates. When the result
+is usable the registry SHALL use it at once, profiles and templates together — a removed subtree
+is usable and leaves no profiles and no templates; when it cannot be read, is present but holds no
+`regular` profile, or holds an invalid `regular` profile, the registry SHALL keep the profiles and
+templates in use unchanged and answer 422
+with `error: component-profiles` and the problems. Either way the response SHALL carry
+`componentProfiles` with `status` (`applied` or `failed`), configuration-level `problems`, and
+every entry with its id, kind, status (`live` or `failed`) and problems — also when the rest of the
+refresh fails. Each profile SHALL take its values from its own id only, and one reload SHALL read
+a single configuration revision, even while another reload runs.
 
 #### Scenario: Valid change
 - **WHEN** a profile's title is changed in service-config and the configuration is reloaded
@@ -148,6 +151,17 @@ Either way, the response SHALL carry `componentProfiles` with:
 #### Scenario: Profile removed
 - **WHEN** a profile is removed in service-config and the configuration is reloaded
 - **THEN** the listing no longer returns it and a create naming it is rejected as unknown
+
+#### Scenario: Subtree removed
+- **WHEN** the whole profile subtree is removed in service-config and the configuration is
+  reloaded
+- **THEN** the response has `componentProfiles.status: applied` with no entries, the listing
+  returns no profiles and a create naming a profile is rejected as unknown
+
+#### Scenario: Subtree turned into a value
+- **WHEN** a reload finds the subtree written as a plain value or a list
+- **THEN** the response is 422 with `componentProfiles.status: failed` and the problem, and the
+  profiles in use are kept
 
 #### Scenario: Invalid regular profile among valid changes
 - **WHEN** a reload changes one profile's title and makes another `regular` profile invalid
@@ -168,26 +182,32 @@ Either way, the response SHALL carry `componentProfiles` with:
 - **WHEN** a reload failed and the configuration is corrected and reloaded
 - **THEN** the reload is applied
 
+#### Scenario: Other refresh failure
+- **WHEN** the refresh fails on a `field-config` value Spring cannot bind, and the profiles are valid
+- **THEN** the response is 500 with `error: config-refresh`, the message and `componentProfiles`
+  (`status: applied`)
+
+#### Scenario: Ids alike to relaxed binding
+- **WHEN** the configuration holds both `regular-internal` and `regularinternal`, with different
+  titles
+- **THEN** each profile has its own title
+
+#### Scenario: Overlapping reloads
+- **WHEN** a second reload starts while the first is between its refresh and its profile load
+- **THEN** the second waits, and the first loads the profiles of the revision it refreshed
+
 ### Requirement: Profiles listed for the current user
 
-`GET /rest/api/4/component-profiles` SHALL return, to a user with `ACCESS_COMPONENTS`, the live
-profiles and live templates together, sorted by `order` and then id. Each entry SHALL carry:
-
-- id, kind (`regular` or `template`), title, description;
-- version, for a template only;
-- classification;
-- its field rules: path, pattern and message;
-- whether the current user may use it, with the reason when not.
-
-Rules and availability:
-
-- The field rules returned SHALL be the ones a create naming that profile, or a create from that
-  template, is checked against.
-- A template SHALL be usable by a user who holds `CREATE_COMPONENTS`, as a regular profile is.
-- The registry checks a pattern with Java regular expressions; a client checks it with its own
-  engine, such as JavaScript in the Portal. A pattern SHALL therefore use syntax both accept.
-- A client that cannot compile a pattern skips its own check; the registry's answer on create
-  decides.
+`GET /rest/api/4/component-profiles` SHALL return, to a user with `ACCESS_COMPONENTS`, the
+live profiles and live templates together, sorted by `order` and then id, each with its id, kind
+(`regular` or `template`), title, description, version (for a template only), classification,
+its field rules (path, pattern and message), and whether the current user may use it, with the
+reason when not. A template SHALL be usable by a user who holds `CREATE_COMPONENTS`, as a regular
+profile is. The field rules returned SHALL be the ones a create naming that profile, or a create
+from that template, is checked against. The registry checks a pattern with Java regular expressions; a client
+checks the same pattern with its own engine, such as JavaScript in the Portal. A pattern SHALL
+therefore use syntax both accept; a client that cannot compile a pattern skips its own check, and
+the registry's answer on create decides.
 
 #### Scenario: User who may create components
 - **WHEN** a user with `CREATE_COMPONENTS` asks
@@ -202,13 +222,13 @@ Rules and availability:
 - **WHEN** two profiles have the same `order`
 - **THEN** they are returned sorted by id
 
-#### Scenario: Templates listed with profiles
-- **WHEN** a template with order 100 and version 3 is live next to the four regular profiles
-- **THEN** it is returned last, with kind `template` and version 3
-
 #### Scenario: Failed entries are not listed
 - **WHEN** a template entry is failed
 - **THEN** it is not returned
+
+#### Scenario: Templates listed with profiles
+- **WHEN** a template with order 100 and version 3 is live next to the four regular profiles
+- **THEN** it is returned last, with kind `template` and version 3
 
 #### Scenario: Field rules returned
 - **WHEN** the Solution profile has a rule on `name`

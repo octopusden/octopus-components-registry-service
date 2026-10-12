@@ -109,6 +109,8 @@ On every load and reload, the registry SHALL check each template:
 - Every problem found SHALL be reported, each naming the parameter or field concerned.
 - A failed template SHALL NOT be offered.
 - A failed template SHALL NOT stop the load or the reload.
+- A template, live or failed, SHALL count as a configured entry: a subtree that holds templates and
+  no `regular` profile SHALL NOT be usable, as the profiles specification states.
 
 Parameter checks:
 

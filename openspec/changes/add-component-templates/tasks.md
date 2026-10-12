@@ -343,3 +343,16 @@
       `dbTest` for the template and profile suites 68, 0 failures; ktlint and detekt clean.
       `pitest`, now covering the template classes in `util/`: 76% mutation score (1048 of 1386)
       and 87% line coverage, above both floors; the template classes 528 of 612 mutants killed
+
+## 14. Follow the profile changes (added on review)
+
+- [x] 14.1 Rebased on the profiles change's head: an absent or empty subtree loads as no profiles; a
+      subtree written as a value or a list is refused; reload-config responses are typed
+  - [x] 14.1.1 A template counts as a configured entry: a subtree with templates and no `regular`
+        profile is not usable, as the profiles spec's "No regular profile" scenario states;
+        `ComponentProfileParserTest` covers a broken and a valid template alone
+  - [x] 14.1.2 The `component-profiles` delta rebuilt on the profiles spec's current text: the
+        startup requirement's new name, the absent-subtree and value-subtree scenarios, and the
+        reload scenarios the delta had dropped (other refresh failure, ids alike, overlapping
+        reloads) kept; only the template changes applied on top
+  - [x] 14.1.3 A removed subtree applies no templates either (catalog KDoc, functional spec)
