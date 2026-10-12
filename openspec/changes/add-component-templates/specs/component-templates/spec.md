@@ -54,17 +54,17 @@ Parameter keys:
 A template id SHALL be lowercase letters, digits and `-`, as a profile id is. A parameter name SHALL
 be upper-case letters, digits and `_`, starting with a letter.
 
-Field paths, and the value each field kind accepts:
+Field paths, the fixed value each field kind accepts, and the parameter types that may fill it:
 
-| Field kind | Paths | Value |
-|---|---|---|
-| Free text | The field-rule paths of the profiles specification | Text that may contain `{{ NAME }}`, `{{ NAME \| lower }}`, `{{ NAME \| upper }}` |
-| CRS value | `baseConfiguration.build.buildSystem`, `baseConfiguration.escrow.generation` | A value of that list, or exactly `{{ NAME }}` of a `crs-list` parameter of the same list |
-| Person | `componentOwner` | A login, or exactly `{{ NAME }}` of a single-value `person` parameter |
-| Free-text list | `artifactIds[0].artifactTokens` | Items, each free text or exactly `{{ NAME }}` of a multi-value `select` |
-| CRS list | `labels` | Labels, or exactly `{{ NAME }}` of a `labels` parameter |
-| People list | `releaseManager`, `securityChampion` | Logins, or exactly `{{ NAME }}` of a `person` parameter |
-| Fixed choice | `artifactIds[0].mode`, `baseConfiguration.packages[0].packageType` | A fixed value only |
+| Field kind | Paths | Fixed value | Parameter types accepted |
+|---|---|---|---|
+| Free text | The field-rule paths of the profiles specification | Text | `text`; single-value `select`; `crs-list` of `build-systems` or `escrow-generation`. Any of these as `{{ NAME }}`, with or without a filter and text around it |
+| CRS value | `baseConfiguration.build.buildSystem`, `baseConfiguration.escrow.generation` | A value of that list | `crs-list` of the same list, as exactly `{{ NAME }}` |
+| Person | `componentOwner` | A login | Single-value `person`, as exactly `{{ NAME }}` |
+| Free-text list | `artifactIds[0].artifactTokens` | Items of text | Per item: what free text accepts, or a multi-value `select` as exactly `{{ NAME }}` |
+| CRS list | `labels` | Labels | Per item: `crs-list` of `labels`, as exactly `{{ NAME }}` |
+| People list | `releaseManager`, `securityChampion` | Logins | Per item: `person`, single- or multi-value, as exactly `{{ NAME }}` |
+| Fixed choice | `artifactIds[0].mode`, `baseConfiguration.packages[0].packageType` | A value of its static list | None |
 
 Expressions are a small subset of Jinja syntax. Only these SHALL be accepted:
 
@@ -318,6 +318,18 @@ R7 SHALL apply only to the fields the Portal's create wizard pre-fills from `com
 - the full, line, minor, release and build version formats;
 - escrow generation;
 - VCS tag and branch, only when the build system needs VCS.
+
+Two defaults apply, one after the other, and neither stands in for the other:
+
+- A parameter's default comes from the template's `default` key, and only from there. It fills an
+  absent or blank parameter before rendering.
+- A field's default comes from `component-defaults`, and only for the fields above. R7 fills a field
+  that is still unset after rendering. A field the template sets, even when it renders a value
+  shorter than intended because an optional parameter was empty, does not take a default.
+
+`component-defaults` is the same source the Portal's create wizard pre-fills from. The wizard shows
+those values to the user, who sends a full request, and the registry adds nothing to it. A template
+asks only for its parameters, so the registry applies them instead, with the same result.
 
 #### Scenario: Case conversion around fixed text
 - **WHEN** `name` is `"{{ CLIENT_CODE | lower }}-plugin-{{ PLUGIN_CODE | lower }}"` with `ACME`

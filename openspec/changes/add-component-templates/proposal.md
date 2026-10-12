@@ -3,7 +3,8 @@
 - Registering a standard client component takes the full create wizard:
   - every field is typed by hand, by someone who knows the registry's conventions;
   - yet the component is set up the same way for every client, apart from a few values.
-- Delivery & Support engineers cannot register these components without R&D.
+- Delivery & Support engineers can register these components, but only with R&D's help: they do
+  not know the component's details.
 - Automation, such as an onboarding job, can only create a component by building the whole
   create request itself.
 - Component profiles now come from configuration (`add-component-profiles`). `kind: template` is
