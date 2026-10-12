@@ -296,6 +296,18 @@ class TemplateParserTest {
     }
 
     @Test
+    @DisplayName("a Jinja tag outside the subset is a problem naming the field")
+    fun jinjaTag() {
+        assertProblem(
+            "fields.name",
+            exampleTemplate().apply {
+                at("fields")["name"] =
+                    "{% if REGION %}eu-{% endif %}{{ CLIENT_CODE | lower }}"
+            },
+        )
+    }
+
+    @Test
     @DisplayName("a malformed {{ is a problem naming the field")
     fun malformedExpression() {
         assertProblem("fields.name", exampleTemplate().apply { at("fields")["name"] = "{{ CLIENT_CODE | lower }-{{ PLUGIN_CODE }}" })
@@ -523,6 +535,7 @@ class TemplateParserTest {
             }
 
         assertProblem("overridable[1]", template)
+        assertTrue(problems(template).any { it.startsWith("$TEMPLATE_ID.overridable[1]") && "dockerImages[0].imageName" in it })
     }
 
     @Test

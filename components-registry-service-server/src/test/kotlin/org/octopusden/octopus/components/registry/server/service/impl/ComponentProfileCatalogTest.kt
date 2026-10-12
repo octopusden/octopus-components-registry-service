@@ -7,6 +7,7 @@ import org.junit.jupiter.api.Assertions.assertTrue
 import org.junit.jupiter.api.DisplayName
 import org.junit.jupiter.api.Test
 import org.octopusden.octopus.components.registry.server.model.ProfileLoad
+import org.octopusden.octopus.components.registry.server.support.TEMPLATE_ID
 import org.octopusden.octopus.components.registry.server.support.designExampleProperties
 import org.octopusden.octopus.components.registry.server.support.profileProperties
 import org.octopusden.octopus.components.registry.server.support.standaloneTemplateProperties
@@ -62,6 +63,18 @@ class ComponentProfileCatalogTest {
 
         assertTrue(load.usable)
         assertEquals(emptyList<Any>(), catalog.profiles())
+    }
+
+    @Test
+    @DisplayName("a reload after the subtree is removed applies no templates either")
+    fun removedSubtreeReloadClearsTemplates() {
+        val source = SwitchableSource(designExampleProperties() + standaloneTemplateProperties())
+        val catalog = ComponentProfileCatalog(source::read)
+        assertEquals(listOf(TEMPLATE_ID), catalog.templates().map { it.id })
+        source.properties = emptyMap()
+
+        assertTrue(catalog.reload().usable)
+        assertEquals(emptyList<Any>(), catalog.templates())
     }
 
     @Test

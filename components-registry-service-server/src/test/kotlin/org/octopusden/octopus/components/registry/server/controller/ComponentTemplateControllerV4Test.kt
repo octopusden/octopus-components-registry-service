@@ -369,16 +369,23 @@ class ComponentTemplateControllerV4Test {
     @Test
     @DisplayName("a malformed Jira task key answers 400, on a dry run as on a create")
     fun malformedJiraTaskKey() {
+        val before = counts()
+
         components(body(extra = mapOf("jiraTaskKey" to "not a key"))).andExpect(status().isBadRequest)
         components(body(extra = mapOf("jiraTaskKey" to "not a key")), dryRun = false).andExpect(status().isBadRequest)
+
+        assertEquals(before, counts())
     }
 
     @Test
-    @DisplayName("when several checks fail, the first in order answers: Jira task key 400, template 404, use 403, override 403, path 400")
+    @DisplayName("when several checks fail, the first in order answers: key 400, access 403, template 404, use 403, override 403, path 400")
     fun orderOfChecks() {
         val badKey = mapOf("jiraTaskKey" to "not a key")
         val notOverridable = mapOf("overrides" to mapOf("name" to listOf("my-name")))
 
+        val noAccess = jwt().jwt { it.claim("preferred_username", "nobody") }
+        components(body(extra = badKey), id = "no-such-template", jwt = noAccess).andExpect(status().isBadRequest)
+        components(body(), id = "no-such-template", jwt = noAccess).andExpect(status().isForbidden)
         components(body(extra = badKey), id = "no-such-template", jwt = viewerJwt()).andExpect(status().isBadRequest)
         components(body(), id = "no-such-template", jwt = viewerJwt()).andExpect(status().isNotFound)
         components(body(extra = notOverridable), jwt = viewerJwt()).andExpect(status().isForbidden)
@@ -394,6 +401,8 @@ class ComponentTemplateControllerV4Test {
         val code = pluginCode()
         components(body(code), dryRun = false).andExpect(status().isCreated)
 
+        val before = counts()
+
         components(body(code))
             .andExpect(status().isOk)
             .andExpect(jsonPath("$.valid").value(false))
@@ -401,6 +410,7 @@ class ComponentTemplateControllerV4Test {
             .andExpect(jsonPath("$.problems[0].parameters", containsInAnyOrder("CLIENT_CODE", "PLUGIN_CODE")))
             .andExpect(jsonPath("$.problems[0].templateProblem").value(false))
             .andExpect(jsonPath("$.problems[0].message", startsWith("name: a component with name")))
+        assertEquals(before, counts())
     }
 
     @Test

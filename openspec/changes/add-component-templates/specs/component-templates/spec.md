@@ -153,9 +153,10 @@ Required fields, by classification:
 
 - The build systems that need no VCS are `PROVIDED`, `ESCROW_PROVIDED_MANUALLY`,
   `ESCROW_NOT_SUPPORTED`, `WHISKEY` and `BS2_0`. A build system taken from a parameter SHALL count
-  as needing VCS and as not `WHISKEY`.
-- A field fills a requirement when it has fixed non-blank text or a fixed list item, uses a
-  required parameter, or gets a value from `component-defaults`.
+  as needing VCS and as not `WHISKEY`. A build system the template leaves unset SHALL be the
+  `component-defaults` one; a default `BS2_0` is ignored.
+- A field fills a requirement when it has non-blank literal text, alone or around a parameter, or a
+  fixed list item, uses a required parameter, or gets a value from `component-defaults`.
 - A template rule on a field the template leaves unset is checked against the default R7 would
   give it, or against an empty value.
 - Copyright SHALL NOT be checked on load; the dry run's create step checks it.
@@ -165,6 +166,7 @@ Not checked on load, because they depend on data that changes at runtime:
 - Fixed labels; the dry run checks them against the labels dictionary.
 - A `labels` parameter's default; P7 checks it at the dry run, when the default is used.
 - Fixed people; the dry run's create step checks them, as on any create.
+- A `person` parameter's default; P8 checks it at the dry run, when the default is used.
 - Uniqueness, such as a fixed name already taken; the dry run's create step checks it.
 
 #### Scenario: Key not for the type
@@ -266,7 +268,8 @@ How values are taken:
   single-value parameter given the same value twice passes P3.
 - A parameter absent, empty, or given only blank values SHALL take its default.
 - An empty optional parameter without a default SHALL pass and add nothing.
-- When the employee service cannot be reached, P8 SHALL pass, as on create.
+- When the employee service cannot be reached or is not configured, P8 SHALL pass, as on create.
+  A login the service does not know SHALL fail P8, as an inactive one does.
 
 #### Scenario: Pattern with the template's message
 - **WHEN** `PLUGIN_CODE` is `core` against `^[A-Z][A-Z0-9]{2,15}$` with the message
@@ -355,10 +358,11 @@ Jira task key and a comment, and a `dryRun` query parameter:
   | Order | Check | Status |
   |---|---|---|
   | 1 | Jira task key pattern | 400 |
-  | 2 | Template live | 404 |
-  | 3 | User may use the template | 403 |
-  | 4 | User may override, when the request has overrides | 403 |
-  | 5 | Every override path is overridable | 400 |
+  | 2 | User has `ACCESS_COMPONENTS` | 403 |
+  | 3 | Template live | 404 |
+  | 4 | User may use the template | 403 |
+  | 5 | User may override, when the request has overrides | 403 |
+  | 6 | Every override path is overridable | 400 |
 
   Only then do the dry-run steps run.
 
@@ -398,10 +402,13 @@ It SHALL return:
 How problems are reported:
 
 - A problem on a field SHALL name the field and its source parameters.
-- A problem on a field the template fixes SHALL be marked a template problem.
+- A problem on a field the template fixes, fills from `component-defaults` or leaves unset SHALL be
+  marked a template problem; a problem on an overridden field SHALL NOT.
 - A fixed label not in the labels dictionary SHALL be reported as a template problem.
 - Today's create stops at its first failure, so at most one problem SHALL come from step 4,
   worded as the create words it.
+- A unique-index violation from a concurrent create SHALL be a problem on `name`, saying another
+  component took the key or display name at the same moment.
 
 It SHALL answer 200 whether or not the input is valid. Nothing SHALL be created, saved or
 recorded in the audit.
@@ -505,7 +512,7 @@ template may override.
 - every configured profile and template, live or failed, each with:
   - its status and every problem;
   - its definition, when live;
-  - its configuration text;
+  - its configuration as read, dumped back to YAML under its id;
 - the configuration version in use, when the config server reports one;
 - the outcome of the last load or reload, with its problems when it failed.
 

@@ -129,6 +129,8 @@ A dry run with `CLIENT_CODE=ACME`, `PLUGIN_CODE=CORE`, `PLUGIN_NAME=Core API`, o
 - `ComponentProfileParser` hands a `kind: template` entry to `TemplateParser`, which returns a
   `ComponentTemplate` or the entry's problems.
 - `ProfileLoad` gains `templates`. `usable` is unchanged, so a failed template never blocks a load.
+- A template, live or failed, counts as a configured entry, so a configuration with templates and
+  no `regular` profile is not usable, as for any entry.
 - The catalog swaps profiles and templates together, as one snapshot. A reload that fails on a
   regular profile keeps the previous templates too.
 - The catalog also keeps, for the administrator read (Decision 11):
@@ -170,7 +172,8 @@ A dry run with `CLIENT_CODE=ACME`, `PLUGIN_CODE=CORE`, `PLUGIN_NAME=Core API`, o
   templates written for the current subset stay valid.
 - Parsed once, on load, into literal and parameter parts.
 - A CRS value, a Person, or an item of a CRS list or people list takes a parameter whole:
-  `{{ NAME }}` and nothing else, no filter. A free-text list item is free text.
+  `{{ NAME }}` and nothing else, no filter. A free-text list item is free text, or exactly
+  `{{ NAME }}` of a multi-value `select`, which renders one item per value.
 
 ### 4. Load checks
 
@@ -285,29 +288,36 @@ A dry run with `CLIENT_CODE=ACME`, `PLUGIN_CODE=CORE`, `PLUGIN_NAME=Core API`, o
 - The admin migrate endpoint's `dryRun` defaults to `false`; this one differs on purpose, because
   it is the endpoint automation and the Portal call on every review step.
 
-- The endpoint first checks that the user may use the template (`ProfileAvailability`, 403), and
-  may override when the request has overrides (403).
+- The endpoint checks, in order, and answers the first that fails:
+  1. the Jira task key's pattern (400, bean validation on the body);
+  2. `ACCESS_COMPONENTS` (403, `@PreAuthorize`);
+  3. the template is live (404);
+  4. the user may use it (`ProfileAvailability`, 403);
+  5. the user may override, when the request has overrides (403);
+  6. every override is on an `overridable` path (400).
 - `TemplateDryRun` runs:
   1. parameter checks — stop on failure;
   2. render;
-  3. field rules;
+  3. field rules and fixed labels — every problem kept, and the create still runs;
   4. today's `createComponent(rendered)`, inside a `TransactionTemplate` whose status is set
      rollback-only, so it always rolls back, without an `UnexpectedRollbackException`.
 - Everything the create writes is rolled back with it: the component row, the label dictionary,
   the component-source row, the audit event at `BEFORE_COMMIT`. A template sets no TeamCity
   projects, so the TeamCity dictionary is never touched.
-- A failure from `createComponent` is reported as a problem, its message unchanged: an
+- A failure from `createComponent` is reported as a problem, its message unchanged (a concurrent
+  unique-index violation excepted, below): an
   `IllegalArgumentException` (400), a `ResponseStatusException` (403, 422), a `NotFoundException`
   (404) or a `CrossComponentConflictException` (409). A unique-index violation from a concurrent
-  create is a problem on `name`. Any other exception propagates.
+  create is a problem on `name` with its own message, since the database's names no field. Any
+  other exception propagates.
 - Today's create stops at its first failure, so the dry run reports at most one of those. Every
   parameter problem and every rule problem is reported.
 
 ### 9. A create failure is attributed to fields by its message
 
-- `TemplateProblems` turns a rule failure, an unknown fixed label or a create failure into a problem
-  through the rendered template's `sources`; `CreateFailureFields` reads the field a create message
-  names.
+- `TemplateProblems` turns a rule failure or a create failure into a problem through the rendered
+  template's `sources`, and an unknown fixed label into a template problem; `CreateFailureFields`
+  reads the field a create message names.
 
 - `CreateFailureFields` maps the field a create message starts with to the template paths it
   concerns: `name:`, `displayName:`, `artifactIds:`, `componentOwner '…'`, the Jira project and
@@ -383,13 +393,20 @@ sits in the layer the server already uses for its kind.
 | `util/` | `TemplateParser`, `TemplateParameterParser`, `TemplateFieldChecker`, `TemplateRequiredFields`, `EntryKeys`, `TemplateFields`, `TemplateExpressionParser`, `TemplateRenderer`, `ComponentDefaultsSeed`, `TemplateProblems`, `CreateFailureFields`, `FieldRuleParser`, `EntryYaml` |
 | `service/` | `ListValues`, `EmployeeStatus` — the parameter checks' two ports |
 | `service/impl/` | `ParameterChecker`, `RegistryListValues`, `TemplateDryRun` |
-| `config/` | `ComponentTemplatesConfig` (the beans), `TemplateDefaults` (`component-defaults` → template field paths) |
+| `config/` | `ComponentTemplatesConfig` (the beans), `templateDefaults()` in `TemplateDefaults.kt` (`component-defaults` → template field paths) |
+| `controller/` | `ComponentTemplateControllerV4`; the admin read on `AdminControllerV4` |
+| `dto/v4/` | `TemplateComponentRequest`, `TemplateRunResponse`, `ComponentTemplateResponse`, `AdminComponentProfilesResponse` |
+
+Result types sit with what produces them: `RenderedTemplate` and `TemplateProblem` in `util/`,
+`ParameterValues`, `ParameterProblem`, `TemplateInput` and `TemplateRun` in `service/impl/`.
+
 
 - `model/` imports nothing from the server but `model/`: the field kind is a model enum, and the
   expression's data is apart from its parser, so no `model` ↔ `util` cycle (TD-016).
-- `util/` holds the pure logic, so it sits in the PIT mutation scope. It imports `model/` and the
-  request DTOs, never `service/` or `config/`: reading `AdminConfigProperties` is
-  `config/TemplateDefaults`'s job.
+- `util/` holds the pure logic, so it sits in the PIT mutation scope. It imports `model/`, the
+  request DTOs and the enums its field lists draw from (`entity.ArtifactIdMode`,
+  `mapper.PACKAGE_TYPE_NAMES`), never `service/` or `config/`: reading `AdminConfigProperties` is
+  `templateDefaults()`'s job in `config/`.
 - Test fixtures (the design example, `flatten`, `parsedTemplate`) live in
   `support/ComponentTemplateFixtures.kt`.
 
@@ -441,5 +458,5 @@ sits in the layer the server already uses for its kind.
 - **Rules read the rendered request, not the stored entity.**
   - A rule on a field the installation hides sees the rendered value, although the create drops
     it.
-  - Accepted: a template that sets a hidden field is a template problem; the dry run's create step
-    still reports it as today.
+  - Accepted: nothing flags a hidden field. Today's create drops it silently, and a rule on it
+    judges the rendered value, attributed through `sources` like any rule.

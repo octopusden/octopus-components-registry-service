@@ -41,7 +41,7 @@ class ComponentProfileCatalog(
 
     fun template(id: String): ComponentTemplate? = templates().firstOrNull { it.id == id }
 
-    /** Every configured entry in use, live or failed, by id, with its keys as read (Decision 11). */
+    /** Every configured entry in use, live or failed, by id, with its keys as read (templates Decision 11). */
     fun rawEntries(): Map<String, Map<String, String>> = current.get().raw
 
     /** The entries in use, live or failed, sorted by id. */

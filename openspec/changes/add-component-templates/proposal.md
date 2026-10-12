@@ -40,7 +40,8 @@
   - a `current-user` default comes back as the caller.
 - Submitted values are checked with every parameter check (P1–P9); each failure names its
   parameter.
-- An absent parameter takes its default; an empty optional parameter adds nothing.
+- A parameter absent, empty or blank takes its default; an empty optional parameter without a
+  default adds nothing.
 
 **Rendering**
 - One renderer turns a template, checked values and overrides into a create request:
@@ -92,7 +93,7 @@
 - `ComponentManagementServiceImpl.createComponent` is called unchanged; the dry run wraps it.
 - **Listing response:**
   - `kind` can now be `template`;
-  - entries gain `version`, absent for a regular profile;
+  - entries gain `version`, `null` for a regular profile;
   - a client that assumed every entry is `regular` must branch on `kind`.
 - **Reload response:** a valid template entry is now `live`; only a broken one is `failed`.
 - v4 contract change → `api-changelog.md`, regenerated `v4.json`, `functional-spec.md`, ADR-016.
@@ -122,7 +123,7 @@
 ## Rollout note
 
 - Deploy needs no service-config change. With no template configured, behavior is the
-  `add-component-profiles` behavior, except that the reload and listing responses can carry
-  templates.
+  `add-component-profiles` behavior, except that each listing entry carries `version` (`null` for a
+  regular profile) and the three new endpoints exist.
 - A template that fails its load checks after deploy is reported by the reload and the
   administrator read, and is simply not offered.

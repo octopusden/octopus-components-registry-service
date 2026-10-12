@@ -2,8 +2,9 @@
 
 - [x] 1.1 Characterization tests on what this change alters, green on the unchanged code:
   - [x] 1.1.1 A reload with a template entry answers 200, the entry `failed` with "templates are
-        not supported yet" (becomes `live` for a valid template in section 3) — already pinned by
-        `ReloadConfigComponentProfilesTest.templateEntry`
+        not supported yet" (becomes `live` for a valid template in section 3) — pinned by
+        `ReloadConfigComponentProfilesTest.templateEntry` until 3.1.3 replaced it with
+        `templateEntries`
   - [x] 1.1.2 A create whose `name` is taken throws `IllegalArgumentException`
         `name: a component with name '<key>' already exists` and leaves no row
   - [x] 1.1.3 A create rolled back after `saveAndFlush` leaves no component, label dictionary row
@@ -16,7 +17,7 @@
 
 ## 2. Template model and parsing (Decisions 1–4)
 
-- [x] 2.1 Write failing unit tests for `TemplateParser` and `TemplateExpression`:
+- [x] 2.1 Write failing unit tests for `TemplateParser` and `TemplateExpressionParser`:
   - [x] 2.1.1 The design example parses to a live template: four parameters, fourteen fields, two
         overridable paths
   - [x] 2.1.2 Required keys — each missing one → a problem naming it:
@@ -77,7 +78,7 @@
   - [x] 2.2.5 `ComponentProfileParser` hands `kind: template` to `TemplateParser`; `ProfileLoad`
         gains `templates`
 - [x] 2.3 Confirm tests pass: `./gradlew :components-registry-service-server:test` — 1355 tests,
-      0 failures, 1 skipped (pre-existing); `TemplateExpressionTest` 15, `TemplateParserTest` 74.
+      0 failures, 1 skipped (pre-existing); `TemplateExpressionParserTest` 15, `TemplateParserTest` 74.
       `dbTest` for `TemplateCreateBaselineTest` 2, `ReloadConfigComponentProfilesTest` 5,
       `ComponentProfileControllerV4Test` 9 — all green. ktlint and detekt clean.
 - [x] 2.4 Split out of `TemplateParser` to keep each file to one job (added on review):
@@ -158,8 +159,9 @@
     - [x] deprecated build system ignored
     - [x] no `master` or version-format fallback
   - [x] 5.1.5 Classification, Jira task key and comment carried; `profile` absent
-- [x] 5.2 Implement `util/TemplateRenderer.kt` and `util/ComponentDefaultsSeed.kt`
-- [x] 5.3 The catalog passes `ComponentDefaultsSeed`'s paths to `ComponentProfileParser.parse`, on
+- [x] 5.2 Implement `util/TemplateRenderer.kt`, `util/ComponentDefaultsSeed.kt` (paths, `applicable`)
+      and `config/TemplateDefaults.kt` (`templateDefaults()`)
+- [x] 5.3 The catalog passes the `templateDefaults()` values to `ComponentProfileParser.parse`, on
       load and on reload, closing 2.6 (added on review)
 - [x] 5.4 Confirm tests pass: `test` — 1402 tests, 0 failures, 1 skipped (pre-existing);
       `TemplateRendererTest` 15, `ComponentDefaultsSeedTest` 6. `dbTest` on H2 —
@@ -356,3 +358,27 @@
         reload scenarios the delta had dropped (other refresh failure, ids alike, overlapping
         reloads) kept; only the template changes applied on top
   - [x] 14.1.3 A removed subtree applies no templates either (catalog KDoc, functional spec)
+
+## 15. Alignment review against the code (added on review)
+
+- [x] 15.1 Docs brought to the code; no code contradicted a SHALL:
+  - [x] 15.1.1 Spec: `ACCESS_COMPONENTS` (403) is the second check, after the Jira task key; a
+        problem on a fixed, defaulted or unset field is a template problem, on an overridden one
+        not; P8 also passes when the employee service is not configured, and fails an unknown
+        login; literal text around an optional parameter fills a required field; the default build
+        system decides VCS and `WHISKEY`; a `person` default is checked at the dry run; a concurrent
+        unique-index violation is a problem on `name`; the admin read's configuration is the keys
+        dumped back to YAML
+  - [x] 15.1.2 Design: the endpoint's check order; step 3 checks fixed labels too; fixed-label
+        attribution; the concurrent-create message; a free-text list item from a multi-value
+        `select`; templates count as configured entries; Decision 14's `util/` imports, the
+        `controller/` and `dto/v4/` rows and where result types sit; the hidden-field risk states
+        that nothing flags a hidden field
+  - [x] 15.1.3 Proposal and changelog: `version` is `null` for a regular profile; an empty or blank
+        value takes the default; the rollout note names the real differences
+  - [x] 15.1.4 Tasks: `TemplateExpressionParser`(`Test`), `templateDefaults()`, `templateEntries`
+  - [x] 15.1.5 KDoc decision numbers name their design (profiles or templates)
+- [x] 15.2 Tests added for scenarios that lacked them: a Jinja tag names the field; an overridable
+      path not set is named in the problem; a removed subtree clears the templates; the
+      `ACCESS_COMPONENTS` place in the check order; a taken key and a malformed Jira task key
+      create nothing
