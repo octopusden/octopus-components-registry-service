@@ -11,8 +11,9 @@ import org.octopusden.octopus.components.registry.server.model.ProfileLoad
  * `solution.rules.artifactIds[0].groupPattern.pattern`) and values are the strings the
  * environment resolves. Every problem is collected, each prefixed with the full key it concerns.
  * A template entry is failed without further checks. No properties at all, or only a blank root
- * (key `""`), is a usable load with no profiles; a non-blank root is a configuration problem, and any
- * configured entry requires at least one `regular` profile. Pure: no Spring, no IO.
+ * (key `""`), is a usable load with no profiles; a non-blank root or a list root (keys `[0]…`) is a
+ * configuration problem, checked before any entry so a list of template-like entries cannot pass as
+ * failed templates; any configured entry requires at least one `regular` profile. Pure: no Spring, no IO.
  */
 object ComponentProfileParser {
     private val ID = Regex("[a-z0-9-]+")
@@ -27,14 +28,15 @@ object ComponentProfileParser {
 
     fun parse(properties: Map<String, String>): ProfileLoad {
         val root = properties[""]
+        val (listed, entries) = (properties - "").entries.partition { it.key.startsWith('[') }
         val parsed =
-            (properties - "")
-                .entries
+            entries
                 .groupBy({ it.key.substringBefore('.') }, { it.key.substringAfter('.', "") to it.value })
                 .map { (id, keyValues) -> EntryParser(id, keyValues.toMap()).parse() }
         val problems =
             when {
                 !root.isNullOrBlank() -> listOf("$ROOT: '$root' is not a map of profiles")
+                listed.isNotEmpty() -> listOf("$ROOT: a list is not a map of profiles")
                 parsed.isNotEmpty() && parsed.none { it.first.kind == ComponentProfile.REGULAR_KIND } ->
                     listOf("at least one regular profile is required")
                 else -> emptyList()

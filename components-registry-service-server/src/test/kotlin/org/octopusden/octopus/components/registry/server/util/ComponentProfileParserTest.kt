@@ -127,6 +127,16 @@ class ComponentProfileParserTest {
     }
 
     @Test
+    @DisplayName("a list root makes the configuration unusable, even when its entries look like templates")
+    fun listRoot() {
+        val result = ComponentProfileParser.parse(designExampleProperties() + ("[0].kind" to "template"))
+
+        assertFalse(result.usable)
+        assertEquals(listOf("components-registry.component-profiles: a list is not a map of profiles"), result.problems)
+        assertEquals(4, result.entries.size)
+    }
+
+    @Test
     @DisplayName("a blank root next to profiles is ignored")
     fun blankRootWithProfiles() {
         val result = ComponentProfileParser.parse(designExampleProperties() + ("" to ""))

@@ -100,7 +100,42 @@ class ComponentProfilesSourceTest {
 
         val error = assertThrows(ComponentProfilesException::class.java) { ComponentProfileCatalog(source::read) }
 
-        assertTrue(requireNotNull(error.message).contains("[0]: an id consists of lowercase letters, digits and '-'"), error.message)
+        assertTrue(
+            requireNotNull(error.message).contains("components-registry.component-profiles: a list is not a map of profiles"),
+            error.message,
+        )
+    }
+
+    @Test
+    @DisplayName("a list of template-like entries over valid profiles from another file stops startup")
+    fun templateListOverProfilesAtStartup() {
+        val source = ComponentProfilesSource(environment("base.yml", "root-template-list.yml"))
+
+        val error = assertThrows(ComponentProfilesException::class.java) { ComponentProfileCatalog(source::read) }
+
+        assertTrue(
+            requireNotNull(error.message).contains("components-registry.component-profiles: a list is not a map of profiles"),
+            error.message,
+        )
+    }
+
+    @Test
+    @DisplayName("a list of template-like entries added on reload is not applied, nor is a title change beside it")
+    fun templateListOverProfilesOnReload() {
+        val environment = environment("base.yml")
+        val catalog = ComponentProfileCatalog(ComponentProfilesSource(environment)::read)
+        val before = catalog.profiles()
+        YamlPropertySourceLoader()
+            .load("root-template-list.yml", ClassPathResource("component-profiles/root-template-list.yml"))
+            .forEach { environment.propertySources.addFirst(it) }
+        environment.propertySources.addFirst(
+            MapPropertySource("title-change", mapOf("components-registry.component-profiles.solution.title" to "Changed")),
+        )
+
+        val load = catalog.reload()
+
+        assertFalse(load.usable)
+        assertEquals(before, catalog.profiles())
     }
 
     @Test

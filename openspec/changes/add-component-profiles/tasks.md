@@ -270,3 +270,8 @@
       profiles on reload (design Decision 3, spec "Subtree written as a value", "Subtree turned
       into a value"). Seen red first with real YAML sources for startup and reload — which also
       showed `{}`/`[]` arrive as empty map/list objects, not blank strings
+- [x] 8.10 A list root whose entries look like templates (`component-profiles: [{kind: template}]`)
+      arrived as `[0].kind`, was parsed as a failed template and so never blocked a load: with valid
+      profiles from another file, startup passed and a reload applied. A list root is now a
+      configuration problem checked before any entry. Mixed-source regression tests with real YAML
+      for startup and reload (title change beside it not applied); seen red first
