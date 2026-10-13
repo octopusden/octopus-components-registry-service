@@ -3359,7 +3359,10 @@ reports, portal lists, health statistics).
 - A non-test component may not reference a test component as its parent or doc component, and a
   component that non-test components reference that way cannot become a test component: 400,
   `parentComponentName: …` / `docs: …` / `testComponent: …`, naming both components. Checked on
-  create, and on update when the PATCH carries `testComponent`, `parentComponentName` or `docs`.
+  create, and on update when the PATCH carries `testComponent`, `parentComponentName`, `docs` or a new
+  `name` (renaming a test component onto a key that a real component's soft doc link still names is
+  rejected with `name: …`). Concurrent "flag A" and "reference A" writes serialize on a row lock of A,
+  so the second to commit fails (technical-design §6.8).
 - The flag is the source of truth. The `test-component` label is kept for compatibility — the
   Sonar automation and other consumers read it — and is not removed by this requirement. A
   label/flag mismatch is a warning, never an error: a create/update response carries a `warnings`
@@ -3391,7 +3394,8 @@ reports, portal lists, health statistics).
 `` `SYS-099 list filter on testComponent` `` (2),
 `` `SYS-099 real component referencing test parent is rejected` ``,
 `` `SYS-099 real component referencing test doc component is rejected` ``,
-`` `SYS-099 flagging a referenced component is rejected` `` (3),
+`` `SYS-099 flagging a referenced component is rejected` ``,
+`` `SYS-099 rename of a test component onto a dangling doc link is rejected` ``, `TestComponentReferenceRaceTest` (3),
 `` `SYS-099 label without flag warns` `` (4),
 `` `SYS-099 health statistics exclude test components` `` (5);
 `TeamcityValidationQueryServiceTest.SYS-099 test components are excluded` (5);

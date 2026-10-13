@@ -435,6 +435,23 @@ IO edges; the module stays `server → component-validation` (one-way dependency
   [upgrade note](deployment/tc-validation-upgrade-note.md) for required values and the coordinated
   deploy requirement with components-management-portal.
 
+### 6.8 Test-component reference check: concurrency (SYS-099)
+
+"A non-test component may not reference a test component" spans two rows: flagging A writes A,
+referencing A writes the referrer B. Optimistic `@Version` cannot catch the conflict — the versions
+live on different rows — so two concurrent transactions would each miss the other's uncommitted
+write and both commit. The check therefore row-locks the would-be test target before reading flags:
+
+- flagging (or renaming) a test component A: `SELECT … FROM components WHERE component_key IN (A)
+  FOR UPDATE`, then the non-test referrer queries;
+- writing a parent or doc reference from a non-test B: the same lock on every referenced key (key
+  order, to avoid lock-order deadlocks), then a fresh `testComponent` read of those keys (not the
+  persistence-context copy, which may predate a concurrent commit).
+
+Both paths serialize on A's row; the transaction that commits second waits, then sees the first
+one's committed write and fails with 400. The lock is held only for the rest of that write
+transaction. Pinned by `TestComponentReferenceRaceTest`.
+
 ## 7. Data Migration
 
 ### 7.1 Migration Strategy: Component-Source Routing

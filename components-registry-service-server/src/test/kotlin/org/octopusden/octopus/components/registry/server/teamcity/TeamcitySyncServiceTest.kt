@@ -805,6 +805,12 @@ class TeamcitySyncServiceTest {
 
         override fun findTestComponentKeys(): List<String> = components.filter { it.testComponent }.map { it.componentKey }
 
+        override fun lockByComponentKeys(keys: Collection<String>): List<String> =
+            components.map { it.componentKey }.filter { it in keys }.sorted()
+
+        override fun findTestComponentKeysIn(keys: Collection<String>): List<String> =
+            components.filter { it.testComponent && it.componentKey in keys }.map { it.componentKey }
+
         override fun findNonTestChildKeys(parentId: UUID): List<String> =
             components.filter { it.parentComponent?.id == parentId && !it.testComponent }.map { it.componentKey }
 

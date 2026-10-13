@@ -150,6 +150,21 @@ interface ComponentRepository :
     @Query("SELECT c.componentKey FROM ComponentEntity c WHERE c.testComponent = true")
     fun findTestComponentKeys(): List<String>
 
+    /**
+     * Row-locks (`FOR UPDATE`, key order) the components with these keys until the transaction ends.
+     * Serializes the SYS-099 test-component reference check against a concurrent flag/reference write
+     * on the same component; read the flags with a fresh query afterwards.
+     */
+    @Query(
+        value = "SELECT component_key FROM components WHERE component_key IN (:keys) ORDER BY component_key FOR UPDATE",
+        nativeQuery = true,
+    )
+    fun lockByComponentKeys(keys: Collection<String>): List<String>
+
+    /** The subset of [keys] that are test components (fresh read, not the persistence-context copy). */
+    @Query("SELECT c.componentKey FROM ComponentEntity c WHERE c.componentKey IN :keys AND c.testComponent = true")
+    fun findTestComponentKeysIn(keys: Collection<String>): List<String>
+
     /** Keys of the non-test components whose parent is [parentId] (a real product may not sit under a test component). */
     @Query("SELECT c.componentKey FROM ComponentEntity c WHERE c.parentComponent.id = :parentId AND c.testComponent = false")
     fun findNonTestChildKeys(parentId: UUID): List<String>

@@ -289,6 +289,24 @@ class TestComponentFlagV4Test {
     }
 
     @Test
+    @DisplayName("SYS-099: renaming a test component onto a key a real component's soft doc link still names is rejected")
+    fun `SYS-099 rename of a test component onto a dangling doc link is rejected`() {
+        val docKey = name("test-sys099-dockey")
+        val doc = create(""""name":"$docKey"""")
+        val real = name("sys099-docholder")
+        create(""""name":"$real","docs":[{"docComponentKey":"$docKey"}]""")
+        // The doc target moves away; the real component's soft link stays on the old key.
+        patchComponent(doc, """"name":"${name("test-sys099-moved")}"""").andExpect(status().isOk)
+
+        val test = create(""""name":"${name("test-sys099-renamer")}","testComponent":true""")
+        patchComponent(test, """"name":"$docKey"""")
+            .andExpect(status().isBadRequest)
+            .andExpect(
+                jsonPath("$.errorMessage").value(allOf(startsWith("name: "), containsString("'$docKey'"), containsString("'$real'"))),
+            )
+    }
+
+    @Test
     @DisplayName("SYS-099: the test-component label without the flag yields a warning, not an error")
     fun `SYS-099 label without flag warns`() {
         val labelled = create(""""name":"${name("test-sys099-label")}","labels":["test-component"]""")

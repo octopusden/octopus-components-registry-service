@@ -916,9 +916,12 @@ class ComponentManagementServiceImpl(
             // not on an unrelated rename/baseConfig change (which must not 409 on pre-existing data).
             if (request.artifactIds != null) validateArtifactOwnershipIfChanged(saved)
         }
-        // Grandfathered like the checks above: only a PATCH touching the flag or a reference re-checks it.
-        if (request.testComponent != null || request.parentComponentName != null || request.docs != null) {
-            validateTestComponentReferences(saved)
+        // Grandfathered like the checks above: only a PATCH touching the flag, a reference, or the key
+        // re-checks it. A rename counts: a soft doc link left on a renamed-away key re-binds to whatever
+        // component takes that key, so a test component renamed onto it would be referenced by a real one.
+        val referencesTouched = request.parentComponentName != null || request.docs != null
+        if (request.testComponent != null || referencesTouched || isRename) {
+            validateTestComponentReferences(saved, flagField = if (request.testComponent == null && isRename) "name" else "testComponent")
         }
 
         // Junctions — synced via their repositories after the parent flush so the
@@ -3591,12 +3594,23 @@ class ComponentManagementServiceImpl(
      * test component as its parent or doc component (400, like the can-be-parent rule). Checked both
      * ways — this component's own references, and, for a test component, the non-test components that
      * already reference it. Runs post-flush, like [validateDocComponentExistence].
+     *
+     * Race safety: both directions take a row lock (`SELECT … FOR UPDATE`) on the component that would
+     * become the test target — this component when it is a test component, the referenced parent/doc
+     * components otherwise — and read the flag after the lock. A concurrent "flag A" and "reference A"
+     * therefore serialize on A's row: whichever commits second sees the other's committed write and
+     * fails. (Optimistic versions cannot catch it: the two writes bump different components' rows.)
+     * [flagField] is the field prefix of the reverse-direction message (`name` for a rename).
      */
-    private fun validateTestComponentReferences(entity: ComponentEntity) {
+    private fun validateTestComponentReferences(
+        entity: ComponentEntity,
+        flagField: String = "testComponent",
+    ) {
         val key = entity.componentKey
         val violation =
             if (entity.testComponent) {
                 val id = entity.id ?: return
+                componentRepository.lockByComponentKeys(listOf(key))
                 val children = componentRepository.findNonTestChildKeys(id)
                 val docReferrers = componentRepository.findNonTestDocReferrerKeys(key, id)
                 when {
@@ -3605,23 +3619,28 @@ class ComponentManagementServiceImpl(
                     docReferrers.isNotEmpty() ->
                         "non-test component(s) ${docReferrers.sorted().joinToString { "'$it'" }} reference it as their doc component"
                     else -> null
-                }?.let { "testComponent: test component '$key' cannot be referenced by a real product: $it" }
+                }?.let { "$flagField: test component '$key' cannot be referenced by a real product: $it" }
             } else {
-                val parent = entity.parentComponent
+                val parentKey = entity.parentComponent?.componentKey
                 val docKeys =
                     entity.docLinks
                         .map { it.docComponentKey }
                         .filterNot { it == key }
                         .toSet()
-                val testDocKey =
-                    docKeys
-                        .takeIf { it.isNotEmpty() }
-                        ?.let { keys -> componentRepository.findByComponentKeyIn(keys).filter { it.testComponent } }
-                        ?.minOfOrNull { it.componentKey }
+                val targets = docKeys + listOfNotNull(parentKey)
+                // Lock first, then read the flags fresh (the managed parent entity may predate a concurrent commit).
+                val testTargets =
+                    if (targets.isEmpty()) {
+                        emptySet()
+                    } else {
+                        componentRepository.lockByComponentKeys(targets)
+                        componentRepository.findTestComponentKeysIn(targets).toSet()
+                    }
+                val testDocKey = docKeys.filter { it in testTargets }.minOrNull()
                 when {
-                    parent?.testComponent == true ->
+                    parentKey != null && parentKey in testTargets ->
                         "parentComponentName: component '$key' is not a test component but references test component " +
-                            "'${parent.componentKey}' as its parent"
+                            "'$parentKey' as its parent"
                     testDocKey != null ->
                         "docs: component '$key' is not a test component but references test component '$testDocKey' " +
                             "as its doc component"
