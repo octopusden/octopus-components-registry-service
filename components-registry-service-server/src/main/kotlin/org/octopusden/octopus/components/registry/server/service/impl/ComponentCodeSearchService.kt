@@ -309,6 +309,9 @@ class ComponentCodeSearchService(
 
         /** Pre-compile guard on [estimateProgramSize]: generous, it only has to keep compiling cheap. */
         private const val MAX_ESTIMATED_PROGRAM_SIZE = 20_000L
+
+        /** A group's capture-start and capture-end instructions; also the program's own fail and match. */
+        private const val CAPTURE_SIZE = 2L
         private val REPEAT = Regex("""\{(\d+)(,(\d*))?}""")
 
         /** Highlight spans reported per line; matching beyond this many spans adds nothing to read. */
@@ -319,8 +322,10 @@ class ComponentCodeSearchService(
         /**
          * An upper-bound estimate of the RE2 program [q] compiles to, from the pattern text alone: every
          * atom counts 1, a sequence or alternation adds, and a counted repetition `{n}` / `{n,m}` / `{n,}`
-         * multiplies the atom or group before it by its largest count. Escapes (incl. `\p{..}`, `\x{..}`,
-         * `\Q..\E`) and character classes are single atoms. Saturates instead of overflowing.
+         * repeats the atom or group before it, plus one alternation instruction, as many times as its
+         * largest count. The program adds 2, a group adds 2 for its capture instructions, `\Q..\E`
+         * counts each quoted character, other escapes (incl. `\p{..}`, `\x{..}`) and character classes
+         * are single atoms. Saturates instead of overflowing.
          */
         internal fun estimateProgramSize(q: String): Long {
             val estimate = ProgramSizeEstimate()
@@ -342,15 +347,15 @@ class ComponentCodeSearchService(
                 i: Int,
             ): Int =
                 when (q[i]) {
-                    '\\' -> skipEscape(q, i).also { atom(1) }
+                    '\\' -> skipEscape(q, i).also { end -> atom(escapeSize(q, i, end)) }
                     '[' -> skipClass(q, i).also { atom(1) }
                     '(' -> (i + 1).also { sums.addLast(0L) }
-                    ')' -> (i + 1).also { atom((if (sums.size > 1) sums.removeLast() else 0L).coerceAtLeast(1)) }
+                    ')' -> (i + 1).also { atom(saturatingAdd(if (sums.size > 1) sums.removeLast() else 0L, CAPTURE_SIZE)) }
                     '{' -> repeat(q, i)
                     else -> (i + 1).also { atom(1) }
                 }
 
-            fun total(): Long = sums.fold(0L, ::saturatingAdd)
+            fun total(): Long = sums.fold(CAPTURE_SIZE, ::saturatingAdd)
 
             private fun atom(size: Long) {
                 grow(size)
@@ -359,7 +364,7 @@ class ComponentCodeSearchService(
 
             private fun grow(size: Long) = sums.addLast(saturatingAdd(sums.removeLast(), size))
 
-            /** A counted repetition multiplies the preceding atom by its largest count; any other `{` is a literal. */
+            /** A counted repetition repeats the preceding atom and an alternation by its largest count; any other `{` is a literal. */
             private fun repeat(
                 q: String,
                 i: Int,
@@ -367,11 +372,22 @@ class ComponentCodeSearchService(
                 val match = REPEAT.matchAt(q, i) ?: return (i + 1).also { atom(1) }
                 val (min, _, max) = match.destructured
                 val count = (max.ifEmpty { min }.toLongOrNull() ?: Long.MAX_VALUE).coerceAtLeast(1)
-                val extra = saturatingMultiply(last, count - 1)
-                grow(extra)
-                last = saturatingAdd(last, extra)
+                val repeated = saturatingMultiply(saturatingAdd(last, 1), count)
+                grow(repeated - last)
+                last = repeated
                 return i + match.value.length
             }
+        }
+
+        /** Literal characters of a `\Q..\E` escape spanning [start] until [end], each its own instruction; 1 for any other escape. */
+        private fun escapeSize(
+            q: String,
+            start: Int,
+            end: Int,
+        ): Long {
+            if (!q.startsWith("\\Q", start)) return 1
+            val closed = end - 2 >= start + 2 && q.startsWith("\\E", end - 2)
+            return (end - start - 2 - (if (closed) 2 else 0)).coerceAtLeast(1).toLong()
         }
 
         /** Index just past the escape starting at [start] (`\x`, `\p{..}`, `\x{..}`, `\Q..\E`). */

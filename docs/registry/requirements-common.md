@@ -3356,8 +3356,8 @@ field the view shows without per-field query code.
   by the server's own matcher — so a client highlights regex hits exactly instead of re-running
   the pattern in a different regex engine. Empty matches are omitted; at most 50 spans per line.
 - Errors (`400`): `q` too short / too long, `limit` or `maxMatchesPerComponent` out of range, an
-  invalid regex (including constructs outside RE2), a regex whose nested repetitions compile to more
-  than 2000 RE2 instructions (estimated from the pattern text before compiling, so an exploding
+  invalid regex (including constructs outside RE2), a regex that compiles to more than 2000 RE2
+  instructions (an upper bound is estimated from the pattern text before compiling, so an exploding
   pattern is never built), or a regex whose evaluation exceeds a 2 s time budget for the
   request. The budget is one per request: it is checked before every line and every few thousand
   character reads within a line. RE2 does at most program-size work per character read, so no
@@ -3419,6 +3419,7 @@ field the view shows without per-field query code.
 `` `SYS-100 regex constructs outside RE2 are rejected` `` (8),
 `` `SYS-100 oversized regex program is rejected` `` (8),
 `` `SYS-100 estimateProgramSize` `` (8),
+`` `SYS-100 estimateProgramSize bounds the compiled program` `` (8),
 `` `SYS-100 indexLines keeps blank lines so positions equal line numbers` `` (1),
 `` `SYS-100 substring match reports ranges relative to the trimmed text` `` (10),
 `` `SYS-100 regex match reports the matched spans` `` (10),

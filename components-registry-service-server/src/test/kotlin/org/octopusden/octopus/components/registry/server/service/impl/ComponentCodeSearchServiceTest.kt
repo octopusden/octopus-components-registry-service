@@ -1,5 +1,6 @@
 package org.octopusden.octopus.components.registry.server.service.impl
 
+import com.google.re2j.Pattern
 import org.assertj.core.api.Assertions.assertThat
 import org.assertj.core.api.Assertions.assertThatThrownBy
 import org.junit.jupiter.api.BeforeEach
@@ -229,6 +230,9 @@ class ComponentCodeSearchServiceTest {
             "(?:(?:(?:a){1000}){1000}){1000}",
             "(?:(?:a){1000}){1000}".repeat(9),
             "(?:(?=)){2147483647}",
+            // Quoted literals and capture groups compile to an instruction each, not one per escape / group.
+            "(\\Q" + "a".repeat(180) + "\\E){1000}",
+            "(".repeat(90) + "a" + ")".repeat(90) + "{1000}",
         ).forEach { q ->
             assertThatThrownBy { service.search(q, regex = true) }
                 .describedAs(q)
@@ -241,11 +245,43 @@ class ComponentCodeSearchServiceTest {
     @Test
     @DisplayName("SYS-100: estimateProgramSize adds sequences and multiplies nested repetitions")
     fun `SYS-100 estimateProgramSize`() {
-        assertThat(ComponentCodeSearchService.estimateProgramSize("abc")).isEqualTo(3)
-        assertThat(ComponentCodeSearchService.estimateProgramSize("[a-z]{5}\\p{L}{3}")).isEqualTo(8)
+        assertThat(ComponentCodeSearchService.estimateProgramSize("abc")).isEqualTo(5)
+        assertThat(ComponentCodeSearchService.estimateProgramSize("[a-z]{5}\\p{L}{3}")).isEqualTo(18)
         assertThat(ComponentCodeSearchService.estimateProgramSize("(?:ab{10}){10}")).isGreaterThanOrEqualTo(110)
-        assertThat(ComponentCodeSearchService.estimateProgramSize("a{,5}")).isEqualTo(5) // not a repeat: literal
+        assertThat(ComponentCodeSearchService.estimateProgramSize("a{,5}")).isEqualTo(7) // not a repeat: literal
         assertThat(ComponentCodeSearchService.estimateProgramSize("(?:(?:a{1000}){1000}){1000}")).isGreaterThan(1_000_000_000)
+        assertThat(ComponentCodeSearchService.estimateProgramSize("\\Qab.c\\E")).isEqualTo(6)
+        // Rejected by the estimate itself (RE2/J compiles it to 182,002 instructions).
+        assertThat(ComponentCodeSearchService.estimateProgramSize("(\\Q" + "a".repeat(180) + "\\E){1000}")).isGreaterThan(20_000)
+    }
+
+    @Test
+    @DisplayName("SYS-100: estimateProgramSize is never below the program RE2/J actually compiles")
+    fun `SYS-100 estimateProgramSize bounds the compiled program`() {
+        listOf(
+            "abc",
+            "(a)",
+            "((((a))))",
+            "((((a)))){50}",
+            "(\\Q" + "a".repeat(20) + "\\E){50}",
+            "\\Qunterminated",
+            "\\Q\\E",
+            "(?i:a|bc|def){3,7}",
+            "(a|b)*z",
+            "[a-z]+\\d?\\p{L}{2,5}",
+            "^(?:x{0,9}|y{2,}){4}$",
+            "(?:(?:a?){30}){30}x",
+            "(a(b(c){3}){3}){3}",
+            "\\x{41}{10}\\b.{5}",
+            "a{2,5}",
+            "(a){2,5}",
+            "(?:ab|cd){0,10}",
+            "(?:a{0,1000})",
+        ).forEach { q ->
+            assertThat(ComponentCodeSearchService.estimateProgramSize(q))
+                .describedAs(q)
+                .isGreaterThanOrEqualTo(Pattern.compile(q, Pattern.CASE_INSENSITIVE).programSize().toLong())
+        }
     }
 
     @Test
