@@ -235,6 +235,8 @@ class ComponentCodeSearchServiceTest {
             "(\\Q" + "a".repeat(180) + "\\E){1000}",
             "(?:\\d{1000}){1000}",
             "(".repeat(90) + "a" + ")".repeat(90) + "{1000}",
+            // A nullable `{0,}` compiles to a star with two splits.
+            "(?:((((((){0,}){0,}){0,}){0,}){0,}){0,}){999}",
             // An empty quote does not change what the repetition applies to.
             "(?:a{1000})\\Q\\E{100}",
         ).forEach { q ->
@@ -307,6 +309,9 @@ class ComponentCodeSearchServiceTest {
             "\\Q" + "a".repeat(30) + "\\E{1000}",
             "(?:a{1000})\\Q\\E{100}",
             "(?:a{100})\\Qbc\\E{10}",
+            "(?:((((((){0,}){0,}){0,}){0,}){0,}){0,}){999}",
+            "(?:(?:a?){0,}){5}",
+            "(?:a{0,}b{3,}){20}",
             "()",
             "a|",
             "(|a)",
@@ -340,6 +345,8 @@ class ComponentCodeSearchServiceTest {
                 "{3}",
                 "{0,4}",
                 "{2,}",
+                "{0,}",
+                "{1,}",
                 ",",
                 "\\Q",
                 "\\E",
@@ -362,6 +369,33 @@ class ComponentCodeSearchServiceTest {
             assertThat(ComponentCodeSearchService.estimateProgramSize(q)).describedAs(q).isGreaterThanOrEqualTo(program.toLong())
         }
         assertThat(checked).isGreaterThan(RANDOM_PATTERNS / 10)
+    }
+
+    @Test
+    @DisplayName("SYS-100: estimateProgramSize bounds the compiled program of random nested patterns")
+    fun `SYS-100 estimateProgramSize bounds random nested patterns`() {
+        val atoms = listOf("a", "", "^", "\\b", "[a-c]", "\\Qxy\\E", "\\Q\\E", "(?i)")
+        val opens = listOf("(", "(?:", "(?i:")
+        val suffixes = listOf("", "*", "+", "?", "{2}", "{0,3}", "{0,}", "{1,}", "{2,}", "*?")
+        val random = Random(SEED)
+
+        fun pattern(depth: Int): String =
+            if (depth == 0 || random.nextInt(3) == 0) {
+                atoms[random.nextInt(atoms.size)]
+            } else {
+                val branches = (
+                    1..random.nextInt(
+                        1,
+                        3,
+                    )
+                ).joinToString("|") { (1..random.nextInt(1, 3)).joinToString("") { pattern(depth - 1) } }
+                opens[random.nextInt(opens.size)] + branches + ")" + suffixes[random.nextInt(suffixes.size)]
+            }
+        repeat(RANDOM_PATTERNS) {
+            val q = pattern(random.nextInt(1, MAX_DEPTH))
+            val program = runCatching { Pattern.compile(q, Pattern.CASE_INSENSITIVE).programSize() }.getOrNull() ?: return@repeat
+            assertThat(ComponentCodeSearchService.estimateProgramSize(q)).describedAs(q).isGreaterThanOrEqualTo(program.toLong())
+        }
     }
 
     @Test
@@ -522,5 +556,6 @@ class ComponentCodeSearchServiceTest {
         const val SEED = 100
         const val RANDOM_PATTERNS = 5000
         const val MAX_TOKENS = 16
+        const val MAX_DEPTH = 6
     }
 }

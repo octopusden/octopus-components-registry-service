@@ -3422,6 +3422,7 @@ field the view shows without per-field query code.
 `` `SYS-100 estimateProgramSize` `` (8),
 `` `SYS-100 estimateProgramSize bounds the compiled program` `` (8),
 `` `SYS-100 estimateProgramSize bounds random patterns` `` (8),
+`` `SYS-100 estimateProgramSize bounds random nested patterns` `` (8),
 `` `SYS-100 regex within the program cap is accepted` `` (8),
 `` `SYS-100 indexLines keeps blank lines so positions equal line numbers` `` (1),
 `` `SYS-100 substring match reports ranges relative to the trimmed text` `` (10),

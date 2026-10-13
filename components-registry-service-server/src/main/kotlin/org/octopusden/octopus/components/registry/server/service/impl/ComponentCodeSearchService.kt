@@ -331,11 +331,12 @@ class ComponentCodeSearchService(
         /**
          * An upper-bound estimate of the RE2 program [q] compiles to, from the pattern text alone: every
          * atom counts 1, `|` / `*` / `+` / `?` 2, an empty pattern or group 1, a sequence or alternation
-         * adds, and a counted repetition `{n}` / `{n,m}` / `{n,}` repeats the atom or group before it, plus
-         * one alternation instruction, as many times as its largest count. The program adds 2, a capturing
-         * group adds 2 for its capture instructions, `\Q..\E` counts each quoted character (a repetition after it
-         * repeats the last one; an empty quote and a flag group `(?i)` are skipped), other escapes (incl.
-         * `\p{..}`, `\x{..}`) and character classes are single atoms. Saturates instead of overflowing.
+         * adds, and a counted repetition `{n}` / `{n,m}` repeats the atom or group before it, plus one
+         * alternation instruction, as many times as its largest count (`{n,}`: n + 1 times, plus two
+         * splits). The program adds 2, a capturing group adds 2 for its capture instructions, `\Q..\E`
+         * counts each quoted character (a repetition after it repeats the last one; an empty quote and a
+         * flag group `(?i)` are skipped), other escapes (incl. `\p{..}`, `\x{..}`) and character classes
+         * are single atoms. Saturates instead of overflowing.
          */
         internal fun estimateProgramSize(q: String): Long {
             val estimate = ProgramSizeEstimate()
@@ -433,15 +434,21 @@ class ComponentCodeSearchService(
 
             private fun grow(size: Long) = sums.addLast(saturatingAdd(sums.removeLast(), size))
 
-            /** A counted repetition repeats the preceding atom and an alternation by its largest count; any other `{` is a literal. */
+            /**
+             * A counted repetition repeats the preceding atom and an alternation by its largest count, `{n,}` the
+             * atom and two splits n + 1 times; any other `{` is a literal.
+             */
             private fun repeat(
                 q: String,
                 i: Int,
             ): Int {
                 val match = REPEAT.matchAt(q, i) ?: return (i + 1).also { atom(1) }
-                val (min, _, max) = match.destructured
-                val count = (max.ifEmpty { min }.toLongOrNull() ?: Long.MAX_VALUE).coerceAtLeast(1)
-                val repeated = saturatingMultiply(saturatingAdd(last, 1), count)
+                val (min, comma, max) = match.destructured
+                // `{n,}` compiles to n copies and a star, which takes two splits around a nullable atom.
+                val openEnded = comma.isNotEmpty() && max.isEmpty()
+                val count = (if (openEnded) min.toLongOrNull()?.let { saturatingAdd(it, 1) } else max.ifEmpty { min }.toLongOrNull())
+                    ?.coerceAtLeast(1) ?: Long.MAX_VALUE
+                val repeated = saturatingMultiply(saturatingAdd(last, if (openEnded) SPLIT_SIZE else 1), count)
                 grow(repeated - last)
                 last = repeated
                 return i + match.value.length
