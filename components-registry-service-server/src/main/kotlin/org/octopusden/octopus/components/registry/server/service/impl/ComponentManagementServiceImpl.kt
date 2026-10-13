@@ -184,6 +184,9 @@ class ComponentManagementServiceImpl(
     // RMSProperties.enabled and a null RMSClient) — see RMSOverrideGate.
     private val rmsOverrideGate: RMSOverrideGate? = null,
     // Defaulted (nullable) so unit tests constructing this service directly need no new wiring;
+    // Spring always registers the bean (ComponentProfilesConfig). Checks a create that names a profile.
+    private val profileCreateCheck: ProfileCreateCheck? = null,
+    // Defaulted (nullable) so unit tests constructing this service directly need no new wiring;
     // Spring injects the bound properties in production. Null ⇒ no key may be flagged testComponent.
     private val registryProperties: ComponentsRegistryProperties? = null,
 ) : ComponentManagementService {
@@ -378,6 +381,13 @@ class ComponentManagementServiceImpl(
         val baseConfig = ComponentConfigurationEntity(component = entity, versionRange = ALL_VERSIONS, rowType = "BASE")
         applyBaseConfigurationCreate(baseConfig, baseConfigRequest)
         entity.configurations.add(baseConfig)
+
+        // Against the values this create stores — trimmed, hidden fields stripped — not the raw request.
+        request.profile?.trim()?.takeIf { it.isNotEmpty() }?.let { profileId ->
+            checkNotNull(
+                profileCreateCheck,
+            ) { "profile check is not configured" }.check(profileId, EntityCreatedComponent(entity, baseConfig))
+        }
 
         // Person fields (componentOwner / releaseManager / securityChampion) FIRST.
         // On create everything is new, so the active-employee check is always

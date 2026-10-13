@@ -1,0 +1,16 @@
+components-registry:
+  component-profiles:
+    empty-map:
+      kind: regular
+      title: Empty map
+      description: Rules written as an empty map
+      order: 10
+      classification: { external: false, explicit: ask }
+      rules: {}
+    no-value:
+      kind: regular
+      title: No value
+      description: Rules written with no value
+      order: 20
+      classification: { external: false, explicit: ask }
+      rules:
