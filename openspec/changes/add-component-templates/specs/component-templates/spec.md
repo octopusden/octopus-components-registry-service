@@ -301,7 +301,7 @@ registry SHALL record the parameters the value came from.
 | Rule | What happens |
 |---|---|
 | R1 Free text | Each expression is replaced by the parameter's value, converted by `lower` or `upper`; the text around it is kept |
-| R2 Empty values | An empty optional parameter is replaced by nothing; a free-text field that ends up empty is unset |
+| R2 Empty values | An empty optional parameter is replaced by nothing; a field that ends up empty is unset |
 | R3 Whole values | A CRS value or Person field set to `{{ NAME }}` takes the value as it is |
 | R4 Free-text lists | Each item follows R1 and R2; an empty item is dropped; a multi-value parameter becomes one item per value |
 | R5 CRS and people lists | The items in the order the template lists them, a parameter's values in its place, without duplicates |
@@ -324,8 +324,9 @@ Two defaults apply, one after the other, and neither stands in for the other:
 - A parameter's default comes from the template's `default` key, and only from there. It fills an
   absent or blank parameter before rendering.
 - A field's default comes from `component-defaults`, and only for the fields above. R7 fills a field
-  that is still unset after rendering. A field the template sets, even when it renders a value
-  shorter than intended because an optional parameter was empty, does not take a default.
+  that is still unset after rendering, including one R2 left unset because it rendered empty. A
+  field that renders a value, even one shorter than intended because an optional parameter was
+  empty, keeps it and does not take a default.
 
 `component-defaults` is the same source the Portal's create wizard pre-fills from. The wizard shows
 those values to the user, who sends a full request, and the registry adds nothing to it. A template

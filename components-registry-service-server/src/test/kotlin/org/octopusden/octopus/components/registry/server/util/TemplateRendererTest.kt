@@ -199,6 +199,37 @@ class TemplateRendererTest {
     }
 
     @Test
+    @DisplayName("R2, R7: a field that renders empty is unset and takes its default; one that renders shorter keeps its value")
+    fun r7EmptyRenderTakesDefault() {
+        val template =
+            parsedTemplate(
+                exampleTemplate().apply {
+                    at("parameters")["SUFFIX"] = linkedMapOf("label" to "Suffix", "type" to "text", "required" to "false")
+                    at("fields.baseConfiguration.jira")["versionFormat"] = "{{ SUFFIX }}"
+                    @Suppress("UNCHECKED_CAST")
+                    (at("fields.baseConfiguration")["vcsEntries"] as List<MutableMap<String, Any>>)[0]["branch"] = "release{{ SUFFIX }}"
+                },
+            )
+
+        val rendered = render(template, EXAMPLE_VALUES + ("SUFFIX" to emptyList()))
+
+        assertEquals(
+            "\$versionPrefix-\$baseVersionFormat",
+            rendered.request.baseConfiguration
+                ?.jira
+                ?.versionFormat,
+        )
+        assertEquals(emptySet<String>(), rendered.sources["baseConfiguration.jira.versionFormat"])
+        assertEquals(
+            "release",
+            rendered.request.baseConfiguration
+                ?.vcsEntries
+                ?.single()
+                ?.branch,
+        )
+    }
+
+    @Test
     @DisplayName("R7: copyright is defaulted only for an explicit, external template")
     fun r7Copyright() {
         val defaults = EXAMPLE_DEFAULTS + ("copyright" to "Example Corp")
