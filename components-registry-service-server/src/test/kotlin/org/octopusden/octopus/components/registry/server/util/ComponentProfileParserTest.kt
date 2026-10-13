@@ -137,6 +137,23 @@ class ComponentProfileParserTest {
     }
 
     @Test
+    @DisplayName("a blank rules value means no rules")
+    fun blankRules() {
+        val result = ComponentProfileParser.parse(profileProperties("internal", extra = mapOf("rules" to "")))
+
+        assertTrue(result.usable, "${result.problems} ${result.entries}")
+        assertEquals(emptyList<ComponentProfile.FieldRule>(), result.profiles.single().rules)
+    }
+
+    @Test
+    @DisplayName("a rules value that is not blank makes the profile invalid")
+    fun scalarRules() {
+        val entry = ComponentProfileParser.parse(profileProperties("internal", extra = mapOf("rules" to "none"))).entries.single()
+
+        assertEquals(listOf("internal.rules: unknown key"), entry.problems)
+    }
+
+    @Test
     @DisplayName("a blank root next to profiles is ignored")
     fun blankRootWithProfiles() {
         val result = ComponentProfileParser.parse(designExampleProperties() + ("" to ""))

@@ -23,7 +23,8 @@ object ComponentProfileParser {
     private const val SOLUTION = "classification.solution"
     private val REQUIRED_KEYS = listOf("kind", "title", "description", "order", EXTERNAL, EXPLICIT)
     private val PROFILE_KEYS = REQUIRED_KEYS.toSet() + SOLUTION
-    private const val RULES = "rules."
+    private const val RULES_KEY = "rules"
+    private const val RULES = "$RULES_KEY."
     private const val ROOT = "components-registry.component-profiles"
 
     fun parse(properties: Map<String, String>): ProfileLoad {
@@ -72,7 +73,7 @@ object ComponentProfileParser {
         private fun checkStructure(kind: String?) {
             if (!ID.matches(id)) problems += "$id: an id consists of lowercase letters, digits and '-'"
             values.keys
-                .filter { it !in PROFILE_KEYS && !it.startsWith(RULES) }
+                .filter { it !in PROFILE_KEYS && !it.startsWith(RULES) && !(it == RULES_KEY && values[it].isNullOrBlank()) }
                 .forEach { problems += if (it.isEmpty()) "$id: must hold profile keys, not a value" else "$id.$it: unknown key" }
             REQUIRED_KEYS.filter { it !in values }.forEach { problems += "$id.$it: required" }
             if (kind != null && kind != ComponentProfile.REGULAR_KIND) problems += "$id.kind: '$kind' is not one of regular, template"

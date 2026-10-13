@@ -275,3 +275,7 @@
       profiles from another file, startup passed and a reload applied. A list root is now a
       configuration problem checked before any entry. Mixed-source regression tests with real YAML
       for startup and reload (title change beside it not applied); seen red first
+- [x] 8.11 `rules: {}` or `rules:` flattened to `<id>.rules` with a blank value, reported as an
+      unknown key, so a regular profile written that way stopped startup and failed reloads. A blank
+      `rules` now means no rules; a non-blank one is still an unknown key. Parser test plus a real
+      YAML source test for both forms; seen red first

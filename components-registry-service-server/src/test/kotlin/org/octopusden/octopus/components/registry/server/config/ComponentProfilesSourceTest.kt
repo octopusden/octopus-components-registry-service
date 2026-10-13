@@ -155,6 +155,15 @@ class ComponentProfilesSourceTest {
     }
 
     @Test
+    @DisplayName("rules written empty or with no value load as a profile without rules")
+    fun emptyRules() {
+        val result = ComponentProfileParser.parse(ComponentProfilesSource(environment("empty-rules.yml")).read())
+
+        assertTrue(result.usable, "${result.problems} ${result.entries}")
+        assertEquals(listOf(emptyList<Any>(), emptyList<Any>()), result.profiles.map { it.rules })
+    }
+
+    @Test
     @DisplayName("ids arrive exactly as written, so the parser can reject them")
     fun idsAsWritten() {
         val properties = ComponentProfilesSource(environment("odd-ids.yml")).read()
