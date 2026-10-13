@@ -3375,8 +3375,9 @@ reports, portal lists, health statistics).
   - a test component against its non-test referrers when it becomes one (`testComponent: …`) or is
     renamed (`name: …` — renaming it onto a key that a real component's soft doc link still names
     re-binds that link);
-  - a real component against its targets when it stops being a test component (`testComponent: …`)
-    or its parent / doc targets actually change (`parentComponentName: …` / `docs: …`).
+  - a real component against every target when it stops being a test component (`testComponent: …`),
+    otherwise only against what changed: a new parent (`parentComponentName: …`) and newly added doc
+    keys (`docs: …`). An untouched grandfathered parent or doc link is not re-checked.
   Concurrent "flag A" and "reference A" writes serialize on A's row lock, so the second to commit
   fails; two writes that lock each other's rows can deadlock, and the losing one answers 409
   `LOCK_CONFLICT` with nothing changed (technical-design §6.8).
@@ -3441,6 +3442,7 @@ reports, portal lists, health statistics).
 `` `SYS-099 meta endpoint lists name patterns` ``, `TestComponentNamePatternPropertyTest` (9);
 `` `SYS-099 unchanged flag echo on a non-matching key is accepted` ``,
 `` `SYS-099 unchanged echo on a grandfathered real child is accepted` ``,
-`` `SYS-099 unflagging a child of a test parent is rejected on testComponent` `` (10); `LockConflictHandlerTest` (11);
+`` `SYS-099 unflagging a child of a test parent is rejected on testComponent` ``,
+`` `SYS-099 forward check covers only the changed reference` `` (10); `LockConflictHandlerTest` (11);
 `` `SYS-099 every v1-v3 component endpoint is covered by the flag advice` ``, `TestComponentFlagsTest`,
 `TestComponentLabelImportIntegrationTest` (v1–v3 source, cache, import).

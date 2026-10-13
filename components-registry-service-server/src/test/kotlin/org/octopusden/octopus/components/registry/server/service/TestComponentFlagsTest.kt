@@ -4,6 +4,7 @@ import org.junit.jupiter.api.Assertions.assertFalse
 import org.junit.jupiter.api.Assertions.assertTrue
 import org.junit.jupiter.api.DisplayName
 import org.junit.jupiter.api.Test
+import org.mockito.ArgumentMatchers.anyString
 import org.mockito.Mockito.mock
 import org.mockito.Mockito.never
 import org.mockito.Mockito.times
@@ -64,6 +65,20 @@ class TestComponentFlagsTest {
     }
 
     @Test
+    @DisplayName("SYS-099: a v1 list of unlabelled git components makes no per-component resolver lookups")
+    fun `SYS-099 unlabelled list components are not looked up one by one`() {
+        val components = (1..LIST_SIZE).map { component("plain-$it") }
+        `when`(sourceRegistry.getDbComponentNames()).thenReturn(emptySet())
+        `when`(sourceRegistry.getGitComponentNames()).thenReturn(components.map { it.id }.toSet())
+
+        flags(withDb = true).mark(components)
+
+        assertTrue(components.none { it.testComponent })
+        verify(resolver, never()).getComponentById(anyString())
+        verify(sourceRegistry, never()).getSource(anyString())
+    }
+
+    @Test
     @DisplayName("SYS-099: a label-less DTO (find-by-artifact) of a git component reads the label from the resolved model")
     fun `SYS-099 find-by-artifact git component reads the resolved model`() {
         val config = mock(EscrowModuleConfig::class.java)
@@ -100,5 +115,9 @@ class TestComponentFlagsTest {
         flags.evictAfterCommit()
         flags.mark(listOf(component("dbtest"), component("dbreal")))
         verify(repository, times(2)).findTestComponentKeys()
+    }
+
+    private companion object {
+        const val LIST_SIZE = 2000
     }
 }

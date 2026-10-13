@@ -940,18 +940,34 @@ class ComponentManagementServiceImpl(
         // CHANGE-based, like the checks above (an unchanged echo is grandfathered). A test component is
         // re-checked against its non-test referrers when it becomes one or is renamed (a soft doc link
         // left on a renamed-away key re-binds to whatever component takes that key); a real component
-        // against its targets when it stops being a test component or its parent/doc targets change.
-        val docsChanged = saved.docLinks.map { it.docComponentKey }.toSet() != oldDocKeys
+        // against what changed: a new parent, newly added doc keys, or — when it stops being a test
+        // component — every target. An untouched grandfathered reference is never re-checked.
+        val newDocKeys = saved.docLinks.map { it.docComponentKey }.toSet()
+        val parentCheck =
+            when {
+                parentChanged -> "parentComponentName"
+                unflaggedNow -> "testComponent"
+                else -> null
+            }
+        val docChecks =
+            newDocKeys
+                .mapNotNull { docKey ->
+                    when {
+                        docKey !in oldDocKeys -> docKey to "docs"
+                        unflaggedNow -> docKey to "testComponent"
+                        else -> null
+                    }
+                }.toMap()
         val reverseCheck = saved.testComponent && (flaggedNow || isRename)
-        val forwardCheck = !saved.testComponent && (unflaggedNow || parentChanged || docsChanged)
+        val forwardCheck = !saved.testComponent && (parentCheck != null || docChecks.isNotEmpty())
         val flaggedKeysChanged = flaggedNow || unflaggedNow || (isRename && saved.testComponent)
         if (flaggedKeysChanged) testComponentFlags?.evictAfterCommit()
         if (reverseCheck || forwardCheck) {
             validateTestComponentReferences(
                 saved,
                 flagField = if (flaggedNow) "testComponent" else "name",
-                parentField = if (parentChanged) "parentComponentName" else "testComponent",
-                docsField = if (docsChanged) "docs" else "testComponent",
+                parentField = parentCheck,
+                docChecks = docChecks,
             )
         }
 
@@ -3633,14 +3649,15 @@ class ComponentManagementServiceImpl(
      * commits second sees the other's committed write and fails. (Optimistic versions cannot catch it:
      * the two writes bump different components' rows.)
      * The field prefixes name what triggered the check: [flagField] for the reverse direction
-     * (`name` for a rename), [parentField] / [docsField] for the forward one (`testComponent` when the
-     * reference itself did not change but the component was unflagged).
+     * (`name` for a rename). The forward direction checks only what the caller passes: the parent when
+     * [parentField] is set (prefixed with it), and the doc keys in [docChecks] (key → prefix field);
+     * the defaults — the parent and every doc key — are for create, where everything is new.
      */
     private fun validateTestComponentReferences(
         entity: ComponentEntity,
         flagField: String = "testComponent",
-        parentField: String = "parentComponentName",
-        docsField: String = "docs",
+        parentField: String? = "parentComponentName",
+        docChecks: Map<String, String> = entity.docLinks.associate { it.docComponentKey to "docs" },
     ) {
         val key = entity.componentKey
         val violation =
@@ -3656,12 +3673,8 @@ class ComponentManagementServiceImpl(
                     else -> null
                 }?.let { "$flagField: test component '$key' cannot be referenced by a real product: $it" }
             } else {
-                val parentKey = entity.parentComponent?.componentKey
-                val docKeys =
-                    entity.docLinks
-                        .map { it.docComponentKey }
-                        .filterNot { it == key }
-                        .toSet()
+                val parentKey = entity.parentComponent?.componentKey?.takeIf { parentField != null }
+                val docKeys = docChecks.keys.filterNot { it == key }.toSet()
                 val targets = docKeys + listOfNotNull(parentKey)
                 // Lock first, then read the flags fresh (the managed parent entity may predate a concurrent commit).
                 val testTargets =
@@ -3677,8 +3690,9 @@ class ComponentManagementServiceImpl(
                         "$parentField: component '$key' is not a test component but references test component " +
                             "'$parentKey' as its parent"
                     testDocKey != null ->
-                        "$docsField: component '$key' is not a test component but references test component '$testDocKey' " +
-                            "as its doc component"
+                        docChecks.getValue(testDocKey) +
+                            ": component '$key' is not a test component but references test component " +
+                            "'$testDocKey' as its doc component"
                     else -> null
                 }
             }

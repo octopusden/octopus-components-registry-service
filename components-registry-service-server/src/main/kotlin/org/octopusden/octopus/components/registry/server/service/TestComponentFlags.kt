@@ -3,6 +3,7 @@ package org.octopusden.octopus.components.registry.server.service
 import com.github.benmanes.caffeine.cache.Cache
 import com.github.benmanes.caffeine.cache.Caffeine
 import org.octopusden.octopus.components.registry.core.dto.Component
+import org.octopusden.octopus.components.registry.core.dto.VersionedComponent
 import org.octopusden.octopus.components.registry.server.config.ComponentsRegistryProperties
 import org.octopusden.octopus.components.registry.server.repository.ComponentRepository
 import org.springframework.beans.factory.ObjectProvider
@@ -76,13 +77,19 @@ class TestComponentFlags(
         }
     }
 
-    /** The DTO's labels, or — for DTOs built without them (find-by-artifact) — the resolved model's. */
+    /**
+     * The DTO's labels — an empty set included: list/detail DTOs are built with the resolved labels.
+     * Only a [VersionedComponent] (find-by-artifact) is built without them, so only it looks the
+     * component up; those responses carry a handful of components, not the whole registry.
+     */
     private fun labelsOf(component: Component): Set<String> =
-        component.labels.ifEmpty {
+        if (component is VersionedComponent) {
             componentRegistryResolver
                 .getComponentById(component.id)
                 ?.let { (it.componentLevelConfiguration ?: it.moduleConfigurations.firstOrNull())?.labels }
                 ?: emptySet()
+        } else {
+            component.labels
         }
 
     companion object {

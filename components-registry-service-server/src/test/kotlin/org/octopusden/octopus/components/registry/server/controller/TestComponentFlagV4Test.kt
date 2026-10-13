@@ -297,6 +297,41 @@ class TestComponentFlagV4Test {
     }
 
     @Test
+    @DisplayName("SYS-099: a PATCH checks only the reference it changes; untouched grandfathered references stay")
+    fun `SYS-099 forward check covers only the changed reference`() {
+        // Real B under a grandfathered test parent: changing only its docs (to a real doc) is fine.
+        val testParent = name("test-sys099-gparent")
+        val b = name("sys099-gb")
+        val realDoc = name("sys099-greal-doc")
+        create(""""name":"$testParent","canBeParent":true""")
+        create(""""name":"$b","parentComponentName":"$testParent"""")
+        create(""""name":"$realDoc"""")
+        flagInDb(testParent)
+        patchComponent(getJson("/rest/api/4/components/$b"), """"docs":[{"docComponentKey":"$realDoc"}]""")
+            .andExpect(status().isOk)
+
+        // Real C with a grandfathered test doc link: changing only its parent is fine.
+        val oldTestDoc = name("test-sys099-gdoc")
+        val realParent = name("sys099-grparent")
+        val c = name("sys099-gc")
+        create(""""name":"$oldTestDoc"""")
+        create(""""name":"$realParent","canBeParent":true""")
+        create(""""name":"$c","docs":[{"docComponentKey":"$oldTestDoc"}]""")
+        flagInDb(oldTestDoc)
+        patchComponent(getJson("/rest/api/4/components/$c"), """"parentComponentName":"$realParent"""")
+            .andExpect(status().isOk)
+
+        // Adding a test doc key is rejected on `docs:`, naming the new key — not the grandfathered one.
+        val newTestDoc = name("test-sys099-gnewdoc")
+        create(""""name":"$newTestDoc","testComponent":true""")
+        patchComponent(
+            getJson("/rest/api/4/components/$c"),
+            """"docs":[{"docComponentKey":"$oldTestDoc"},{"docComponentKey":"$newTestDoc"}]""",
+        ).andExpect(status().isBadRequest)
+            .andExpect(jsonPath("$.errorMessage").value(allOf(startsWith("docs: "), containsString("'$newTestDoc'"))))
+    }
+
+    @Test
     @DisplayName("SYS-099: renaming a test component out of the patterns is rejected; unflagging is always allowed")
     fun `SYS-099 rename of a flagged component must keep a matching key`() {
         val flagged = create(""""name":"${name("test-sys099-rename")}","testComponent":true""")
