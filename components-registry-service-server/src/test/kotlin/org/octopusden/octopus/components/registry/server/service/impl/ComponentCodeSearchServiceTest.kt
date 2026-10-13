@@ -24,6 +24,7 @@ import java.time.Instant
 import java.time.ZoneId
 import java.time.ZoneOffset
 import java.util.UUID
+import kotlin.random.Random
 
 /** SYS-100: as-code text search — matching, result shaping and index freshness. */
 class ComponentCodeSearchServiceTest {
@@ -232,7 +233,10 @@ class ComponentCodeSearchServiceTest {
             "(?:(?=)){2147483647}",
             // Quoted literals and capture groups compile to an instruction each, not one per escape / group.
             "(\\Q" + "a".repeat(180) + "\\E){1000}",
+            "(?:\\d{1000}){1000}",
             "(".repeat(90) + "a" + ")".repeat(90) + "{1000}",
+            // An empty quote does not change what the repetition applies to.
+            "(?:a{1000})\\Q\\E{100}",
         ).forEach { q ->
             assertThatThrownBy { service.search(q, regex = true) }
                 .describedAs(q)
@@ -240,6 +244,28 @@ class ComponentCodeSearchServiceTest {
                 .hasMessageContaining("too complex")
         }
         assertThat(service.search("(?:(?:a?){30}){30}x", regex = true).results).isNotNull()
+        // A repetition after a quote repeats its last character only (1,031 instructions).
+        assertThat(service.search("\\Q" + "a".repeat(30) + "\\E{1000}", regex = true).results).isNotNull()
+    }
+
+    @Test
+    @DisplayName("SYS-100: a regex within the compiled-program cap is not rejected by the estimate")
+    fun `SYS-100 regex within the program cap is accepted`() {
+        // Each compiles to at most 2000 RE2 instructions; the estimate must not reject it first.
+        listOf(
+            "(?:a|b|c|d|e|f){1000}",
+            "\\d{1000}",
+            "[a-z]{1000}",
+            "a{1000}",
+            "(?i:abc){500}",
+            "(?:foo|bar|baz){100}",
+            "(?:a{10}){100}",
+            "(?:(?:a?){30}){30}x",
+            "\\Q" + "a".repeat(30) + "\\E{1000}",
+        ).forEach { q ->
+            assertThat(Pattern.compile(q, Pattern.CASE_INSENSITIVE).programSize()).describedAs(q).isLessThanOrEqualTo(2000)
+            assertThat(service.search(q, regex = true).results).describedAs(q).isNotNull()
+        }
     }
 
     @Test
@@ -273,15 +299,69 @@ class ComponentCodeSearchServiceTest {
             "(?:(?:a?){30}){30}x",
             "(a(b(c){3}){3}){3}",
             "\\x{41}{10}\\b.{5}",
+            "(?:\\d{100}){10}",
             "a{2,5}",
             "(a){2,5}",
             "(?:ab|cd){0,10}",
             "(?:a{0,1000})",
+            "\\Q" + "a".repeat(30) + "\\E{1000}",
+            "(?:a{1000})\\Q\\E{100}",
+            "(?:a{100})\\Qbc\\E{10}",
+            "()",
+            "a|",
+            "(|a)",
+            "(){1000}",
+            "(?:a|){1000}",
         ).forEach { q ->
             assertThat(ComponentCodeSearchService.estimateProgramSize(q))
                 .describedAs(q)
                 .isGreaterThanOrEqualTo(Pattern.compile(q, Pattern.CASE_INSENSITIVE).programSize().toLong())
         }
+    }
+
+    @Test
+    @DisplayName("SYS-100: estimateProgramSize bounds the compiled program of random small patterns")
+    fun `SYS-100 estimateProgramSize bounds random patterns`() {
+        val tokens =
+            listOf(
+                "a",
+                "b",
+                "(",
+                ")",
+                "(?:",
+                "(?i:",
+                "(?i)",
+                "|",
+                "*",
+                "+",
+                "?",
+                "{",
+                "}",
+                "{3}",
+                "{0,4}",
+                "{2,}",
+                ",",
+                "\\Q",
+                "\\E",
+                "[a-c]",
+                "[^b]",
+                "\\d",
+                "\\p{L}",
+                "\\x{41}",
+                "\\b",
+                "^",
+                "$",
+                ".",
+            )
+        val random = Random(SEED)
+        var checked = 0
+        repeat(RANDOM_PATTERNS) {
+            val q = (1..random.nextInt(1, MAX_TOKENS)).joinToString("") { tokens[random.nextInt(tokens.size)] }
+            val program = runCatching { Pattern.compile(q, Pattern.CASE_INSENSITIVE).programSize() }.getOrNull() ?: return@repeat
+            checked++
+            assertThat(ComponentCodeSearchService.estimateProgramSize(q)).describedAs(q).isGreaterThanOrEqualTo(program.toLong())
+        }
+        assertThat(checked).isGreaterThan(RANDOM_PATTERNS / 10)
     }
 
     @Test
@@ -439,5 +519,8 @@ class ComponentCodeSearchServiceTest {
 
     private companion object {
         val ALPHA_ID: UUID = UUID.fromString("00000000-0000-0000-0000-0000000000a1")
+        const val SEED = 100
+        const val RANDOM_PATTERNS = 5000
+        const val MAX_TOKENS = 16
     }
 }

@@ -312,6 +312,15 @@ class ComponentCodeSearchService(
 
         /** A group's capture-start and capture-end instructions; also the program's own fail and match. */
         private const val CAPTURE_SIZE = 2L
+
+        /** `|`, `*`, `+`, `?`: the split instruction and the empty match of a branch that may be empty. */
+        private const val SPLIT_SIZE = 2L
+
+        /** `(?i)`, `(?-s)`, …: sets flags, compiles to nothing, so a following repetition applies to what precedes it. */
+        private val FLAG_GROUP = Regex("""\(\?[imsU-]*\)""")
+
+        /** `(?:`, `(?i:`, …: opens a group without capture instructions. */
+        private val NON_CAPTURING_GROUP = Regex("""\(\?[imsU-]*:""")
         private val REPEAT = Regex("""\{(\d+)(,(\d*))?}""")
 
         /** Highlight spans reported per line; matching beyond this many spans adds nothing to read. */
@@ -321,11 +330,12 @@ class ComponentCodeSearchService(
 
         /**
          * An upper-bound estimate of the RE2 program [q] compiles to, from the pattern text alone: every
-         * atom counts 1, a sequence or alternation adds, and a counted repetition `{n}` / `{n,m}` / `{n,}`
-         * repeats the atom or group before it, plus one alternation instruction, as many times as its
-         * largest count. The program adds 2, a group adds 2 for its capture instructions, `\Q..\E`
-         * counts each quoted character, other escapes (incl. `\p{..}`, `\x{..}`) and character classes
-         * are single atoms. Saturates instead of overflowing.
+         * atom counts 1, `|` / `*` / `+` / `?` 2, an empty pattern or group 1, a sequence or alternation
+         * adds, and a counted repetition `{n}` / `{n,m}` / `{n,}` repeats the atom or group before it, plus
+         * one alternation instruction, as many times as its largest count. The program adds 2, a capturing
+         * group adds 2 for its capture instructions, `\Q..\E` counts each quoted character (a repetition after it
+         * repeats the last one; an empty quote and a flag group `(?i)` are skipped), other escapes (incl.
+         * `\p{..}`, `\x{..}`) and character classes are single atoms. Saturates instead of overflowing.
          */
         internal fun estimateProgramSize(q: String): Long {
             val estimate = ProgramSizeEstimate()
@@ -338,6 +348,9 @@ class ComponentCodeSearchService(
         private class ProgramSizeEstimate {
             private val sums = ArrayDeque(listOf(0L))
 
+            /** Whether each open group captures, parallel to [sums] (the pattern itself does not). */
+            private val captures = ArrayDeque(listOf(false))
+
             /** Size of the atom or group a following repetition applies to. */
             private var last = 0L
 
@@ -347,19 +360,75 @@ class ComponentCodeSearchService(
                 i: Int,
             ): Int =
                 when (q[i]) {
-                    '\\' -> skipEscape(q, i).also { end -> atom(escapeSize(q, i, end)) }
-                    '[' -> skipClass(q, i).also { atom(1) }
-                    '(' -> (i + 1).also { sums.addLast(0L) }
-                    ')' -> (i + 1).also { atom(saturatingAdd(if (sums.size > 1) sums.removeLast() else 0L, CAPTURE_SIZE)) }
+                    '\\' -> escape(q, i)
+                    '[' -> past(skipClass(q, i)) { atom(1) }
+                    '(' -> open(q, i)
+                    ')' -> past(i + 1) { close() }
+                    '|' -> past(i + 1) { atom(SPLIT_SIZE) }
+                    in "*+?" -> past(i + 1) { quantify() }
                     '{' -> repeat(q, i)
-                    else -> (i + 1).also { atom(1) }
+                    else -> past(i + 1) { atom(1) }
                 }
 
-            fun total(): Long = sums.fold(CAPTURE_SIZE, ::saturatingAdd)
+            /** Runs [step] for the token ending at [end]; returns [end]. */
+            private inline fun past(
+                end: Int,
+                step: () -> Unit,
+            ): Int {
+                step()
+                return end
+            }
+
+            /** A flag group `(?i)` compiles to nothing; `(?:` / `(?i:` opens a group without capture, `(` one with. */
+            private fun open(
+                q: String,
+                i: Int,
+            ): Int {
+                FLAG_GROUP.matchAt(q, i)?.let { return i + it.value.length }
+                val nonCapturing = NON_CAPTURING_GROUP.matchAt(q, i)
+                sums.addLast(0L)
+                captures.addLast(nonCapturing == null)
+                return i + (nonCapturing?.value?.length ?: 1)
+            }
+
+            private fun close() {
+                val nested = sums.size > 1
+                val size = (if (nested) sums.removeLast() else 0L).coerceAtLeast(1)
+                atom(if (!nested || captures.removeLast()) saturatingAdd(size, CAPTURE_SIZE) else size)
+            }
+
+            // An empty pattern or group still compiles to one empty-match instruction.
+            fun total(): Long = saturatingAdd(sums.fold(0L, ::saturatingAdd).coerceAtLeast(1), CAPTURE_SIZE)
 
             private fun atom(size: Long) {
                 grow(size)
                 last = size
+            }
+
+            /**
+             * An escape is one atom; a `\Q..\E` quote adds each of its characters, but a following
+             * repetition applies to its last character only, and an empty quote leaves the target as it was.
+             */
+            private fun escape(
+                q: String,
+                i: Int,
+            ): Int {
+                val end = skipEscape(q, i)
+                val quoted = quotedLength(q, i, end)
+                when {
+                    quoted == null -> atom(1)
+                    quoted > 0 -> {
+                        grow(quoted)
+                        last = 1
+                    }
+                }
+                return end
+            }
+
+            /** `*` / `+` / `?` wraps the preceding atom, which a following flag-group repetition repeats whole. */
+            private fun quantify() {
+                grow(SPLIT_SIZE)
+                last = saturatingAdd(last, SPLIT_SIZE)
             }
 
             private fun grow(size: Long) = sums.addLast(saturatingAdd(sums.removeLast(), size))
@@ -379,15 +448,15 @@ class ComponentCodeSearchService(
             }
         }
 
-        /** Literal characters of a `\Q..\E` escape spanning [start] until [end], each its own instruction; 1 for any other escape. */
-        private fun escapeSize(
+        /** Literal characters of a `\Q..\E` escape spanning [start] until [end]; `null` for any other escape. */
+        private fun quotedLength(
             q: String,
             start: Int,
             end: Int,
-        ): Long {
-            if (!q.startsWith("\\Q", start)) return 1
+        ): Long? {
+            if (!q.startsWith("\\Q", start)) return null
             val closed = end - 2 >= start + 2 && q.startsWith("\\E", end - 2)
-            return (end - start - 2 - (if (closed) 2 else 0)).coerceAtLeast(1).toLong()
+            return (end - start - 2 - (if (closed) 2 else 0)).toLong()
         }
 
         /** Index just past the escape starting at [start] (`\x`, `\p{..}`, `\x{..}`, `\Q..\E`). */
@@ -399,7 +468,7 @@ class ComponentCodeSearchService(
             return when {
                 next >= q.length -> q.length
                 q[next] == 'Q' -> q.indexOf("\\E", next).let { if (it < 0) q.length else it + 2 }
-                next + 1 < q.length && q[next + 1] == '{' -> q.indexOf('}', next).let { if (it < 0) q.length else it + 1 }
+                q[next] in "pPx" && q.startsWith("{", next + 1) -> q.indexOf('}', next).let { if (it < 0) q.length else it + 1 }
                 else -> next + 1
             }
         }

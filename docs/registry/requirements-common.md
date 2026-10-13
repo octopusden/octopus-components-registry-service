@@ -3357,8 +3357,9 @@ field the view shows without per-field query code.
   the pattern in a different regex engine. Empty matches are omitted; at most 50 spans per line.
 - Errors (`400`): `q` too short / too long, `limit` or `maxMatchesPerComponent` out of range, an
   invalid regex (including constructs outside RE2), a regex that compiles to more than 2000 RE2
-  instructions (an upper bound is estimated from the pattern text before compiling, so an exploding
-  pattern is never built), or a regex whose evaluation exceeds a 2 s time budget for the
+  instructions (an upper bound is estimated from the pattern text before compiling, and a pattern
+  whose estimate exceeds 20,000 is rejected without being built; the estimate is conservative,
+  e.g. a long single-character alternation is counted as written although RE2 folds it into a class), or a regex whose evaluation exceeds a 2 s time budget for the
   request. The budget is one per request: it is checked before every line and every few thousand
   character reads within a line. RE2 does at most program-size work per character read, so no
   single match can run on without reading input, and neither many cheap lines nor one long line
@@ -3420,6 +3421,8 @@ field the view shows without per-field query code.
 `` `SYS-100 oversized regex program is rejected` `` (8),
 `` `SYS-100 estimateProgramSize` `` (8),
 `` `SYS-100 estimateProgramSize bounds the compiled program` `` (8),
+`` `SYS-100 estimateProgramSize bounds random patterns` `` (8),
+`` `SYS-100 regex within the program cap is accepted` `` (8),
 `` `SYS-100 indexLines keeps blank lines so positions equal line numbers` `` (1),
 `` `SYS-100 substring match reports ranges relative to the trimmed text` `` (10),
 `` `SYS-100 regex match reports the matched spans` `` (10),
