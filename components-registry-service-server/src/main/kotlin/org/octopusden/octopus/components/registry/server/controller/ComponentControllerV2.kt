@@ -115,7 +115,6 @@ class ComponentControllerV2(
             buildParameters = escrowModuleConfig.buildConfiguration?.let { bc -> getBuildParametersDTO(bc) }
             solution = escrowModuleConfig.solution
             archived = escrowModuleConfig.archived
-            testComponent = componentName in testComponentKeys.get()
             doc = escrowModuleConfig.doc?.toDTO()
             escrow = escrowModuleConfig.escrow?.toDTO()
             copyright = escrowModuleConfig.copyright
@@ -236,7 +235,7 @@ class ComponentControllerV2(
     @PostMapping("find-by-artifact")
     fun findComponentByArtifact(
         @RequestBody artifact: ArtifactDependency,
-    ): VersionedComponent = componentRegistryResolver.findComponentByArtifact(artifact).also { testComponentKeys.mark(listOf(it)) }
+    ): VersionedComponent = componentRegistryResolver.findComponentByArtifact(artifact)
 
     // todo - consider removing the whole endpoint or just version specific fields, like docker,
     //  because version is not provided in this context
@@ -252,7 +251,6 @@ class ComponentControllerV2(
             .findComponentsByArtifact(artifacts.toSet())
             .values
             .filterNotNull()
-            .also(testComponentKeys::mark)
 
     override var createComponentFunc: (EscrowModule) -> ComponentV2 = { escrowModule ->
         val moduleName = escrowModule.moduleName

@@ -461,6 +461,19 @@ with `409` and `errorCode: LOCK_CONFLICT` ("nothing was changed — retry the re
 write proceeds. The window needs two simultaneous edits of mutually-referencing components, so the
 service does not retry on its own.
 
+### 6.9 v1–v3 `testComponent`: one advice, source-aware, cached (SYS-099)
+
+`TestComponentFlagAdvice` (a `ResponseBodyAdvice` scoped to `BaseComponentController` subclasses and
+`ComponentControllerV3`) marks every `Component` DTO in a v1–v3 response body, bare or wrapped
+(`ComponentsDTO`, `ComponentV3`, `ArtifactComponentsDTO`, collections); `TestComponentFlagV4Test`
+enumerates the v1–v3 handler methods returning such DTOs and fails if one falls outside the
+advice's scope. `TestComponentFlags` decides per component source, like `ComponentRoutingResolver`:
+DB-sourced → the cached set of flagged keys (`findTestComponentKeys`, Caffeine, TTL 30 s, evicted
+after commit of a v4 write that flips the flag or renames a flagged component, or of an import that
+flags one); Git-sourced and no-db → the `test-component` label of the resolved DSL model. A single
+DTO costs one source lookup (as routing already does) and a set membership; a list costs one bulk
+source read. Staleness bound across pods: 30 s after a change made on another pod.
+
 ## 7. Data Migration
 
 ### 7.1 Migration Strategy: Component-Source Routing

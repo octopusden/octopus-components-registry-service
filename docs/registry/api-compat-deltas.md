@@ -62,9 +62,10 @@ The compat-test exercises **API contracts**:
   `known-deltas-git.json` stays empty: Git mode has no placement and no Build Working Directory.
 
 - **`testComponent` flag** (SYS-099, 2026-10) — the v1/v2/v3 `Component` DTO (and its
-  `VersionedComponent` / `DetailedComponent` subclasses) always serializes `testComponent`, read
-  from the DB whichever resolver serves the component: `false`, `true` for the components `V11__`
-  flagged from the `test-component` label, `false` without a DB. Every component payload therefore
+  `VersionedComponent` / `DetailedComponent` subclasses) always serializes `testComponent`: for a
+  DB-sourced component the stored flag (`true` for the components `V11__` flagged from the
+  `test-component` label), for a Git-sourced one — and in no-db mode — `true` when its DSL carries
+  that label. Both give the same answer on today's data. Every component payload therefore
   gains the key — component list and detail (v1, v2, v3 `component.`), the `DetailedComponent`, and
   find-by-artifact (`VersionedComponent`). This is the first additive delta that also reaches
   **git mode**, by decision: the key is new API surface, not a resolver change. Raw layer: one

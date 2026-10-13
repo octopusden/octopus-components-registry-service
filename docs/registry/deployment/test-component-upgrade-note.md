@@ -50,6 +50,18 @@ A row in either of the last two queries is a real product referencing test data:
 reference or the label) before the rollout. A labelled key outside the patterns stays flagged and
 editable after `V11__`; only flagging it again or renaming it is checked.
 
+## Why `V11__` does not check these itself
+
+A Flyway migration cannot read the service configuration, so it cannot know an installation's name
+patterns; and refusing or rewriting data inside a schema migration would block startup on data an
+operator has to look at anyway. `V11__` therefore only mirrors the label. The two rules bind on
+change (create, a flag flip, a rename, a parent/doc change), so grandfathered data stays readable and
+editable. Production check before the rollout: 14 labelled components, all keys match `^test-`, and
+no real component references one of them as parent or doc component.
+
+Importing from the DSL (`migrate-component(s)`, import) applies the same label rule, so a fresh
+install or a re-migration ends up with the same flags as `V11__`.
+
 ## After the rollout
 
 ```sql

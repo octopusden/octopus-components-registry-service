@@ -92,6 +92,7 @@ import org.octopusden.octopus.components.registry.server.security.PermissionEval
 import org.octopusden.octopus.components.registry.server.service.ComponentManagementService
 import org.octopusden.octopus.components.registry.server.service.ComponentSourceRegistry
 import org.octopusden.octopus.components.registry.server.service.RenderedComponentCode
+import org.octopusden.octopus.components.registry.server.service.TestComponentFlags
 import org.octopusden.octopus.components.registry.server.service.rms.ComponentBuildRanges
 import org.octopusden.octopus.components.registry.server.service.rms.RMSBuildParametersService
 import org.octopusden.octopus.components.registry.server.service.rms.RMSOverrideGate
@@ -189,6 +190,9 @@ class ComponentManagementServiceImpl(
     // Defaulted (nullable) so unit tests constructing this service directly need no new wiring;
     // Spring injects the bound properties in production. Null ⇒ no key may be flagged testComponent.
     private val registryProperties: ComponentsRegistryProperties? = null,
+    // Defaulted (nullable) so unit tests constructing this service directly need no new wiring;
+    // Spring injects the bean in production. Evicted when the set of flagged keys changes.
+    private val testComponentFlags: TestComponentFlags? = null,
 ) : ComponentManagementService {
     // ConfigHelper is constructed lazily because it touches the Spring
     // Environment on first access; mirrors the pattern used by
@@ -425,6 +429,7 @@ class ComponentManagementServiceImpl(
         validateCrossComponentIntegrity(saved)
         validateArtifactOwnershipIfChanged(saved) // self-skips when the create carried no ownership
         validateTestComponentReferences(saved)
+        if (saved.testComponent) testComponentFlags?.evictAfterCommit()
 
         // M:N junctions (no cascade — see ComponentEntity kdoc convention) must be
         // persisted via their own repositories AFTER the parent has an assigned id.
@@ -939,6 +944,8 @@ class ComponentManagementServiceImpl(
         val docsChanged = saved.docLinks.map { it.docComponentKey }.toSet() != oldDocKeys
         val reverseCheck = saved.testComponent && (flaggedNow || isRename)
         val forwardCheck = !saved.testComponent && (unflaggedNow || parentChanged || docsChanged)
+        val flaggedKeysChanged = flaggedNow || unflaggedNow || (isRename && saved.testComponent)
+        if (flaggedKeysChanged) testComponentFlags?.evictAfterCommit()
         if (reverseCheck || forwardCheck) {
             validateTestComponentReferences(
                 saved,

@@ -15,14 +15,20 @@ import org.junit.jupiter.api.Tag
 import org.junit.jupiter.api.Test
 import org.junit.jupiter.api.Timeout
 import org.octopusden.cloud.commons.security.client.AuthServerClient
+import org.octopusden.octopus.components.registry.core.dto.ArtifactComponentsDTO
+import org.octopusden.octopus.components.registry.core.dto.Component
+import org.octopusden.octopus.components.registry.core.dto.ComponentV3
+import org.octopusden.octopus.components.registry.core.dto.ComponentsDTO
 import org.octopusden.octopus.components.registry.server.ComponentRegistryServiceApplication
 import org.octopusden.octopus.components.registry.server.repository.ComponentRepository
 import org.octopusden.octopus.components.registry.server.support.adminJwt
 import org.octopusden.octopus.components.registry.server.support.editorJwt
 import org.springframework.beans.factory.annotation.Autowired
+import org.springframework.beans.factory.annotation.Qualifier
 import org.springframework.boot.test.autoconfigure.web.servlet.AutoConfigureMockMvc
 import org.springframework.boot.test.context.SpringBootTest
 import org.springframework.boot.test.mock.mockito.MockBean
+import org.springframework.core.ResolvableType
 import org.springframework.http.MediaType
 import org.springframework.test.annotation.DirtiesContext
 import org.springframework.test.context.ActiveProfiles
@@ -33,6 +39,8 @@ import org.springframework.test.web.servlet.request.MockMvcRequestBuilders.patch
 import org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post
 import org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath
 import org.springframework.test.web.servlet.result.MockMvcResultMatchers.status
+import org.springframework.web.method.ControllerAdviceBean
+import org.springframework.web.servlet.mvc.method.annotation.RequestMappingHandlerMapping
 import java.nio.file.Paths
 import java.util.UUID
 
@@ -64,6 +72,13 @@ class TestComponentFlagV4Test {
 
     @Autowired
     private lateinit var componentRepository: ComponentRepository
+
+    @Autowired
+    @Qualifier("requestMappingHandlerMapping")
+    private lateinit var handlerMapping: RequestMappingHandlerMapping
+
+    @Autowired
+    private lateinit var testComponentFlagAdvice: TestComponentFlagAdvice
 
     init {
         val testResourcesPath =
@@ -131,9 +146,14 @@ class TestComponentFlagV4Test {
         val summary = getJson("/rest/api/4/components?search=$test")["content"].single()
         assertTrue(summary["testComponent"].asBoolean())
 
-        // Legacy surface: always present, true or false.
-        assertTrue(getJson("/rest/api/2/components/$test")["testComponent"].asBoolean())
-        assertFalse(getJson("/rest/api/2/components/$real")["testComponent"].asBoolean())
+        // Legacy surface: always present, true or false, on every component-returning endpoint.
+        listOf("1", "2").forEach { v ->
+            assertTrue(getJson("/rest/api/$v/components/$test")["testComponent"].asBoolean(), "v$v detail")
+            assertFalse(getJson("/rest/api/$v/components/$real")["testComponent"].asBoolean(), "v$v detail")
+            val list = getJson("/rest/api/$v/components")["components"].associateBy { it["id"].asText() }
+            assertTrue(list.getValue(test)["testComponent"].asBoolean(), "v$v list")
+            assertFalse(list.getValue(real)["testComponent"].asBoolean(), "v$v list")
+        }
         val v3 = getJson("/rest/api/3/components").associateBy { it["component"]["id"].asText() }
         assertTrue(v3.getValue(test)["component"]["testComponent"].asBoolean())
         assertFalse(v3.getValue(real)["component"]["testComponent"].asBoolean())
@@ -143,6 +163,27 @@ class TestComponentFlagV4Test {
             .perform(get("/rest/api/4/components/$test/as-code").with(adminJwt()))
             .andExpect(status().isOk)
             .andExpect { assertFalse(it.response.contentAsString.contains("testComponent")) }
+    }
+
+    @Test
+    @DisplayName("SYS-099: every v1-v3 handler that returns a Component DTO is in the flag advice's scope")
+    fun `SYS-099 every v1-v3 component endpoint is covered by the flag advice`() {
+        val advice = ControllerAdviceBean(testComponentFlagAdvice)
+        val covered =
+            handlerMapping.handlerMethods.filter { (info, handler) ->
+                info.patternValues.any { V1_V3.containsMatchIn(it) } &&
+                    carriesComponent(ResolvableType.forMethodReturnType(handler.method, handler.beanType))
+            }
+        // List, detail, DetailedComponent, find-by-artifact (v2 x2, v3), v3 list at least.
+        assertTrue(covered.size >= 8) { "expected the v1-v3 component endpoints, found ${covered.keys}" }
+        covered.forEach { (info, handler) ->
+            assertTrue(advice.isApplicableToBeanType(handler.beanType)) { "$info (${handler.beanType.simpleName}) escapes the advice" }
+        }
+    }
+
+    private fun carriesComponent(type: ResolvableType): Boolean {
+        val raw = type.resolve() ?: return false
+        return COMPONENT_CARRIERS.any { it.isAssignableFrom(raw) } || type.generics.any(::carriesComponent)
     }
 
     @Test
@@ -375,5 +416,13 @@ class TestComponentFlagV4Test {
         val after = getJson("/rest/api/4/health/statistics")
         assertEquals(before["totalComponents"].asLong() + 1, after["totalComponents"].asLong())
         assertEquals(before["activeComponents"].asLong() + 1, after["activeComponents"].asLong())
+    }
+
+    private companion object {
+        val V1_V3 = Regex("^/?rest/api/[123]/")
+
+        // Response types that are, or carry, v1-v3 Component DTOs.
+        val COMPONENT_CARRIERS =
+            listOf(Component::class.java, ComponentV3::class.java, ComponentsDTO::class.java, ArtifactComponentsDTO::class.java)
     }
 }

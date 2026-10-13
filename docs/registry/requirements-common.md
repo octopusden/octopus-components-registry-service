@@ -3339,13 +3339,23 @@ reports, portal lists, health statistics).
   `archived`), `ComponentSummaryResponse.testComponent` and `ComponentDetailResponse.testComponent`.
   `GET /components?testComponent=true|false` filters; without the parameter test components are
   included (hiding them is a Portal default, not an API one).
-- v1/v2/v3: the `Component` DTO always carries `testComponent` (true or false), read from the DB
-  for every component whichever resolver serves it (no DB layer → false), including the
-  find-by-artifact results. Released clients ignore the new key: their concrete DTOs
-  (`ComponentV1`/`V2`/`V3`, `VersionedComponent`, `DetailedComponent`) already carry
-  `@JsonIgnoreProperties(ignoreUnknown = true)`, so a plain deploy is the rollout.
-- The flag lives only in the DB and the v4 API: the legacy Groovy DSL, its import and the as-code
-  view do not carry it.
+- v1/v2/v3: the `Component` DTO always carries `testComponent` (true or false), on every
+  component-returning endpoint including find-by-artifact. One response-body advice
+  (`TestComponentFlagAdvice`, scoped to the v1–v3 component controllers) sets it on every
+  `Component` in the body, so a new endpoint cannot miss it. The value follows the component's
+  source, like the routing resolver:
+  - DB-sourced: the stored flag — membership in a cached set of flagged keys (Caffeine, 30 s TTL,
+    evicted after a v4 write that changes the flag or renames a flagged component, and after an
+    import that flags one). A change made through another pod is visible here within 30 s.
+  - Git-sourced, and every component in no-db mode: `true` when the resolved DSL model carries the
+    `test-component` label. No DB read is made for the flag; the legacy model is not changed.
+  Released clients ignore the new key: their concrete DTOs (`ComponentV1`/`V2`/`V3`,
+  `VersionedComponent`, `DetailedComponent`) already carry `@JsonIgnoreProperties(ignoreUnknown = true)`,
+  so a plain deploy is the rollout.
+- The flag is stored only in the DB and set through the v4 API; the legacy Groovy DSL and the as-code
+  view do not carry it. Importing from the DSL (`migrate-component(s)`, import) sets
+  `test_component = true` exactly for components with the `test-component` label — the `V11__` rule —
+  so fresh installs and re-migrations match migrated data.
 - Key rule: `testComponent = true` is allowed only when the component key matches one of the
   regexes in `components-registry.test-components.name-patterns` (find semantics; default
   `^test-`, `^cvelab-` in `application.yml`; service-config replaces the list per installation;
@@ -3374,6 +3384,16 @@ reports, portal lists, health statistics).
   their keys match `^test-`, and no real component references one of them as parent or doc
   component — so V11 leaves no flagged component outside the default patterns and creates no
   reference violation. The queries are in [the upgrade note](deployment/test-component-upgrade-note.md).
+  Why `V11__` does not apply the name patterns or the reference rule itself: a Flyway migration
+  cannot read the service configuration (the patterns are per installation), and refusing or
+  rewriting data inside a schema migration would block startup on data an operator has to fix
+  anyway. Instead the rules bind on change: grandfathered data stays readable and editable, and
+  only a write that flags, renames or re-references is checked. The pre-rollout queries surface
+  any such data before the migration runs.
+- Totals vs the list: `GET /health/statistics` (and the TeamCity validation views) exclude test
+  components, while the bare v4 list includes them unless `?testComponent=false` is passed — so a
+  drill-down from a dashboard figure must add `testComponent=false` to match the total. CRS and
+  `crsctl` build no such links; the Portal does.
 - The flag is the source of truth. The `test-component` label is kept for compatibility — the
   Sonar automation and other consumers read it — and is not removed by this requirement. A
   label/flag mismatch is a warning, never an error: a create/update response carries a `warnings`
@@ -3421,4 +3441,6 @@ reports, portal lists, health statistics).
 `` `SYS-099 meta endpoint lists name patterns` ``, `TestComponentNamePatternPropertyTest` (9);
 `` `SYS-099 unchanged flag echo on a non-matching key is accepted` ``,
 `` `SYS-099 unchanged echo on a grandfathered real child is accepted` ``,
-`` `SYS-099 unflagging a child of a test parent is rejected on testComponent` `` (10); `LockConflictHandlerTest` (11).
+`` `SYS-099 unflagging a child of a test parent is rejected on testComponent` `` (10); `LockConflictHandlerTest` (11);
+`` `SYS-099 every v1-v3 component endpoint is covered by the flag advice` ``, `TestComponentFlagsTest`,
+`TestComponentLabelImportIntegrationTest` (v1–v3 source, cache, import).

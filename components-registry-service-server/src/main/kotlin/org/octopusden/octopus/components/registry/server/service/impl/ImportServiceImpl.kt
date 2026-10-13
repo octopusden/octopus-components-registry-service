@@ -59,6 +59,7 @@ import org.octopusden.octopus.components.registry.server.service.MigrationProgre
 import org.octopusden.octopus.components.registry.server.service.MigrationProgressListener
 import org.octopusden.octopus.components.registry.server.service.MigrationResult
 import org.octopusden.octopus.components.registry.server.service.MigrationStatus
+import org.octopusden.octopus.components.registry.server.service.TestComponentFlags
 import org.octopusden.octopus.components.registry.server.service.ValidationResult
 import org.octopusden.octopus.components.registry.server.util.ArtifactOwnershipModeClassifier
 import org.octopusden.octopus.components.registry.server.util.JiraRowView
@@ -122,6 +123,9 @@ class ImportServiceImpl(
     private val dockerImageRepository: DistributionDockerImageRepository,
     private val versionRangeFactory: VersionRangeFactory,
     private val numericVersionFactory: NumericVersionFactory,
+    // Defaulted (nullable) so tests constructing this service directly need no new wiring; evicted
+    // when an imported component is flagged testComponent (SYS-099).
+    private val testComponentFlags: TestComponentFlags? = null,
 ) : ImportService {
     @PersistenceContext
     private lateinit var entityManager: EntityManager
@@ -1408,6 +1412,9 @@ class ImportServiceImpl(
         entity.productType = cfg.productType?.name
         entity.clientCode = cfg.clientCode
         entity.archived = cfg.archived
+        // SYS-099: the legacy label marks a test component (same rule as V11__); the DSL has no flag.
+        entity.testComponent = cfg.labels?.contains(TestComponentFlags.TEST_COMPONENT_LABEL) == true
+        if (entity.testComponent) testComponentFlags?.evictAfterCommit()
         entity.solution = cfg.solution
         // CSV → ordered list happens HERE (the single split site). The accessor
         // does trim → drop blank → keep-first dedupe, so import only needs the

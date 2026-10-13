@@ -38,8 +38,11 @@ refresh it with `./gradlew :components-registry-service-server:generateOpenApiDo
   when the component has the `test-component` label but the flag is false (the label is kept for
   its readers; the flag is the source of truth). `GET /health/statistics` and
   `GET /admin/teamcity-validations` (and `/summary`) no longer count test components. `V11__` flags
-  every component labelled `test-component` and keeps the label. The v1–v3 `Component` payloads (list, detail, detailed component, v3 list,
-  find-by-artifact) always carry `testComponent`, read from the DB; released clients ignore the new
+  every component labelled `test-component` and keeps the label; importing from the DSL applies the
+  same label rule. Health and TeamCity-validation totals exclude test components while the bare list
+  includes them, so a drill-down from a total must pass `testComponent=false`. The v1–v3 `Component` payloads (list, detail, detailed component, v3 list,
+  find-by-artifact) always carry `testComponent` — the stored flag for a DB-sourced component, the
+  `test-component` label for a Git-sourced one (and in no-db mode); released clients ignore the new
   key (their DTOs ignore unknown properties). The flag is not part of the legacy Groovy DSL or the as-code view.
 
 - **Create-component profiles from configuration.** The start-page profiles are configured in
