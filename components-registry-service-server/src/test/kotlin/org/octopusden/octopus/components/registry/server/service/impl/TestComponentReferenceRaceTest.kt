@@ -37,7 +37,8 @@ import java.util.concurrent.TimeoutException
 /**
  * SYS-099 race: "flag A" and "reference A from a non-test B" in concurrent transactions. Optimistic
  * versions sit on different rows, so without a lock both would commit. The reference check row-locks A,
- * so the second writer waits for the first to commit and then sees its write.
+ * so the second writer waits for the first to commit and then sees its write. Runs on PostgreSQL
+ * (Testcontainers), whose row-lock semantics production relies on.
  */
 @Tag("integration")
 @AutoConfigureMockMvc
@@ -45,7 +46,7 @@ import java.util.concurrent.TimeoutException
     webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT,
     classes = [ComponentRegistryServiceApplication::class],
 )
-@ActiveProfiles("common", "ft-db")
+@ActiveProfiles("common", "test")
 @DirtiesContext(classMode = DirtiesContext.ClassMode.AFTER_CLASS)
 @Timeout(120)
 class TestComponentReferenceRaceTest {
@@ -112,12 +113,17 @@ class TestComponentReferenceRaceTest {
                     ComponentUpdateRequest(version = b.version, docs = listOf(DocLinkRequest(docComponentKey = a.name))),
                 )
             }
-        assertThrows<TimeoutException>("T2 committed while T1 still held A") { t2.get(1, TimeUnit.SECONDS) }
+        assertThrows<TimeoutException>("T2 committed while T1 still held A") { t2.get(BLOCKED_PROBE_SECONDS, TimeUnit.SECONDS) }
 
         release.countDown()
         t1.get(30, TimeUnit.SECONDS)
         val failure = assertThrows<ExecutionException> { t2.get(30, TimeUnit.SECONDS) }
         assertTrue(failure.cause is IllegalArgumentException, "expected the reference rule, got ${failure.cause}")
         assertTrue(failure.cause!!.message!!.startsWith("docs: ")) { failure.cause!!.message }
+    }
+
+    private companion object {
+        // How long T2 must stay blocked on A's row; generous so a slow CI agent cannot let it look "done".
+        const val BLOCKED_PROBE_SECONDS = 3L
     }
 }

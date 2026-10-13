@@ -678,6 +678,10 @@ class ComponentManagementServiceImpl(
         val oldBaseBuildSystem = oldBase?.buildSystem
         val oldBaseJavaVersion = oldBase?.javaVersion
         val oldBaseMavenVersion = oldBase?.mavenVersion
+        // SYS-099: the test-component checks are CHANGE-based too (same full-form echo reason as
+        // above) — snapshot the flag and the doc targets so an unchanged echo is not re-validated.
+        val oldTestComponent = entity.testComponent
+        val oldDocKeys = entity.docLinks.map { it.docComponentKey }.toSet()
 
         if (isRename) entity.componentKey = normalizedNewKey!!
 
@@ -708,9 +712,11 @@ class ComponentManagementServiceImpl(
         request.solution?.let { if (!fieldConfigService.isHidden("component.solution")) entity.solution = it }
         request.archived?.let { entity.archived = it }
         request.testComponent?.let { entity.testComponent = it }
+        val flaggedNow = !oldTestComponent && entity.testComponent
+        val unflaggedNow = oldTestComponent && !entity.testComponent
         // Flagging, or renaming a flagged component, must keep the key inside the configured patterns.
-        if (request.testComponent == true || isRename) {
-            validateTestComponentName(entity, if (request.testComponent == true) "testComponent" else "name")
+        if (flaggedNow || (isRename && entity.testComponent)) {
+            validateTestComponentName(entity, if (flaggedNow) "testComponent" else "name")
         }
         // canBeParent: editability enforced above; `hidden` silently strips (consistent with
         // the other field-config-gated scalars). Structural invariants are validated below.
@@ -926,12 +932,20 @@ class ComponentManagementServiceImpl(
             // not on an unrelated rename/baseConfig change (which must not 409 on pre-existing data).
             if (request.artifactIds != null) validateArtifactOwnershipIfChanged(saved)
         }
-        // Grandfathered like the checks above: only a PATCH touching the flag, a reference, or the key
-        // re-checks it. A rename counts: a soft doc link left on a renamed-away key re-binds to whatever
-        // component takes that key, so a test component renamed onto it would be referenced by a real one.
-        val referencesTouched = request.parentComponentName != null || request.docs != null
-        if (request.testComponent != null || referencesTouched || isRename) {
-            validateTestComponentReferences(saved, flagField = if (request.testComponent == null && isRename) "name" else "testComponent")
+        // CHANGE-based, like the checks above (an unchanged echo is grandfathered). A test component is
+        // re-checked against its non-test referrers when it becomes one or is renamed (a soft doc link
+        // left on a renamed-away key re-binds to whatever component takes that key); a real component
+        // against its targets when it stops being a test component or its parent/doc targets change.
+        val docsChanged = saved.docLinks.map { it.docComponentKey }.toSet() != oldDocKeys
+        val reverseCheck = saved.testComponent && (flaggedNow || isRename)
+        val forwardCheck = !saved.testComponent && (unflaggedNow || parentChanged || docsChanged)
+        if (reverseCheck || forwardCheck) {
+            validateTestComponentReferences(
+                saved,
+                flagField = if (flaggedNow) "testComponent" else "name",
+                parentField = if (parentChanged) "parentComponentName" else "testComponent",
+                docsField = if (docsChanged) "docs" else "testComponent",
+            )
         }
 
         // Junctions — synced via their repositories after the parent flush so the
@@ -3605,22 +3619,26 @@ class ComponentManagementServiceImpl(
      * ways — this component's own references, and, for a test component, the non-test components that
      * already reference it. Runs post-flush, like [validateDocComponentExistence].
      *
-     * Race safety: both directions take a row lock (`SELECT … FOR UPDATE`) on the component that would
-     * become the test target — this component when it is a test component, the referenced parent/doc
-     * components otherwise — and read the flag after the lock. A concurrent "flag A" and "reference A"
-     * therefore serialize on A's row: whichever commits second sees the other's committed write and
-     * fails. (Optimistic versions cannot catch it: the two writes bump different components' rows.)
-     * [flagField] is the field prefix of the reverse-direction message (`name` for a rename).
+     * Race safety: both directions serialize on the row of the component that would become the test
+     * target. Flagging (or renaming) a test component A already holds A's row: the caller has flushed
+     * the UPDATE that changed it (on create, the row is uncommitted and invisible to others). Referencing
+     * A from a real component takes `SELECT … FOR UPDATE` on A, then reads A's flag fresh. Whichever
+     * commits second sees the other's committed write and fails. (Optimistic versions cannot catch it:
+     * the two writes bump different components' rows.)
+     * The field prefixes name what triggered the check: [flagField] for the reverse direction
+     * (`name` for a rename), [parentField] / [docsField] for the forward one (`testComponent` when the
+     * reference itself did not change but the component was unflagged).
      */
     private fun validateTestComponentReferences(
         entity: ComponentEntity,
         flagField: String = "testComponent",
+        parentField: String = "parentComponentName",
+        docsField: String = "docs",
     ) {
         val key = entity.componentKey
         val violation =
             if (entity.testComponent) {
                 val id = entity.id ?: return
-                componentRepository.lockByComponentKeys(listOf(key))
                 val children = componentRepository.findNonTestChildKeys(id)
                 val docReferrers = componentRepository.findNonTestDocReferrerKeys(key, id)
                 when {
@@ -3649,10 +3667,10 @@ class ComponentManagementServiceImpl(
                 val testDocKey = docKeys.filter { it in testTargets }.minOrNull()
                 when {
                     parentKey != null && parentKey in testTargets ->
-                        "parentComponentName: component '$key' is not a test component but references test component " +
+                        "$parentField: component '$key' is not a test component but references test component " +
                             "'$parentKey' as its parent"
                     testDocKey != null ->
-                        "docs: component '$key' is not a test component but references test component '$testDocKey' " +
+                        "$docsField: component '$key' is not a test component but references test component '$testDocKey' " +
                             "as its doc component"
                     else -> null
                 }

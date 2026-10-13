@@ -66,6 +66,20 @@ class ControllerExceptionHandler {
         )
     }
 
+    /**
+     * A pessimistic row lock could not be taken — in practice a deadlock between two writes that lock
+     * each other's component rows (SYS-099 reference check, technical-design §6.8). The losing
+     * transaction is rolled back with nothing changed, so the same request can simply be retried.
+     */
+    @ExceptionHandler(org.springframework.dao.PessimisticLockingFailureException::class)
+    @ResponseStatus(HttpStatus.CONFLICT)
+    fun pessimisticLockingFailureHandler(e: org.springframework.dao.PessimisticLockingFailureException): HttpEntity<ErrorResponse> {
+        log.warn("Lock conflict: {}", e.localizedMessage)
+        return HttpEntity(
+            ErrorResponse("Concurrent update of a related component; nothing was changed — retry the request", ErrorCodes.LOCK_CONFLICT),
+        )
+    }
+
     @ExceptionHandler(org.springframework.dao.DataIntegrityViolationException::class)
     @ResponseStatus(HttpStatus.CONFLICT)
     fun dataIntegrityViolationExceptionHandler(e: org.springframework.dao.DataIntegrityViolationException): HttpEntity<ErrorResponse> {

@@ -440,17 +440,26 @@ IO edges; the module stays `server → component-validation` (one-way dependency
 "A non-test component may not reference a test component" spans two rows: flagging A writes A,
 referencing A writes the referrer B. Optimistic `@Version` cannot catch the conflict — the versions
 live on different rows — so two concurrent transactions would each miss the other's uncommitted
-write and both commit. The check therefore row-locks the would-be test target before reading flags:
+write and both commit. Both paths therefore hold the would-be test target's row before reading flags:
 
-- flagging (or renaming) a test component A: `SELECT … FROM components WHERE component_key IN (A)
-  FOR UPDATE`, then the non-test referrer queries;
-- writing a parent or doc reference from a non-test B: the same lock on every referenced key (key
-  order, to avoid lock-order deadlocks), then a fresh `testComponent` read of those keys (not the
-  persistence-context copy, which may predate a concurrent commit).
+- flagging (or renaming) a test component A: the check runs after the write has flushed A's own
+  `UPDATE`, which already holds A's row lock until commit (on create, A's row is uncommitted and
+  invisible to other transactions), so no extra lock is taken;
+- writing a parent or doc reference from a non-test B: `SELECT … FROM components WHERE component_key
+  IN (…) ORDER BY component_key FOR UPDATE` on every referenced key, then a fresh `testComponent` read
+  of those keys (not the persistence-context copy, which may predate a concurrent commit).
 
 Both paths serialize on A's row; the transaction that commits second waits, then sees the first
 one's committed write and fails with 400. The lock is held only for the rest of that write
-transaction. Pinned by `TestComponentReferenceRaceTest`.
+transaction. Pinned by `TestComponentReferenceRaceTest` (PostgreSQL via Testcontainers).
+
+**Deadlock window.** Each write also holds its own row from its flushed `UPDATE`. Two concurrent
+PATCHes on components that reference each other — A gains a reference to B while B gains one to A —
+each hold their own row and then wait for the other's: PostgreSQL detects the cycle and aborts one
+(`40P01`). Spring translates it to a `PessimisticLockingFailureException`, which the API answers
+with `409` and `errorCode: LOCK_CONFLICT` ("nothing was changed — retry the request"); the other
+write proceeds. The window needs two simultaneous edits of mutually-referencing components, so the
+service does not retry on its own.
 
 ## 7. Data Migration
 

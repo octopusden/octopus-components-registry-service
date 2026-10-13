@@ -16,6 +16,7 @@ import org.junit.jupiter.api.Test
 import org.junit.jupiter.api.Timeout
 import org.octopusden.cloud.commons.security.client.AuthServerClient
 import org.octopusden.octopus.components.registry.server.ComponentRegistryServiceApplication
+import org.octopusden.octopus.components.registry.server.repository.ComponentRepository
 import org.octopusden.octopus.components.registry.server.support.adminJwt
 import org.octopusden.octopus.components.registry.server.support.editorJwt
 import org.springframework.beans.factory.annotation.Autowired
@@ -61,10 +62,20 @@ class TestComponentFlagV4Test {
     @Autowired
     private lateinit var objectMapper: ObjectMapper
 
+    @Autowired
+    private lateinit var componentRepository: ComponentRepository
+
     init {
         val testResourcesPath =
             Paths.get(TestComponentFlagV4Test::class.java.getResource("/expected-data")!!.toURI()).parent
         System.setProperty("COMPONENTS_REGISTRY_SERVICE_TEST_DATA_DIR", testResourcesPath.toString())
+    }
+
+    /** Sets the flag behind the API's back — the state V11 or a past rule can leave behind. */
+    private fun flagInDb(key: String) {
+        val entity = componentRepository.findByComponentKey(key)!!
+        entity.testComponent = true
+        componentRepository.save(entity)
     }
 
     private fun name(prefix: String) = "$prefix-${UUID.randomUUID().toString().take(8)}"
@@ -205,6 +216,43 @@ class TestComponentFlagV4Test {
             .andExpect(status().isBadRequest)
             .andExpect(jsonPath("$.errorMessage").value(allOf(startsWith("testComponent: "), containsString("'$real'"))))
             .andExpect(jsonPath("$.errorCode").doesNotExist())
+    }
+
+    @Test
+    @DisplayName("SYS-099: echoing testComponent=true on a flagged key that matches no pattern is accepted")
+    fun `SYS-099 unchanged flag echo on a non-matching key is accepted`() {
+        val legacy = name("sys099-legacy")
+        create(""""name":"$legacy"""")
+        flagInDb(legacy) // e.g. flagged before a pattern change
+        val detail = getJson("/rest/api/4/components/$legacy")
+        patchComponent(detail, """"testComponent":true,"displayName":"$legacy echo"""")
+            .andExpect(status().isOk)
+            .andExpect(jsonPath("$.testComponent").value(true))
+    }
+
+    @Test
+    @DisplayName("SYS-099: echoing testComponent=false and the same parent on a real child of a test parent is accepted")
+    fun `SYS-099 unchanged echo on a grandfathered real child is accepted`() {
+        val parent = name("test-sys099-gfparent")
+        val child = name("sys099-gfchild")
+        create(""""name":"$parent","canBeParent":true""")
+        create(""""name":"$child","parentComponentName":"$parent"""")
+        flagInDb(parent) // grandfathered: the parent became a test component outside the API
+        val detail = getJson("/rest/api/4/components/$child")
+        patchComponent(detail, """"testComponent":false,"parentComponentName":"$parent","displayName":"$child echo"""")
+            .andExpect(status().isOk)
+    }
+
+    @Test
+    @DisplayName("SYS-099: unflagging a test child of a test parent names the field that changed: testComponent")
+    fun `SYS-099 unflagging a child of a test parent is rejected on testComponent`() {
+        val parent = name("test-sys099-uparent")
+        val child = name("test-sys099-uchild")
+        create(""""name":"$parent","canBeParent":true,"testComponent":true""")
+        val detail = create(""""name":"$child","parentComponentName":"$parent","testComponent":true""")
+        patchComponent(detail, """"testComponent":false""")
+            .andExpect(status().isBadRequest)
+            .andExpect(jsonPath("$.errorMessage").value(allOf(startsWith("testComponent: "), containsString("'$parent'"))))
     }
 
     @Test

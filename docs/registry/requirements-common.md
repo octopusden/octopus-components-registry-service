@@ -3349,20 +3349,31 @@ reports, portal lists, health statistics).
 - Key rule: `testComponent = true` is allowed only when the component key matches one of the
   regexes in `components-registry.test-components.name-patterns` (find semantics; default
   `^test-`, `^cvelab-` in `application.yml`; service-config replaces the list per installation;
-  empty ⇒ no component can be flagged). Create with the flag, a PATCH that sets it, and a rename of
-  a flagged component to a non-matching key fail with 400 (`testComponent: …` / `name: …`) naming
-  the key and the patterns. Unflagging is always allowed. The flag is never derived from the key.
-  The active patterns are served read-only by `GET /rest/api/4/components/meta/test-component-name-patterns`
-  (`List<String>`, `ACCESS_COMPONENTS`). `V11__` flags by label, not by key; the labelled components
-  on QA all match `^test-`. A flagged component whose key matches no pattern (after a pattern
-  change) keeps its flag and stays editable; only flagging it again or renaming it is checked.
+  empty ⇒ no component can be flagged). The list is bound at startup: changing it needs a restart
+  (`/admin/reload-config` does not rebind it). Create with the flag, a PATCH that turns it on
+  (false → true), and a rename of a flagged component to a non-matching key fail with 400
+  (`testComponent: …` / `name: …`) naming the key and the patterns. Echoing an unchanged `true`
+  (the Portal sends the whole General slice on Save) and unflagging are always allowed. The flag is
+  never derived from the key. The active patterns are served read-only by
+  `GET /rest/api/4/components/meta/test-component-name-patterns` (`List<String>`, `ACCESS_COMPONENTS`).
+  `V11__` flags by label, not by key. A flagged component whose key matches no pattern (after a
+  pattern change) keeps its flag and stays editable; only flagging it again or renaming it is checked.
 - A non-test component may not reference a test component as its parent or doc component, and a
   component that non-test components reference that way cannot become a test component: 400,
-  `parentComponentName: …` / `docs: …` / `testComponent: …`, naming both components. Checked on
-  create, and on update when the PATCH carries `testComponent`, `parentComponentName`, `docs` or a new
-  `name` (renaming a test component onto a key that a real component's soft doc link still names is
-  rejected with `name: …`). Concurrent "flag A" and "reference A" writes serialize on a row lock of A,
-  so the second to commit fails (technical-design §6.8).
+  naming both components. Checked on create; on update the check is change-based like the other
+  cross-component rules, so an unchanged echo is grandfathered:
+  - a test component against its non-test referrers when it becomes one (`testComponent: …`) or is
+    renamed (`name: …` — renaming it onto a key that a real component's soft doc link still names
+    re-binds that link);
+  - a real component against its targets when it stops being a test component (`testComponent: …`)
+    or its parent / doc targets actually change (`parentComponentName: …` / `docs: …`).
+  Concurrent "flag A" and "reference A" writes serialize on A's row lock, so the second to commit
+  fails; two writes that lock each other's rows can deadlock, and the losing one answers 409
+  `LOCK_CONFLICT` with nothing changed (technical-design §6.8).
+- Pre-rollout check (prod, before V11): 14 components carry the `test-component` label, all of
+  their keys match `^test-`, and no real component references one of them as parent or doc
+  component — so V11 leaves no flagged component outside the default patterns and creates no
+  reference violation. The queries are in [the upgrade note](deployment/test-component-upgrade-note.md).
 - The flag is the source of truth. The `test-component` label is kept for compatibility — the
   Sonar automation and other consumers read it — and is not removed by this requirement. A
   label/flag mismatch is a warning, never an error: a create/update response carries a `warnings`
@@ -3388,6 +3399,10 @@ reports, portal lists, health statistics).
 8. The client's default mapper reads a v1/v2 component carrying `testComponent` and an unknown field.
 9. Flagging a non-matching key (create or PATCH) and renaming a flagged component to one are 400; unflagging
    is allowed; `/meta/test-component-name-patterns` returns the configured list; a configured list replaces the defaults.
+10. PATCH checks are change-based: echoing an unchanged `testComponent: true` on a key outside the
+    patterns, or `testComponent: false` with the same parent on a real child of a test parent, is
+    accepted; unflagging a test child of a test parent is rejected with `testComponent: …`.
+11. A write that loses a row-lock race (deadlock) answers 409 `LOCK_CONFLICT`, not 500.
 
 **Test method:** `TestComponentFlagV4Test` —
 `` `SYS-099 testComponent is returned by v4 v2 and v3` ``, `` `SYS-099 find-by-artifact carries testComponent` `` (1),
@@ -3403,4 +3418,7 @@ reports, portal lists, health statistics).
 `` `SYS-099 editor without archive permission can flag` `` (7);
 `ComponentUnknownPropertyTest` (8);
 `` `SYS-099 flag requires a matching key` ``, `` `SYS-099 rename of a flagged component must keep a matching key` ``,
-`` `SYS-099 meta endpoint lists name patterns` ``, `TestComponentNamePatternPropertyTest` (9).
+`` `SYS-099 meta endpoint lists name patterns` ``, `TestComponentNamePatternPropertyTest` (9);
+`` `SYS-099 unchanged flag echo on a non-matching key is accepted` ``,
+`` `SYS-099 unchanged echo on a grandfathered real child is accepted` ``,
+`` `SYS-099 unflagging a child of a test parent is rejected on testComponent` `` (10); `LockConflictHandlerTest` (11).
