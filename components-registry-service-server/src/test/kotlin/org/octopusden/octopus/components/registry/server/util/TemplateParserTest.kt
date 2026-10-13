@@ -6,6 +6,7 @@ import org.junit.jupiter.api.DisplayName
 import org.junit.jupiter.api.Test
 import org.junit.jupiter.params.ParameterizedTest
 import org.junit.jupiter.params.provider.ValueSource
+import org.octopusden.octopus.components.registry.server.model.ComponentProfile
 import org.octopusden.octopus.components.registry.server.model.ComponentTemplate
 import org.octopusden.octopus.components.registry.server.model.ProfileLoad
 import org.octopusden.octopus.components.registry.server.support.EXAMPLE_DEFAULTS
@@ -536,6 +537,21 @@ class TemplateParserTest {
 
         assertProblem("overridable[1]", template)
         assertTrue(problems(template).any { it.startsWith("$TEMPLATE_ID.overridable[1]") && "dockerImages[0].imageName" in it })
+    }
+
+    @Test
+    @DisplayName("rules written empty mean no rules; a non-blank rules value is an unknown key")
+    fun emptyRules() {
+        val properties = designExampleProperties() + flatten(exampleTemplate().apply { remove("rules") }, TEMPLATE_ID)
+
+        val empty = ComponentProfileParser.parse(properties + ("$TEMPLATE_ID.rules" to ""), EXAMPLE_DEFAULTS)
+        val scalar = ComponentProfileParser.parse(properties + ("$TEMPLATE_ID.rules" to "none"), EXAMPLE_DEFAULTS)
+
+        assertEquals(emptyList<ComponentProfile.FieldRule>(), empty.templates.single().rules)
+        assertEquals(
+            listOf("$TEMPLATE_ID.rules: unknown key"),
+            scalar.entries.single { it.id == TEMPLATE_ID }.problems,
+        )
     }
 
     @Test

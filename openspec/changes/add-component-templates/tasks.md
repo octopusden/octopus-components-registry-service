@@ -382,3 +382,7 @@
       path not set is named in the problem; a removed subtree clears the templates; the
       `ACCESS_COMPONENTS` place in the check order; a taken key and a malformed Jira task key
       create nothing
+- [x] 15.3 R2 unsets any field that renders empty, not only free text, so R7 defaults it; a field
+      that renders a shorter value keeps it (`TemplateRendererTest`)
+- [x] 15.4 A template's `rules` written empty (`{}` or no value) means no rules, as for a profile;
+      the component-profiles delta carries the same `rules` row (`TemplateParserTest`)

@@ -21,7 +21,7 @@ SHALL accept only these keys, with these values:
 | `classification.external` | Yes | `true`, `false` |
 | `classification.explicit` | Yes | `true`, `false`, `ask` |
 | `classification.solution` | No, default `false` | `true`, `false`; `true` requires `external: true` and `explicit: true` |
-| `rules` | No | Map of field path → field rule |
+| `rules` | No | Map of field path → field rule; written empty (`{}` or no value) it means no rules |
 
 A field rule SHALL accept only these keys, with these values:
 

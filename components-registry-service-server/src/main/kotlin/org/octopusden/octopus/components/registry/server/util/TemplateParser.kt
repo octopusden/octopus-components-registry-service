@@ -62,8 +62,12 @@ internal class TemplateParser(
     private fun checkKeys() {
         if (!ID.matches(id)) keys.problem(null, "an id consists of lowercase letters, digits and '-'")
         keys.values.keys
-            .filter { key -> key !in SCALAR_KEYS && SECTIONS.none { key.startsWith(it) } && !OVERRIDABLE_ITEM.matches(key) }
-            .forEach { if (it.isEmpty()) keys.problem(null, "must hold template keys, not a value") else keys.problem(it, "unknown key") }
+            .filter { key ->
+                key !in SCALAR_KEYS &&
+                    SECTIONS.none { key.startsWith(it) } &&
+                    !OVERRIDABLE_ITEM.matches(key) &&
+                    !keys.values.isEmptyRules(key)
+            }.forEach { if (it.isEmpty()) keys.problem(null, "must hold template keys, not a value") else keys.problem(it, "unknown key") }
         REQUIRED_KEYS.filter { it !in keys }.forEach { keys.problem(it, "required") }
         if (keys.values.keys.none { it.startsWith(FIELDS) }) keys.problem("fields", "required")
     }
