@@ -21,11 +21,14 @@ import org.springframework.boot.test.mock.mockito.MockBean
 import org.springframework.http.MediaType
 import org.springframework.test.annotation.DirtiesContext
 import org.springframework.test.context.ActiveProfiles
+import org.springframework.test.context.DynamicPropertyRegistry
+import org.springframework.test.context.DynamicPropertySource
 import org.springframework.test.web.servlet.MockMvc
 import org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post
 import org.springframework.test.web.servlet.result.MockMvcResultMatchers.status
 import org.springframework.transaction.PlatformTransactionManager
 import org.springframework.transaction.support.TransactionTemplate
+import org.testcontainers.containers.PostgreSQLContainer
 import java.nio.file.Paths
 import java.util.UUID
 import java.util.concurrent.CompletableFuture
@@ -38,7 +41,7 @@ import java.util.concurrent.TimeoutException
  * SYS-099 race: "flag A" and "reference A from a non-test B" in concurrent transactions. Optimistic
  * versions sit on different rows, so without a lock both would commit. The reference check row-locks A,
  * so the second writer waits for the first to commit and then sees its write. Runs on PostgreSQL
- * (Testcontainers), whose row-lock semantics production relies on.
+ * (Testcontainers) with the schema built by Flyway (V1..), whose row-lock semantics production relies on.
  */
 @Tag("integration")
 @AutoConfigureMockMvc
@@ -46,7 +49,7 @@ import java.util.concurrent.TimeoutException
     webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT,
     classes = [ComponentRegistryServiceApplication::class],
 )
-@ActiveProfiles("common", "test")
+@ActiveProfiles("common", "test-db-validate")
 @DirtiesContext(classMode = DirtiesContext.ClassMode.AFTER_CLASS)
 @Timeout(120)
 class TestComponentReferenceRaceTest {
@@ -122,8 +125,21 @@ class TestComponentReferenceRaceTest {
         assertTrue(failure.cause!!.message!!.startsWith("docs: ")) { failure.cause!!.message }
     }
 
-    private companion object {
+    companion object {
         // How long T2 must stay blocked on A's row; generous so a slow CI agent cannot let it look "done".
-        const val BLOCKED_PROBE_SECONDS = 3L
+        private const val BLOCKED_PROBE_SECONDS = 3L
+
+        // Same wiring as V10GenericArtifactConstraintIntegrationTest / ComponentTeamcityValidationEmbeddingIntegrationTest:
+        // a real PostgreSQL 16 whose schema Flyway builds from V1.. (test-db-validate: Flyway on, ddl-auto=validate).
+        @JvmStatic
+        val postgres = PostgreSQLContainer("postgres:16-alpine").apply { start() }
+
+        @DynamicPropertySource
+        @JvmStatic
+        fun configureProperties(registry: DynamicPropertyRegistry) {
+            registry.add("spring.datasource.url", postgres::getJdbcUrl)
+            registry.add("spring.datasource.username", postgres::getUsername)
+            registry.add("spring.datasource.password", postgres::getPassword)
+        }
     }
 }
