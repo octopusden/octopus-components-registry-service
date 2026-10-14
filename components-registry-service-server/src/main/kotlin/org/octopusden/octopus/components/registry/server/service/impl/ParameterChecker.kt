@@ -1,10 +1,14 @@
 package org.octopusden.octopus.components.registry.server.service.impl
 
 import org.octopusden.octopus.components.registry.server.model.ComponentTemplate
+import org.octopusden.octopus.components.registry.server.model.TemplateFieldKind
+import org.octopusden.octopus.components.registry.server.model.TemplateList
 import org.octopusden.octopus.components.registry.server.model.TemplateParameter
 import org.octopusden.octopus.components.registry.server.service.EmployeeStatus
 import org.octopusden.octopus.components.registry.server.service.ListValues
 import org.octopusden.octopus.components.registry.server.service.impl.ActiveStatus
+import org.octopusden.octopus.components.registry.server.util.TemplateFields
+import org.octopusden.octopus.components.registry.server.util.TemplateProblem
 
 /** One failed parameter check, with a message a creator can act on. */
 data class ParameterProblem(
@@ -64,6 +68,33 @@ class ParameterChecker(
         }
         return ParameterValues(values, problems)
     }
+
+    /**
+     * Checks override values as a parameter filling the same field is checked: a CRS value or list
+     * against its registry list (P7), a person or people list for active employees (P8). Today's
+     * create checks neither, and adds an unknown label to the dictionary. Other fields are left to
+     * the create. A problem is on the overridden field and is never a template problem.
+     */
+    fun checkOverrides(overrides: Map<String, List<String>>): List<TemplateProblem> =
+        overrides.flatMap { (path, values) ->
+            val given = values.filter { it.isNotBlank() }.distinct()
+            when (TemplateFields.KINDS[path]) {
+                TemplateFieldKind.CRS_VALUE, TemplateFieldKind.CRS_LIST -> {
+                    val list = TemplateFields.CRS_VALUE_LISTS[path] ?: TemplateList.LABELS
+                    val allowed = lists.values(list)
+                    given.filter { it !in allowed }.map { "'$it' is not in the ${list.key} list" }
+                }
+                TemplateFieldKind.PERSON, TemplateFieldKind.PEOPLE_LIST -> given.mapNotNull { employeeProblem(it) }
+                else -> emptyList()
+            }.map { TemplateProblem(listOf(path), emptySet(), templateProblem = false, "$path: $it") }
+        }
+
+    private fun employeeProblem(login: String): String? =
+        when (employees.of(login)) {
+            ActiveStatus.INACTIVE -> "'$login' is not an active employee"
+            ActiveStatus.UNKNOWN -> "'$login' is not a known employee"
+            ActiveStatus.ACTIVE, ActiveStatus.UNAVAILABLE, ActiveStatus.DISABLED -> null
+        }
 
     private fun defaultOf(
         parameter: TemplateParameter,
@@ -137,12 +168,6 @@ class ParameterChecker(
         }
 
         private fun person() =
-            value.forEach { login ->
-                when (employees.of(login)) {
-                    ActiveStatus.INACTIVE -> fail(ParameterProblem.Check.P8_ACTIVE_EMPLOYEE, "'$login' is not an active employee")
-                    ActiveStatus.UNKNOWN -> fail(ParameterProblem.Check.P8_ACTIVE_EMPLOYEE, "'$login' is not a known employee")
-                    ActiveStatus.ACTIVE, ActiveStatus.UNAVAILABLE, ActiveStatus.DISABLED -> Unit
-                }
-            }
+            value.forEach { login -> employeeProblem(login)?.let { fail(ParameterProblem.Check.P8_ACTIVE_EMPLOYEE, it) } }
     }
 }

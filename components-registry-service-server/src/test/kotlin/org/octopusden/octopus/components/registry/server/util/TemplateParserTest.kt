@@ -528,6 +528,18 @@ class TemplateParserTest {
     }
 
     @Test
+    @DisplayName("the build system is never overridable: its VCS defaults and requirements are decided on load")
+    fun buildSystemNotOverridable() {
+        val template =
+            exampleTemplate().apply {
+                put("overridable", listOf("baseConfiguration.vcsEntries[0].vcsPath", "baseConfiguration.build.buildSystem"))
+            }
+
+        assertProblem("overridable[1]", template)
+        assertTrue(problems(template).any { it.startsWith("$TEMPLATE_ID.overridable[1]") && "crs-list" in it })
+    }
+
+    @Test
     @DisplayName("an overridable path the template does not set is a problem naming it")
     fun overridableNotSet() {
         val template =

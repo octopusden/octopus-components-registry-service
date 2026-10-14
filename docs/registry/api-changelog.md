@@ -77,6 +77,8 @@ refresh it with `./gradlew :components-registry-service-server:generateOpenApiDo
       body, and nothing is created.
     - At most one problem comes from today's create rules, worded as the create words it; every
       parameter and rule problem is reported.
+    - An override is checked as a parameter filling the field would be: a label or CRS value in
+      its list, a login an active employee; a failure is a problem on the field.
     - `400` for a malformed `jiraTaskKey` or an override on a path the template does not list;
       `403` when the caller may not use the template or override its fields; `404` for a failed,
       removed or unknown template.

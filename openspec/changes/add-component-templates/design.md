@@ -298,7 +298,7 @@ A dry run with `CLIENT_CODE=ACME`, `PLUGIN_CODE=CORE`, `PLUGIN_NAME=Core API`, o
 - `TemplateDryRun` runs:
   1. parameter checks — stop on failure;
   2. render;
-  3. field rules and fixed labels — every problem kept, and the create still runs;
+  3. field rules, fixed labels and override values — every problem kept, and the create still runs;
   4. today's `createComponent(rendered)`, inside a `TransactionTemplate` whose status is set
      rollback-only, so it always rolls back, without an `UnexpectedRollbackException`.
 - Everything the create writes is rolled back with it: the component row, the label dictionary,
@@ -347,6 +347,13 @@ A dry run with `CLIENT_CODE=ACME`, `PLUGIN_CODE=CORE`, `PLUGIN_NAME=Core API`, o
 - Overrides:
   - on a path not in `overridable` → 400 naming the path;
   - from a user `ProfileAvailability` says may not override → 403;
+  - checked as a parameter filling the field would be (`ParameterChecker.checkOverrides`): a CRS
+    value or label against its list, a login as an active employee. Today's create checks
+    neither, and adds an unknown label to the dictionary. A failure is a problem on the field,
+    never a template problem;
+  - never on `baseConfiguration.build.buildSystem`, refused on load: the build system decides
+    which VCS fields are required and defaulted, and R7 runs before R8, so an overridden one
+    would leave VCS wrong. A `crs-list` parameter of `build-systems` lets the creator choose it;
   - in this change every user who may use the template may override; the Delivery & Support
     change replaces that answer.
 
@@ -430,7 +437,9 @@ Result types sit with what produces them: `RenderedTemplate` and `TemplateProble
   - TD-027.
 - **Attribution depends on message prefixes.**
   - A message reworded in `createComponent` loses its field and is shown without parameters.
-  - Mitigated by one test per prefix; the problem is still reported.
+  - The tests check one copy of each message, not the create's own text, so a rewording passes
+    them; only a few cases, such as a taken key and the 409 conflict, go through the real create.
+    The problem is still reported, without its field. TD-030.
 - **A dry run holds the new component's row until it rolls back.**
   - Two concurrent dry runs for the same key can wait on each other's unique index.
   - Accepted: a dry run lasts milliseconds, plus the employee-service calls.

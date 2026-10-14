@@ -139,8 +139,17 @@ internal class TemplateParser(
                     .removePrefix("overridable[")
                     .removeSuffix("]")
                     .toInt()
-            }.onEach { (key, path) -> if (path !in fields) keys.problem(key, "'$path' is not set in fields") }
-            .map { it.value }
+            }.onEach { (key, path) ->
+                when {
+                    path == TemplateFields.BUILD_SYSTEM ->
+                        keys.problem(
+                            key,
+                            "the build system is not overridable, since it decides VCS on load; let the creator choose it " +
+                                "with a crs-list parameter of build-systems",
+                        )
+                    path !in fields -> keys.problem(key, "'$path' is not set in fields")
+                }
+            }.map { it.value }
 
     /**
      * A rule on a field built from parameters is checked by the dry run, on the rendered value. An

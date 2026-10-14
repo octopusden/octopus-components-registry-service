@@ -644,6 +644,20 @@ class ComponentTemplateControllerV4Test {
     }
 
     @Test
+    @DisplayName("overrides: a label override not in the dictionary is a problem on labels, and no label is added")
+    fun labelOverrideNotInDictionary() {
+        configure(standaloneTemplate().apply { put("overridable", listOf("labels")) })
+        val before = counts()
+
+        components(body(extra = mapOf("overrides" to mapOf("labels" to listOf("typo-lable")))), dryRun = false)
+            .andExpect(status().isUnprocessableEntity)
+            .andExpect(jsonPath("$.problems[0].fields", contains("labels")))
+            .andExpect(jsonPath("$.problems[0].templateProblem").value(false))
+            .andExpect(jsonPath("$.problems[0].message").value("labels: 'typo-lable' is not in the labels list"))
+        assertEquals(before, counts())
+    }
+
+    @Test
     @DisplayName("a user who may not create components is refused, on a dry run as on a create")
     fun viewerRefused() {
         components(body(), jwt = viewerJwt()).andExpect(status().isForbidden)

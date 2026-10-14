@@ -43,9 +43,9 @@ data class TemplateRun(
 
 /**
  * Runs a template through the dry-run steps (Decision 8): parameter checks, rendering, the
- * template's rules and fixed labels, then today's [create] on the rendered request. The create
- * runs in its own transaction, rolled back unless [run] is asked to commit and nothing failed
- * before it, so a dry run and a create cannot drift apart.
+ * template's rules, fixed labels and override values, then today's [create] on the rendered
+ * request. The create runs in its own transaction, rolled back unless [run] is asked to commit
+ * and nothing failed before it, so a dry run and a create cannot drift apart.
  *
  * A failure of today's create is reported as a problem: a 400, 403, 404, 409 or 422 it throws,
  * and a unique-index violation from a concurrent create; any other exception propagates. An
@@ -76,7 +76,9 @@ class TemplateDryRun(
         val rendered =
             TemplateRenderer.render(template, checked.values, input.overrides, defaults(), input.jiraTaskKey, input.changeComment)
         val beforeCreate =
-            TemplateProblems.rules(template, rendered) + TemplateProblems.fixedLabels(template, lists.values(TemplateList.LABELS))
+            TemplateProblems.rules(template, rendered) +
+                TemplateProblems.fixedLabels(template, lists.values(TemplateList.LABELS)) +
+                parameters.checkOverrides(input.overrides)
         val commits = commit && beforeCreate.isEmpty()
         return when (val outcome = createStep(rendered.request, commits)) {
             is CreateOutcome.Created -> TemplateRun(emptyList(), rendered, beforeCreate, outcome.component.takeIf { commits })

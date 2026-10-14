@@ -308,4 +308,41 @@ class ParameterCheckerTest {
             failedChecks(template, "PLUGIN_CODE" to listOf("core"), "CLIENT_CODE" to listOf("XYZ")),
         )
     }
+
+    @Test
+    @DisplayName("an override is checked as a parameter of its field's kind: labels against the dictionary, logins as active employees")
+    fun overrides() {
+        val problems =
+            checker.checkOverrides(
+                mapOf(
+                    "labels" to listOf("plugin", "typo-lable"),
+                    "componentOwner" to listOf("left"),
+                    "releaseManager" to listOf("jdoe", "ghost"),
+                    TemplateFields.ESCROW_GENERATION to listOf("NOPE"),
+                    "baseConfiguration.vcsEntries[0].vcsPath" to listOf("anything"),
+                ),
+            )
+
+        assertEquals(
+            listOf(
+                listOf("labels") to "labels: 'typo-lable' is not in the labels list",
+                listOf("componentOwner") to "componentOwner: 'left' is not an active employee",
+                listOf("releaseManager") to "releaseManager: 'ghost' is not a known employee",
+                listOf(TemplateFields.ESCROW_GENERATION) to
+                    "${TemplateFields.ESCROW_GENERATION}: 'NOPE' is not in the escrow-generation list",
+            ),
+            problems.map { it.fields to it.message },
+        )
+        assertEquals(emptySet<String>(), problems.flatMapTo(mutableSetOf()) { it.parameters })
+        assertEquals(setOf(false), problems.map { it.templateProblem }.toSet())
+    }
+
+    @Test
+    @DisplayName("an override with values in the lists and active logins has no problem")
+    fun validOverrides() {
+        assertEquals(
+            emptyList<Any>(),
+            checker.checkOverrides(mapOf("labels" to listOf("ui"), "securityChampion" to listOf("asmith"))),
+        )
+    }
 }

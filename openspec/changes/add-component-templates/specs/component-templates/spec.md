@@ -139,7 +139,7 @@ Whole-template checks:
 | Check | Fails when |
 |---|---|
 | Required fields | A field the classification requires has no fixed value, no required parameter and no component default |
-| Overridable | An `overridable` path is not set in `fields` |
+| Overridable | An `overridable` path is not set in `fields`, or is `baseConfiguration.build.buildSystem` |
 | Own rules | A fixed value breaks one of the template's rules |
 
 Required fields, by classification:
@@ -212,6 +212,12 @@ Not checked on load, because they depend on data that changes at runtime:
 #### Scenario: Overridable path not set
 - **WHEN** `overridable` lists `baseConfiguration.jira.projectKey` and `fields` does not set it
 - **THEN** the template is failed with a problem naming that path
+
+#### Scenario: Build system not overridable
+- **WHEN** `overridable` lists `baseConfiguration.build.buildSystem`
+- **THEN** the template is failed with a problem naming that entry: the build system decides on
+  load which VCS fields are required and defaulted, and a `crs-list` parameter of `build-systems`
+  lets the creator choose it instead
 
 #### Scenario: Broken template next to working ones
 - **WHEN** a reload adds a broken template next to a live one
@@ -401,7 +407,8 @@ A dry run SHALL run these steps:
 
 1. Check the parameter values. When any check fails, stop here.
 2. Render the template.
-3. Check the template's field rules on the rendered request.
+3. Check the template's field rules on the rendered request, its fixed labels, and the override
+   values.
 4. Run today's create on the rendered request, in a transaction that is always rolled back.
 
 It SHALL return:
@@ -501,8 +508,10 @@ The registry SHALL accept an override only when:
 - its path is in the template's `overridable`; and
 - the availability rule lets the user override.
 
-An accepted override SHALL still pass every check. In this change, every user who may use the
-template may override.
+An accepted override SHALL still pass every check. An override of a field a parameter could
+fill SHALL be checked as that parameter would be: a CRS value or `labels` item SHALL be in its
+registry list, and a `componentOwner`, `releaseManager` or `securityChampion` login SHALL be an
+active employee. In this change, every user who may use the template may override.
 
 #### Scenario: Overridable field
 - **WHEN** a user overrides `baseConfiguration.vcsEntries[0].vcsPath`, which is overridable
@@ -519,6 +528,11 @@ template may override.
 #### Scenario: Invalid override
 - **WHEN** an override makes the component fail a check
 - **THEN** the problem is reported on the overridden field
+
+#### Scenario: Label override not in the dictionary
+- **WHEN** `labels` is overridable and a request overrides it with a label not in the dictionary
+- **THEN** the problem is on `labels`, not a template problem; a create answers 422 and the label
+  is not added to the dictionary
 
 ### Requirement: Administrator read
 

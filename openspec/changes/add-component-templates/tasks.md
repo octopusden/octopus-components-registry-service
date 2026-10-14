@@ -390,3 +390,9 @@
       other integrity failure, such as a value too long, is a problem on no field with today's
       create's wording (`TemplateDryRunTest`, `ComponentTemplateControllerV4Test.valueTooLong`);
       TD-029 for length checks in the create
+- [x] 15.6 Review: an override is checked as a parameter filling its field would be, labels and
+      CRS values against their lists and logins as active employees
+      (`ParameterChecker.checkOverrides`; `ParameterCheckerTest`,
+      `ComponentTemplateControllerV4Test.labelOverrideNotInDictionary`); the build system is
+      refused in `overridable` on load (`TemplateParserTest.buildSystemNotOverridable`); TD-030
+      for message-based attribution
