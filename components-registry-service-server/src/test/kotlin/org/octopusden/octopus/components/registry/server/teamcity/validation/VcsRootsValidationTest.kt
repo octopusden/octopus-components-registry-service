@@ -46,8 +46,8 @@ class VcsRootsValidationTest {
     ) = TcCompileConfig(id, urls.map { TcVcsRootEntry(it, "") }, null)
 
     @Test
-    @DisplayName("SYS-099: an extra root is a WARNING naming the repository and the build type")
-    fun `SYS-099 an extra root is a WARNING naming the repository and the build type`() {
+    @DisplayName("SYS-102: an extra root is a WARNING naming the repository and the build type")
+    fun `SYS-102 an extra root is a WARNING naming the repository and the build type`() {
         val result = VcsRootsValidation.check("comp-one", listOf(app), listOf(config("bt1", app, tooling)))
 
         assertNotNull(result)
@@ -151,8 +151,8 @@ class VcsRootsValidationTest {
     }
 
     @Test
-    @DisplayName("SYS-099: components sharing a project with the same roots get no finding")
-    fun `SYS-099 components sharing a project with the same roots get no finding`() {
+    @DisplayName("SYS-102: components sharing a project with the same roots get no finding")
+    fun `SYS-102 components sharing a project with the same roots get no finding`() {
         val a = comp("comp-one")
         val b = comp("comp-two")
         val findings = validationFindings(
@@ -165,8 +165,8 @@ class VcsRootsValidationTest {
     }
 
     @Test
-    @DisplayName("SYS-099: a shared project with differing roots flags neither component, like the Diff")
-    fun `SYS-099 a shared project with differing roots flags neither component, like the Diff`() {
+    @DisplayName("SYS-102: a shared project with differing roots flags neither component, like the Diff")
+    fun `SYS-102 a shared project with differing roots flags neither component, like the Diff`() {
         val a = comp("comp-one")
         val b = comp("comp-two")
         val rows = listOf(baseRow(a, app), baseRow(b, appB))

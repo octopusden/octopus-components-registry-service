@@ -218,8 +218,8 @@ class TeamcityPlacementDiffServiceTest {
     }
 
     @Test
-    @DisplayName("SYS-099: a manually re-saved value is reported as manual edit, not overwritten")
-    fun `SYS-099 a manually re-saved value is reported as manual edit, not overwritten`() {
+    @DisplayName("SYS-102: a manually re-saved value is reported as manual edit, not overwritten")
+    fun `SYS-102 a manually re-saved value is reported as manual edit, not overwritten`() {
         val comp = component()
         val row = multiRootRow(comp, currentAppCd = "custom-name")
         val bt = compileBuildType("compileA", roots = listOf(gatewayId to "", appId to "+:. => app-one"))
@@ -282,8 +282,8 @@ class TeamcityPlacementDiffServiceTest {
     }
 
     @Test
-    @DisplayName("SYS-099: a TeamCity error on a single-root row is reported, not dropped")
-    fun `SYS-099 a TeamCity error on a single-root row is reported, not dropped`() {
+    @DisplayName("SYS-102: a TeamCity error on a single-root row is reported, not dropped")
+    fun `SYS-102 a TeamCity error on a single-root row is reported, not dropped`() {
         // Without the chain nothing is derived, so the single-root scope filter can't tell whether
         // the row is in scope; dropping it hid that most projects failed to read.
         val comp = component()
@@ -303,8 +303,8 @@ class TeamcityPlacementDiffServiceTest {
     }
 
     @Test
-    @DisplayName("SYS-099: a compile configuration attaching an extra tooling root is a roots mismatch, not invalid")
-    fun `SYS-099 a compile configuration attaching an extra tooling root is a roots mismatch, not invalid`() {
+    @DisplayName("SYS-102: a compile configuration attaching an extra tooling root is a roots mismatch, not invalid")
+    fun `SYS-102 a compile configuration attaching an extra tooling root is a roots mismatch, not invalid`() {
         val comp = component()
         val row = ComponentConfigurationEntity(id = UUID.randomUUID(), component = comp, rowType = "BASE")
         row.vcsEntries += VcsSettingsEntryEntity(componentConfiguration = row, name = "main", vcsPath = appId, sortOrder = 0)
@@ -348,8 +348,8 @@ class TeamcityPlacementDiffServiceTest {
     }
 
     @Test
-    @DisplayName("SYS-099: a single-root row TeamCity places where CRS cannot express it is reported, not dropped")
-    fun `SYS-099 a single-root row TeamCity places where CRS cannot express it is reported, not dropped`() {
+    @DisplayName("SYS-102: a single-root row TeamCity places where CRS cannot express it is reported, not dropped")
+    fun `SYS-102 a single-root row TeamCity places where CRS cannot express it is reported, not dropped`() {
         val comp = component()
         val bt = compileBuildType("compileA", workDir = "%PARAM%/x", roots = listOf(appId to "+:a => b\n+:c => d"))
         val svc = service(
@@ -362,8 +362,8 @@ class TeamcityPlacementDiffServiceTest {
     }
 
     @Test
-    @DisplayName("SYS-099: a single-root row whose compile configurations disagree is reported, not dropped")
-    fun `SYS-099 a single-root row whose compile configurations disagree is reported, not dropped`() {
+    @DisplayName("SYS-102: a single-root row whose compile configurations disagree is reported, not dropped")
+    fun `SYS-102 a single-root row whose compile configurations disagree is reported, not dropped`() {
         val comp = component()
         val a = compileBuildType("a", roots = listOf(appId to ""))
         val b = compileBuildType("b", roots = listOf(appId to "+:mapper"))
@@ -534,8 +534,8 @@ class TeamcityPlacementDiffServiceTest {
     }
 
     @Test
-    @DisplayName("SYS-099: a version-range override (vcs_settings marker) row is left out of the Diff")
-    fun `SYS-099 a version-range override (vcs_settings marker) row is left out of the Diff`() {
+    @DisplayName("SYS-102: a version-range override (vcs_settings marker) row is left out of the Diff")
+    fun `SYS-102 a version-range override (vcs_settings marker) row is left out of the Diff`() {
         // Only the current (base) configuration is diffed; version ranges are not touched.
         val comp = component()
         val row = ComponentConfigurationEntity(
@@ -552,8 +552,8 @@ class TeamcityPlacementDiffServiceTest {
     }
 
     @Test
-    @DisplayName("SYS-099: an archived component is left out of the Diff entirely")
-    fun `SYS-099 an archived component is left out of the Diff entirely`() {
+    @DisplayName("SYS-102: an archived component is left out of the Diff entirely")
+    fun `SYS-102 an archived component is left out of the Diff entirely`() {
         // On QA, archived components made up 60% of the report and can never be synced.
         val comp = component(archived = true)
         val row = multiRootRow(comp)

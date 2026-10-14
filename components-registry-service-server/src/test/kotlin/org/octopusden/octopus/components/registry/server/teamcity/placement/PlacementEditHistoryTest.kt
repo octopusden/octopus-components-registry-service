@@ -81,8 +81,8 @@ class PlacementEditHistoryTest {
     }
 
     @Test
-    @DisplayName("SYS-099: the last change being a real untagged user write is manual")
-    fun `SYS-099 the last change being a real untagged user write is manual`() {
+    @DisplayName("SYS-102: the last change being a real untagged user write is manual")
+    fun `SYS-102 the last change being a real untagged user write is manual`() {
         stub(row(vcsSnapshot(null, null), vcsSnapshot("app", null)))
         assertTrue(history().isCheckoutDirectoryManuallySet(componentId, appVcsPath))
     }
@@ -94,8 +94,8 @@ class PlacementEditHistoryTest {
     }
 
     @Test
-    @DisplayName("SYS-099: TeamCity changing after a sync still resolves on re-diff (only the LAST change is looked at)")
-    fun `SYS-099 TeamCity changing after a sync still resolves on re-diff (only the LAST change is looked at)`() {
+    @DisplayName("SYS-102: TeamCity changing after a sync still resolves on re-diff (only the LAST change is looked at)")
+    fun `SYS-102 TeamCity changing after a sync still resolves on re-diff (only the LAST change is looked at)`() {
         // Newest first: the user's edit is now further back than the sync that followed it, so the
         // sync (tagged) is what decides.
         val userEdit = row(vcsSnapshot(null, null), vcsSnapshot("app", null))
@@ -105,8 +105,8 @@ class PlacementEditHistoryTest {
     }
 
     @Test
-    @DisplayName("SYS-099: a user edit after a sync is manual again")
-    fun `SYS-099 a user edit after a sync is manual again`() {
+    @DisplayName("SYS-102: a user edit after a sync is manual again")
+    fun `SYS-102 a user edit after a sync is manual again`() {
         val sync = row(vcsSnapshot("app", null), vcsSnapshot("app2", null), changeComment = "sync from TeamCity (job=diff-2)")
         val userEdit = row(vcsSnapshot("app2", null), vcsSnapshot("custom", null))
         stub(userEdit, sync)
@@ -162,8 +162,8 @@ class PlacementEditHistoryTest {
     }
 
     @Test
-    @DisplayName("SYS-099: checkoutDirectory and sourcePath are tracked independently")
-    fun `SYS-099 checkoutDirectory and sourcePath are tracked independently`() {
+    @DisplayName("SYS-102: checkoutDirectory and sourcePath are tracked independently")
+    fun `SYS-102 checkoutDirectory and sourcePath are tracked independently`() {
         // A PAIR-based (checkoutDirectory, sourcePath) comparison would let a Sync write that touches
         // ONLY sourcePath "launder" an earlier MANUAL checkoutDirectory edit: the pair as a whole
         // differs on the sync row, so the pair-based check would find its sync tag and call the

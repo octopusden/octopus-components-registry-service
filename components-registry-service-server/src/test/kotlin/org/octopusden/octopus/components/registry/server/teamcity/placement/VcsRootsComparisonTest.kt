@@ -22,8 +22,8 @@ class VcsRootsComparisonTest {
     }
 
     @Test
-    @DisplayName("SYS-099: a tooling root attached by TeamCity only is extra, with its build types")
-    fun `SYS-099 a tooling root attached by TeamCity only is extra, with its build types`() {
+    @DisplayName("SYS-102: a tooling root attached by TeamCity only is extra, with its build types")
+    fun `SYS-102 a tooling root attached by TeamCity only is extra, with its build types`() {
         val result = compareVcsRoots(listOf(app), listOf(config("bt1", app, tooling), config("bt2", tooling, app)))
 
         assertEquals(listOf(ExtraVcsRoot("tools/shared-tooling", listOf("bt1", "bt2"))), result.extra)
@@ -31,8 +31,8 @@ class VcsRootsComparisonTest {
     }
 
     @Test
-    @DisplayName("SYS-099: a configuration attaching none of the component's repositories is not judged")
-    fun `SYS-099 a configuration attaching none of the component's repositories is not judged`() {
+    @DisplayName("SYS-102: a configuration attaching none of the component's repositories is not judged")
+    fun `SYS-102 a configuration attaching none of the component's repositories is not judged`() {
         // bt2 belongs to a sibling component or an old version line: its roots are not "extra".
         val result = compareVcsRoots(listOf(app), listOf(config("bt1", app), config("bt2", appB, tooling)))
 

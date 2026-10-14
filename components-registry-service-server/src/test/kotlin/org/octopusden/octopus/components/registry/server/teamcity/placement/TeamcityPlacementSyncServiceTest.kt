@@ -128,8 +128,8 @@ class TeamcityPlacementSyncServiceTest {
     }
 
     @Test
-    @DisplayName("SYS-099: an applied row's before and after values are recorded per field")
-    fun `SYS-099 an applied row's before and after values are recorded per field`() {
+    @DisplayName("SYS-102: an applied row's before and after values are recorded per field")
+    fun `SYS-102 an applied row's before and after values are recorded per field`() {
         val diffRow = row(PlacementDiffRowStatus.RESOLVED, derivedBwd = "app/build")
         val diffService = diffServiceReturning(listOf(diffRow))
         val (svc, _) = service(diffService)
@@ -170,8 +170,8 @@ class TeamcityPlacementSyncServiceTest {
     }
 
     @Test
-    @DisplayName("SYS-099: a manual-edit row is skipped, never written")
-    fun `SYS-099 a manual-edit row is skipped, never written`() {
+    @DisplayName("SYS-102: a manual-edit row is skipped, never written")
+    fun `SYS-102 a manual-edit row is skipped, never written`() {
         val diffRow = row(PlacementDiffRowStatus.MANUAL_EDIT)
         val diffService = diffServiceReturning(listOf(diffRow))
         val (svc, cms) = service(diffService)
@@ -191,8 +191,8 @@ class TeamcityPlacementSyncServiceTest {
     }
 
     @Test
-    @DisplayName("SYS-099: an invalid row is skipped even if selected")
-    fun `SYS-099 an invalid row is skipped even if selected`() {
+    @DisplayName("SYS-102: an invalid row is skipped even if selected")
+    fun `SYS-102 an invalid row is skipped even if selected`() {
         // Covered by the freshRow.status != RESOLVED check.
         val diffRow = row(PlacementDiffRowStatus.INVALID)
         val diffService = diffServiceReturning(listOf(diffRow))
