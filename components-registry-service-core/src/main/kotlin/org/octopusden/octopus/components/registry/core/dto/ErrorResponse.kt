@@ -10,7 +10,7 @@ import com.fasterxml.jackson.annotation.JsonProperty
  * to distinguish an optimistic-lock 409 ("reload and re-apply") from a
  * uniqueness-violation 409 ("fix the conflicting value"). Nullable: handlers
  * that have no meaningful class emit plain messages, and older servers omit
- * the field entirely. Known values: `OPTIMISTIC_LOCK`, `UNIQUENESS_VIOLATION`,
+ * the field entirely. Known values: `OPTIMISTIC_LOCK`, `LOCK_CONFLICT`, `UNIQUENESS_VIOLATION`,
  * `DATA_INTEGRITY` — clients must tolerate unknown values.
  */
 @JsonIgnoreProperties(ignoreUnknown = true)

@@ -133,6 +133,7 @@ Filters (repeatable ones may be passed multiple times):
 | `--archived <true\|false>` | | |
 | `--involves <user>` | yes | Owner OR release manager OR security champion. |
 | `--involves-role <role>` | yes | Narrow `--involves`: `owner`, `releaseManager`, `securityChampion`. |
+| `--test-component <true\|false>` | | Without it, test components are listed. |
 | `--can-be-parent <true\|false>` | | |
 | `--distribution-explicit <true\|false>` | | |
 | `--distribution-external <true\|false>` | | |

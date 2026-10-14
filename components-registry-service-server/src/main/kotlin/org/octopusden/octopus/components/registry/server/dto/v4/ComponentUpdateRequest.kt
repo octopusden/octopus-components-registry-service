@@ -39,6 +39,7 @@ data class ComponentUpdateRequest(
     // or false while children still reference it, is rejected by the service.
     val canBeParent: Boolean? = null,
     val archived: Boolean? = null,
+    val testComponent: Boolean? = null,
     // Ordered multi-value (first = primary). PATCH: null = "don't touch";
     // a provided list (including empty = clear) replaces the whole ordered list.
     val releaseManager: List<String>? = null,

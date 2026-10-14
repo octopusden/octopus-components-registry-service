@@ -39,7 +39,20 @@ class ComponentsRegistryProperties(
     // (Spring relaxed binding replaces — not merges — the list), so different installs can
     // offer different version sets. Empty list ⇒ the Portal dropdown shows no preset options.
     val buildToolVersions: BuildToolVersionsSettings = BuildToolVersionsSettings(),
+    // SYS-099: a component may be flagged `testComponent` only when its key matches one of these
+    // regexes (find semantics — anchor with `^`). Defaults in application.yml; service-config replaces
+    // the list per installation. Empty list ⇒ no component can be flagged.
+    val testComponents: TestComponentsSettings = TestComponentsSettings(),
 ) {
+    data class TestComponentsSettings(
+        val namePatterns: List<String> = emptyList(),
+    ) {
+        // Compiled at binding, so an invalid pattern fails the bootstrap instead of a later write.
+        val nameRegexes: List<Regex> = namePatterns.map(::Regex)
+
+        fun matches(componentKey: String): Boolean = nameRegexes.any { it.containsMatchIn(componentKey) }
+    }
+
     data class DatabaseSettings(
         val enabled: Boolean = true,
     )

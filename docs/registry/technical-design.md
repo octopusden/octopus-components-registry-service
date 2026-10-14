@@ -131,10 +131,10 @@ DELETE /rest/api/4/components/{id}
   Behavior: Sets archived=true (soft delete)
   Auth:     DELETE_COMPONENTS
 
-GET    /rest/api/4/components?productType=&archived=&search=&owner=
+GET    /rest/api/4/components?productType=&archived=&testComponent=&search=&owner=
   Response: Page<ComponentSummaryResponse>
   Auth:     ACCESS_COMPONENTS
-  Filters:  productType, archived, search (name/displayName, ILIKE), owner (exact
+  Filters:  productType, archived, testComponent, search (name/displayName, ILIKE), owner (exact
             componentOwner). All independently optional, ANDed when combined.
             `system` is currently rejected with 400 (JPA Criteria + text[] gap).
   Contract: SYS-035 pins the owner filter (case-sensitive exact match).
@@ -445,6 +445,45 @@ IO edges; the module stays `server → component-validation` (one-way dependency
   ids used by the module's `TemplateCatalog`. See the
   [upgrade note](deployment/tc-validation-upgrade-note.md) for required values and the coordinated
   deploy requirement with components-management-portal.
+
+### 6.8 Test-component reference check: concurrency (SYS-099)
+
+"A non-test component may not reference a test component" spans two rows: flagging A writes A,
+referencing A writes the referrer B. Optimistic `@Version` cannot catch the conflict — the versions
+live on different rows — so two concurrent transactions would each miss the other's uncommitted
+write and both commit. Both paths therefore hold the would-be test target's row before reading flags:
+
+- flagging (or renaming) a test component A: the check runs after the write has flushed A's own
+  `UPDATE`, which already holds A's row lock until commit (on create, A's row is uncommitted and
+  invisible to other transactions), so no extra lock is taken;
+- writing a parent or doc reference from a non-test B: `SELECT … FROM components WHERE component_key
+  IN (…) ORDER BY component_key FOR UPDATE` on every referenced key, then a fresh `testComponent` read
+  of those keys (not the persistence-context copy, which may predate a concurrent commit).
+
+Both paths serialize on A's row; the transaction that commits second waits, then sees the first
+one's committed write and fails with 400. The lock is held only for the rest of that write
+transaction. Pinned by `TestComponentReferenceRaceTest` (PostgreSQL via Testcontainers).
+
+**Deadlock window.** Each write also holds its own row from its flushed `UPDATE`. Two concurrent
+PATCHes on components that reference each other — A gains a reference to B while B gains one to A —
+each hold their own row and then wait for the other's: PostgreSQL detects the cycle and aborts one
+(`40P01`). Spring translates it to a `PessimisticLockingFailureException`, which the API answers
+with `409` and `errorCode: LOCK_CONFLICT` ("nothing was changed — retry the request"); the other
+write proceeds. The window needs two simultaneous edits of mutually-referencing components, so the
+service does not retry on its own.
+
+### 6.9 v1–v3 `testComponent`: one advice, source-aware, cached (SYS-099)
+
+`TestComponentFlagAdvice` (a `ResponseBodyAdvice` scoped to `BaseComponentController` subclasses and
+`ComponentControllerV3`) marks every `Component` DTO in a v1–v3 response body, bare or wrapped
+(`ComponentsDTO`, `ComponentV3`, `ArtifactComponentsDTO`, collections); `TestComponentFlagV4Test`
+enumerates the v1–v3 handler methods returning such DTOs and fails if one falls outside the
+advice's scope. `TestComponentFlags` decides per component source, like `ComponentRoutingResolver`:
+DB-sourced → the cached set of flagged keys (`findTestComponentKeys`, Caffeine, TTL 30 s, evicted
+after commit of a v4 write that flips the flag or renames a flagged component, or of an import that
+flags one); Git-sourced and no-db → the `test-component` label of the resolved DSL model. A single
+DTO costs one source lookup (as routing already does) and a set membership; a list costs one bulk
+source read. Staleness bound across pods: 30 s after a change made on another pod.
 
 ## 7. Data Migration
 

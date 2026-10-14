@@ -412,6 +412,12 @@ object Comparators {
                         java.util.function.BiPredicate<Any?, Any?> { a, b -> a == null || a == b },
                         *VcsPlacementFields.typedPathRegexes,
                     )
+                    // SYS-099: V11 flags the components labelled `test-component`; the baseline has no
+                    // flag (reads false). Forgive EXACTLY baseline-false -> true; a dropped flag stays a VALUE_DIFF.
+                    .withEqualsForFieldsMatchingRegexes(
+                        java.util.function.BiPredicate<Any?, Any?> { a, b -> a == false || a == b },
+                        "^(.+\\.)?testComponent$",
+                    )
             // ADR-021, root-level shape. On the detailed-version endpoints `component` IS the display-name
             // string (`DetailedComponentVersion.component`) and sits at `component` (GET) or
             // `versions.<version>.component` (POST batch) — neither reachable by the exact-anchored nested
