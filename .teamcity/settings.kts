@@ -1738,7 +1738,6 @@ object id70DeployToOkdProdManual_2 : BuildType({
             name = "Publish documentation on wiki"
             id = "RUNNER_869"
             tasks = "adocPublishToWiki"
-            buildFile = "build.gradle"
             workingDir = "octopus-%COMPONENT_NAME%"
             gradleParams = """-Pdocker.registry=%DOCKER_REGISTRY% -Pwiki.url=%WIKI_URL% -Pwiki.username=%WIKI_USER% -Pwiki.password=%WIKI_PASSWORD% -Pwiki.space-key=%WIKI_SPACE_KEY% -Pwiki.page-id=%WIKI_PAGE_ID% -Padoc.glossary-component-link=%GLOSSARY_COMPONENT_LINK% -Padoc.components-registry-portal-link=%COMPONENTS_REGISTRY_PORTAL_LINK% -Padoc.components-registry-swagger-link=%COMPONENTS_REGISTRY_SWAGGER_LINK% -Padoc.release-management-automation-link=%RELEASE_MANAGEMENT_AUTOMATION_LINK% -Padoc.escrow-automation-tool-link=%ESCROW_AUTOMATION_TOOL_LINK% -Padoc.components-registry-validation-link=%COMPONENTS_REGISTRY_VALIDATION_LINK% -Padoc.service-desk-link=%SERVICE_DESK_LINK% "-Padoc.header=%WIKI_PAGE_HEADER%""""
             enableStacktrace = true
