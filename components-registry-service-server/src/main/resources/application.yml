@@ -22,6 +22,13 @@ components-registry:
       - "3.6.3"
       - "3.9"
 
+  # SYS-099: component keys that may carry testComponent = true (regexes, find semantics).
+  # service-config replaces the whole list per installation; served via /meta/test-component-name-patterns.
+  test-components:
+    name-patterns:
+      - "^test-"
+      - "^cvelab-"
+
   # Admin config-as-code BASELINE (product defaults). service-config overrides
   # per installation, merging at the property-leaf level (see ADR-016). Keep
   # only generic/product values here — installation-specific or internal values

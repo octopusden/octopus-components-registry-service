@@ -9,6 +9,9 @@ object ErrorCodes {
     /** Stale `version` on a concurrent-edit check — reload and re-apply. */
     const val OPTIMISTIC_LOCK = "OPTIMISTIC_LOCK"
 
+    /** The write lost a row-lock race (e.g. a deadlock with a concurrent write) and was rolled back unchanged — retry it as is. */
+    const val LOCK_CONFLICT = "LOCK_CONFLICT"
+
     /** A uniqueness invariant was violated (distribution GAV, jira projectKey+versionPrefix, docker image name, component name). */
     const val UNIQUENESS_VIOLATION = "UNIQUENESS_VIOLATION"
 

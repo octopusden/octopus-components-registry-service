@@ -27,6 +27,7 @@ data class ComponentSummaryResponse(
     val systems: Set<String>,
     val productType: String?,
     val archived: Boolean,
+    val testComponent: Boolean = false,
     val canBeParent: Boolean = false,
     val updatedAt: Instant?,
     val labels: List<String> = emptyList(),

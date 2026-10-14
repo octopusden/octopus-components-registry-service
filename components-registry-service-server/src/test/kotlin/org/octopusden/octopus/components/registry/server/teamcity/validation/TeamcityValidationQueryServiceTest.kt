@@ -161,6 +161,19 @@ class TeamcityValidationQueryServiceTest {
         assertEquals(2, summary.byType["OVERRIDES_DEFAULT_BUILD_STEP"]) // a, b (Foo)
     }
 
+    @Test
+    @DisplayName("SYS-099: findings of a test component are left out of the list and the summary")
+    fun `SYS-099 test components are excluded`() {
+        val test = UUID.randomUUID()
+        Mockito.`when`(versionLineRepo.findByProjectIdsWithComponent(Mockito.anyCollection())).thenAnswer { inv ->
+            val ids = inv.getArgument<Collection<String>>(0)
+            (versionLines + versionLine(test, "comp-test", "Foo", testComponent = true)).filter { it.teamcityProject.projectId in ids }
+        }
+
+        assertEquals(setOf(a, b), service.list(types = null, status = null, component = null).map { it.componentId }.toSet())
+        assertEquals(2, service.summary().componentsWithIssues)
+    }
+
     private fun finding(
         projectId: String,
         type: String,
@@ -177,8 +190,9 @@ class TeamcityValidationQueryServiceTest {
         componentId: UUID,
         componentKey: String,
         projectId: String,
+        testComponent: Boolean = false,
     ) = VersionLineEntity(
-        component = ComponentEntity(id = componentId, componentKey = componentKey),
+        component = ComponentEntity(id = componentId, componentKey = componentKey, testComponent = testComponent),
         teamcityProject = TeamcityProjectEntity(projectId = projectId),
     )
 }

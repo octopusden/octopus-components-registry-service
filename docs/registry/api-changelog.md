@@ -18,6 +18,33 @@ refresh it with `./gradlew :components-registry-service-server:generateOpenApiDo
 
 ## Unreleased
 
+- **`testComponent` flag (SYS-099).** `ComponentSummaryResponse` and `ComponentDetailResponse` gain a
+  required `testComponent: boolean`; `ComponentCreateRequest` (default `false`) and
+  `ComponentUpdateRequest` (`null` = unchanged) accept it; changing it needs only the plain
+  component edit permission. `GET /components` gains `?testComponent=true|false`;
+  without it test components are still listed. `testComponent = true` needs a component key
+  matching one of the configured name patterns (default `^test-`, `^cvelab-`; bound at startup, a
+  change needs a restart): a create or PATCH that turns it on, or a rename of a flagged component,
+  with a non-matching key returns `400` (`testComponent: …` / `name: …`, naming the key and the
+  patterns); echoing an unchanged value and unflagging are always allowed.
+  New `GET /components/meta/test-component-name-patterns` (`ACCESS_COMPONENTS`) returns the active
+  patterns as `string[]`, e.g. `["^test-","^cvelab-"]`. Create and PATCH also return `400` when a
+  non-test component would reference a test component as its parent or doc component, or when a
+  component that non-test components reference that way is flagged or renamed; the message names
+  both components and starts with the field that changed (`parentComponentName: …`, `docs: …`,
+  `testComponent: …` or `name: …`). On PATCH these checks are change-based: an unchanged echo of
+  the General slice is accepted. A write that loses a row lock to a concurrent one (a deadlock)
+  returns `409` with the new `errorCode` `LOCK_CONFLICT`; nothing was changed, retry it. `warnings` carries an entry
+  when the component has the `test-component` label but the flag is false (the label is kept for
+  its readers; the flag is the source of truth). `GET /health/statistics` and
+  `GET /admin/teamcity-validations` (and `/summary`) no longer count test components. `V11__` flags
+  every component labelled `test-component` and keeps the label; importing from the DSL applies the
+  same label rule. Health and TeamCity-validation totals exclude test components while the bare list
+  includes them, so a drill-down from a total must pass `testComponent=false`. The v1–v3 `Component` payloads (list, detail, detailed component, v3 list,
+  find-by-artifact) always carry `testComponent` — the stored flag for a DB-sourced component, the
+  `test-component` label for a Git-sourced one (and in no-db mode); released clients ignore the new
+  key (their DTOs ignore unknown properties). The flag is not part of the legacy Groovy DSL or the as-code view.
+
 - **Create-component profiles from configuration.** The start-page profiles are configured in
   service-config under `components-registry.component-profiles` and checked when CRS starts and on
   reload. Without the subtree, or with it written empty, CRS starts with no profiles; a subtree

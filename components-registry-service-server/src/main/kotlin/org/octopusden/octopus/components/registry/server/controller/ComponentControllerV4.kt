@@ -242,6 +242,12 @@ class ComponentControllerV4(
     @PreAuthorize("@permissionEvaluator.hasPermission('ACCESS_COMPONENTS')")
     fun getMavenVersions(): List<String> = properties.buildToolVersions.maven.sortedWith(VERSION_COMPARATOR)
 
+    // SYS-099: the regexes a key must match for `testComponent = true` (configured order), so the
+    // Portal can disable the switch with a hint for other keys.
+    @GetMapping("/meta/test-component-name-patterns")
+    @PreAuthorize("@permissionEvaluator.hasPermission('ACCESS_COMPONENTS')")
+    fun getTestComponentNamePatterns(): List<String> = properties.testComponents.namePatterns
+
     @PostMapping
     @ResponseStatus(HttpStatus.CREATED)
     @PreAuthorize(
@@ -258,6 +264,7 @@ class ComponentControllerV4(
         @RequestParam(required = false) system: List<String>?,
         @RequestParam(required = false) productType: String?,
         @RequestParam(required = false) archived: Boolean?,
+        @RequestParam(required = false) testComponent: Boolean?,
         @RequestParam(required = false) search: String?,
         @RequestParam(required = false) owner: List<String>?,
         @RequestParam(required = false) releaseManager: List<String>?,
@@ -289,6 +296,7 @@ class ComponentControllerV4(
                 system = normalizeCsvParam(system),
                 productType = productType,
                 archived = archived,
+                testComponent = testComponent,
                 search = search,
                 owner = normalizeCsvParam(owner),
                 releaseManager = normalizeCsvParam(releaseManager),

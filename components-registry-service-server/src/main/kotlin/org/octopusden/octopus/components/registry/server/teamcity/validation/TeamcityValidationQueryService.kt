@@ -77,11 +77,13 @@ class TeamcityValidationQueryService(
     }
 
     /**
-     * project id -> the components (id + key) that own it, via version_line.
+     * project id -> the components (id + key) that own it, via version_line. Test components
+     * (SYS-099) are left out, so their findings are not reported as real problems.
      */
     private fun componentsByProject(projectIds: Set<String>): Map<String, List<Pair<UUID, String>>> =
         versionLineRepository
             .findByProjectIdsWithComponent(projectIds)
+            .filterNot { it.component.testComponent }
             .distinctBy { it.teamcityProject.projectId to it.component.id }
             .groupBy(
                 { it.teamcityProject.projectId },

@@ -126,4 +126,6 @@ data class ComponentFilter(
     /** Exact match on `components.distribution_external`. Like `solution`,
      *  `distributionExternal=false` excludes rows where the value IS NULL. */
     val distributionExternal: Boolean? = null,
+    /** Exact match on `components.test_component`. Null = test components are included. */
+    val testComponent: Boolean? = null,
 )
