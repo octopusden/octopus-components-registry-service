@@ -29,7 +29,7 @@ class ComponentControllerV4ReservedCommentTest {
     private val mvc: MockMvc =
         MockMvcBuilders
             .standaloneSetup(
-                ComponentControllerV4(service, mock(), mock(), mock(), mock(), mock(), mock(), mock(), mock(), mock(), mock()),
+                ComponentControllerV4(service, mock(), mock(), mock(), mock(), mock(), mock(), mock(), mock(), mock(), mock(), mock()),
             ).setControllerAdvice(ControllerExceptionHandler())
             .build()
     private val id = UUID.randomUUID()
@@ -43,8 +43,8 @@ class ComponentControllerV4ReservedCommentTest {
     private fun comment(prefix: String) = """"changeComment":"$prefix (job ${UUID.randomUUID()})""""
 
     @Test
-    @DisplayName("SYS-099: PATCH with the reserved sync comment is a 400")
-    fun `SYS-099 PATCH with the reserved sync comment is a 400`() {
+    @DisplayName("SYS-102: PATCH with the reserved sync comment is a 400")
+    fun `SYS-102 PATCH with the reserved sync comment is a 400`() {
         mvc
             .perform(
                 patch("/rest/api/4/components/$id")
@@ -56,8 +56,8 @@ class ComponentControllerV4ReservedCommentTest {
     }
 
     @Test
-    @DisplayName("SYS-099: the reserved prefix is matched case-insensitively after trim")
-    fun `SYS-099 the reserved prefix is matched case-insensitively after trim`() {
+    @DisplayName("SYS-102: the reserved prefix is matched case-insensitively after trim")
+    fun `SYS-102 the reserved prefix is matched case-insensitively after trim`() {
         mvc
             .perform(
                 patch("/rest/api/4/components/$id")
@@ -67,8 +67,8 @@ class ComponentControllerV4ReservedCommentTest {
     }
 
     @Test
-    @DisplayName("SYS-099: POST create with the reserved sync comment is a 400")
-    fun `SYS-099 POST create with the reserved sync comment is a 400`() {
+    @DisplayName("SYS-102: POST create with the reserved sync comment is a 400")
+    fun `SYS-102 POST create with the reserved sync comment is a 400`() {
         mvc
             .perform(
                 post("/rest/api/4/components")
@@ -79,8 +79,8 @@ class ComponentControllerV4ReservedCommentTest {
     }
 
     @Test
-    @DisplayName("SYS-099: PUT supported-versions with the reserved sync comment is a 400")
-    fun `SYS-099 PUT supported-versions with the reserved sync comment is a 400`() {
+    @DisplayName("SYS-102: PUT supported-versions with the reserved sync comment is a 400")
+    fun `SYS-102 PUT supported-versions with the reserved sync comment is a 400`() {
         mvc
             .perform(
                 put("/rest/api/4/components/$id/supported-versions")

@@ -232,8 +232,8 @@ class DeriveTest {
     }
 
     @Test
-    @DisplayName("SYS-099: only derived statuses are scope-filtered, any other status is always reported")
-    fun `SYS-099 only derived statuses are scope-filtered, any other status is always reported`() {
+    @DisplayName("SYS-102: only derived statuses are scope-filtered, any other status is always reported")
+    fun `SYS-102 only derived statuses are scope-filtered, any other status is always reported`() {
         assertEquals(
             setOf(
                 PlacementRowStatus.RESOLVED,

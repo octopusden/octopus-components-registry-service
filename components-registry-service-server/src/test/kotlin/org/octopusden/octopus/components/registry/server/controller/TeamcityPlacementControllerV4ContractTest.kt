@@ -88,8 +88,8 @@ class TeamcityPlacementControllerV4ContractTest {
         )
 
     @Test
-    @DisplayName("SYS-099: the report stays readable while a new Diff runs")
-    fun `SYS-099 the report stays readable while a new Diff runs`() {
+    @DisplayName("SYS-102: the report stays readable while a new Diff runs")
+    fun `SYS-102 the report stays readable while a new Diff runs`() {
         val first = completedDiff()
         startDiffLeftRunning()
 
@@ -100,8 +100,8 @@ class TeamcityPlacementControllerV4ContractTest {
     }
 
     @Test
-    @DisplayName("SYS-099: a failed Diff keeps the previous report")
-    fun `SYS-099 a failed Diff keeps the previous report`() {
+    @DisplayName("SYS-102: a failed Diff keeps the previous report")
+    fun `SYS-102 a failed Diff keeps the previous report`() {
         val first = completedDiff()
         whenever(diffService.runDiff()).thenThrow(IllegalStateException("tc down"))
         startDiffLeftRunning()
@@ -114,8 +114,8 @@ class TeamcityPlacementControllerV4ContractTest {
     }
 
     @Test
-    @DisplayName("SYS-099: a Sync naming the last completed Diff is accepted when a later Diff failed")
-    fun `SYS-099 a Sync naming the last completed Diff is accepted when a later Diff failed`() {
+    @DisplayName("SYS-102: a Sync naming the last completed Diff is accepted when a later Diff failed")
+    fun `SYS-102 a Sync naming the last completed Diff is accepted when a later Diff failed`() {
         val first = completedDiff()
         whenever(diffService.runDiff()).thenThrow(IllegalStateException("tc down"))
         startDiffLeftRunning()
@@ -125,8 +125,8 @@ class TeamcityPlacementControllerV4ContractTest {
     }
 
     @Test
-    @DisplayName("SYS-099: a Sync while a Diff runs answers the gate's conflict, even with a stale diffId")
-    fun `SYS-099 a Sync while a Diff runs answers the gate's conflict, even with a stale diffId`() {
+    @DisplayName("SYS-102: a Sync while a Diff runs answers the gate's conflict, even with a stale diffId")
+    fun `SYS-102 a Sync while a Diff runs answers the gate's conflict, even with a stale diffId`() {
         completedDiff()
         startDiffLeftRunning()
 
@@ -138,8 +138,8 @@ class TeamcityPlacementControllerV4ContractTest {
     }
 
     @Test
-    @DisplayName("SYS-099: a Sync while another admin job runs answers the gate's conflict")
-    fun `SYS-099 a Sync while another admin job runs answers the gate's conflict`() {
+    @DisplayName("SYS-102: a Sync while another admin job runs answers the gate's conflict")
+    fun `SYS-102 a Sync while another admin job runs answers the gate's conflict`() {
         val first = completedDiff()
         gate.tryClaim(MigrationLifecycleGate.JobKind.TC_RESYNC, "resync-1")
 
@@ -149,8 +149,8 @@ class TeamcityPlacementControllerV4ContractTest {
     }
 
     @Test
-    @DisplayName("SYS-099: a Sync while a Sync runs answers the running job (kind job)")
-    fun `SYS-099 a Sync while a Sync runs answers the running job (kind job)`() {
+    @DisplayName("SYS-102: a Sync while a Sync runs answers the running job (kind job)")
+    fun `SYS-102 a Sync while a Sync runs answers the running job (kind job)`() {
         val first = completedDiff()
         sync(first).andExpect(status().isAccepted)
 
@@ -161,8 +161,8 @@ class TeamcityPlacementControllerV4ContractTest {
     }
 
     @Test
-    @DisplayName("SYS-099: a stale diffId on an idle gate answers the placement-diff-stale code")
-    fun `SYS-099 a stale diffId on an idle gate answers the placement-diff-stale code`() {
+    @DisplayName("SYS-102: a stale diffId on an idle gate answers the placement-diff-stale code")
+    fun `SYS-102 a stale diffId on an idle gate answers the placement-diff-stale code`() {
         completedDiff()
         val second = completedDiff()
 
@@ -174,16 +174,16 @@ class TeamcityPlacementControllerV4ContractTest {
     }
 
     @Test
-    @DisplayName("SYS-099: a Sync before any Diff completed answers the placement-diff-stale code")
-    fun `SYS-099 a Sync before any Diff completed answers the placement-diff-stale code`() {
+    @DisplayName("SYS-102: a Sync before any Diff completed answers the placement-diff-stale code")
+    fun `SYS-102 a Sync before any Diff completed answers the placement-diff-stale code`() {
         sync("nothing-yet")
             .andExpect(status().isConflict)
             .andExpect(jsonPath("$.errorCode").value("placement-diff-stale"))
     }
 
     @Test
-    @DisplayName("SYS-099: the stale check reads the last completed Diff under the gate, not before it")
-    fun `SYS-099 the stale check reads the last completed Diff under the gate, not before it`() {
+    @DisplayName("SYS-102: the stale check reads the last completed Diff under the gate, not before it")
+    fun `SYS-102 the stale check reads the last completed Diff under the gate, not before it`() {
         // A Diff completing between the request's read and the Sync's claim must make the Sync
         // stale. Simulated with a spy: the old Diff is "last completed" while the gate is free,
         // the newer one once the Sync holds the gate.
