@@ -60,6 +60,9 @@ dependencies {
 
     implementation("org.eclipse.jgit:org.eclipse.jgit:5.13.0.202109080827-r")
 
+    // As-code search regex (SYS-100): RE2 matches in linear time, unlike java.util.regex.
+    implementation("com.google.re2j:re2j:1.8")
+
     // Database (JPA + PostgreSQL + Flyway)
     implementation("org.springframework.boot:spring-boot-starter-data-jpa")
     runtimeOnly("org.postgresql:postgresql")

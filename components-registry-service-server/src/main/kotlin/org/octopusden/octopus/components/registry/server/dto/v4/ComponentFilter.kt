@@ -43,6 +43,19 @@ data class ComponentFilter(
      */
     val securityChampion: List<String>? = null,
     /**
+     * Multi-value "involvement" filter (SYS-101): a component matches when ANY listed username is
+     * its componentOwner OR among its release managers OR among its security champions — "every
+     * component I am involved in", which the AND-combined [owner] / [releaseManager] /
+     * [securityChampion] filters cannot express. `involvesRoles` narrows which roles count.
+     * Same controller normalisation as the other multi-value filters.
+     */
+    val involves: List<String>? = null,
+    /**
+     * Roles [involves] checks — any subset of `owner`, `releaseManager`, `securityChampion`
+     * (OR across the chosen roles). Null or empty = all three. Ignored without [involves].
+     */
+    val involvesRoles: List<String>? = null,
+    /**
      * Multi-value OR filter over the BASE configuration row's buildSystem
      * column. A component matches when its BASE buildSystem equals any of
      * the listed values. A component has exactly one BASE buildSystem at
