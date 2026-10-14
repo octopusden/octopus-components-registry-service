@@ -17,6 +17,7 @@ import org.springframework.dao.DataIntegrityViolationException
 import org.springframework.transaction.PlatformTransactionManager
 import org.springframework.transaction.support.TransactionTemplate
 import org.springframework.web.server.ResponseStatusException
+import java.sql.SQLException
 
 /** What a creator sends: values by parameter, overrides by template path, and today's change metadata. */
 data class TemplateInput(
@@ -116,15 +117,30 @@ class TemplateDryRun(
         } catch (e: NotFoundException) {
             CreateOutcome.Failed(e.message.orEmpty())
         } catch (e: DataIntegrityViolationException) {
-            // Another create took the key or display name after today's checks passed; the
-            // unique index is the last word. A run again names the field through the usual check.
-            log.warn("template create lost a race on a unique index: {}", e.mostSpecificCause.message)
-            CreateOutcome.Failed(
-                "name: another component with this key or display name was saved at the same moment; run again to see which",
-            )
+            CreateOutcome.Failed(integrityFailure(e))
         }
+
+    /**
+     * A unique violation means another create took the key or display name after today's checks
+     * passed; a run again names the field through the usual check. Anything else — a value too
+     * long, a CHECK or NOT NULL — is deterministic, so it is worded as today's create words it.
+     */
+    private fun integrityFailure(e: DataIntegrityViolationException): String {
+        val uniqueViolation =
+            generateSequence<Throwable>(e) { it.cause.takeIf { cause -> cause !== it } }
+                .filterIsInstance<SQLException>()
+                .any { it.sqlState == UNIQUE_VIOLATION }
+        return if (uniqueViolation) {
+            log.warn("template create lost a race on a unique index: {}", e.mostSpecificCause.message)
+            "name: another component with this key or display name was saved at the same moment; run again to see which"
+        } else {
+            log.warn("template create failed a database constraint: {}", e.mostSpecificCause.message)
+            "Data integrity violation: duplicate or invalid data"
+        }
+    }
 
     private companion object {
         val log: Logger = LoggerFactory.getLogger(TemplateDryRun::class.java)
+        const val UNIQUE_VIOLATION = "23505"
     }
 }

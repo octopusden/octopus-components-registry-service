@@ -308,7 +308,10 @@ A dry run with `CLIENT_CODE=ACME`, `PLUGIN_CODE=CORE`, `PLUGIN_NAME=Core API`, o
   unique-index violation excepted, below): an
   `IllegalArgumentException` (400), a `ResponseStatusException` (403, 422), a `NotFoundException`
   (404) or a `CrossComponentConflictException` (409). A unique-index violation from a concurrent
-  create is a problem on `name` with its own message, since the database's names no field. Any
+  create (SQL state `23505`) is a problem on `name` with its own message, since the database's
+  names no field. Any other `DataIntegrityViolationException` — a value too long for its column, a
+  CHECK or NOT NULL — is deterministic, so it is a problem on no field with today's create's
+  wording, "duplicate or invalid data"; today's create checks no column lengths (TD-029). Any
   other exception propagates.
 - Today's create stops at its first failure, so the dry run reports at most one of those. Every
   parameter problem and every rule problem is reported.
@@ -435,6 +438,11 @@ Result types sit with what produces them: `RenderedTemplate` and `TemplateProble
   - Someone may take the key in between, or a label may be removed.
   - Accepted: the create runs every check again and fails cleanly; a concurrent create that wins
     the unique index is reported as a problem on `name`.
+- **A value too long for its column names no field.**
+  - Today's create checks no column lengths, so a `text` parameter without `max-length` can render
+    a `name`, display name, client code or Jira project key the database rejects.
+  - Accepted: the dry run reports it as today's create does, on no field; a template author can
+    set `max-length`. Length checks in the create itself are TD-029.
 - **Client codes are maintained by hand in each template.**
   - A new client needs a template change before its first component.
   - Two templates can list different codes.

@@ -386,3 +386,7 @@
       that renders a shorter value keeps it (`TemplateRendererTest`)
 - [x] 15.4 A template's `rules` written empty (`{}` or no value) means no rules, as for a profile;
       the component-profiles delta carries the same `rules` row (`TemplateParserTest`)
+- [x] 15.5 Review: only a unique violation (SQL state `23505`) is the key race on `name`; any
+      other integrity failure, such as a value too long, is a problem on no field with today's
+      create's wording (`TemplateDryRunTest`, `ComponentTemplateControllerV4Test.valueTooLong`);
+      TD-029 for length checks in the create

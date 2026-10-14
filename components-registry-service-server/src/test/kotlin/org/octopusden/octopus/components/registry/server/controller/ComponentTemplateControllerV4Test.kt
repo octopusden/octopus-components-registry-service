@@ -3,6 +3,7 @@ package org.octopusden.octopus.components.registry.server.controller
 import com.fasterxml.jackson.databind.ObjectMapper
 import org.hamcrest.Matchers.contains
 import org.hamcrest.Matchers.containsInAnyOrder
+import org.hamcrest.Matchers.empty
 import org.hamcrest.Matchers.hasItem
 import org.hamcrest.Matchers.startsWith
 import org.junit.jupiter.api.AfterEach
@@ -410,6 +411,20 @@ class ComponentTemplateControllerV4Test {
             .andExpect(jsonPath("$.problems[0].parameters", containsInAnyOrder("CLIENT_CODE", "PLUGIN_CODE")))
             .andExpect(jsonPath("$.problems[0].templateProblem").value(false))
             .andExpect(jsonPath("$.problems[0].message", startsWith("name: a component with name")))
+        assertEquals(before, counts())
+    }
+
+    @Test
+    @DisplayName("a value too long for its column is a problem on no field, not a key race, and nothing is written")
+    fun valueTooLong() {
+        val before = counts()
+
+        components(body(parameters = mapOf("PLUGIN_NAME" to listOf("x".repeat(300)))))
+            .andExpect(status().isOk)
+            .andExpect(jsonPath("$.valid").value(false))
+            .andExpect(jsonPath("$.problems[0].fields", empty<String>()))
+            .andExpect(jsonPath("$.problems[0].templateProblem").value(false))
+            .andExpect(jsonPath("$.problems[0].message").value("Data integrity violation: duplicate or invalid data"))
         assertEquals(before, counts())
     }
 

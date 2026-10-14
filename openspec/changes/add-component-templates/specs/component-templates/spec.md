@@ -422,6 +422,8 @@ How problems are reported:
   worded as the create words it.
 - A unique-index violation from a concurrent create SHALL be a problem on `name`, saying another
   component took the key or display name at the same moment.
+- Any other database constraint failure, such as a value too long for its column, SHALL be a
+  problem on no field, worded as today's create words it, and SHALL NOT say to run again.
 
 It SHALL answer 200 whether or not the input is valid. Nothing SHALL be created, saved or
 recorded in the audit.

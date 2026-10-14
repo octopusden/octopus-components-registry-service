@@ -12,6 +12,7 @@ import org.springframework.dao.DataIntegrityViolationException
 import org.springframework.transaction.TransactionDefinition
 import org.springframework.transaction.support.AbstractPlatformTransactionManager
 import org.springframework.transaction.support.DefaultTransactionStatus
+import java.sql.SQLException
 
 /** Begins, commits and rolls back nothing: the dry run's transaction handling is not under test here. */
 private class NoTransactions : AbstractPlatformTransactionManager() {
@@ -28,17 +29,16 @@ private class NoTransactions : AbstractPlatformTransactionManager() {
 }
 
 class TemplateDryRunTest {
-    @Test
-    @DisplayName("Decision 8: a unique-key race in today's create is a problem on name, not an error response")
-    fun uniqueKeyRaceIsAProblem() {
-        val dryRun =
-            TemplateDryRun(
-                parameters = ParameterChecker({ list -> TemplateFields.staticValues(list) ?: setOf("plugin") }) { ActiveStatus.ACTIVE },
-                lists = { list -> TemplateFields.staticValues(list) ?: setOf("plugin") },
-                defaults = { EXAMPLE_DEFAULTS },
-                create = { throw DataIntegrityViolationException("duplicate key value violates unique constraint") },
-                transactionManager = NoTransactions(),
-            )
+    private fun dryRun(failure: DataIntegrityViolationException) =
+        TemplateDryRun(
+            parameters = ParameterChecker({ list -> TemplateFields.staticValues(list) ?: setOf("plugin") }) { ActiveStatus.ACTIVE },
+            lists = { list -> TemplateFields.staticValues(list) ?: setOf("plugin") },
+            defaults = { EXAMPLE_DEFAULTS },
+            create = { throw failure },
+            transactionManager = NoTransactions(),
+        )
+
+    private fun run(failure: DataIntegrityViolationException): TemplateRun {
         val input =
             TemplateInput(
                 parameters =
@@ -48,11 +48,29 @@ class TemplateDryRunTest {
                         "PLUGIN_NAME" to listOf("Core API"),
                     ),
             )
+        return dryRun(failure).run(parsedTemplate(), input, caller = "jdoe", commit = true)
+    }
 
-        val run = dryRun.run(parsedTemplate(), input, caller = "jdoe", commit = true)
+    @Test
+    @DisplayName("Decision 8: a unique-key race in today's create is a problem on name, not an error response")
+    fun uniqueKeyRaceIsAProblem() {
+        val run = run(DataIntegrityViolationException("could not execute statement", SQLException("duplicate key", "23505")))
 
         assertFalse(run.valid)
         assertEquals(listOf("name"), run.problems.single().fields)
         assertEquals(setOf("CLIENT_CODE", "PLUGIN_CODE"), run.problems.single().parameters)
+    }
+
+    @Test
+    @DisplayName("any other integrity failure, such as a value too long, is a problem on no field, worded as today's create words it")
+    fun otherIntegrityFailureNamesNoField() {
+        val run = run(DataIntegrityViolationException("could not execute statement", SQLException("value too long", "22001")))
+
+        assertFalse(run.valid)
+        val problem = run.problems.single()
+        assertEquals(emptyList<String>(), problem.fields)
+        assertEquals(emptySet<String>(), problem.parameters)
+        assertFalse(problem.templateProblem)
+        assertEquals("Data integrity violation: duplicate or invalid data", problem.message)
     }
 }
