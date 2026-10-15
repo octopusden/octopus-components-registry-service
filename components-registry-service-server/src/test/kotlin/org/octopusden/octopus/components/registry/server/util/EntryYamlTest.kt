@@ -27,6 +27,17 @@ class EntryYamlTest {
     }
 
     @Test
+    @DisplayName("keys that make a node both a list and a map dump as a map, keeping every key, rather than failing")
+    fun mixedListAndMap() {
+        val keys = linkedMapOf("labels[0]" to "plugin", "labels.typo" to "x", "tokens[2147483648]" to "big")
+
+        assertEquals(
+            mapOf("e" to mapOf("labels" to mapOf("0" to "plugin", "typo" to "x"), "tokens" to listOf("big"))),
+            Yaml().load<Map<String, Any>>(EntryYaml.dump("e", keys)),
+        )
+    }
+
+    @Test
     @DisplayName("a rule path's dots and brackets nest as the configuration nests them")
     fun rulePath() {
         val keys = mapOf("rules.artifactIds[0].groupPattern.pattern" to "^org\\..*", "rules.artifactIds[0].groupPattern.message" to "m")

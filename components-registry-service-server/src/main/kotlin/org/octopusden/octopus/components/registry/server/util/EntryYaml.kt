@@ -6,7 +6,8 @@ import org.yaml.snakeyaml.Yaml
 /**
  * One configured entry's flattened keys, dumped back to YAML under its id for the administrator
  * read (Decision 11), so a failed entry shows what was read. Spring flattens the result to the
- * same keys again; values stay the strings Spring read.
+ * same keys again; values stay the strings Spring read. A node given both indexed and named keys
+ * — a failed entry can have them — is dumped as a map, so every key still shows.
  */
 object EntryYaml {
     private val SEGMENT = Regex("""([^.\[]+)|\[(\d+)]""")
@@ -50,7 +51,8 @@ object EntryYaml {
         fun toValue(): Any =
             when {
                 children.isEmpty() -> value.orEmpty()
-                list -> children.entries.sortedBy { it.key.toInt() }.map { it.value.toValue() }
+                list && children.keys.all { key -> key.all(Char::isDigit) } ->
+                    children.entries.sortedBy { it.key.toBigInteger() }.map { it.value.toValue() }
                 else -> children.mapValues { it.value.toValue() }
             }
     }

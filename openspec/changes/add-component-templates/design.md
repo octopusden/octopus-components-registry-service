@@ -133,6 +133,9 @@ A dry run with `CLIENT_CODE=ACME`, `PLUGIN_CODE=CORE`, `PLUGIN_NAME=Core API`, o
   no `regular` profile is not usable, as for any entry.
 - The catalog swaps profiles and templates together, as one snapshot. A reload that fails on a
   regular profile keeps the previous templates too.
+- A response that reads more than one part of the catalog — the listing reads profiles and
+  templates, the administrator read also entries and raw keys — takes `snapshot()` once, so a
+  reload between its reads cannot mix revisions.
 - The catalog also keeps, for the administrator read (Decision 11):
   - the last load's outcome;
   - each entry's raw keys.
@@ -348,7 +351,8 @@ A dry run with `CLIENT_CODE=ACME`, `PLUGIN_CODE=CORE`, `PLUGIN_NAME=Core API`, o
   - on a path not in `overridable` → 400 naming the path;
   - from a user `ProfileAvailability` says may not override → 403;
   - checked as a parameter filling the field would be (`ParameterChecker.checkOverrides`): a CRS
-    value or label against its list, a login as an active employee. Today's create checks
+    value or label against its list, a login as an active employee, one value for a field that is
+    not a list (the request keeps only the first). Today's create checks
     neither, and adds an unknown label to the dictionary. A failure is a problem on the field,
     never a template problem;
   - never on `baseConfiguration.build.buildSystem`, refused on load: the build system decides

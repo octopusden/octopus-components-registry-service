@@ -33,6 +33,12 @@ class ComponentProfileCatalog(
 
     constructor(read: () -> Map<String, String>) : this(read, { emptyMap() })
 
+    /**
+     * Everything in use from one load. A response that reads more than one part takes it once, so
+     * a reload in between cannot mix revisions.
+     */
+    fun snapshot(): Snapshot = current.get()
+
     /** The live profiles, sorted by order then id. Take it once per request. */
     fun profiles(): List<ComponentProfile> = current.get().profiles
 
@@ -40,12 +46,6 @@ class ComponentProfileCatalog(
     fun templates(): List<ComponentTemplate> = current.get().templates
 
     fun template(id: String): ComponentTemplate? = templates().firstOrNull { it.id == id }
-
-    /** Every configured entry in use, live or failed, by id, with its keys as read (templates Decision 11). */
-    fun rawEntries(): Map<String, Map<String, String>> = current.get().raw
-
-    /** The entries in use, live or failed, sorted by id. */
-    fun entries(): List<ProfileLoad.Entry> = current.get().entries
 
     /** The outcome of the last load or reload, applied or not. */
     fun lastLoad(): ProfileLoad = last.get()
@@ -69,13 +69,14 @@ class ComponentProfileCatalog(
             .groupBy({ it.key.substringBefore('.') }, { it.key.substringAfter('.', "") to it.value })
             .mapValues { (_, keyValues) -> keyValues.toMap() }
 
-    private class Snapshot(
+    /** [raw] holds every configured entry's keys as read, by id. */
+    class Snapshot(
         load: ProfileLoad,
         val raw: Map<String, Map<String, String>>,
     ) {
-        val profiles = load.profiles
-        val templates = load.templates
-        val entries = load.entries
+        val profiles: List<ComponentProfile> = load.profiles
+        val templates: List<ComponentTemplate> = load.templates
+        val entries: List<ProfileLoad.Entry> = load.entries
     }
 }
 

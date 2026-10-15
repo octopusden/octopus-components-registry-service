@@ -53,6 +53,26 @@ class ComponentProfileCatalogTest {
     }
 
     @Test
+    @DisplayName("Decision 2: a snapshot keeps one revision's profiles, templates, entries and keys together across a reload")
+    fun snapshotIsOneRevision() {
+        val source = SwitchableSource(designExampleProperties())
+        val catalog = ComponentProfileCatalog(source::read)
+        val before = catalog.snapshot()
+        source.properties = designExampleProperties() + standaloneTemplateProperties()
+
+        catalog.reload()
+
+        assertEquals(emptyList<Any>(), before.templates)
+        assertFalse(before.entries.any { it.id == TEMPLATE_ID })
+        assertFalse(TEMPLATE_ID in before.raw)
+        val after = catalog.snapshot()
+        assertEquals(listOf(TEMPLATE_ID), after.templates.map { it.id })
+        assertTrue(after.entries.any { it.id == TEMPLATE_ID })
+        assertTrue(TEMPLATE_ID in after.raw)
+        assertEquals(before.profiles, after.profiles)
+    }
+
+    @Test
     @DisplayName("Decision 2: a reload after the subtree is removed applies no profiles")
     fun removedSubtreeReloadAppliesEmpty() {
         val source = SwitchableSource(designExampleProperties())
@@ -143,8 +163,8 @@ class ComponentProfileCatalogTest {
     fun keepsRawKeys() {
         val catalog = ComponentProfileCatalog { designExampleProperties() + ("client-plugin.kind" to "template") }
 
-        assertEquals(mapOf("kind" to "template"), catalog.rawEntries()["client-plugin"])
-        assertEquals("Title of solution", catalog.rawEntries().getValue("solution")["title"])
+        assertEquals(mapOf("kind" to "template"), catalog.snapshot().raw["client-plugin"])
+        assertEquals("Title of solution", catalog.snapshot().raw.getValue("solution")["title"])
     }
 
     @Test

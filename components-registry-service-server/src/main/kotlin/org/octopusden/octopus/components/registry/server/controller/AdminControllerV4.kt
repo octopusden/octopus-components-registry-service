@@ -138,15 +138,15 @@ class AdminControllerV4(
      */
     @GetMapping("/component-profiles")
     fun componentProfiles(): AdminComponentProfilesResponse {
-        val profiles = componentProfileCatalog.profiles().associateBy { it.id }
-        val templates = componentProfileCatalog.templates().associateBy { it.id }
-        val raw = componentProfileCatalog.rawEntries()
+        val snapshot = componentProfileCatalog.snapshot()
+        val profiles = snapshot.profiles.associateBy { it.id }
+        val templates = snapshot.templates.associateBy { it.id }
         val caller = currentUserResolver.currentUsername()
         return AdminComponentProfilesResponse(
             configVersion = environment.getProperty("config.client.version"),
             lastLoad = ComponentProfilesReloadResponse.from(componentProfileCatalog.lastLoad()),
             entries =
-                componentProfileCatalog.entries().map { entry ->
+                snapshot.entries.map { entry ->
                     AdminComponentProfilesResponse.Entry(
                         id = entry.id,
                         kind = entry.kind,
@@ -154,7 +154,7 @@ class AdminControllerV4(
                         problems = entry.problems,
                         profile = profiles[entry.id]?.let { ComponentProfileResponse.from(it, profileAvailability.evaluate(it)) },
                         template = templates[entry.id]?.let { ComponentTemplateResponse.from(it, templateListValues, caller) },
-                        configuration = EntryYaml.dump(entry.id, raw[entry.id].orEmpty()),
+                        configuration = EntryYaml.dump(entry.id, snapshot.raw[entry.id].orEmpty()),
                     )
                 },
         )

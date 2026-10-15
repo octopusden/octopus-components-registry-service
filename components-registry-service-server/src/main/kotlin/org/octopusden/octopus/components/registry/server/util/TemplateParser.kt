@@ -101,7 +101,14 @@ internal class TemplateParser(
             val kind = TemplateFields.KINDS[path]
             val expression = { expression(key, value) }
             when {
-                listPath != null -> expression()?.let { items.getOrPut(listPath) { mutableListOf() } += item.groupValues[2].toInt() to it }
+                listPath != null -> {
+                    val index = item.groupValues[2].toIntOrNull()
+                    if (index == null) {
+                        keys.problem(key, INDEX_TOO_LARGE)
+                    } else {
+                        expression()?.let { items.getOrPut(listPath) { mutableListOf() } += index to it }
+                    }
+                }
                 kind?.list == true -> expression()?.let { items.getOrPut(path) { mutableListOf() } += 0 to it }
                 kind != null -> expression()?.let { singles[path] = it }
                 else -> keys.problem(key, "not a create-request path a template may set")
@@ -133,13 +140,11 @@ internal class TemplateParser(
     private fun overridable(fields: Map<String, TemplateField>): List<String> =
         keys.values
             .filterKeys { OVERRIDABLE_ITEM.matches(it) }
-            .entries
-            .sortedBy {
-                it.key
-                    .removePrefix("overridable[")
-                    .removeSuffix("]")
-                    .toInt()
-            }.onEach { (key, path) ->
+            .mapNotNull { (key, path) ->
+                val index = key.removePrefix("overridable[").removeSuffix("]").toIntOrNull()
+                if (index == null) null.also { keys.problem(key, INDEX_TOO_LARGE) } else Triple(index, key, path)
+            }.sortedBy { it.first }
+            .onEach { (_, key, path) ->
                 when {
                     path == TemplateFields.BUILD_SYSTEM ->
                         keys.problem(
@@ -149,11 +154,12 @@ internal class TemplateParser(
                         )
                     path !in fields -> keys.problem(key, "'$path' is not set in fields")
                 }
-            }.map { it.value }
+            }.map { it.third }
 
     /**
      * A rule on a field built from parameters is checked by the dry run, on the rendered value. An
-     * unset field is checked with the default the renderer would give it, or as empty.
+     * unset field, or one fixed blank, which R2 leaves unset, is checked with the default the
+     * renderer would give it, or as empty.
      */
     private fun checkOwnRules(
         rules: List<ComponentProfile.FieldRule>,
@@ -163,7 +169,11 @@ internal class TemplateParser(
         val buildSystem =
             when (val field = fields[TemplateFields.BUILD_SYSTEM]) {
                 null -> defaults[TemplateFields.BUILD_SYSTEM]
-                is TemplateField.Single -> field.value.literal().takeIf { field.value.parameters.isEmpty() }
+                is TemplateField.Single ->
+                    field.value
+                        .literal()
+                        .ifBlank { defaults[TemplateFields.BUILD_SYSTEM] }
+                        .takeIf { field.value.parameters.isEmpty() }
                 is TemplateField.Items -> null
             }
         val applicable = ComponentDefaultsSeed.applicable(defaults, classification, buildSystem)
@@ -179,7 +189,7 @@ internal class TemplateParser(
         val value =
             when {
                 field == null -> defaults[rule.path].orEmpty()
-                field.value.parameters.isEmpty() -> field.value.literal()
+                field.value.parameters.isEmpty() -> field.value.literal().ifBlank { defaults[rule.path].orEmpty() }
                 else -> return
             }
         if (!rule.regex.matches(value)) keys.problem("rules.${rule.path}", "the value '$value' breaks the rule: ${rule.message}")
@@ -196,6 +206,7 @@ internal class TemplateParser(
         private val SECTIONS = listOf("$PARAMETERS.", FIELDS, "rules.")
         private val ID = Regex("[a-z0-9-]+")
         private val OVERRIDABLE_ITEM = Regex("""overridable\[\d+]""")
+        private const val INDEX_TOO_LARGE = "the list index is too large"
         private val LIST_ITEM = Regex("""(.+)\[(\d+)]""")
     }
 }

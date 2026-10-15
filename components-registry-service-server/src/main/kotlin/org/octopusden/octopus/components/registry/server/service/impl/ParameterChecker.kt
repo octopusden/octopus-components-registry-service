@@ -71,14 +71,25 @@ class ParameterChecker(
 
     /**
      * Checks override values as a parameter filling the same field is checked: a CRS value or list
-     * against its registry list (P7), a person or people list for active employees (P8). Today's
-     * create checks neither, and adds an unknown label to the dictionary. Other fields are left to
-     * the create. A problem is on the overridden field and is never a template problem.
+     * against its registry list (P7), a person or people list for active employees (P8), and a
+     * single-value field for one value (P3), since the request keeps only the first. Today's
+     * create checks no list or employee, and adds an unknown label to the dictionary; any other
+     * check is left to it. A problem is on the overridden field and is never a template problem.
      */
     fun checkOverrides(overrides: Map<String, List<String>>): List<TemplateProblem> =
         overrides.flatMap { (path, values) ->
-            val given = values.filter { it.isNotBlank() }.distinct()
-            when (TemplateFields.KINDS[path]) {
+            overrideProblems(path, values.filter { it.isNotBlank() }.distinct())
+                .map { TemplateProblem(listOf(path), emptySet(), templateProblem = false, "$path: $it") }
+        }
+
+    private fun overrideProblems(
+        path: String,
+        given: List<String>,
+    ): List<String> {
+        val kind = TemplateFields.KINDS[path]
+        val count = listOf("takes one value").takeIf { kind?.list == false && given.size > 1 }.orEmpty()
+        val values =
+            when (kind) {
                 TemplateFieldKind.CRS_VALUE, TemplateFieldKind.CRS_LIST -> {
                     val list = TemplateFields.CRS_VALUE_LISTS[path] ?: TemplateList.LABELS
                     val allowed = lists.values(list)
@@ -86,8 +97,9 @@ class ParameterChecker(
                 }
                 TemplateFieldKind.PERSON, TemplateFieldKind.PEOPLE_LIST -> given.mapNotNull { employeeProblem(it) }
                 else -> emptyList()
-            }.map { TemplateProblem(listOf(path), emptySet(), templateProblem = false, "$path: $it") }
-        }
+            }
+        return count + values
+    }
 
     private fun employeeProblem(login: String): String? =
         when (employees.of(login)) {

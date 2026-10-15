@@ -47,6 +47,9 @@ internal class TemplateParameterParser(
                 type in TYPE_KEYS -> keys.problem(key, "does not apply to a $type parameter")
             }
         }
+        keys.values.keys
+            .filter { key -> '[' in key && key.substringBefore('[').let { it !in LIST_KEYS && (it in COMMON_KEYS || it in applicable) } }
+            .forEach { keys.problem(it, "takes one value, not a list") }
     }
 
     private fun default(multiple: Boolean): List<String> =
@@ -116,6 +119,7 @@ internal class TemplateParameterParser(
         private const val MAX_LENGTH = "max-length"
         private val NAME = Regex("[A-Z][A-Z0-9_]*")
         private val COMMON_KEYS = setOf("label", "hint", "type", "required", DEFAULT)
+        private val LIST_KEYS = setOf(DEFAULT, OPTIONS)
         private val TYPE_KEYS =
             mapOf(
                 TEXT to setOf(PATTERN, "message", MAX_LENGTH),

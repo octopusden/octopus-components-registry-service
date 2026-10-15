@@ -396,3 +396,15 @@
       `ComponentTemplateControllerV4Test.labelOverrideNotInDictionary`); the build system is
       refused in `overridable` on load (`TemplateParserTest.buildSystemNotOverridable`); TD-030
       for message-based attribution
+- [x] 15.7 Review:
+  - [x] 15.7.1 The listing and the administrator read take one catalog snapshot
+        (`ComponentProfileCatalog.snapshot()`), so a reload between reads cannot mix revisions;
+        `rawEntries()` and `entries()` removed
+  - [x] 15.7.2 A list index too large for an `Int` fails the template, not the whole load
+  - [x] 15.7.3 The administrator read dumps a node with both indexed and named keys as a map
+        instead of failing
+  - [x] 15.7.4 A parameter setting other than `options` and `default` written as a list is a
+        problem
+  - [x] 15.7.5 A rule on a field fixed blank, and the build system fixed blank, take the default
+        R2 and R7 give
+  - [x] 15.7.6 An override with several values on a field that is not a list is a problem

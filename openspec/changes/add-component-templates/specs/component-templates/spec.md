@@ -51,6 +51,9 @@ Parameter keys:
 | `max-length` | `text` | No | Whole number above 0 |
 | `default` | All | No | A value valid for the parameter; for `person`, a login or `current-user` |
 
+Only `options` and `default` SHALL be written as a list; any other key written as one SHALL be a
+problem, not ignored.
+
 A template id SHALL be lowercase letters, digits and `-`, as a profile id is. A parameter name SHALL
 be upper-case letters, digits and `_`, starting with a letter.
 
@@ -157,8 +160,9 @@ Required fields, by classification:
   `component-defaults` one; a default `BS2_0` is ignored.
 - A field fills a requirement when it has non-blank literal text, alone or around a parameter, or a
   fixed list item, uses a required parameter, or gets a value from `component-defaults`.
-- A template rule on a field the template leaves unset is checked against the default R7 would
-  give it, or against an empty value.
+- A template rule on a field the template leaves unset, or fixes blank (which R2 leaves unset), is
+  checked against the default R7 would give it, or against an empty value. A build system fixed
+  blank is the `component-defaults` one, as when it is unset.
 - Copyright SHALL NOT be checked on load; the dry run's create step checks it.
 
 Not checked on load, because they depend on data that changes at runtime:
@@ -510,8 +514,9 @@ The registry SHALL accept an override only when:
 
 An accepted override SHALL still pass every check. An override of a field a parameter could
 fill SHALL be checked as that parameter would be: a CRS value or `labels` item SHALL be in its
-registry list, and a `componentOwner`, `releaseManager` or `securityChampion` login SHALL be an
-active employee. In this change, every user who may use the template may override.
+registry list, a `componentOwner`, `releaseManager` or `securityChampion` login SHALL be an
+active employee, and a field that is not a list SHALL take one value. In this change, every user
+who may use the template may override.
 
 #### Scenario: Overridable field
 - **WHEN** a user overrides `baseConfiguration.vcsEntries[0].vcsPath`, which is overridable

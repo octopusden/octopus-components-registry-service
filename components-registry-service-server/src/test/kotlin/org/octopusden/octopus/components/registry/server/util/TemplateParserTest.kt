@@ -527,6 +527,39 @@ class TemplateParserTest {
         assertEquals(emptyList<String>(), flatProblems(flat))
     }
 
+    @ParameterizedTest(name = "{0}")
+    @ValueSource(strings = ["fields.labels[2147483648]", "overridable[2147483648]"])
+    @DisplayName("an index too large for a list fails the template, not the whole load")
+    fun indexTooLarge(key: String) {
+        val load =
+            ComponentProfileParser.parse(
+                designExampleProperties() + flatten(exampleTemplate(), TEMPLATE_ID) + ("$TEMPLATE_ID.$key" to "plugin"),
+                EXAMPLE_DEFAULTS,
+            )
+
+        assertTrue(load.usable)
+        assertTrue(
+            load.entries
+                .single { it.id == TEMPLATE_ID }
+                .problems
+                .any { it.startsWith("$TEMPLATE_ID.$key:") },
+            load.toString(),
+        )
+    }
+
+    @ParameterizedTest(name = "{0}")
+    @ValueSource(strings = ["pattern", "max-length"])
+    @DisplayName("a single-value parameter setting written as a list is a problem, not silently ignored")
+    fun scalarSettingAsList(setting: String) {
+        val template =
+            exampleTemplate().apply {
+                at("parameters.PLUGIN_CODE").remove("pattern")
+                at("parameters.PLUGIN_CODE")[setting] = listOf("10")
+            }
+
+        assertProblem("parameters.PLUGIN_CODE.$setting[0]", template)
+    }
+
     @Test
     @DisplayName("the build system is never overridable: its VCS defaults and requirements are decided on load")
     fun buildSystemNotOverridable() {
@@ -611,6 +644,24 @@ class TemplateParserTest {
         assertTrue(
             flatProblems(noVcs, EXAMPLE_DEFAULTS).any { it.startsWith("$TEMPLATE_ID.rules.baseConfiguration.vcsEntries[0].branch") },
         )
+    }
+
+    @Test
+    @DisplayName("a rule on a field fixed blank sees the default the renderer gives it, as for an unset field")
+    fun ruleOnBlankFixedFieldSeesDefault() {
+        val template =
+            exampleTemplate().apply {
+                put(
+                    "rules",
+                    linkedMapOf(
+                        "baseConfiguration.vcsEntries[0].branch" to linkedMapOf("pattern" to "^main$", "message" to "Use main."),
+                    ),
+                )
+                @Suppress("UNCHECKED_CAST")
+                (at("fields.baseConfiguration")["vcsEntries"] as List<MutableMap<String, Any>>)[0]["branch"] = ""
+            }
+
+        assertEquals(emptyList<String>(), problems(template))
     }
 
     @Test

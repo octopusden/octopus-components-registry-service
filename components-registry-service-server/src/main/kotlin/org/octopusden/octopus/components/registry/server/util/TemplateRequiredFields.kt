@@ -49,10 +49,16 @@ internal class TemplateRequiredFields(
         return fromTemplate || !defaults[path].isNullOrBlank()
     }
 
-    /** The value when the template fixes it or a default supplies it; `null` when a parameter or nothing gives it. */
+    /**
+     * The value when the template fixes it or a default supplies it, a blank fixed value taking the
+     * default as R2 and R7 do; `null` when a parameter or nothing gives it.
+     */
     private fun fixedOrDefault(path: String): String? {
         val field = fields[path] as? TemplateField.Single ?: return defaults[path]?.takeIf { it.isNotBlank() }
-        return field.value.literal().takeIf { field.value.parameters.isEmpty() }
+        return field.value
+            .literal()
+            .ifBlank { defaults[path]?.takeIf { it.isNotBlank() } }
+            .takeIf { field.value.parameters.isEmpty() }
     }
 
     companion object {

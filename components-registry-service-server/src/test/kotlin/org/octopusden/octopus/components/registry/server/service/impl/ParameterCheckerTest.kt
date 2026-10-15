@@ -338,6 +338,25 @@ class ParameterCheckerTest {
     }
 
     @Test
+    @DisplayName("an override with several values on a single-value field is a problem, not silently cut to the first")
+    fun severalValuesOnSingleField() {
+        assertEquals(
+            listOf(
+                listOf("componentOwner") to "componentOwner: takes one value",
+                listOf("baseConfiguration.vcsEntries[0].vcsPath") to "baseConfiguration.vcsEntries[0].vcsPath: takes one value",
+            ),
+            checker
+                .checkOverrides(
+                    mapOf(
+                        "componentOwner" to listOf("jdoe", "asmith"),
+                        "baseConfiguration.vcsEntries[0].vcsPath" to listOf("a", "b"),
+                        "labels" to listOf("plugin", "ui"),
+                    ),
+                ).map { it.fields to it.message },
+        )
+    }
+
+    @Test
     @DisplayName("an override with values in the lists and active logins has no problem")
     fun validOverrides() {
         assertEquals(
