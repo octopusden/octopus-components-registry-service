@@ -665,6 +665,18 @@ class TemplateParserTest {
     }
 
     @Test
+    @DisplayName("a build system fixed blank takes the component default; with none, it is a required field, not a list problem")
+    fun blankBuildSystemTakesDefault() {
+        val template = exampleTemplate().apply { at("fields.baseConfiguration.build")["buildSystem"] = "" }
+
+        assertEquals(emptyList<String>(), problems(template, EXAMPLE_DEFAULTS + (TemplateFields.BUILD_SYSTEM to "GRADLE")))
+        assertEquals(
+            listOf("$TEMPLATE_ID.fields.${TemplateFields.BUILD_SYSTEM}"),
+            problems(template).map { it.substringBefore(':') },
+        )
+    }
+
+    @Test
     @DisplayName("solution: true without explicit and external is a problem")
     fun solutionNeedsExplicitExternal() {
         assertProblem("classification.solution", exampleTemplate().apply { at("classification")["solution"] = "true" })

@@ -36,7 +36,6 @@ import org.octopusden.octopus.components.registry.server.teamcity.sync.TeamcityS
 import org.octopusden.octopus.components.registry.server.teamcity.validation.TeamcityValidationJobService
 import org.octopusden.octopus.components.registry.server.util.EntryYaml
 import org.slf4j.LoggerFactory
-import org.springframework.core.env.Environment
 import org.springframework.http.HttpStatus
 import org.springframework.http.ResponseEntity
 import org.springframework.security.access.prepost.PreAuthorize
@@ -64,7 +63,6 @@ class AdminControllerV4(
     private val componentProfileCatalog: ComponentProfileCatalog,
     private val profileAvailability: ProfileAvailability,
     private val templateListValues: ListValues,
-    private val environment: Environment,
 ) {
     private val log = LoggerFactory.getLogger(AdminControllerV4::class.java)
 
@@ -134,7 +132,8 @@ class AdminControllerV4(
 
     /**
      * Every configured profile and template in use, live or failed, with its configuration as read
-     * (Decision 11). The version is the `config.client.version` property Spring Cloud Config sets.
+     * (Decision 11). The version is the one the entries in use were loaded from, as Spring Cloud
+     * Config reported it, so a reload that failed does not change it.
      */
     @GetMapping("/component-profiles")
     fun componentProfiles(): AdminComponentProfilesResponse {
@@ -143,8 +142,8 @@ class AdminControllerV4(
         val templates = snapshot.templates.associateBy { it.id }
         val caller = currentUserResolver.currentUsername()
         return AdminComponentProfilesResponse(
-            configVersion = environment.getProperty("config.client.version"),
-            lastLoad = ComponentProfilesReloadResponse.from(componentProfileCatalog.lastLoad()),
+            configVersion = snapshot.configVersion,
+            lastLoad = ComponentProfilesReloadResponse.from(snapshot.lastLoad),
             entries =
                 snapshot.entries.map { entry ->
                     AdminComponentProfilesResponse.Entry(

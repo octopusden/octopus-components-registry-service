@@ -556,7 +556,8 @@ who may use the template may override.
 
 #### Scenario: Last reload failed
 - **WHEN** the last reload failed on an invalid regular profile
-- **THEN** the result says so with the problems, and lists the entries still in use
+- **THEN** the result says so with the problems, and lists the entries still in use with the
+  configuration version they were loaded from, not the one the failed reload read
 
 #### Scenario: Not an administrator
 - **WHEN** a user without `IMPORT_DATA` asks

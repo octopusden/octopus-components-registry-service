@@ -85,7 +85,7 @@ refresh it with `./gradlew :components-registry-service-server:generateOpenApiDo
       removed or unknown template.
   - **`GET /rest/api/4/admin/component-profiles` added** (`IMPORT_DATA`, database mode): every
     configured entry in use, live or failed, with `status`, `problems`, the parsed `profile` or
-    `template`, and its `configuration` as YAML; `configVersion` from the config server, and
+    `template`, and its `configuration` as YAML; `configVersion`, the config server's version of the entries in use, and
     `lastLoad`, the outcome of the last load or reload in the `componentProfiles` shape.
   - **No change for a regular create:** a create without `profile`, or naming a regular profile,
     is validated as before; a template id given as `profile` is still an unknown profile.

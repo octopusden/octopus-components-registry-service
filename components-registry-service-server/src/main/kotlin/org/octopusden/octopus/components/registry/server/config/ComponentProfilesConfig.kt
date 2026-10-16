@@ -24,7 +24,8 @@ class ComponentProfilesConfig {
     fun componentProfileCatalog(
         source: ComponentProfilesSource,
         adminConfig: AdminConfigProperties,
-    ): ComponentProfileCatalog = ComponentProfileCatalog(source::read) { adminConfig.componentDefaults.templateDefaults() }
+    ): ComponentProfileCatalog =
+        ComponentProfileCatalog(source::read, { adminConfig.componentDefaults.templateDefaults() }, source::version)
 
     @Bean
     fun profileAvailability(permissionEvaluator: PermissionEvaluator): ProfileAvailability =

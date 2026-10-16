@@ -134,8 +134,9 @@ A dry run with `CLIENT_CODE=ACME`, `PLUGIN_CODE=CORE`, `PLUGIN_NAME=Core API`, o
 - The catalog swaps profiles and templates together, as one snapshot. A reload that fails on a
   regular profile keeps the previous templates too.
 - A response that reads more than one part of the catalog — the listing reads profiles and
-  templates, the administrator read also entries and raw keys — takes `snapshot()` once, so a
-  reload between its reads cannot mix revisions.
+  templates, the administrator read also entries, raw keys and the last load's outcome — takes
+  `snapshot()` once, so a reload between its reads cannot mix revisions. The last load's outcome
+  is kept in the same snapshot: a reload that is not usable replaces only that outcome.
 - The catalog also keeps, for the administrator read (Decision 11):
   - the last load's outcome;
   - each entry's raw keys.
@@ -369,8 +370,10 @@ A dry run with `CLIENT_CODE=ACME`, `PLUGIN_CODE=CORE`, `PLUGIN_NAME=Core API`, o
   - the parsed definition, when live;
   - the configuration text: the entry's raw keys dumped back to YAML with SnakeYAML
     (`EntryYaml`), so a failed entry shows what was read.
-- The configuration version: the `config.client.version` property Spring Cloud Config sets;
-  absent when not served by a config server.
+- The configuration version: the `config.client.version` property Spring Cloud Config sets, read
+  with the entries on each load and kept in the catalog snapshot, so it is the version of the
+  entries in use; a reload that fails does not change it. Absent when not served by a config
+  server.
 - The last reload's outcome: applied, or failed with its problems. When it failed, the entries
   shown are the ones still in use.
 

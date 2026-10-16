@@ -73,6 +73,27 @@ class ComponentProfileCatalogTest {
     }
 
     @Test
+    @DisplayName("Decision 11: the configuration version is the one the entries in use were loaded from, kept by a reload that fails")
+    fun versionOfEntriesInUse() {
+        val source = SwitchableSource(designExampleProperties())
+        var version = "v1"
+        val catalog = ComponentProfileCatalog(source::read, { emptyMap() }, { version })
+
+        version = "v2"
+        source.properties = designExampleProperties() + profileProperties("broken", order = null)
+        catalog.reload()
+
+        assertEquals("v1", catalog.snapshot().configVersion)
+        assertFalse(catalog.snapshot().lastLoad.usable)
+
+        version = "v3"
+        source.properties = designExampleProperties()
+        catalog.reload()
+
+        assertEquals("v3", catalog.snapshot().configVersion)
+    }
+
+    @Test
     @DisplayName("Decision 2: a reload after the subtree is removed applies no profiles")
     fun removedSubtreeReloadAppliesEmpty() {
         val source = SwitchableSource(designExampleProperties())

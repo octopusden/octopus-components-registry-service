@@ -8,8 +8,11 @@ import org.junit.jupiter.api.DisplayName
 import org.junit.jupiter.api.Tag
 import org.junit.jupiter.api.Test
 import org.junit.jupiter.api.Timeout
+import org.mockito.kotlin.doAnswer
+import org.mockito.kotlin.whenever
 import org.octopusden.cloud.commons.security.client.AuthServerClient
 import org.octopusden.octopus.components.registry.server.ComponentRegistryServiceApplication
+import org.octopusden.octopus.components.registry.server.security.CurrentUserResolver
 import org.octopusden.octopus.components.registry.server.service.impl.ComponentProfileCatalog
 import org.octopusden.octopus.components.registry.server.support.adminJwt
 import org.octopusden.octopus.components.registry.server.support.editorJwt
@@ -18,6 +21,7 @@ import org.springframework.beans.factory.annotation.Autowired
 import org.springframework.boot.test.autoconfigure.web.servlet.AutoConfigureMockMvc
 import org.springframework.boot.test.context.SpringBootTest
 import org.springframework.boot.test.mock.mockito.MockBean
+import org.springframework.boot.test.mock.mockito.SpyBean
 import org.springframework.core.env.ConfigurableEnvironment
 import org.springframework.core.env.MapPropertySource
 import org.springframework.test.annotation.DirtiesContext
@@ -55,6 +59,9 @@ class AdminComponentProfilesTest {
 
     @Autowired
     private lateinit var catalog: ComponentProfileCatalog
+
+    @SpyBean
+    private lateinit var currentUserResolver: CurrentUserResolver
 
     init {
         val testResourcesPath =
@@ -96,13 +103,23 @@ class AdminComponentProfilesTest {
     }
 
     @Test
-    @DisplayName("Decision 11: the configuration version is the one the config server reported, absent otherwise")
+    @DisplayName("Decision 11: the configuration version is the one the entries in use were loaded from, absent otherwise")
     fun configVersion() {
         read().andExpect(jsonPath("$.configVersion").value(nullValue()))
 
         reloadWith(mapOf("config.client.version" to "4f2c1a9"))
 
         read().andExpect(jsonPath("$.configVersion").value("4f2c1a9"))
+    }
+
+    @Test
+    @DisplayName("Decision 11: a reload that fails keeps the version of the entries still in use")
+    fun failedReloadKeepsVersion() {
+        reloadWith(mapOf("${PREFIX}solution.order" to "first", "config.client.version" to "9e8d7c6"))
+
+        read()
+            .andExpect(jsonPath("$.lastLoad.status").value("failed"))
+            .andExpect(jsonPath("$.configVersion").value(nullValue()))
     }
 
     @Test
@@ -115,6 +132,23 @@ class AdminComponentProfilesTest {
             .andExpect(jsonPath("$.lastLoad.status").value("failed"))
             .andExpect(jsonPath("$.lastLoad.entries[?(@.id == 'solution')].problems[*]").value(hasItem(containsString("solution.order"))))
             .andExpect(jsonPath("$.entries[?(@.id == 'solution')].status").value("live"))
+    }
+
+    @Test
+    @DisplayName("Decision 11: entries and the last load come from one revision, even when a reload lands during the request")
+    fun oneRevisionAcrossAReload() {
+        environment.propertySources.addFirst(
+            MapPropertySource(OVERRIDES, standaloneTemplateProperties("client-plugin").mapKeys { PREFIX + it.key }),
+        )
+        doAnswer {
+            catalog.reload()
+            it.callRealMethod()
+        }.whenever(currentUserResolver).currentUsername()
+
+        read()
+            .andExpect(status().isOk)
+            .andExpect(jsonPath("$.entries[?(@.id == 'client-plugin')]").isEmpty)
+            .andExpect(jsonPath("$.lastLoad.entries[?(@.id == 'client-plugin')]").isEmpty)
     }
 
     @Test

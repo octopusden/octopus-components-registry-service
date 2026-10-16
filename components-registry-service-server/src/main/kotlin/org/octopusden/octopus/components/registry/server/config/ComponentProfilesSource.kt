@@ -34,6 +34,9 @@ class ComponentProfilesSource(
         return values.mapValues { (_, value) -> environment.resolveRequiredPlaceholders(value) }
     }
 
+    /** The configuration's version as Spring Cloud Config reports it, or `null` without a config server. */
+    fun version(): String? = environment.getProperty(VERSION)
+
     private fun text(value: Any?): String =
         when {
             value is Map<*, *> && value.isEmpty() -> ""
@@ -44,5 +47,6 @@ class ComponentProfilesSource(
     companion object {
         const val ROOT = "components-registry.component-profiles"
         const val PREFIX = "$ROOT."
+        private const val VERSION = "config.client.version"
     }
 }

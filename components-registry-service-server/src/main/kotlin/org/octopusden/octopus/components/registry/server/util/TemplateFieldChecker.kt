@@ -74,7 +74,8 @@ internal class TemplateFieldChecker(
     ) {
         val list = TemplateFields.CRS_VALUE_LISTS.getValue(path)
         if (fixed) {
-            val literal = value.literal()
+            // A blank value is unset (R2) and takes its default (R7); the required-field check catches none.
+            val literal = value.literal().ifBlank { return }
             TemplateFields.staticValues(list)?.let { if (literal !in it) keys.problem(key, "'$literal' is not in the ${list.key} list") }
         } else {
             whole(key, value, "a crs-list of the ${list.key} list") { it is TemplateParameter.CrsList && it.list == list }

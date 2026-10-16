@@ -408,3 +408,13 @@
   - [x] 15.7.5 A rule on a field fixed blank, and the build system fixed blank, take the default
         R2 and R7 give
   - [x] 15.7.6 An override with several values on a field that is not a list is a problem
+- [x] 15.8 Review:
+  - [x] 15.8.1 The last load's outcome is part of the catalog snapshot, so the administrator read's
+        entries and `lastLoad` come from one revision (`AdminComponentProfilesTest`, a reload
+        triggered during the request)
+  - [x] 15.8.2 A build system or escrow generation fixed blank skips the list check and takes its
+        default; a build system with no default is reported as a required field
+  - [x] 15.8.3 The administrator read's `configVersion` is read with the entries on each load and
+        kept in the snapshot, so a failed reload no longer shows its version next to the entries
+        still in use (`ComponentProfileCatalogTest.versionOfEntriesInUse`,
+        `AdminComponentProfilesTest.failedReloadKeepsVersion`)
