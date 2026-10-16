@@ -13,6 +13,7 @@ import org.octopusden.cloud.commons.security.client.AuthServerClient
 import org.octopusden.octopus.components.registry.server.ComponentRegistryServiceApplication
 import org.octopusden.octopus.components.registry.server.entity.RegistryConfigEntity
 import org.octopusden.octopus.components.registry.server.model.ComponentProfile
+import org.octopusden.octopus.components.registry.server.model.ComponentTemplate
 import org.octopusden.octopus.components.registry.server.repository.RegistryConfigRepository
 import org.octopusden.octopus.components.registry.server.service.ProfileAvailability
 import org.octopusden.octopus.components.registry.server.service.impl.ComponentProfileCatalog
@@ -46,6 +47,10 @@ class SwitchableProfileAvailability : ProfileAvailability {
     var refusal: String? = null
 
     override fun evaluate(profile: ComponentProfile) = ProfileAvailability.Availability(usable = refusal == null, reason = refusal)
+
+    override fun evaluate(template: ComponentTemplate) = ProfileAvailability.Availability(usable = refusal == null, reason = refusal)
+
+    override fun mayOverride(template: ComponentTemplate) = refusal == null
 }
 
 @TestConfiguration

@@ -12,9 +12,11 @@ import org.octopusden.octopus.components.registry.server.model.ComponentProfile
 import org.octopusden.octopus.components.registry.server.model.ProfileLoad
 import org.octopusden.octopus.components.registry.server.support.SOLUTION_NAME_MESSAGE
 import org.octopusden.octopus.components.registry.server.support.SOLUTION_NAME_PATTERN
+import org.octopusden.octopus.components.registry.server.support.TEMPLATE_ID
 import org.octopusden.octopus.components.registry.server.support.designExampleProperties
 import org.octopusden.octopus.components.registry.server.support.profileProperties
 import org.octopusden.octopus.components.registry.server.support.rule
+import org.octopusden.octopus.components.registry.server.support.standaloneTemplateProperties
 
 class ComponentProfileParserTest {
     @Test
@@ -77,33 +79,43 @@ class ComponentProfileParserTest {
     }
 
     @Test
-    @DisplayName("a template entry fails with 'templates are not supported yet' and is not checked further; the rest stays live")
-    fun templateEntryFails() {
+    @DisplayName("a broken template entry fails with its own problems; the regular profiles stay live and the load usable")
+    fun brokenTemplateEntryFails() {
         val template =
             mapOf(
-                "ww-modpack.kind" to "template",
-                "ww-modpack.version" to "3",
-                "ww-modpack.parameters.CLIENT_CODE.type" to "crs-list",
-                "ww-modpack.fields.name" to "{{ CLIENT_CODE | lower }}-ww",
+                "client-plugin.kind" to "template",
+                "client-plugin.version" to "3",
+                "client-plugin.parameters.CLIENT_CODE.type" to "crs-list",
+                "client-plugin.fields.name" to "{{ CLIENT_CODE | lower }}-plugin",
             )
 
         val result = ComponentProfileParser.parse(designExampleProperties() + template)
 
         assertTrue(result.usable)
         assertEquals(4, result.profiles.size)
-        val entry = result.entries.single { it.id == "ww-modpack" }
+        val entry = result.entries.single { it.id == "client-plugin" }
         assertEquals(ProfileLoad.Entry.Status.FAILED, entry.status)
         assertEquals("template", entry.kind)
-        assertEquals(listOf("ww-modpack.kind: templates are not supported yet"), entry.problems)
+        assertTrue("client-plugin.title: required" in entry.problems, "problems: ${entry.problems}")
     }
 
     @Test
     @DisplayName("only template entries: the configuration is not usable")
     fun onlyTemplates() {
-        val result = ComponentProfileParser.parse(mapOf("ww-modpack.kind" to "template"))
+        val result = ComponentProfileParser.parse(mapOf("client-plugin.kind" to "template"))
 
         assertFalse(result.usable)
         assertEquals(listOf("at least one regular profile is required"), result.problems)
+    }
+
+    @Test
+    @DisplayName("a valid template with no regular profile: not usable, the template counts as an entry")
+    fun onlyLiveTemplate() {
+        val result = ComponentProfileParser.parse(standaloneTemplateProperties())
+
+        assertFalse(result.usable)
+        assertEquals(listOf("at least one regular profile is required"), result.problems)
+        assertEquals(listOf(TEMPLATE_ID), result.templates.map { it.id })
     }
 
     @Test

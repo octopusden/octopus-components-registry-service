@@ -47,6 +47,8 @@ class OpenApiV4Config {
                 "/rest/api/4/versions/**",
                 // ComponentProfileControllerV4 — the Create component start-page profiles.
                 "/rest/api/4/component-profiles",
+                // ComponentTemplateControllerV4 — describe a template, dry run and create from it.
+                "/rest/api/4/component-templates/**",
                 // AuthController at /auth/me — outside /rest/api/4.
                 "/auth/**",
             )
