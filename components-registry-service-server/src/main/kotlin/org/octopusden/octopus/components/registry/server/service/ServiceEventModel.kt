@@ -41,6 +41,12 @@ enum class ServiceEventType(
     /** TeamCity project Java/Maven validation run. */
     TEAMCITY_VALIDATION(ServiceEventCategory.SYSTEM),
 
+    /** ONB-002: read-only TeamCity -> CRS VCS-placement Diff run. */
+    TEAMCITY_PLACEMENT_DIFF(ServiceEventCategory.SYSTEM),
+
+    /** ONB-002: TeamCity -> CRS VCS-placement Sync run (applies a prior Diff's resolved rows). */
+    TEAMCITY_PLACEMENT_SYNC(ServiceEventCategory.SYSTEM),
+
     /** Portal-owned scheduled component-validation sweep run (source=portal). */
     VALIDATION_SWEEP(ServiceEventCategory.SYSTEM),
 
