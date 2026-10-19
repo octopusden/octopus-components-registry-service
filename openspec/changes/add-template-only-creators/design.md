@@ -79,6 +79,9 @@
 - `POST /rest/api/4/components` keeps `@PreAuthorize(ACCESS_COMPONENTS and CREATE_COMPONENTS)`.
 - A template-only creator gets 403 from it with or without a profile, before `ProfileCreateCheck`
   runs. The template-only reason therefore reaches them through the listing, not through this 403.
+- The 403 keeps the generic access-denied body. Returning the template-only reason there too was
+  weighed and not done: Portal users never reach this call, and it would need a check ahead of
+  the guard.
 - Why not drop the guard and let `ProfileCreateCheck` answer: a create without a profile has no
   availability check, so the guard is what stops it.
 
