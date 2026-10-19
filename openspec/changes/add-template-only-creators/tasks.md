@@ -13,7 +13,8 @@
   - [ ] 2.1.1 `GET /auth/me` with `ROLE_COMPONENTS_REGISTRY_TEMPLATE_CREATOR` lists
         `ACCESS_COMPONENTS`, `ACCESS_AUDIT` and `CREATE_FROM_TEMPLATE` for that role, read from the
         bundled role map
-  - [ ] 2.1.2 The same role leaves `ROLE_COMPONENTS_REGISTRY_EDITOR` and `ROLE_ADMIN` unchanged
+  - [ ] 2.1.2 `ROLE_COMPONENTS_REGISTRY_EDITOR` and `ROLE_ADMIN` still list the same permissions
+        as before, without `CREATE_FROM_TEMPLATE` (Decision 2)
 - [ ] 2.2 Implement:
   - [ ] 2.2.1 `PermissionEvaluator` — `CREATE_FROM_TEMPLATE` in the companion, beside the others
   - [ ] 2.2.2 bundled `application.yml` — `ROLE_COMPONENTS_REGISTRY_TEMPLATE_CREATOR`
@@ -32,7 +33,8 @@
 - [ ] 3.2 Implement:
   - [ ] 3.2.1 `PermissionProfileAvailability` — the table in Decision 3, `CREATE_COMPONENTS` first;
         permission names from `PermissionEvaluator`
-  - [ ] 3.2.2 KDoc on `ProfileAvailability` — drop "a later restriction" now that it exists
+  - [ ] 3.2.2 KDoc on `ProfileAvailability` — describe the template-only rule instead of "a later
+        restriction", without naming a user group
 - [ ] 3.3 Confirm tests pass.
 
 ## 4. Endpoints with a template-only creator (Decisions 4, 5)
@@ -54,8 +56,11 @@
 
 - [ ] 5.1 ADR-004 — the permission table and the role map gain `CREATE_FROM_TEMPLATE` and
       `ROLE_COMPONENTS_REGISTRY_TEMPLATE_CREATOR`
-- [ ] 5.2 `docs/deployment/keycloak-setup.md` — the realm role `COMPONENTS_REGISTRY_TEMPLATE_CREATOR`
-      to provision
+- [ ] 5.2 `docs/registry/deployment/keycloak-setup.md`:
+  - [ ] 5.2.1 the realm role `COMPONENTS_REGISTRY_TEMPLATE_CREATOR` to provision
+  - [ ] 5.2.2 the default-role step: `COMPONENTS_REGISTRY_EDITOR` in the default role keeps every
+        logged-in user a full creator; to have template-only creators, the default role carries
+        `COMPONENTS_REGISTRY_VIEWER` and full creators get `COMPONENTS_REGISTRY_EDITOR` by group
 - [ ] 5.3 `technical-design.md` — the availability table; the create gate stays `CREATE_COMPONENTS`
 - [ ] 5.4 `functional-spec.md` — who may create from a template, and who may override
 - [ ] 5.5 `requirements-common.md` — next free `SYS-NNN` for template-only creators, with its
@@ -74,3 +79,5 @@
   - [ ] 6.2.3 `ROLE_COMPONENTS_REGISTRY_EDITOR` and `ROLE_ADMIN` unchanged, here and in service-config
   - [ ] 6.2.4 `POST /rest/api/4/components` guard unchanged
 - [ ] 6.3 Risks in `design.md` still stated
+- [ ] 6.4 On archive, drop the line "Who counts as Delivery & Support is not covered here." from the
+      `component-templates` Purpose: a delta cannot change a Purpose

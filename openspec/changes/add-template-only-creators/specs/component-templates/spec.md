@@ -16,7 +16,8 @@ without overrides. `CREATE_COMPONENTS` SHALL keep every right it has, including 
 template; a user holding both SHALL have the rights of `CREATE_COMPONENTS`.
 
 #### Scenario: Role grants the permission
-- **WHEN** a user's token carries the realm role `COMPONENTS_REGISTRY_TEMPLATE_CREATOR`
+- **WHEN** Keycloak's userinfo for a user carries the realm role
+  `COMPONENTS_REGISTRY_TEMPLATE_CREATOR`
 - **THEN** `GET /auth/me` lists `ACCESS_COMPONENTS`, `ACCESS_AUDIT` and `CREATE_FROM_TEMPLATE`
   for that role
 

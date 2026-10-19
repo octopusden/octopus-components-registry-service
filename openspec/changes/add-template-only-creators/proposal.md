@@ -44,8 +44,8 @@
   - the listing marks regular profiles unusable for them, with the new reason;
   - the template endpoints answer 403 to their overrides.
 - Nothing changes for a user who holds `CREATE_COMPONENTS` or no create permission.
-- Docs: ADR-004 (roles and permissions), `technical-design.md`, `functional-spec.md`,
-  `requirements-common.md`, `api-changelog.md`.
+- Docs: ADR-004 (roles and permissions), `deployment/keycloak-setup.md`, `technical-design.md`,
+  `functional-spec.md`, `requirements-common.md`, `api-changelog.md`.
 
 ## Out of scope
 

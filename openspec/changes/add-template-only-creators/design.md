@@ -15,7 +15,8 @@
 - Asked by:
   - `ComponentProfileControllerV4` — the listing's `usable` and `reason`;
   - `ProfileCreateCheck` — a create naming a profile (403 with the reason);
-  - `ComponentTemplateControllerV4` — dry run and create (403), overrides (403).
+  - `ComponentTemplateControllerV4` — dry run and create (403), overrides (403);
+  - `AdminControllerV4` — the profile entries of the administrator read.
 - `PermissionProfileAvailability`, the only implementation, answers all three with
   `CREATE_COMPONENTS`.
 - `POST /rest/api/4/components` requires `CREATE_COMPONENTS` in `@PreAuthorize`, before any profile
@@ -70,8 +71,8 @@
 - Reasons:
   - template-only: "You may create components from templates only";
   - no permission: "You do not have permission to create components", unchanged.
-- The permission names move to `PermissionEvaluator`'s companion, beside the others;
-  `PermissionProfileAvailability` stops keeping its own copy.
+- `CREATE_FROM_TEMPLATE` joins the permission names in `PermissionEvaluator`'s companion;
+  `PermissionProfileAvailability` reads both names from there instead of keeping its own copy.
 
 ### 4. The regular create endpoint keeps its guard
 
@@ -85,8 +86,8 @@
 
 - Still `ACCESS_COMPONENTS` in `@PreAuthorize`; usability, then override rights, inside, as in
   `add-component-templates` (order 4 and 5).
-- A request with overrides from a template-only creator answers 403 at step 5, before the override paths are
-  checked.
+- A request with overrides from a template-only creator answers 403 at step 5, before the
+  override paths are checked.
 
 ## Out of Scope
 
