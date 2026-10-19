@@ -14,6 +14,7 @@ class ComponentProfilesConfigTest {
         ApplicationContextRunner()
             .withUserConfiguration(ComponentProfilesConfig::class.java)
             .withBean(PermissionEvaluator::class.java, { mock(PermissionEvaluator::class.java) })
+            .withBean(AdminConfigProperties::class.java, { AdminConfigProperties() })
 
     private val validProfile =
         arrayOf(

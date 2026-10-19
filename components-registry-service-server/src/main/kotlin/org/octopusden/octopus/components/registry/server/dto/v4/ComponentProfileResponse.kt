@@ -2,17 +2,20 @@ package org.octopusden.octopus.components.registry.server.dto.v4
 
 import io.swagger.v3.oas.annotations.media.Schema
 import org.octopusden.octopus.components.registry.server.model.ComponentProfile
+import org.octopusden.octopus.components.registry.server.model.ComponentTemplate
 import org.octopusden.octopus.components.registry.server.service.ProfileAvailability
 
-/** `GET /rest/api/4/component-profiles`: the live profiles in order, for the current user. */
+/** `GET /rest/api/4/component-profiles`: the live profiles and templates in order, for the current user. */
 data class ComponentProfilesResponse(
     val profiles: List<ComponentProfileResponse>,
 )
 
 data class ComponentProfileResponse(
     val id: String,
-    @field:Schema(description = "`regular`; templates are listed with their own kind once supported.")
+    @field:Schema(allowableValues = ["regular", "template"])
     val kind: String,
+    @field:Schema(description = "A template's version, raised by the administrator on every change; absent for a regular profile.")
+    val version: Int? = null,
     val title: String,
     val description: String,
     val classification: Classification,
@@ -24,10 +27,19 @@ data class ComponentProfileResponse(
 ) {
     data class Classification(
         val external: Boolean,
-        @field:Schema(allowableValues = ["true", "false", "ask"])
+        @field:Schema(allowableValues = ["true", "false", "ask"], description = "Never `ask` for a template.")
         val explicit: String,
         val solution: Boolean,
-    )
+    ) {
+        companion object {
+            fun from(classification: ComponentProfile.Classification) =
+                Classification(
+                    external = classification.external,
+                    explicit = classification.explicit.name.lowercase(),
+                    solution = classification.solution,
+                )
+        }
+    }
 
     data class FieldRule(
         @field:Schema(description = "Create-request path, e.g. `name` or `baseConfiguration.jira.projectKey`.")
@@ -50,14 +62,23 @@ data class ComponentProfileResponse(
             kind = ComponentProfile.REGULAR_KIND,
             title = profile.title,
             description = profile.description,
-            classification =
-                Classification(
-                    external = profile.classification.external,
-                    explicit = profile.classification.explicit.name
-                        .lowercase(),
-                    solution = profile.classification.solution,
-                ),
+            classification = Classification.from(profile.classification),
             rules = profile.rules.map { FieldRule(it.path, it.pattern, it.message) },
+            usable = availability.usable,
+            unusableReason = availability.reason,
+        )
+
+        fun from(
+            template: ComponentTemplate,
+            availability: ProfileAvailability.Availability,
+        ) = ComponentProfileResponse(
+            id = template.id,
+            kind = "template",
+            version = template.version,
+            title = template.title,
+            description = template.description,
+            classification = Classification.from(template.classification),
+            rules = template.rules.map { FieldRule(it.path, it.pattern, it.message) },
             usable = availability.usable,
             unusableReason = availability.reason,
         )
