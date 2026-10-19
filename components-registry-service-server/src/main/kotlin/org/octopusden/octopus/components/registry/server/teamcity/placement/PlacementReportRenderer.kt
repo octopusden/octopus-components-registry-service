@@ -4,8 +4,8 @@ import org.springframework.web.util.HtmlUtils
 
 /**
  * Renders a [PlacementDiffResult] / [PlacementSyncResult] as a human-readable HTML report or a CSV
- * export — the download formats the design brief asks for alongside the JSON the Portal table
- * consumes directly. Pure functions; the controller sets the content type.
+ * export — the downloads offered alongside the JSON the Portal table consumes directly. Pure
+ * functions; the controller sets the content type.
  */
 object PlacementReportRenderer {
     private const val ROOT_LABEL = "(root)"

@@ -93,11 +93,10 @@ data class PlacementDiffResult(
  * ONB-002: the read-only TeamCity -> CRS VCS-placement Diff. Walks every component's
  * configuration rows that carry VCS entries, derives their placement from the linked project(s)'
  * compile build configurations ([derive]), and classifies each row against the registry's current
- * values. Only the current (BASE) configuration of a non-archived component is diffed (owner
- * decision after the first QA run): archived components and version-range (`vcs.settings` marker)
- * rows are left out entirely.
+ * values. Only the current (BASE) configuration of a non-archived component is diffed: archived
+ * components and version-range (`vcs.settings` marker) rows are left out entirely.
  *
- * Scope (design brief, BASE rows of a non-archived component only): multi-root rows; single-root
+ * Scope (BASE rows of a non-archived component only): multi-root rows; single-root
  * rows where TeamCity derives (or the registry already carries) a non-root Checkout Directory;
  * single-root rows with a non-default Build Working Directory (current or derived). A single-root
  * row with nothing on either side (no Checkout Directory, checkout-root Build Working Directory)
@@ -443,8 +442,8 @@ class TeamcityPlacementDiffService(
         return ChainOutcome.Ok(compile, pausedCompile, nonCompileRuled, compile.map { it.buildTypeId })
     }
 
-    /** Best-effort classification of a TeamCity fetch failure for the job/report; the design brief
-     * asks specifically for a clear "no permission" message on a 403. */
+    /** Best-effort classification of a TeamCity fetch failure for the job/report, with a clear
+     * "no permission" message on a 403. */
     private fun describeTeamcityError(
         e: Exception,
         projectId: String,

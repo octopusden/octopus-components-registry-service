@@ -29,7 +29,7 @@ import org.springframework.web.bind.annotation.RestController
 /**
  * ONB-002: TeamCity -> CRS VCS-placement Diff (read-only) and Sync (writes through the same v4
  * service methods a human PATCH uses). Split out of [AdminControllerV4] because, unlike every
- * other admin job, its REPORT is readable by anyone who can view components (design brief) while
+ * other admin job, its REPORT is readable by anyone who can view components while
  * both "run" endpoints stay behind `IMPORT_DATA` — a single class-level `@PreAuthorize` cannot
  * express that split.
  */

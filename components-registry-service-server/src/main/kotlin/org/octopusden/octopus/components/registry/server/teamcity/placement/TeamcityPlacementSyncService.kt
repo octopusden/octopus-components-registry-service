@@ -48,7 +48,7 @@ data class PlacementSyncResult(
 /**
  * ONB-002: applies a previously-run Diff's RESOLVED rows for the selected components.
  *
- * Safety (design brief): re-reads TeamCity and the registry and re-derives before writing; if the
+ * Safety: re-reads TeamCity and the registry and re-derives before writing; if the
  * fresh derivation of a row differs from the snapshot it was selected from, that row is skipped
  * with "changed since diff" rather than applied blind. Every write goes through
  * [ComponentManagementService] — the same validation, name-derivation and audit path a human PATCH
