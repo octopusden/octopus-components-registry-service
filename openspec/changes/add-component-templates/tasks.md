@@ -418,3 +418,5 @@
         kept in the snapshot, so a failed reload no longer shows its version next to the entries
         still in use (`ComponentProfileCatalogTest.versionOfEntriesInUse`,
         `AdminComponentProfilesTest.failedReloadKeepsVersion`)
+- [x] 15.9 Review: a blank fixed label, which rendering drops, is not checked against the labels
+      dictionary (`TemplateProblemsTest.blankFixedLabel`)

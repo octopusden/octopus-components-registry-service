@@ -43,7 +43,8 @@ object TemplateProblems {
 
     /**
      * The template's own labels missing from the labels dictionary. Checked here because today's
-     * create adds an unknown label to the dictionary rather than rejecting it.
+     * create adds an unknown label to the dictionary rather than rejecting it. A blank label is
+     * skipped: rendering drops it (R4).
      */
     fun fixedLabels(
         template: ComponentTemplate,
@@ -54,7 +55,7 @@ object TemplateProblems {
             .orEmpty()
             .filter { it.parameters.isEmpty() }
             .map { it.literal() }
-            .filter { it !in dictionary }
+            .filter { it.isNotBlank() && it !in dictionary }
             .map { TemplateProblem(listOf(LABELS), emptySet(), templateProblem = true, "$LABELS: '$it' is not in the labels dictionary") }
 
     private fun attribute(

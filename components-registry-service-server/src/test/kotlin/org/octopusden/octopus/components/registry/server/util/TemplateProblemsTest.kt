@@ -6,6 +6,7 @@ import org.junit.jupiter.api.Test
 import org.octopusden.octopus.components.registry.server.model.ComponentTemplate
 import org.octopusden.octopus.components.registry.server.support.EXAMPLE_DEFAULTS
 import org.octopusden.octopus.components.registry.server.support.EXAMPLE_VALUES
+import org.octopusden.octopus.components.registry.server.support.at
 import org.octopusden.octopus.components.registry.server.support.exampleTemplate
 import org.octopusden.octopus.components.registry.server.support.parsedTemplate
 
@@ -124,5 +125,14 @@ class TemplateProblemsTest {
 
         assertEquals(listOf(listOf("labels")), problems.map { it.fields })
         assertEquals(true, problems.single().templateProblem)
+    }
+
+    @Test
+    @DisplayName("a blank fixed label is dropped on render, so it loads, renders without it and is not checked against the dictionary")
+    fun blankFixedLabel() {
+        val template = parsedTemplate(exampleTemplate().apply { at("fields")["labels"] = listOf("plugin", "") })
+
+        assertEquals(listOf("plugin"), rendered(template).request.labels.toList())
+        assertEquals(emptyList<TemplateProblem>(), TemplateProblems.fixedLabels(template, setOf("plugin")))
     }
 }
