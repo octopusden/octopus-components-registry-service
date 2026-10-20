@@ -169,7 +169,7 @@ class ComponentProfileControllerV4Test {
     }
 
     @Test
-    @DisplayName("an editor may use every profile and every template")
+    @DisplayName("SYS-103: an editor may use every profile and every template (Decision 2)")
     fun usableForEditor() {
         reloadWith(*standaloneTemplateProperties().toList().toTypedArray())
 
