@@ -95,6 +95,7 @@
 | SYS-100 | `GET /components/as-code/search` — global case-insensitive substring (or `regex=true`) search over every component's FULL as-code view, grouped by component with line number, line text and enclosing block path; `archived` / `limit` / `maxMatchesPerComponent` params; in-memory index rebuilt when the DB change stamp moves or after 5 minutes; `crsctl search` client command | High | unit + integration-test | ✅ Tested |
 | SYS-101 | `GET /components?involves=<u>[&involvesRoles=…]` — components where any listed user is the owner OR a release manager OR a security champion (OR across the chosen roles; all three by default); combines with every other filter via AND; one row per component; unknown role → 400. `crsctl components list --involves/--involves-role` | High | integration-test | ✅ Tested |
 | SYS-102 | TeamCity placement Diff/Sync (`/admin/teamcity-placement`): Diff is a read-only report over the BASE rows of non-archived components; Sync writes only the `RESOLVED` rows of the last completed Diff (named by `diffId`, else 409 `placement-diff-stale`) through the normal v4 write path, tagged `sync from TeamCity (job <id>)`, a prefix user writes cannot set; single-root `CONFLICT`/`UNEXPRESSIBLE` rows are always reported; VCS roots that the component's own compile configurations attach but the registry lacks yield `ROOTS_MISMATCH` and the `VCS_ROOTS_DIFFER_FROM_REGISTRY` validation warning | High | unit + integration-test | ✅ Tested |
+| SYS-103 | `ClassicComponentsRegistryServiceClient` takes the retry policy for retryable failures (503, I/O errors) from its caller (`Retryer` constructor parameter); without one it keeps the default of 5 attempts, backoff 100 ms – 1 s (`defaultRetryer()`); the policy is per request, so one call exhausting it does not shorten the next | Medium | unit-test | ✅ Tested |
 
 ---
 
@@ -3674,3 +3675,28 @@ been replaced.
 `VcsRootsComparisonTest` and `VcsRootsValidationTest` — `SYS-102 ...` tests (7);
 `TeamcityPlacementSyncServiceTest` — `` `SYS-102 an invalid row is skipped even if selected` ``,
 `` `SYS-102 an applied row's before and after values are recorded per field` `` (8).
+
+### SYS-103: Configurable retry policy in `ClassicComponentsRegistryServiceClient`
+
+**Priority:** Medium
+**Test layer:** unit-test
+**Status:** ✅ Tested
+
+**Motivation:**
+The client retries a 503 or an I/O error a few times within about a second. That covers a
+momentary blip but not a longer outage of the service, such as its pod being rescheduled, when
+the route answers 503 for minutes. A caller that has to survive such an outage could only wrap
+the whole client in its own retry loop.
+
+**Description:**
+1. `ClassicComponentsRegistryServiceClient(apiUrlProvider, objectMapper, retryer)` uses the given
+   `feign.Retryer` for every request. The constructors without it keep the default policy,
+   `ClassicComponentsRegistryServiceClient.defaultRetryer()`: 5 attempts, backoff from 100 ms up to
+   1 s.
+2. The policy is per request: Feign clones the retryer for each call, so one call exhausting its
+   attempts does not shorten the next. A custom `Retryer` must return a fresh instance from
+   `clone()`.
+
+**Test method:**
+`RetryOn503Test` — `` `SYS-103 caller-supplied retryer outlasts the default` `` (1),
+`` `SYS-103 retryer state is not shared between requests` `` (2).
