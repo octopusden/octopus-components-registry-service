@@ -31,7 +31,8 @@ out of the box:
 | Role key in CRS config | Permissions | Realm-role you must create in Keycloak |
 |---|---|---|
 | `ROLE_COMPONENTS_REGISTRY_VIEWER` | `ACCESS_COMPONENTS`, `ACCESS_AUDIT` | `COMPONENTS_REGISTRY_VIEWER` |
-| `ROLE_COMPONENTS_REGISTRY_EDITOR` | `+ CREATE_COMPONENTS` | `COMPONENTS_REGISTRY_EDITOR` |
+| `ROLE_COMPONENTS_REGISTRY_TEMPLATE_CREATOR` | `ACCESS_COMPONENTS`, `ACCESS_AUDIT`, `CREATE_FROM_TEMPLATE` — create from templates only, without overrides | `COMPONENTS_REGISTRY_TEMPLATE_CREATOR` |
+| `ROLE_COMPONENTS_REGISTRY_EDITOR` | `ACCESS_COMPONENTS`, `ACCESS_AUDIT`, `CREATE_COMPONENTS` — create any component, including from a template, with overrides | `COMPONENTS_REGISTRY_EDITOR` |
 | `ROLE_ADMIN` | all permissions including `ARCHIVE_COMPONENTS`, `RENAME_COMPONENTS`, `DELETE_COMPONENTS`, `IMPORT_DATA`, `EDIT_METADATA` | usually a platform-wide `ADMIN` realm-role you already have |
 | `ROLE_ANONYMOUS` | `ACCESS_COMPONENTS` (public read on v4 GETs) | implicit Spring authority — no Keycloak action needed |
 
@@ -43,7 +44,7 @@ authority, which matches the YAML key. **Don't add the `ROLE_` prefix to
 the Keycloak role name itself** — you'll get `ROLE_ROLE_*` and the map
 will silently miss.
 
-## Step 1 — create the two CRS realm-roles
+## Step 1 — create the CRS realm-roles
 
 Keycloak Admin Console:
 
@@ -55,6 +56,10 @@ Keycloak Admin Console:
    - **Role name:** `COMPONENTS_REGISTRY_VIEWER`
    - **Description:** Read components + audit in components-registry-service
    - Composite: leave unchecked
+3. Repeat for:
+   - **Role name:** `COMPONENTS_REGISTRY_TEMPLATE_CREATOR`
+   - **Description:** Create components from templates only in components-registry-service
+   - Composite: leave unchecked
 
 Or via `kcadm.sh`:
 ```bash
@@ -64,6 +69,9 @@ kcadm.sh create roles -r <your-realm> \
 kcadm.sh create roles -r <your-realm> \
   -s name=COMPONENTS_REGISTRY_VIEWER \
   -s 'description=Read components + audit in components-registry-service'
+kcadm.sh create roles -r <your-realm> \
+  -s name=COMPONENTS_REGISTRY_TEMPLATE_CREATOR \
+  -s 'description=Create components from templates only in components-registry-service'
 ```
 
 ## Step 2 — decide who gets the editor role by default
@@ -95,7 +103,25 @@ Admin Console:
 - Or: Groups → select group → **Role Mappings** → assign role; users in
   that group inherit it.
 
-Either way, `COMPONENTS_REGISTRY_VIEWER` is intentionally kept out of
+### Option C — some users create from templates only
+
+Option A makes every user a full creator, and a user holding both
+`COMPONENTS_REGISTRY_EDITOR` and `COMPONENTS_REGISTRY_TEMPLATE_CREATOR`
+keeps every right of the editor. So template-only creators need:
+
+- `COMPONENTS_REGISTRY_VIEWER`, not `COMPONENTS_REGISTRY_EDITOR`, in
+  `default-roles-<your-realm>`: every user reads, and edits the
+  components they own, but no longer creates;
+- `COMPONENTS_REGISTRY_EDITOR` on the groups that create any component;
+- `COMPONENTS_REGISTRY_TEMPLATE_CREATOR` on the groups that create from
+  templates only;
+- `COMPONENTS_REGISTRY_EDITOR` assigned directly to every service account
+  that creates components, before the default role changes.
+
+Deploy a CRS version that knows `ROLE_COMPONENTS_REGISTRY_TEMPLATE_CREATOR`
+first; until then the role grants nothing.
+
+Outside Option C, `COMPONENTS_REGISTRY_VIEWER` is intentionally kept out of
 the default-roles composite — it's reserved for read-only consumers
 (service accounts, auditors) that should not have write access even
 when the rest of the org does.
@@ -127,6 +153,10 @@ In the impersonated session, open the portal and check:
    present).
 4. Archive / Admin / Audit-restricted actions match the expected
    permission set for the role you assigned.
+5. For a template-only creator, `/auth/me` lists
+   `ROLE_COMPONENTS_REGISTRY_TEMPLATE_CREATOR` with `CREATE_FROM_TEMPLATE`,
+   and `GET /rest/api/4/component-profiles` marks the regular profiles
+   unusable with "You may create components from templates only".
 
 ## Operational caveats
 
