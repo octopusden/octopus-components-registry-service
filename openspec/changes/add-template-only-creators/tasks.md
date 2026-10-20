@@ -95,6 +95,8 @@
       `CREATE_COMPONENTS` may send overrides
 - [x] 5.5 `requirements-common.md` — SYS-103, summary row and section, with its tests; the new
       tests' `@DisplayName`s start with `SYS-103:`
+- [x] 5.5a Renumbered to SYS-103 on rebase: SYS-102 was taken by the TeamCity placement Diff/Sync
+      requirement merged to main first (added on review)
 - [x] 5.6 `api-changelog.md` — the new permission and role, the reason in the listing, 403 on
       overrides for template-only creators
 - [x] 5.7 `v4.json` — regenerated with `generateOpenApiDocs`; unchanged, since no schema changes
