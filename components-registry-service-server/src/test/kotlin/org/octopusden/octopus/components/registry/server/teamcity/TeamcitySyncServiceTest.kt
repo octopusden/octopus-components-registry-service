@@ -349,12 +349,13 @@ class TeamcitySyncServiceTest {
                 "beta" to listOf(TcProject("Beta_Build", hasCdReleaseBuild = true)),
             ),
         )
+        val publisher = RecordingPublisher()
         val svc = service(
             StubComponentRepository(listOf(auto, manual)),
             StubVersionLineRepository(),
             StubTeamcityProjectRepository(),
             fetcher,
-            RecordingPublisher(),
+            publisher,
             fixedUser("admin"),
         )
 
@@ -363,6 +364,10 @@ class TeamcitySyncServiceTest {
         assertTrue(auto.autoRelease)
         assertFalse(manual.autoRelease)
         assertEquals(1, result.autoReleaseEnabled)
+        val audit = publisher.events.filterIsInstance<AuditEvent>().single()
+        assertEquals(alice.toString(), audit.entityId)
+        assertEquals(mapOf("autoRelease" to false), audit.oldValue)
+        assertEquals(mapOf("autoRelease" to true), audit.newValue)
     }
 
     @Test
