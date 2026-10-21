@@ -326,6 +326,7 @@ class ConfigSyncServiceTest {
         val props = AdminConfigProperties().apply {
             componentDefaults = AdminConfigProperties.ComponentDefaults().apply {
                 solution = false
+                autoRelease = false
                 build = AdminConfigProperties.Build().apply { requiredProject = false }
                 jira = AdminConfigProperties.Jira().apply { technical = false }
                 distribution = AdminConfigProperties.Distribution().apply {
@@ -337,6 +338,7 @@ class ConfigSyncServiceTest {
         }
         val result = service(props).componentDefaultsMap()
         assertEquals(false, result["solution"])
+        assertEquals(false, result["autoRelease"])
         assertEquals(false, (result["build"] as Map<*, *>)["requiredProject"])
         assertEquals(false, (result["jira"] as Map<*, *>)["technical"])
         assertEquals(false, (result["distribution"] as Map<*, *>)["explicit"])

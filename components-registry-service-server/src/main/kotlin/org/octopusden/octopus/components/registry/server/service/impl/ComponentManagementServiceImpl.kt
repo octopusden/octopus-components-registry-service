@@ -349,6 +349,7 @@ class ComponentManagementServiceImpl(
                 clientCode = stripIfHidden("component.clientCode", request.clientCode),
                 archived = request.archived,
                 testComponent = request.testComponent,
+                autoRelease = request.autoRelease && !fieldConfigService.isHidden("component.autoRelease"),
                 solution = stripIfHidden("component.solution", request.solution),
                 parentComponent = parent,
                 // R1: group = migration-derived aggregator membership only; never assigned via API.
@@ -737,6 +738,7 @@ class ComponentManagementServiceImpl(
         request.solution?.let { if (!fieldConfigService.isHidden("component.solution")) entity.solution = it }
         request.archived?.let { entity.archived = it }
         request.testComponent?.let { entity.testComponent = it }
+        request.autoRelease?.let { if (!fieldConfigService.isHidden("component.autoRelease")) entity.autoRelease = it }
         val flaggedNow = !oldTestComponent && entity.testComponent
         val unflaggedNow = oldTestComponent && !entity.testComponent
         // Flagging, or renaming a flagged component, must keep the key inside the configured patterns.
@@ -2437,6 +2439,7 @@ class ComponentManagementServiceImpl(
         request.productType?.let { enforceFieldEditable("component.productType", it, entity.productType) }
         request.clientCode?.let { enforceFieldEditable("component.clientCode", it, entity.clientCode) }
         request.solution?.let { enforceFieldEditable("component.solution", it, entity.solution) }
+        request.autoRelease?.let { enforceFieldEditable("component.autoRelease", it, entity.autoRelease) }
         request.copyright?.let { enforceFieldEditable("component.copyright", it, entity.copyright) }
         request.releasesInDefaultBranch?.let {
             enforceFieldEditable("component.releasesInDefaultBranch", it, entity.releasesInDefaultBranch)
@@ -2521,6 +2524,7 @@ class ComponentManagementServiceImpl(
         request.productType?.let { enforceFieldEditable("component.productType", it, null) }
         request.clientCode?.let { enforceFieldEditable("component.clientCode", it, null) }
         request.solution?.let { enforceFieldEditable("component.solution", it, null) }
+        if (request.autoRelease) enforceFieldEditable("component.autoRelease", true, null)
         request.copyright?.let { enforceFieldEditable("component.copyright", it, null) }
         request.releasesInDefaultBranch?.let { enforceFieldEditable("component.releasesInDefaultBranch", it, null) }
         request.jiraDisplayName?.let { enforceFieldEditable("component.jiraDisplayName", it, null) }
@@ -4355,6 +4359,9 @@ class ComponentManagementServiceImpl(
         filter.archived?.let { archived ->
             spec = spec.and(Specification { root, _, cb -> cb.equal(root.get<Boolean>("archived"), archived) })
         }
+        filter.autoRelease?.let { autoRelease ->
+            spec = spec.and(Specification { root, _, cb -> cb.equal(root.get<Boolean>("autoRelease"), autoRelease) })
+        }
         filter.testComponent?.let { testComponent ->
             spec = spec.and(Specification { root, _, cb -> cb.equal(root.get<Boolean>("testComponent"), testComponent) })
         }
@@ -4644,6 +4651,7 @@ class ComponentManagementServiceImpl(
             "clientCode" to entity.clientCode,
             "archived" to entity.archived,
             "testComponent" to entity.testComponent,
+            "autoRelease" to entity.autoRelease,
             "solution" to entity.solution,
             "parentComponentName" to entity.parentComponent?.componentKey,
             "canBeParent" to entity.canBeParent,

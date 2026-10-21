@@ -53,6 +53,9 @@ data class ComponentCreateRequest(
     // reference a test one as its parent or doc component — rejected by the service.
     @field:Schema(requiredMode = Schema.RequiredMode.NOT_REQUIRED)
     val testComponent: Boolean = false,
+    // Releases may be started by release automation once a candidate passes its gates.
+    @field:Schema(requiredMode = Schema.RequiredMode.NOT_REQUIRED)
+    val autoRelease: Boolean = false,
     // Ordered multi-value (first = primary); canonicalized server-side
     // (trim → drop blank → keep-first dedupe).
     @field:Schema(requiredMode = Schema.RequiredMode.NOT_REQUIRED)

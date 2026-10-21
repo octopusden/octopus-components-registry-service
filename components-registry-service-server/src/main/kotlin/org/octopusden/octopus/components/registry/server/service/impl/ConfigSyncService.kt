@@ -179,6 +179,7 @@ class ConfigSyncService(
             d.parentComponent?.let { put("parentComponent", it) }
             d.releasesInDefaultBranch?.let { put("releasesInDefaultBranch", it) }
             d.solution?.let { put("solution", it) }
+            d.autoRelease?.let { put("autoRelease", it) }
             d.archived?.let { put("archived", it) }
             d.copyright?.let { put("copyright", it) }
             d.labels.takeIf { it.isNotEmpty() }?.let { put("labels", it.toList()) }

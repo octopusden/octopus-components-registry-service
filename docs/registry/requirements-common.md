@@ -96,6 +96,7 @@
 | SYS-101 | `GET /components?involves=<u>[&involvesRoles=…]` — components where any listed user is the owner OR a release manager OR a security champion (OR across the chosen roles; all three by default); combines with every other filter via AND; one row per component; unknown role → 400. `crsctl components list --involves/--involves-role` | High | integration-test | ✅ Tested |
 | SYS-102 | TeamCity placement Diff/Sync (`/admin/teamcity-placement`): Diff is a read-only report over the BASE rows of non-archived components; Sync writes only the `RESOLVED` rows of the last completed Diff (named by `diffId`, else 409 `placement-diff-stale`) through the normal v4 write path, tagged `sync from TeamCity (job <id>)`, a prefix user writes cannot set; single-root `CONFLICT`/`UNEXPRESSIBLE` rows are always reported; VCS roots that the component's own compile configurations attach but the registry lacks yield `ROOTS_MISMATCH` and the `VCS_ROOTS_DIFFER_FROM_REGISTRY` validation warning | High | unit + integration-test | ✅ Tested |
 | SYS-103 | `ClassicComponentsRegistryServiceClient` takes the retry policy for retryable failures (503, I/O errors) from its caller (`Retryer` constructor parameter); without one it keeps the default of 5 attempts, backoff 100 ms – 1 s (`defaultRetryer()`); the policy is per request, so one call exhausting it does not shorten the next | Medium | unit-test | ✅ Tested |
+| SYS-104 | Component flag `autoRelease` (default false), DB and v4 only: create/update requests, summary/detail responses, `?autoRelease=` list filter, field-config visibility/editability | Medium | unit + integration-test | ✅ Tested |
 
 ---
 
@@ -3700,3 +3701,30 @@ the whole client in its own retry loop.
 **Test method:**
 `RetryOn503Test` — `` `SYS-103 caller-supplied retryer outlasts the default` `` (1),
 `` `SYS-103 retryer state is not shared between requests` `` (2).
+
+### SYS-104: Component flag `autoRelease`
+
+**Priority:** Medium
+**Test layer:** unit + integration-test
+**Status:** ✅ Tested
+
+**Motivation:**
+Release automation (for example the CVE remediation service) needs to know whether a component's
+releases may be started without a person. Until now that was inferred from a finish-build trigger on
+the release configuration.
+
+**Description:**
+- `components.auto_release BOOLEAN NOT NULL DEFAULT false` (`V12__`). Meaning: releases of the
+  component may be started automatically by release automation once a release candidate passes its
+  gates; `false`: a person starts every release. A finish-build trigger on the release configuration
+  is treated as `autoRelease = true` by consumers.
+- v4: `ComponentCreateRequest.autoRelease` (default false), `ComponentUpdateRequest.autoRelease`
+  (null = unchanged), `ComponentSummaryResponse.autoRelease`, `ComponentDetailResponse.autoRelease`;
+  `GET /components?autoRelease=true|false` filters (absent = both).
+- Field-config path `component.autoRelease` (`visibility`, `editable`); the default for a new
+  component is `component-defaults.autoRelease` (false).
+- The flag is not part of the Groovy DSL and is not exposed on v1-v3. Changes are recorded in the
+  component audit history.
+
+**Test method:**
+`V12AutoReleaseMigrationIntegrationTest`, `AutoReleaseFlagV4Test`, `CommandsTest`.

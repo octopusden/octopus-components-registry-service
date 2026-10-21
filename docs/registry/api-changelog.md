@@ -18,6 +18,13 @@ refresh it with `./gradlew :components-registry-service-server:generateOpenApiDo
 
 ## Unreleased
 
+- **`autoRelease` component flag added (SYS-104).** `ComponentCreateRequest.autoRelease` (default
+  `false`), `ComponentUpdateRequest.autoRelease` (null = unchanged), `ComponentSummaryResponse.autoRelease`,
+  `ComponentDetailResponse.autoRelease`, and the `GET /components?autoRelease=true|false` filter
+  (absent = both). Releases of the component may be started by release automation once a candidate
+  passes its gates; `false` means a person starts every release. A finish-build trigger on the release
+  configuration is treated as `autoRelease = true` by consumers. The flag exists only in the database
+  and v4: it is not in the Groovy DSL and not in the v1-v3 payloads.
 - **`involves` / `involvesRoles` list filters added (SYS-101).** `GET /components?involves=<u>` returns
   components where any listed user is the owner OR a release manager OR a security champion;
   `involvesRoles` (any of `owner`, `releaseManager`, `securityChampion`; default all) narrows the

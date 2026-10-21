@@ -82,6 +82,7 @@ class AdminConfigProperties {
         var parentComponent: String? = null
         var releasesInDefaultBranch: Boolean? = null
         var solution: Boolean? = null
+        var autoRelease: Boolean? = null
         var archived: Boolean? = null
         var copyright: String? = null
         var labels: MutableList<String> = mutableListOf()

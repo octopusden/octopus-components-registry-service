@@ -44,6 +44,7 @@ components-registry:
       name:                 { visibility: editable, searchable: Extended, required: true }
       displayName:          { visibility: editable, searchable: Extended }
       solution:             { visibility: editable, searchable: Extended }
+      autoRelease:          { visibility: editable, searchable: Extended }
       componentOwner:       { visibility: editable, searchable: Main }
       system:               { visibility: editable, searchable: Main }
       productType:          { visibility: editable, searchable: Extended }
@@ -79,6 +80,7 @@ components-registry:
     artifactIdPattern: '[\w-\.]+'
     releasesInDefaultBranch: true
     solution: false
+    autoRelease: false
     build:
       javaVersion: "17"
       mavenVersion: "3.9"

@@ -773,6 +773,9 @@
             },
             "type" : "array"
           },
+          "autoRelease" : {
+            "type" : "boolean"
+          },
           "baseConfiguration" : {
             "$ref" : "#/components/schemas/BaseConfigurationRequest"
           },
@@ -906,6 +909,9 @@
               "$ref" : "#/components/schemas/ArtifactIdResponse"
             },
             "type" : "array"
+          },
+          "autoRelease" : {
+            "type" : "boolean"
           },
           "canBeParent" : {
             "type" : "boolean"
@@ -1043,6 +1049,7 @@
         "required" : [
           "archived",
           "artifactIds",
+          "autoRelease",
           "canBeParent",
           "configurations",
           "docs",
@@ -1248,6 +1255,9 @@
           "archived" : {
             "type" : "boolean"
           },
+          "autoRelease" : {
+            "type" : "boolean"
+          },
           "buildSystem" : {
             "type" : "string"
           },
@@ -1320,6 +1330,7 @@
         },
         "required" : [
           "archived",
+          "autoRelease",
           "canBeParent",
           "id",
           "labels",
@@ -1505,6 +1516,9 @@
               "$ref" : "#/components/schemas/ArtifactIdRequest"
             },
             "type" : "array"
+          },
+          "autoRelease" : {
+            "type" : "boolean"
           },
           "baseConfiguration" : {
             "$ref" : "#/components/schemas/BaseConfigurationRequest"
@@ -9818,6 +9832,14 @@
           {
             "in" : "query",
             "name" : "testComponent",
+            "required" : false,
+            "schema" : {
+              "type" : "boolean"
+            }
+          },
+          {
+            "in" : "query",
+            "name" : "autoRelease",
             "required" : false,
             "schema" : {
               "type" : "boolean"
