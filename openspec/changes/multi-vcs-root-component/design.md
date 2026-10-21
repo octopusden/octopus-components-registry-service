@@ -1,7 +1,8 @@
 ## Context
 
-Program-level design: `onb-001-multi-vcs-root-component/design.md` in the program repository
-([ADR-022](../../../docs/registry/adr/022-vcs-root-checkout-layout.md)). Baseline characterization tests on branch `test/onb-001-baseline`
+Registry design of this feature; the decision is
+[ADR-022](../../../docs/registry/adr/022-vcs-root-checkout-layout.md), the import
+[ADR-023](../../../docs/registry/adr/023-teamcity-checkout-layout-diff-sync.md). Baseline characterization tests on branch `test/onb-001-baseline`
 (`fd47e79d`) pin today's v2 JSON, the DTO shape and the v4 write behaviour this change builds on.
 Revision 2 is implemented on this branch and deployed to QA (V8 applied there); revision 3 changes
 the checkout layout rules and the name rule, and adds the Build Working Directory.
@@ -11,8 +12,8 @@ the checkout layout rules and the name rule, and adds the Build Working Director
 - Migrations. `V8__add_vcs_entry_placement.sql` stays as shipped (Flyway migrations are immutable
   once applied): two nullable `varchar(255)` columns on `vcs_settings_entries`, and
   `checkout_directory = name where sort_order > 0`. Under revision 3 this is a valid fallback
-  (every row keeps exactly one entry without Checkout Directory, the first); the program's
-  checkout layout import replaces it where TeamCity shows the real layout. New
+  (every row keeps exactly one entry without Checkout Directory, the first); the
+  checkout layout import (ADR-023) replaces it where TeamCity shows the real layout. New
   `V9__add_build_working_directory.sql`: `alter table component_configurations add column
   build_working_directory varchar(255);`, no data change. The open PR #481 becomes `V10__`.
 - DSL import (`ImportServiceImpl.attachVcsEntries`, `ImportServiceImpl.kt:982,1854`) keeps
@@ -135,4 +136,4 @@ new code):
    wrote; if such a row has more than one entry without Checkout Directory, its next v4 write fails
    with 400 until an editor places the entries.
 
-See the program design for cross-repository order.
+Cross-repository order: see the proposal.
