@@ -56,7 +56,7 @@ None.
   `@JsonCreator(mode = DISABLED)`; v4 VCS entries, configuration rows, `warnings` on the detail
   response, the `/admin/teamcity-checkout-layout` endpoints; `docs/registry/api-changelog.md`.
 - Data: `V8__` (two nullable entry columns; `checkoutDirectory := name` after the first entry of
-  existing multi-entry rows), `V9__` (one nullable row column), `V10__` (event type rename).
+  existing multi-entry rows), `V9__` (one nullable row column), `V13__` (event type rename).
 - Behaviour changes: a generated root's default branch follows the registry instead of `master`; a
   Git-sourced (Groovy DSL) multi-root component gets no layout in v2, so the generator refuses it
   until it is migrated to the database; a v4 client that adds a second root without a Checkout

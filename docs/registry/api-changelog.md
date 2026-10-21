@@ -26,7 +26,7 @@ refresh it with `./gradlew :components-registry-service-server:generateOpenApiDo
   conflict `code` `tc-placement-{diff,sync}-running` → `tc-checkout-layout-{diff,sync}-running` and
   `activeKind` `TC_PLACEMENT_{DIFF,SYNC}` → `TC_CHECKOUT_LAYOUT_{DIFF,SYNC}`, the service event types
   `TEAMCITY_PLACEMENT_{DIFF,SYNC}` → `TEAMCITY_CHECKOUT_LAYOUT_{DIFF,SYNC}` (recorded events are
-  migrated by `V10__`), the schemas `TeamcityPlacement*` / `Placement*` → `TeamcityCheckoutLayout*` /
+  migrated by `V12__`), the schemas `TeamcityPlacement*` / `Placement*` → `TeamcityCheckoutLayout*` /
   `CheckoutLayout*`, and the CSV file names.
 
 - **`autoRelease` component flag (SYS-104).** v4 create/update/summary/detail field (default `false`)
