@@ -3868,6 +3868,10 @@
             "format" : "int32",
             "type" : "integer"
           },
+          "auto_release_enabled" : {
+            "format" : "int32",
+            "type" : "integer"
+          },
           "dropped_lines" : {
             "format" : "int32",
             "type" : "integer"
@@ -3901,6 +3905,7 @@
         },
         "required" : [
           "ambiguous_auto_resolved",
+          "auto_release_enabled",
           "dropped_lines",
           "errors",
           "scanned",
