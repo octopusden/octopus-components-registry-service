@@ -27,44 +27,44 @@ class TeamcityPlacementLegacyControllerV4(
     private val current: TeamcityCheckoutLayoutControllerV4,
 ) {
     @Deprecated(DEPRECATED)
-    @Operation(deprecated = true, summary = DEPRECATED)
+    @Operation(deprecated = true, summary = DEPRECATED, operationId = "startDiffLegacy")
     @PostMapping("/diff")
     fun startDiff(): ResponseEntity<TeamcityCheckoutLayoutDiffJobResponse> = current.startDiff()
 
     @Deprecated(DEPRECATED)
-    @Operation(deprecated = true, summary = DEPRECATED)
+    @Operation(deprecated = true, summary = DEPRECATED, operationId = "getDiffJobLegacy")
     @GetMapping("/diff/job")
     fun getDiffJob(): ResponseEntity<TeamcityCheckoutLayoutDiffJobResponse> = current.getDiffJob()
 
     @Deprecated(DEPRECATED)
-    @Operation(deprecated = true, summary = DEPRECATED)
+    @Operation(deprecated = true, summary = DEPRECATED, operationId = "getReportJsonLegacy")
     @GetMapping("/diff/report.json", produces = [MediaType.APPLICATION_JSON_VALUE])
     fun getReportJson(): ResponseEntity<CheckoutLayoutDiffResult> = current.getReportJson()
 
     @Deprecated(DEPRECATED)
-    @Operation(deprecated = true, summary = DEPRECATED)
+    @Operation(deprecated = true, summary = DEPRECATED, operationId = "getReportHtmlLegacy")
     @GetMapping("/diff/report.html", produces = [MediaType.TEXT_HTML_VALUE])
     fun getReportHtml(): ResponseEntity<String> = current.getReportHtml()
 
     @Deprecated(DEPRECATED)
-    @Operation(deprecated = true, summary = DEPRECATED)
+    @Operation(deprecated = true, summary = DEPRECATED, operationId = "getReportCsvLegacy")
     @GetMapping("/diff/report.csv")
     fun getReportCsv(): ResponseEntity<String> = current.getReportCsv()
 
     @Deprecated(DEPRECATED)
-    @Operation(deprecated = true, summary = DEPRECATED)
+    @Operation(deprecated = true, summary = DEPRECATED, operationId = "startSyncLegacy")
     @PostMapping("/sync")
     fun startSync(
         @RequestBody request: TeamcityCheckoutLayoutSyncRequest,
     ): ResponseEntity<TeamcityCheckoutLayoutSyncJobResponse> = current.startSync(request)
 
     @Deprecated(DEPRECATED)
-    @Operation(deprecated = true, summary = DEPRECATED)
+    @Operation(deprecated = true, summary = DEPRECATED, operationId = "getSyncJobLegacy")
     @GetMapping("/sync/job")
     fun getSyncJob(): ResponseEntity<TeamcityCheckoutLayoutSyncJobResponse> = current.getSyncJob()
 
     @Deprecated(DEPRECATED)
-    @Operation(deprecated = true, summary = DEPRECATED)
+    @Operation(deprecated = true, summary = DEPRECATED, operationId = "getSyncReportCsvLegacy")
     @GetMapping("/sync/report.csv")
     fun getSyncReportCsv(): ResponseEntity<String> = current.getSyncReportCsv()
 }
