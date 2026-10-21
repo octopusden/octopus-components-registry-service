@@ -4,7 +4,7 @@ import org.octopusden.octopus.components.registry.server.util.VcsUrlCanonicalize
 
 /*
  * ONB-002: pure derivation of VCS root placement (Checkout Directory / Source Path / Build
- * Working Directory, ADR-001) from a component's TeamCity compile build configurations.
+ * Working Directory, ADR-022) from a component's TeamCity compile build configurations.
  *
  * Scoped to what the ONB-002 Diff/Sync jobs need: compile configurations only (`CDGradleBuild` /
  * `CDJavaMavenBuild`, non-paused), no `CDRelease` / `CdReleaseCandidateNew` fallback — the design

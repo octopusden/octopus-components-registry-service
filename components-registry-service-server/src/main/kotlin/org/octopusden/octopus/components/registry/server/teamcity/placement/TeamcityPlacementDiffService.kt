@@ -100,7 +100,7 @@ data class PlacementDiffResult(
  * rows where TeamCity derives (or the registry already carries) a non-root Checkout Directory;
  * single-root rows with a non-default Build Working Directory (current or derived). A single-root
  * row with nothing on either side (no Checkout Directory, checkout-root Build Working Directory)
- * is out of scope entirely — ADR-001 keeps single-root Checkout Directories out of the
+ * is out of scope entirely — ADR-022 keeps single-root Checkout Directories out of the
  * escrow-facing `main` name — and never appears
  * in the result, not even as "in sync". The filter applies only to [PlacementRowStatus.scopeFiltered]
  * statuses; any other (`CONFLICT`, `UNEXPRESSIBLE`, ...) is always reported, like `TC_ERROR`.
@@ -240,7 +240,7 @@ class TeamcityPlacementDiffService(
     /**
      * Scope filter — see class kdoc. Only single-root rows are filtered; a multi-root row is
      * always in scope. Checks Source Path alongside Checkout Directory / Build Working Directory:
-     * ADR-001 allows a single root with an empty Checkout Directory but a non-empty Source Path
+     * ADR-022 allows a single root with an empty Checkout Directory but a non-empty Source Path
      * (`+:<Source Path> => <Source Path>`, a monorepo subdirectory with no rename) — that is a real
      * placement a row could need synced or reported on, not "nothing".
      */
@@ -283,7 +283,7 @@ class TeamcityPlacementDiffService(
         if (differingEntries.isEmpty() && !bwdDiffers) {
             return PlacementDiffRowStatus.IN_SYNC to emptyList()
         }
-        // ADR-002 decision 3: RESOLVED requires the derived values to
+        // ADR-023 decision 3: RESOLVED requires the derived values to
         // ALSO pass the same validation a real v4 write runs. This is the ONLY place that runs it
         // (PlacementRules.derive's pure engine does not pre-empt it
         // with its own narrower check): UNEXPRESSIBLE there is reserved for a rule/WORK_DIR shape

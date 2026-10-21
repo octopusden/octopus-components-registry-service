@@ -183,7 +183,7 @@ Architecture Decision Records and design docs in this repo live in `docs/registr
 - `functional-spec.md` — functional specification
 - `non-functional-spec.md` — performance, availability, async-job SLAs
 - `requirements-{common,migration,resolver}.md` — numbered requirements (`SYS-NNN`, `MIG-NNN`, `RES-NNN` for resolver parity)
-- `adr/` — ADRs (000–019), including ADR-012 (Portal architecture, canonical), ADR-013 (Cutover strategy, Proposed), ADR-014 (Schema v2), ADR-015 (Employee-service runtime validation), ADR-016 (Admin config-as-code), ADR-017 (Artifact-ownership modes), ADR-018 (Decoupled version model), ADR-019 (Feedback)
+- `adr/` — ADRs (000–023), including ADR-012 (Portal architecture, canonical), ADR-013 (Cutover strategy, Proposed), ADR-014 (Schema v2), ADR-015 (Employee-service runtime validation), ADR-016 (Admin config-as-code), ADR-017 (Artifact-ownership modes), ADR-018 (Decoupled version model), ADR-019 (Feedback), ADR-022 (VCS root checkout placement), ADR-023 (TeamCity placement Diff/Sync)
 - `tech-debt/` — numbered tech-debt entries (`TD-NNN`)
 
 ### Docs & comments: state, not history

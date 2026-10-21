@@ -129,7 +129,7 @@ class TeamcityPlacementControllerV4(
         return ResponseEntity.ok(TeamcityPlacementSyncJobResponse.from(state))
     }
 
-    /** The latest Sync run's rollback trace (ADR-002 decision 5): one row
+    /** The latest Sync run's rollback trace (ADR-023 decision 5): one row
      * per field it wrote, before and after. 404 until a Sync has completed at least once. Same
      * `IMPORT_DATA` gate as the rest of Sync -- this is what Sync wrote, not a public report. */
     @GetMapping("/sync/report.csv")

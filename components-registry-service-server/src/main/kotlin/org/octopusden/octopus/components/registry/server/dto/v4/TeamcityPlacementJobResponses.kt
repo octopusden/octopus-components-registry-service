@@ -58,7 +58,7 @@ data class TeamcityPlacementSyncJobResponse(
 }
 
 /** POST body for `/admin/teamcity-placement/sync` — the Portal offers "select all resolved" from
- * the last Diff's report. `diffId` is the id of the Diff run the selection came from (ADR-002
+ * the last Diff's report. `diffId` is the id of the Diff run the selection came from (ADR-023
  * decision 1): the controller refuses the whole request with 409 when it no longer matches the
  * latest Diff's id, since Diff keeps no history and a replaced result must never be acted on. */
 data class TeamcityPlacementSyncRequest(
