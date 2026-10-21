@@ -148,7 +148,7 @@ class TeamcitySyncService(
                         // unresolved (ambiguous). The component-level skipped_* counters do NOT
                         // reflect this, so surface it separately.
                         droppedLines += ambiguousLineCount
-                        if (enableAutoRelease(componentId, picks, changedBy)) autoReleaseEnabled++
+                        autoReleaseEnabled += enableAutoRelease(componentId, picks, changedBy)
                     }
 
                     // No winner at all: ambiguous if a line was left unresolved, else no-match.
@@ -194,16 +194,17 @@ class TeamcitySyncService(
     /**
      * SYS-104, one way only: a linked release configuration with an enabled finish-build trigger
      * turns `autoRelease` on; resync never turns it off and never writes to TeamCity. Audited, unlike
-     * re-links, so the component history says why the flag changed.
+     * re-links, so the component history says why the flag changed. Returns 1 when it turned the
+     * flag on, else 0 (a count, so the caller's loop stays branch-free).
      */
     private fun enableAutoRelease(
         componentId: UUID,
         picks: List<Pick>,
         changedBy: String,
-    ): Boolean {
-        val projectId = picks.firstOrNull { it.project.hasAutoReleaseTrigger }?.project?.id ?: return false
-        val component = componentRepository.findById(componentId).orElse(null) ?: return false
-        if (component.autoRelease) return false
+    ): Int {
+        val projectId = picks.firstOrNull { it.project.hasAutoReleaseTrigger }?.project?.id ?: return 0
+        val component = componentRepository.findById(componentId).orElse(null) ?: return 0
+        if (component.autoRelease) return 0
         component.autoRelease = true
         applicationEventPublisher.publishEvent(
             AuditEvent(
@@ -217,7 +218,7 @@ class TeamcitySyncService(
             ),
         )
         log.info { "TeamCity sync turned autoRelease on for ${component.componentKey} (TeamCity project $projectId, by $changedBy)" }
-        return true
+        return 1
     }
 
     /** A resolved winner for one PROJECT_VERSION line, with whether a tie-break was needed. */
