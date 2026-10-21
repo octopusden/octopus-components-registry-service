@@ -210,8 +210,10 @@ class TeamcityCheckoutLayoutDiffServiceTest {
         val configured = service(listOf(row), mapOf(comp.id!! to listOf("P")), fetcher, catalog = templateCatalog("CDCompileUTGradle"))
         val other = service(listOf(row), mapOf(comp.id!! to listOf("P")), fetcher)
 
-        assertEquals(CheckoutLayoutDiffRowStatus.RESOLVED, configured.runDiff().rows.single().status)
-        assertEquals(CheckoutLayoutDiffRowStatus.OUTSIDE_TEMPLATES, other.runDiff().rows.single().status)
+        val configuredRow = configured.runDiff().rows.single()
+        val otherRow = other.runDiff().rows.single()
+        assertEquals(CheckoutLayoutDiffRowStatus.RESOLVED, configuredRow.status)
+        assertEquals(CheckoutLayoutDiffRowStatus.OUTSIDE_TEMPLATES, otherRow.status)
     }
 
     @Test
