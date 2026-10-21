@@ -620,7 +620,7 @@ class ExternalTcProjectFetcherTest {
     fun noAutoReleaseOtherwise() {
         assertEquals(false, autoReleaseOf(release()))
         assertEquals(false, autoReleaseOf(release(finishBuildTrigger(disabled = true))))
-        assertEquals(false, autoReleaseOf(release(finishBuildTrigger(), paused = true)))
+        assertEquals(false, autoReleaseOf(release(finishBuildTrigger(), paused = true), buildType("Compile")))
         assertEquals(false, autoReleaseOf(release(ExternalTeamcityTrigger("schedulingTrigger", false, ExternalTeamcityProperties()))))
         val compile = buildType("Compile", legacyTemplateId = "CDGradleBuild", triggers = listOf(finishBuildTrigger()))
         assertEquals(false, autoReleaseOf(compile))
