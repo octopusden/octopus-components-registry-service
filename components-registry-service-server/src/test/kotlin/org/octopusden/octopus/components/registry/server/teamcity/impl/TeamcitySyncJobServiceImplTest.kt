@@ -207,6 +207,7 @@ class TeamcitySyncJobServiceImplTest {
                 ambiguousAutoResolved = 0,
                 droppedLines = 0,
                 errors = emptyList(),
+                autoReleaseEnabled = 4,
             )
         val syncService = mock(TeamcitySyncService::class.java)
         `when`(syncService.resync()).thenReturn(populated)
@@ -225,6 +226,7 @@ class TeamcitySyncJobServiceImplTest {
         assertEquals(ServiceEventStatus.COMPLETED, finish.status)
         assertEquals(start.correlationId, finish.correlationId)
         assertEquals(2, finish.detail?.get("updated"))
+        assertEquals(4, finish.detail?.get("autoReleaseEnabled"))
     }
 
     @Test
