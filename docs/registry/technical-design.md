@@ -505,8 +505,8 @@ source read. Staleness bound across pods: 30 s after a change made on another po
 ### 6.10 TeamCity checkout layout Diff/Sync (ONB-002)
 Two jobs that reconcile a component's VCS checkout layout (ADR-022: Checkout Directory, Source Path,
 Build Working Directory) against its linked TeamCity project(s)' actual chains, scoped to compile configurations
-only (`CDGradleBuild` / `CDJavaMavenBuild`, non-paused; no `CDRelease` / `CdReleaseCandidateNew`
-fallback).
+only (based on the templates configured in `teamcity.validation.{gradle,maven}-build-template-id`, e.g.
+`CDGradleBuild` / `CDJavaMavenBuild`; non-paused; no release-template fallback).
 
 - **Diff (read-only):** `TeamcityCheckoutLayoutDiffService` walks every component's configuration rows
   (base or `vcs.settings` override) that carry VCS entries — `ComponentConfigurationRepository

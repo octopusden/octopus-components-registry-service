@@ -45,7 +45,8 @@ selective apply and no repeatable "has this drifted" check.
    `ROOTS_MISMATCH`, then the derivation outcomes (`NO_CHAIN`, `COMPILE_PAUSED`,
    `OUTSIDE_TEMPLATES`, `UNEXPRESSIBLE`, `CONFLICT`), then `IN_SYNC`, `INVALID`, `MANUAL_EDIT`,
    `RESOLVED`.
-   - Compile configurations (`CDGradleBuild`, `CDJavaMavenBuild`, not paused) are authoritative.
+   - Compile configurations (based on the compile templates configured in
+     `teamcity.validation.{gradle,maven}-build-template-id`, not paused) are authoritative.
    - A registry entry matches a TeamCity VCS root entry by the full repository URL, host included
      (Git case-insensitive, trailing `.git` and `/` ignored), never by name or path alone.
    - Checkout rule → fields: `+:.=>d` gives Checkout Directory `d`; `+:sp=>d/sp` gives Checkout

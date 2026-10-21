@@ -133,13 +133,20 @@ Directory is set.
 - **WHEN** a chain is generated for a Component without a Build Working Directory
 - **THEN** no created configuration gets `BUILD_VERSION_FORMAT_FILE`, and nothing is logged about it
 
-### Requirement: Current compile template ids
+### Requirement: Compile template ids
 
-The generator SHALL instantiate compile configurations from `CDGradleBuild` for Gradle-family build
-systems and `CDJavaMavenBuild` for Maven.
+The generator SHALL instantiate compile configurations from the Gradle compile template for
+Gradle-family build systems and the Maven compile template for Maven. The ids default to
+`CDCompileUTGradle` and `CDCompileUTMaven`, the original ids every TeamCity installation resolves
+(an installation that renamed the templates keeps resolving them), and are set with
+`--gradle-compile-template` / `--maven-compile-template`.
 
-#### Scenario: Maven Component
-- **WHEN** a chain is generated for a Maven Component
+#### Scenario: Maven Component, default ids
+- **WHEN** a chain is generated for a Maven Component without `--maven-compile-template`
+- **THEN** the compile configuration is based on template `CDCompileUTMaven`
+
+#### Scenario: Configured ids
+- **WHEN** a chain is generated with `--maven-compile-template=CDJavaMavenBuild` for a Maven Component
 - **THEN** the compile configuration is based on template `CDJavaMavenBuild`
 
 ### Requirement: Unsupported shapes fail before creation

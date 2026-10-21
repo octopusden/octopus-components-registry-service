@@ -61,6 +61,8 @@
 - [x] 4.5 Before/after CSV per written field; rollback procedure in technical-design §6.10
 - [x] 4.6 Endpoints under `/rest/api/4/admin/teamcity-checkout-layout`; the first name,
       `/teamcity-placement`, kept as deprecated aliases
+- [x] 4.7 Compile configurations recognised by the configured template ids
+      (`teamcity.validation.{gradle,maven}-build-template-id`), not hardcoded ones
 
 ## 5. Portal (octopus-components-management-portal)
 
@@ -75,10 +77,13 @@
 
 - [x] 6.1 Characterization tests of the single-root behaviour, negative-checked
 - [x] 6.2 One TeamCity VCS root per registry root with the checkout rule of its layout; attach
-      order; default branch from the registry; `WORK_DIR`/`COMPONENT_CONFIG_DIR`; current template
-      ids; unsupported shapes fail before creation (#78, released in 1.1.0)
+      order; default branch from the registry; `WORK_DIR`/`COMPONENT_CONFIG_DIR`; unsupported
+      shapes fail before creation (#78, released in 1.1.0)
 - [x] 6.3 `BUILD_VERSION_FORMAT_FILE` on created configurations with a *Calculate Build Version*
       step when a Build Working Directory is set (ADR-022 decision 9)
+- [ ] 6.4 Compile template ids default to the original `CDCompileUTGradle`/`CDCompileUTMaven`
+      again (#78 had switched them to one installation's renamed ids), with
+      `--gradle-compile-template` / `--maven-compile-template` (#85)
 
 ## 7. Sonar automation (octopus-sonar-automation)
 

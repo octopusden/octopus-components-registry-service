@@ -30,7 +30,8 @@ Each reported row gets exactly one status, checked in this order:
 - **COMPILE_PAUSED**: configurations are found, but every compile configuration is paused.
   Reported; never written.
 - **OUTSIDE_TEMPLATES**: active configurations attach registry roots but none is built on a known
-  template (`CDGradleBuild`, `CDJavaMavenBuild`). Reported; never written.
+  compile template (the Gradle and Maven build templates configured for the registry). Reported;
+  never written.
 - **UNEXPRESSIBLE**: a checkout rule or `WORK_DIR` value can't be parsed into the shapes ADR-022
   defines. Reported; never written.
 - **CONFLICT**: two compile configurations disagree on a repository's checkout rule or `WORK_DIR`,
@@ -127,7 +128,7 @@ Diff SHALL keep no history beyond that one result and its id.
 
 #### Scenario: No compile configuration on a known template
 - **WHEN** a component has active configurations that attach registry roots with checkout rules,
-  but none of them is based on `CDGradleBuild` or `CDJavaMavenBuild`
+  but none of them is based on a configured compile template
 - **THEN** the component is reported OUTSIDE_TEMPLATES and is not offered for Sync
 
 #### Scenario: Every compile configuration paused

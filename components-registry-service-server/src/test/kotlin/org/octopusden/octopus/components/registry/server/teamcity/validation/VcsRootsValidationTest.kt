@@ -29,6 +29,7 @@ import org.octopusden.octopus.components.registry.server.teamcity.checkoutlayout
 import org.octopusden.octopus.components.registry.server.teamcity.checkoutlayout.TeamcityCheckoutLayoutDiffService
 import org.octopusden.octopus.components.registry.server.teamcity.checkoutlayout.compileBuildType
 import org.octopusden.octopus.components.registry.server.teamcity.checkoutlayout.project
+import org.octopusden.octopus.components.registry.server.teamcity.checkoutlayout.templateCatalog
 import org.octopusden.octopus.validation.core.Status
 import org.octopusden.octopus.validation.dto.teamcity.TemplateCatalog
 import org.springframework.transaction.support.TransactionTemplate
@@ -133,7 +134,14 @@ class VcsRootsValidationTest {
         whenever(configRepo.findAllRowsWithVcsEntries()).thenReturn(rows)
         val versionLines = mock<VersionLineRepository>()
         projectIdsByComponent.forEach { (id, ps) -> whenever(versionLines.findDistinctTeamcityProjectIdsByComponentId(id)).thenReturn(ps) }
-        val diff = TeamcityCheckoutLayoutDiffService(configRepo, versionLines, fetcher(projects), mock<CheckoutLayoutEditHistory>())
+        val diff =
+            TeamcityCheckoutLayoutDiffService(
+                configRepo,
+                versionLines,
+                fetcher(projects),
+                mock<CheckoutLayoutEditHistory>(),
+                templateCatalog(),
+            )
         return diff.runDiff().rows.associate { it.componentKey to it.status }
     }
 

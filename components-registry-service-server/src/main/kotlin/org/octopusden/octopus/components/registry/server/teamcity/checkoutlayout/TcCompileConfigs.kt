@@ -1,12 +1,17 @@
 package org.octopusden.octopus.components.registry.server.teamcity.checkoutlayout
 
 import org.octopusden.octopus.infrastructure.teamcity.client.dto.TeamcityBuildType
+import org.octopusden.octopus.validation.dto.teamcity.TemplateCatalog
 
-/** ADR-022: the only two chain templates whose build carries `WORK_DIR` / checkout layout. */
-private val COMPILE_TEMPLATE_IDS = setOf("CDGradleBuild", "CDJavaMavenBuild")
+/**
+ * ADR-022: the chain's two compile templates, the only ones whose build carries `WORK_DIR` /
+ * checkout layout. Their ids differ between TeamCity installations, so they come from
+ * `teamcity.validation.{gradle,maven}-build-template-id`.
+ */
+fun TemplateCatalog.compileTemplateIds(): Set<String> = setOf(gradleBuildTemplateId, mavenBuildTemplateId) - ""
 
-internal fun TeamcityBuildType.isCompile(): Boolean =
-    (templates?.buildTypes.orEmpty().map { it.id } + listOfNotNull(template?.id)).any { it in COMPILE_TEMPLATE_IDS }
+internal fun TeamcityBuildType.isCompile(compileTemplateIds: Set<String>): Boolean =
+    (templates?.buildTypes.orEmpty().map { it.id } + listOfNotNull(template?.id)).any { it in compileTemplateIds }
 
 internal fun TeamcityBuildType.vcsRootUrls(): List<Pair<String?, String?>> =
     vcsRoots?.entries.orEmpty().map { e ->
@@ -29,5 +34,8 @@ internal fun TeamcityBuildType.toCompileConfig(): TcCompileConfig =
     )
 
 /** The non-paused compile configurations of a project's build types — what the Diff and the VCS-roots check compare. */
-fun compileConfigsOf(buildTypes: List<TeamcityBuildType>): List<TcCompileConfig> =
-    buildTypes.filter { it.isCompile() && it.paused != true }.map { it.toCompileConfig() }
+fun compileConfigsOf(
+    buildTypes: List<TeamcityBuildType>,
+    compileTemplateIds: Set<String>,
+): List<TcCompileConfig> =
+    buildTypes.filter { it.isCompile(compileTemplateIds) && it.paused != true }.map { it.toCompileConfig() }

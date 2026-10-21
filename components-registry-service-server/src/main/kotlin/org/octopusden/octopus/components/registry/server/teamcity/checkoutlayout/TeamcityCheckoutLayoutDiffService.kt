@@ -10,6 +10,7 @@ import org.octopusden.octopus.components.registry.server.repository.ComponentCon
 import org.octopusden.octopus.components.registry.server.repository.VersionLineRepository
 import org.octopusden.octopus.components.registry.server.teamcity.validation.EnrichedTcProjectFetcher
 import org.octopusden.octopus.components.registry.server.util.VcsCheckoutLayoutValidator
+import org.octopusden.octopus.validation.dto.teamcity.TemplateCatalog
 import org.springframework.stereotype.Service
 import java.time.Instant
 import java.util.UUID
@@ -112,8 +113,10 @@ class TeamcityCheckoutLayoutDiffService(
     private val versionLineRepository: VersionLineRepository,
     private val enrichedTcProjectFetcher: EnrichedTcProjectFetcher,
     private val checkoutLayoutEditHistory: CheckoutLayoutEditHistory,
+    templateCatalog: TemplateCatalog,
 ) {
     private val log = KotlinLogging.logger {}
+    private val compileTemplateIds = templateCatalog.compileTemplateIds()
 
     /**
      * Forces the next [runDiff] to read live TeamCity state instead of [enrichedTcProjectFetcher]'s
@@ -426,7 +429,7 @@ class TeamcityCheckoutLayoutDiffService(
         val nonCompileRuled = mutableMapOf<String, Pair<Set<String>, Int>>()
         for (bt in buildTypes) {
             val paused = bt.paused == true
-            if (bt.isCompile()) {
+            if (bt.isCompile(compileTemplateIds)) {
                 if (paused) pausedCompile++ else compile += bt.toCompileConfig()
             } else if (!paused) {
                 val ruledKeys = bt
