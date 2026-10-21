@@ -23,6 +23,7 @@ import org.octopusden.octopus.infrastructure.teamcity.client.dto.TeamcityPropert
 import org.octopusden.octopus.infrastructure.teamcity.client.dto.TeamcityVcsRoot
 import org.octopusden.octopus.infrastructure.teamcity.client.dto.TeamcityVcsRootEntries
 import org.octopusden.octopus.infrastructure.teamcity.client.dto.TeamcityVcsRootEntry
+import org.octopusden.octopus.validation.dto.teamcity.TemplateCatalog
 import java.util.UUID
 import org.octopusden.octopus.infrastructure.teamcity.client.dto.TeamcityProject as ExternalTeamcityProject
 
@@ -82,13 +83,26 @@ internal fun compileBuildType(
     paused: Boolean = false,
     workDir: String? = null,
     roots: List<Pair<String, String?>> = emptyList(),
+    template: String = "CDGradleBuild",
 ) = bareBuildType(
     id = id,
     paused = paused,
-    templates = TeamcityBuildTypes(listOf(bareBuildType(id = "CDGradleBuild"))),
+    templates = TeamcityBuildTypes(listOf(bareBuildType(id = template))),
     parameters = workDir?.let { props("WORK_DIR" to it) },
     vcsRoots = TeamcityVcsRootEntries(roots.map { (url, rule) -> entry(url, rule) }),
 )
+
+internal fun templateCatalog(
+    gradle: String = "CDGradleBuild",
+    maven: String = "CDJavaMavenBuild",
+): TemplateCatalog =
+    object : TemplateCatalog {
+        override val gradleBuildTemplateId = gradle
+        override val mavenBuildTemplateId = maven
+        override val releaseFamilyTemplateIds = emptySet<String>()
+
+        override fun defaultBuildStepId(templateId: String): String? = null
+    }
 
 internal fun project(vararg buildTypes: TeamcityBuildType): ExternalTeamcityProject =
     TeamcityProject(
@@ -174,6 +188,7 @@ class TeamcityCheckoutLayoutDiffServiceTest {
         projectIdsByComponent: Map<UUID, List<String>>,
         fetcher: EnrichedTcProjectFetcher,
         editHistory: CheckoutLayoutEditHistory = editHistory(),
+        catalog: TemplateCatalog = templateCatalog(),
     ): TeamcityCheckoutLayoutDiffService {
         val configRepo = mock<ComponentConfigurationRepository>()
         whenever(configRepo.findAllRowsWithVcsEntries()).thenReturn(rows)
@@ -181,7 +196,22 @@ class TeamcityCheckoutLayoutDiffServiceTest {
         projectIdsByComponent.forEach { (id, projects) ->
             whenever(versionLineRepo.findDistinctTeamcityProjectIdsByComponentId(id)).thenReturn(projects)
         }
-        return TeamcityCheckoutLayoutDiffService(configRepo, versionLineRepo, fetcher, editHistory)
+        return TeamcityCheckoutLayoutDiffService(configRepo, versionLineRepo, fetcher, editHistory, catalog)
+    }
+
+    @Test
+    fun `compile templates are the configured ones`() {
+        val comp = component()
+        val row = multiRootRow(comp)
+        val roots = listOf(gatewayId to "", appId to "+:. => app-one")
+        val bt = compileBuildType("compileA", roots = roots, template = "CDCompileUTGradle")
+        val fetcher = FakeEnrichedTcProjectFetcher(mapOf("P" to project(bt)))
+
+        val configured = service(listOf(row), mapOf(comp.id!! to listOf("P")), fetcher, catalog = templateCatalog("CDCompileUTGradle"))
+        val other = service(listOf(row), mapOf(comp.id!! to listOf("P")), fetcher)
+
+        assertEquals(CheckoutLayoutDiffRowStatus.RESOLVED, configured.runDiff().rows.single().status)
+        assertEquals(CheckoutLayoutDiffRowStatus.OUTSIDE_TEMPLATES, other.runDiff().rows.single().status)
     }
 
     @Test
