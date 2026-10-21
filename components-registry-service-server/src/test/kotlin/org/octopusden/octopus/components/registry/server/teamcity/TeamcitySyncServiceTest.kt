@@ -1,6 +1,7 @@
 package org.octopusden.octopus.components.registry.server.teamcity
 
 import org.junit.jupiter.api.Assertions.assertEquals
+import org.junit.jupiter.api.Assertions.assertFalse
 import org.junit.jupiter.api.Assertions.assertTrue
 import org.junit.jupiter.api.DisplayName
 import org.junit.jupiter.api.Test
@@ -335,6 +336,53 @@ class TeamcitySyncServiceTest {
 
         val ex = assertThrows<RuntimeException> { svc.resync() }
         assertEquals("TC unavailable", ex.message)
+    }
+
+    @Test
+    @DisplayName("SYS-104: a finish-build trigger on a linked release configuration turns autoRelease on")
+    fun autoReleaseEnabledFromTeamcity() {
+        val auto = component(alice, "alpha")
+        val manual = component(bob, "beta")
+        val fetcher = stubFetcher(
+            mapOf(
+                "alpha" to listOf(TcProject("Alpha_Build", hasCdReleaseBuild = true, hasAutoReleaseTrigger = true)),
+                "beta" to listOf(TcProject("Beta_Build", hasCdReleaseBuild = true)),
+            ),
+        )
+        val svc = service(
+            StubComponentRepository(listOf(auto, manual)),
+            StubVersionLineRepository(),
+            StubTeamcityProjectRepository(),
+            fetcher,
+            RecordingPublisher(),
+            fixedUser("admin"),
+        )
+
+        val result = svc.resync()
+
+        assertTrue(auto.autoRelease)
+        assertFalse(manual.autoRelease)
+        assertEquals(1, result.autoReleaseEnabled)
+    }
+
+    @Test
+    @DisplayName("SYS-104: resync never turns autoRelease off")
+    fun autoReleaseNeverTurnedOff() {
+        val alpha = component(alice, "alpha").apply { autoRelease = true }
+        val fetcher = stubFetcher(mapOf("alpha" to listOf(TcProject("Alpha_Build", hasCdReleaseBuild = true))))
+        val svc = service(
+            StubComponentRepository(listOf(alpha)),
+            StubVersionLineRepository(),
+            StubTeamcityProjectRepository(),
+            fetcher,
+            RecordingPublisher(),
+            fixedUser("admin"),
+        )
+
+        val result = svc.resync()
+
+        assertTrue(alpha.autoRelease)
+        assertEquals(0, result.autoReleaseEnabled)
     }
 
     @Test

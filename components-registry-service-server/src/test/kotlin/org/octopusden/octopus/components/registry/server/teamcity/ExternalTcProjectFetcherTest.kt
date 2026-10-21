@@ -15,6 +15,8 @@ import org.octopusden.octopus.infrastructure.teamcity.client.dto.TeamcityProject
 import org.octopusden.octopus.infrastructure.teamcity.client.dto.TeamcityProjects as ExternalTeamcityProjects
 import org.octopusden.octopus.infrastructure.teamcity.client.dto.TeamcityProperties as ExternalTeamcityProperties
 import org.octopusden.octopus.infrastructure.teamcity.client.dto.TeamcityProperty as ExternalTeamcityProperty
+import org.octopusden.octopus.infrastructure.teamcity.client.dto.TeamcityTrigger as ExternalTeamcityTrigger
+import org.octopusden.octopus.infrastructure.teamcity.client.dto.TeamcityTriggers as ExternalTeamcityTriggers
 
 /**
  * Unit tests for the pure mapper inside [org.octopusden.octopus.components.registry.server.teamcity.sync.ExternalTcProjectFetcher].
@@ -590,12 +592,46 @@ class ExternalTcProjectFetcherTest {
         },
     )
 
+    private fun finishBuildTrigger(disabled: Boolean = false) = ExternalTeamcityTrigger("buildDependencyTrigger", disabled, null)
+
+    private fun autoReleaseOf(vararg buildTypes: ExternalTeamcityBuildType): Boolean {
+        val project = tcProject(id = "Tc_Rel", webUrl = "http://tc/rel", componentName = "foo", buildTypes = buildTypes.toList())
+        return mapTcProjectsToComponentMatches(listOf(project), mapOf("foo" to fooUuid), cdReleaseTemplateId)[fooUuid]!!
+            .single()
+            .hasAutoReleaseTrigger
+    }
+
+    private fun release(
+        vararg triggers: ExternalTeamcityTrigger,
+        paused: Boolean? = null,
+    ) = buildType("Release", legacyTemplateId = "CDRelease", paused = paused, triggers = triggers.toList())
+
+    @Test
+    @DisplayName("SYS-104: an enabled finish-build trigger on the release configuration means auto release")
+    fun autoReleaseFromFinishBuildTrigger() {
+        assertEquals(true, autoReleaseOf(release(finishBuildTrigger())))
+        val viaTemplates = buildType("Release", pluralTemplateIds = listOf("CDRelease"), triggers = listOf(finishBuildTrigger()))
+        assertEquals(true, autoReleaseOf(viaTemplates))
+    }
+
+    @Test
+    @DisplayName("SYS-104: no auto release from a disabled trigger, a paused release, another trigger or another configuration")
+    fun noAutoReleaseOtherwise() {
+        assertEquals(false, autoReleaseOf(release()))
+        assertEquals(false, autoReleaseOf(release(finishBuildTrigger(disabled = true))))
+        assertEquals(false, autoReleaseOf(release(finishBuildTrigger(), paused = true)))
+        assertEquals(false, autoReleaseOf(release(ExternalTeamcityTrigger("schedulingTrigger", false, null))))
+        val compile = buildType("Compile", legacyTemplateId = "CDGradleBuild", triggers = listOf(finishBuildTrigger()))
+        assertEquals(false, autoReleaseOf(compile))
+    }
+
     private fun buildType(
         id: String,
         legacyTemplateId: String? = null,
         pluralTemplateIds: List<String>? = null,
         paused: Boolean? = null,
         projectVersion: String? = null,
+        triggers: List<ExternalTeamcityTrigger>? = null,
     ): ExternalTeamcityBuildType =
         ExternalTeamcityBuildType(
             id = id,
@@ -604,6 +640,7 @@ class ExternalTcProjectFetcherTest {
             projectName = "P",
             href = "/$id",
             paused = paused,
+            triggers = triggers?.let { ExternalTeamcityTriggers(it) },
             parameters = projectVersion?.let {
                 ExternalTeamcityProperties(
                     properties = mutableListOf(ExternalTeamcityProperty(name = "PROJECT_VERSION", value = it)),
