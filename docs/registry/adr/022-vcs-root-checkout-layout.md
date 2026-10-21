@@ -2,10 +2,7 @@
 
 ## Status
 
-Accepted. Implemented in #503 (fields, validation, name derivation, migrations `V8__`/`V9__`).
-Moved here from the program repository, where it was recorded as ADR-001, with the same
-decision numbers.
-The term was "placement" until 2026-10; migration `V8__add_vcs_entry_placement.sql` keeps it.
+Accepted. Implemented in #503 (`V8__`, `V9__`).
 
 ## Context
 
@@ -26,9 +23,8 @@ Constraints:
   tag only if the compile configuration attaches it.
 - The escrow export writes each root of a multi-root component into `src/<name>/` and silently
   skips a second root with the same name.
-- The shared compile templates feed about 1 400 configurations; about 96 of them rely on the
-  version-format file staying at the checkout root, so the templates cannot derive paths from
-  `WORK_DIR`.
+- Many configurations on the shared compile templates rely on the version-format file at the
+  checkout root, so the templates cannot derive paths from `WORK_DIR`.
 - Existing hand-made chains place roots in any order: the root at the checkout root is not always
   the first registry entry, and some chains have no root at the checkout root at all.
 
@@ -80,8 +76,8 @@ Constraints:
 8. **Scope of automation is creation.** The generator does not reconcile existing chains. A v4
    write that changes roots or the Build Working Directory of a component linked to a TeamCity
    project returns a warning that the chain must be recreated.
-9. **Version-format file outside the checkout root.** The shared compile templates (`CDGradleBuild`,
-   `CDJavaMavenBuild`) get a template parameter `BUILD_VERSION_FORMAT_FILE`, defaulting to today's
+9. **Version-format file outside the checkout root.** The shared Gradle and Maven compile templates
+   get a template parameter `BUILD_VERSION_FORMAT_FILE`, defaulting to today's
    `build-version-format.properties`, read by their *Calculate Build Version* step. The generator
    sets it to `<Build Working Directory>/build-version-format.properties` on every configuration it
    creates that has that step, only when a Build Working Directory is set. The template change is a
@@ -118,8 +114,8 @@ prefixed with `fieldOverrides[<j>].` for a per-range row).
 - **Checkout layout only in TeamCity, maintained by hand.** The status quo that drifted.
 - **The generator overriding the inherited *Calculate Build Version* step.** Rejected: standard
   steps stay as the templates define them.
-- **Templates derive the version-format file from `WORK_DIR`.** Changes behaviour for the ~96
-  configurations that read it from the checkout root.
+- **Templates derive the version-format file from `WORK_DIR`.** Changes behaviour for the configurations
+  that read it from the checkout root.
 - **Free-form `name` with a uniqueness rule.** A changed Checkout Directory would leave a stale
   name another root could collide with.
 

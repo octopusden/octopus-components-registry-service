@@ -113,8 +113,8 @@ Working Directory is set, the generator SHALL set the configuration parameter
 configuration it creates that already carries a *Calculate Build Version* step, checked per
 configuration; it SHALL set nothing on a configuration without that step, and nothing at all when
 there is no Build Working Directory. The generator SHALL override no build step. The parameter
-takes effect only once templates `CDGradleBuild` and `CDJavaMavenBuild` read it (a manual, one-time
-template change, not applied by the generator, outside this repository);
+takes effect only once the compile templates read it (a manual, one-time template change, not
+applied by the generator);
 the generator SHALL log this at INFO, naming the parameter and its value, whenever a Build Working
 Directory is set.
 
@@ -146,8 +146,8 @@ Gradle-family build systems and the Maven compile template for Maven. The ids de
 - **THEN** the compile configuration is based on template `CDCompileUTMaven`
 
 #### Scenario: Configured ids
-- **WHEN** a chain is generated with `--maven-compile-template=CDJavaMavenBuild` for a Maven Component
-- **THEN** the compile configuration is based on template `CDJavaMavenBuild`
+- **WHEN** a chain is generated with `--maven-compile-template=<id>` for a Maven Component
+- **THEN** the compile configuration is based on template `<id>`
 
 ### Requirement: Unsupported shapes fail before creation
 

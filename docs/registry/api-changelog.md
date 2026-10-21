@@ -18,17 +18,11 @@ refresh it with `./gradlew :components-registry-service-server:generateOpenApiDo
 
 ## Unreleased
 
-- **TeamCity placement Diff/Sync renamed to "checkout layout" (SYS-102).** The endpoints move to
-  `/rest/api/4/admin/teamcity-checkout-layout/...` (same sub-paths, methods, permissions and bodies).
-  The old `/rest/api/4/admin/teamcity-placement/...` paths still answer, delegating to the new ones,
-  and are marked `deprecated`; they will be removed in a later release. Also renamed: the stale-Diff
-  `errorCode` `placement-diff-stale` → `checkout-layout-diff-stale` (on both paths), the gate's
-  conflict `code` `tc-placement-{diff,sync}-running` → `tc-checkout-layout-{diff,sync}-running` and
-  `activeKind` `TC_PLACEMENT_{DIFF,SYNC}` → `TC_CHECKOUT_LAYOUT_{DIFF,SYNC}`, the service event types
-  `TEAMCITY_PLACEMENT_{DIFF,SYNC}` → `TEAMCITY_CHECKOUT_LAYOUT_{DIFF,SYNC}` (recorded events are
-  migrated by `V12__`), the schemas `TeamcityPlacement*` / `Placement*` → `TeamcityCheckoutLayout*` /
-  `CheckoutLayout*`, and the CSV file names.
-
+- **TeamCity placement Diff/Sync renamed to checkout layout (SYS-102).** Endpoints move to
+  `/admin/teamcity-checkout-layout/...`; `/admin/teamcity-placement/...` stays as a deprecated alias.
+  Renamed: errorCode `checkout-layout-diff-stale`, gate code `tc-checkout-layout-{diff,sync}-running`,
+  activeKind `TC_CHECKOUT_LAYOUT_{DIFF,SYNC}`, event types `TEAMCITY_CHECKOUT_LAYOUT_{DIFF,SYNC}`
+  (migrated by `V13__`), `CheckoutLayout*` schemas, CSV file names.
 - **`autoRelease` component flag (SYS-104).** v4 create/update/summary/detail field (default `false`)
   and `?autoRelease=` list filter; not in the DSL or v1-v3. An admin-started TeamCity resync turns it on
   (never off) when every linked release line has an enabled finish-build trigger and nobody changed the

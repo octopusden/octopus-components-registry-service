@@ -17,38 +17,25 @@ and components without a TeamCity link are left out of the report entirely. Of t
 a multi-root row is always reported; a single-root row is reported when a Checkout Directory or a
 non-default Build Working Directory exists on either side (stored or derived), and always when its
 status is TC_ERROR, ROOTS_MISMATCH, CONFLICT or UNEXPRESSIBLE (nothing is derived to decide by).
-Each reported row gets exactly one status, checked in this order:
+Each reported row gets exactly one status, checked in this order. Every status except RESOLVED
+is reported and never written.
 
-- **TC_ERROR**: the TeamCity fetch for the component's configurations failed (a 403 is reported as
-  missing permission to read VCS root entries). Reported; never written.
-- **ROOTS_MISMATCH**: a non-paused compile configuration that attaches at least one of the row's
-  repositories also attaches a repository the registry does not list (for example a shared tooling
-  repository). Reported with the extra repositories in its note; never written. The same comparison
-  drives the TeamCity Validation finding `VCS_ROOTS_DIFFER_FROM_REGISTRY`.
-- **NO_CHAIN**: no compile configuration is found in the projects the component's registry
-  TeamCity link names (projects are never searched by `COMPONENT_NAME`). Reported; never written.
-- **COMPILE_PAUSED**: configurations are found, but every compile configuration is paused.
-  Reported; never written.
-- **OUTSIDE_TEMPLATES**: active configurations attach registry roots but none is built on a known
-  compile template (the Gradle and Maven build templates configured for the registry). Reported;
-  never written.
-- **UNEXPRESSIBLE**: a checkout rule or `WORK_DIR` value can't be parsed into the shapes ADR-022
-  defines. Reported; never written.
-- **CONFLICT**: two compile configurations disagree on a repository's checkout rule or `WORK_DIR`,
-  or the same repository — matched by full URL including host — is attached twice with different
-  rules. Reported; never written.
-- **INVALID**: derivation succeeds and disagrees with CRS's stored checkout layout, but the derived
-  values fail CRS validation (e.g. a reserved name, or two roots without a Checkout Directory).
-  Reported; never offered.
-- **IN_SYNC**: derivation succeeds and matches CRS's stored checkout layout exactly. Reported; Sync
-  treats a selected IN_SYNC component as a no-op skip.
-- **MANUAL_EDIT**: derivation succeeds and disagrees with CRS, and the differing field's last
-  audited change is a user write not tagged `sync from TeamCity (job <id>)`. Reported; never
-  offered.
-- **RESOLVED**: derivation succeeds and disagrees with CRS, the derived values pass CRS validation,
-  and every differing field is overwritable — no audit record has ever touched it (still null, or
-  holding V8's SQL back-fill, which left no audit record), or its last audited change carries a
-  previous Sync's `sync from TeamCity (job <id>)` tag. Offered to Sync.
+- **TC_ERROR**: the TeamCity fetch failed (a 403 is reported as missing permission).
+- **ROOTS_MISMATCH**: a non-paused compile configuration that attaches one of the row's
+  repositories also attaches a repository the registry does not list; the note names it. Also the
+  TeamCity Validation finding `VCS_ROOTS_DIFFER_FROM_REGISTRY`.
+- **NO_CHAIN**: no compile configuration in the projects the component's TeamCity link names.
+- **COMPILE_PAUSED**: every compile configuration is paused.
+- **OUTSIDE_TEMPLATES**: active configurations attach registry roots, but none is built on a
+  configured compile template.
+- **UNEXPRESSIBLE**: a checkout rule or `WORK_DIR` doesn't fit the shapes of ADR-022.
+- **CONFLICT**: compile configurations disagree on a repository's checkout rule or `WORK_DIR`, or
+  one repository (full URL, host included) is attached twice with different rules.
+- **IN_SYNC**: the derived values match the registry; a selected IN_SYNC component is skipped.
+- **INVALID**: the derived values differ but fail registry validation (for example a reserved name).
+- **MANUAL_EDIT**: a differing field's last audited change is a user write, not a Sync.
+- **RESOLVED**: the derived values differ, pass validation, and every differing field was never
+  audited (null, or `V8__`'s back-fill) or was last written by a Sync. Offered to Sync.
 
 Every Diff run SHALL be assigned an id. The result of the last *completed* run SHALL be kept and
 served, replacing the previous one; a run that is still running or has failed does not replace it.

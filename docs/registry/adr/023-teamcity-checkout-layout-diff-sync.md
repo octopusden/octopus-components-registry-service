@@ -2,22 +2,16 @@
 
 ## Status
 
-Accepted. Implemented in #510 ([SYS-102](../requirements-common.md); design in
-[technical-design §6.10](../technical-design.md#610-teamcity-checkout-layout-diffsync-onb-002)).
-Moved here from the program repository, where it was recorded as ADR-002, with the same
-decision numbers.
-The term was "placement" until 2026-10. Revision 2, after the first
-QA Diff: the report covers only base rows of non-archived components, and `ROOTS_MISMATCH` was
-added.
+Accepted. Implemented in #510; [SYS-102](../requirements-common.md); design in
+[technical-design §6.10](../technical-design.md#610-teamcity-checkout-layout-diffsync-onb-002).
 
 ## Context
 
 [ADR-022](022-vcs-root-checkout-layout.md) gives the registry the fields that place a
 component's VCS roots: Source Path, Checkout Directory, Build Working Directory. Existing TeamCity
 chains already encode that checkout layout by hand, and the `V8__` back-fill only guessed it from
-registry order. A production survey (read-only) found 10 multi-root rows and, among about 920
-single-root components, 37 with a Checkout Directory and 9 with a non-default `WORK_DIR` in their
-chains — the rest has nothing to import, no chain, or a shape the fields cannot express.
+registry order. Existing chains hold the real values for multi-root rows and for single-root chains
+with a Checkout Directory or a non-default `WORK_DIR`.
 
 A one-off script would cover the population once, with no report a non-engineer can open, no
 selective apply and no repeatable "has this drifted" check.
@@ -39,8 +33,8 @@ selective apply and no repeatable "has this drifted" check.
    links resync writes, and the validation job's build-type fetch extended with
    `vcs-root-entries(checkout-rules, vcs-root(url))`, with the existing read-only TeamCity user.
    Endpoints under `/rest/api/4/admin/teamcity-checkout-layout`: `POST /diff`, `GET /diff/job`,
-   `GET /diff/report.{json,html,csv}`, `POST /sync`, `GET /sync/job`, `GET /sync/report.csv`. The
-   first release served them under `/teamcity-placement`; those paths remain as deprecated aliases.
+   `GET /diff/report.{json,html,csv}`, `POST /sync`, `GET /sync/job`, `GET /sync/report.csv`. Deprecated
+   aliases under `/teamcity-placement`.
 3. **Derivation** assigns each component exactly one status, checked in this order: `TC_ERROR`,
    `ROOTS_MISMATCH`, then the derivation outcomes (`NO_CHAIN`, `COMPILE_PAUSED`,
    `OUTSIDE_TEMPLATES`, `UNEXPRESSIBLE`, `CONFLICT`), then `IN_SYNC`, `INVALID`, `MANUAL_EDIT`,
@@ -61,10 +55,9 @@ selective apply and no repeatable "has this drifted" check.
      list (typically a shared tooling repository). It is reported, never written, and is also a
      TeamCity validation warning (`VCS_ROOTS_DIFFER_FROM_REGISTRY`). Sync never adds, removes or
      changes a VCS root: it writes back the registry's own roots and changes only their checkout layout
-     fields. Adding the tooling repository to the registry is **not** a fix: the release tooling
-     attaches commits, and through them issues, to a component by each registry root's `vcsPath`
-     and `branch`, so a root for a shared repository would attach that repository's commits and
-     issues to every component that lists it.
+     fields. Adding the shared repository to the registry is not a fix: release tooling
+     attributes commits by each root's `vcsPath`, so every listing component would inherit its
+     commits.
 4. **Scope.** Base rows of non-archived components that have a TeamCity version-line link:
    multi-root rows, and single-root rows whose chain has a Checkout Directory or a non-default
    `WORK_DIR`. Archived components and per-range `vcs.settings` rows are left out of the report.
@@ -89,7 +82,6 @@ selective apply and no repeatable "has this drifted" check.
    only component-view access.
 7. **Rollout.** QA first: Diff, Sync a few components, Diff again to confirm them `IN_SYNC`.
    Production after the Portal that edits these fields is released there.
-8. **Delivery.** CRS #510 after #503; the Portal admin card in its own PR.
 9. **Out of scope:** a scheduled sync, Diff history in the database, writes back to TeamCity,
    adding or removing roots, the template parameter of ADR-022 decision 9.
 
@@ -102,7 +94,7 @@ selective apply and no repeatable "has this drifted" check.
   two services.
 - **Direct database writes.** Bypass validation, name derivation and audit.
 - **A one-off script, extended to single-root rows.** No UI, no selective apply, no repeatable
-  check; it was retired without ever writing anything.
+  check.
 
 ## Consequences
 

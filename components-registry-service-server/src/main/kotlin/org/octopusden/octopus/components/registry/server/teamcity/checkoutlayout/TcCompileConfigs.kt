@@ -8,7 +8,7 @@ import org.octopusden.octopus.validation.dto.teamcity.TemplateCatalog
  * checkout layout. Their ids differ between TeamCity installations, so they come from
  * `teamcity.validation.{gradle,maven}-build-template-id`.
  */
-fun TemplateCatalog.compileTemplateIds(): Set<String> = setOf(gradleBuildTemplateId, mavenBuildTemplateId) - ""
+fun TemplateCatalog.compileTemplateIds(): Set<String> = setOf(gradleBuildTemplateId, mavenBuildTemplateId)
 
 internal fun TeamcityBuildType.isCompile(compileTemplateIds: Set<String>): Boolean =
     (templates?.buildTypes.orEmpty().map { it.id } + listOfNotNull(template?.id)).any { it in compileTemplateIds }

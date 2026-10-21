@@ -30,7 +30,7 @@ repository that holds the Build Working Directory.
 
 #### Scenario: Both roots in Checkout Directories with a Build Working Directory (pilot-shaped)
 - **GIVEN** the `BUILD_VERSION_FORMAT_FILE` template parameter (ADR-022 decision 9) is
-  already applied to `CDGradleBuild`/`CDJavaMavenBuild` as the rollout prerequisite
+  already applied to the compile templates as the rollout prerequisite
 - **WHEN** a test Component is saved with root A (Checkout Directory `core`) and root B (Checkout
   Directory `feature`), listed B first, with Build Working Directory `core/mapper`, and its chain
   is generated and its compile build runs

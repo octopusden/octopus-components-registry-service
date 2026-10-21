@@ -6,9 +6,8 @@ import org.octopusden.octopus.components.registry.server.util.VcsUrlCanonicalize
  * ONB-002: pure derivation of VCS root checkout layout (Checkout Directory / Source Path / Build
  * Working Directory, ADR-022) from a component's TeamCity compile build configurations.
  *
- * Scoped to what the ONB-002 Diff/Sync jobs need: compile configurations only (`CDGradleBuild` /
- * `CDJavaMavenBuild`, non-paused), no `CDRelease` / `CdReleaseCandidateNew` fallback — the design
- * brief reads only the linked projects' compile build types. A row where every compile
+ * Scoped to what the ONB-002 Diff/Sync jobs need: compile configurations only (the configured
+ * compile templates, non-paused), no release-template fallback. A row where every compile
  * configuration agrees on SOME entries but never attaches at least one entry at all is
  * CheckoutLayoutRowStatus.UNEXPRESSIBLE — both mean "cannot be safely applied", and the per-entry
  * `notes` still say which entry is missing.
@@ -38,7 +37,7 @@ data class TcVcsRootEntry(
     val checkoutRules: String?,
 )
 
-/** One non-paused compile build configuration (`CDGradleBuild` / `CDJavaMavenBuild`) of a linked TeamCity project. */
+/** One non-paused compile build configuration of a linked TeamCity project. */
 data class TcCompileConfig(
     val buildTypeId: String,
     val vcsRootEntries: List<TcVcsRootEntry>,
