@@ -3710,21 +3710,18 @@ the whole client in its own retry loop.
 
 **Motivation:**
 Release automation (for example the CVE remediation service) needs to know whether a component's
-releases may be started without a person. Until now that was inferred from a finish-build trigger on
-the release configuration.
+releases may be started without a person.
 
 **Description:**
 - `components.auto_release BOOLEAN NOT NULL DEFAULT false` (`V12__`). Meaning: releases of the
   component may be started automatically by release automation once a release candidate passes its
-  gates; `false`: a person starts every release. A finish-build trigger on the release configuration
-  is treated as `autoRelease = true` by consumers.
+  gates; `false`: a person starts every release.
 - v4: `ComponentCreateRequest.autoRelease` (default false), `ComponentUpdateRequest.autoRelease`
   (null = unchanged), `ComponentSummaryResponse.autoRelease`, `ComponentDetailResponse.autoRelease`;
   `GET /components?autoRelease=true|false` filters (absent = both).
-- Field-config path `component.autoRelease` (`visibility`, `editable`); the default for a new
-  component is `component-defaults.autoRelease` (false).
-- The flag is not part of the Groovy DSL and is not exposed on v1-v3. Changes are recorded in the
-  component audit history.
+- Field-config path `component.autoRelease` (`visibility`, `editable`). A create request without the
+  field stores `false`.
+- The flag is not part of the Groovy DSL and is not exposed on v1-v3.
 
 **Test method:**
-`V12AutoReleaseMigrationIntegrationTest`, `AutoReleaseFlagV4Test`, `CommandsTest`.
+`V12AutoReleaseMigrationIntegrationTest`, `AutoReleaseFlagV4Test`.

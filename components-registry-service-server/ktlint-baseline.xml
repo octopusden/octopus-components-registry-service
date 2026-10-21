@@ -1,9 +1,9 @@
 <?xml version="1.0" encoding="utf-8"?>
 <baseline version="1.0">
     <file name="src/main/kotlin/org/octopusden/octopus/components/registry/server/config/AdminConfigProperties.kt">
+        <error line="149" column="13" source="standard:property-naming" />
         <error line="150" column="13" source="standard:property-naming" />
         <error line="151" column="13" source="standard:property-naming" />
-        <error line="152" column="13" source="standard:property-naming" />
     </file>
     <file name="src/main/kotlin/org/octopusden/octopus/components/registry/server/controller/ComponentControllerV3.kt">
         <error line="33" column="5" source="standard:no-consecutive-comments" />
