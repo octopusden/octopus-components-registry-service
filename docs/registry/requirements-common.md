@@ -2380,7 +2380,8 @@ Persistence is the transitional `version_line` → `teamcity_project` model: one
 row per kept line (`version` is sync-owned, nullable, a reconciliation discriminator — see
 `VersionLineEntity`), pointing at a deduplicated `teamcity_project`. Reconciliation is
 idempotent (writes only when the (projectId, version) set changes). Counters are reported per
-component (`updated`/`unchanged`/`skipped_no_match`/`skipped_ambiguous`/`ambiguous_auto_resolved`);
+component (`updated`/`unchanged`/`skipped_no_match`/`skipped_ambiguous`/`ambiguous_auto_resolved`,
+`auto_release_enabled` — SYS-104);
 `dropped_lines` separately surfaces lines dropped from otherwise-linked components. A v4 PATCH
 preserves the sync-owned `version` for project ids it retains.
 
@@ -3722,6 +3723,13 @@ releases may be started without a person.
 - Field-config path `component.autoRelease` (`visibility`, `editable`). A create request without the
   field stores `false`.
 - The flag is not part of the Groovy DSL and is not exposed on v1-v3.
+- The TeamCity resync turns the flag on when a linked project's release configuration (based on
+  `teamcity.sync.cd-release-template-id`, not paused) has an enabled finish-build trigger: TeamCity
+  already releases that component automatically. It writes one audit row and counts the component
+  in `auto_release_enabled`. One way only: resync never turns the flag off and never changes
+  TeamCity.
 
 **Test method:**
-`V12AutoReleaseMigrationIntegrationTest`, `AutoReleaseFlagV4Test`.
+`V12AutoReleaseMigrationIntegrationTest`, `AutoReleaseFlagV4Test`; `ExternalTcProjectFetcherTest`
+(`autoReleaseFromFinishBuildTrigger`, `noAutoReleaseOtherwise`), `TeamcitySyncServiceTest`
+(`autoReleaseEnabledFromTeamcity`, `autoReleaseNeverTurnedOff`).

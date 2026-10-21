@@ -23,7 +23,9 @@ refresh it with `./gradlew :components-registry-service-server:generateOpenApiDo
   `ComponentDetailResponse.autoRelease`, and the `GET /components?autoRelease=true|false` filter
   (absent = both). Releases of the component may be started by release automation once a candidate
   passes its gates; `false` means a person starts every release. The flag exists only in the database
-  and v4: it is not in the Groovy DSL and not in the v1-v3 payloads.
+  and v4: it is not in the Groovy DSL and not in the v1-v3 payloads. The TeamCity resync turns it on
+  when a linked release configuration has an enabled finish-build trigger (never off); its job
+  result (`TeamcitySyncResult`) gains `auto_release_enabled`, the number of components it turned on.
 - **`involves` / `involvesRoles` list filters added (SYS-101).** `GET /components?involves=<u>` returns
   components where any listed user is the owner OR a release manager OR a security champion;
   `involvesRoles` (any of `owner`, `releaseManager`, `securityChampion`; default all) narrows the

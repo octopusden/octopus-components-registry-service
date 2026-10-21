@@ -5,6 +5,7 @@ import org.octopusden.octopus.components.registry.server.config.ConditionalOnDat
 import org.octopusden.octopus.components.registry.server.entity.ComponentEntity
 import org.octopusden.octopus.components.registry.server.entity.TeamcityProjectEntity
 import org.octopusden.octopus.components.registry.server.entity.VersionLineEntity
+import org.octopusden.octopus.components.registry.server.event.AuditEvent
 import org.octopusden.octopus.components.registry.server.repository.ComponentRepository
 import org.octopusden.octopus.components.registry.server.repository.TeamcityProjectRepository
 import org.octopusden.octopus.components.registry.server.repository.VersionLineRepository
@@ -34,6 +35,9 @@ import java.util.UUID
  * Idempotent: only writes when the matched project set changes, traced via an INFO log
  * line. Deliberately does NOT write an `audit_log` row — TC sync is automated
  * reconciliation and a row per re-link was noise in the component history (SYS-051).
+ *
+ * Auto release (SYS-104): when a kept project's release configuration has an enabled
+ * finish-build trigger, the component's `autoRelease` is turned on, with an audit row. Never off.
  * `changedBy` is `"system"` for the cron, or the admin's username for a triggered run.
  *
  * Error handling: a fetcher failure propagates out of [resync] (502/500 for the admin
@@ -47,11 +51,7 @@ class TeamcitySyncService(
     private val versionLineRepository: VersionLineRepository,
     private val teamcityProjectRepository: TeamcityProjectRepository,
     private val tcProjectFetcher: TcProjectFetcher,
-    // Retained as the audit seam even though TeamCity sync is deliberately NOT
-    // audited (SYS-051): TeamcitySyncServiceTest injects a recording publisher
-    // and asserts no AuditEvent is published, guarding against an accidental
-    // re-introduction. Re-publish here if per-sync auditing is ever wanted.
-    @Suppress("UnusedPrivateProperty")
+    // Re-links are deliberately NOT audited (SYS-051); only turning `autoRelease` on is (SYS-104).
     private val applicationEventPublisher: ApplicationEventPublisher,
     private val currentUserResolver: CurrentUserResolver,
     private val transactionTemplate: TransactionTemplate,
@@ -118,6 +118,7 @@ class TeamcitySyncService(
         var skippedAmbiguous = 0
         var ambiguousAutoResolved = 0
         var droppedLines = 0
+        var autoReleaseEnabled = 0
         val errors = mutableListOf<String>()
 
         for (component in components) {
@@ -147,6 +148,9 @@ class TeamcitySyncService(
                         // unresolved (ambiguous). The component-level skipped_* counters do NOT
                         // reflect this, so surface it separately.
                         droppedLines += ambiguousLineCount
+                        picks.firstOrNull { it.project.hasAutoReleaseTrigger }?.let { pick ->
+                            if (enableAutoRelease(componentId, pick.project.id, changedBy)) autoReleaseEnabled++
+                        }
                     }
 
                     // No winner at all: ambiguous if a line was left unresolved, else no-match.
@@ -174,7 +178,7 @@ class TeamcitySyncService(
             "TC sync done: scanned=$scanned, updated=$updated, unchanged=$unchanged, " +
                 "skippedNoMatch=$skippedNoMatch, skippedAmbiguous=$skippedAmbiguous, " +
                 "ambiguousAutoResolved=$ambiguousAutoResolved, droppedLines=$droppedLines, " +
-                "errors=${errors.size}"
+                "autoReleaseEnabled=$autoReleaseEnabled, errors=${errors.size}"
         }
         return TeamcitySyncResult(
             scanned = scanned,
@@ -185,7 +189,36 @@ class TeamcitySyncService(
             ambiguousAutoResolved = ambiguousAutoResolved,
             droppedLines = droppedLines,
             errors = errors.toList(),
+            autoReleaseEnabled = autoReleaseEnabled,
         )
+    }
+
+    /**
+     * SYS-104, one way only: a linked release configuration with an enabled finish-build trigger
+     * turns `autoRelease` on; resync never turns it off and never writes to TeamCity. Audited, unlike
+     * re-links, so the component history says why the flag changed.
+     */
+    private fun enableAutoRelease(
+        componentId: UUID,
+        projectId: String,
+        changedBy: String,
+    ): Boolean {
+        val component = componentRepository.findById(componentId).orElse(null) ?: return false
+        if (component.autoRelease) return false
+        component.autoRelease = true
+        applicationEventPublisher.publishEvent(
+            AuditEvent(
+                entityType = "Component",
+                entityId = componentId.toString(),
+                action = "UPDATE",
+                changedBy = changedBy,
+                oldValue = mapOf("autoRelease" to false),
+                newValue = mapOf("autoRelease" to true),
+                changeComment = "TeamCity resync: release configuration in $projectId has a finish-build trigger",
+            ),
+        )
+        log.info { "TeamCity sync turned autoRelease on for ${component.componentKey} (TeamCity project $projectId, by $changedBy)" }
+        return true
     }
 
     /** A resolved winner for one PROJECT_VERSION line, with whether a tie-break was needed. */

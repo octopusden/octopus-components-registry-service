@@ -11,6 +11,7 @@ import org.octopusden.octopus.infrastructure.teamcity.client.dto.locator.Propert
 import org.springframework.context.annotation.Bean
 import org.springframework.context.annotation.Configuration
 import java.util.UUID
+import org.octopusden.octopus.infrastructure.teamcity.client.dto.TeamcityBuildType as ExternalTeamcityBuildType
 import org.octopusden.octopus.infrastructure.teamcity.client.dto.TeamcityProject as ExternalTeamcityProject
 import org.octopusden.octopus.infrastructure.teamcity.client.dto.TeamcityProperties as ExternalTeamcityProperties
 
@@ -32,7 +33,7 @@ private const val BUILD_TYPE_REQUIRED = "id,name,projectId,projectName,href"
 private const val PROJECT_FIELDS =
     "project(id,name,webUrl,href,archived," +
         "parameters(property(name,value))," +
-        "buildTypes(buildType($BUILD_TYPE_REQUIRED,paused,parameters(property(name,value))," +
+        "buildTypes(buildType($BUILD_TYPE_REQUIRED,paused,parameters(property(name,value)),triggers(trigger(type,disabled))," +
         "template($BUILD_TYPE_REQUIRED)," +
         "templates(buildType($BUILD_TYPE_REQUIRED)))))"
 
@@ -116,7 +117,8 @@ internal class ExternalTcProjectFetcher(
  * (e.g. `my-component-%CUSTOMER_NAME%`), resolved recursively via [resolveParam].
  *
  * `hasCdReleaseBuild` is true iff a non-paused buildType inherits (via `template` or
- * `templates`) from [cdReleaseTemplateId]; sub-projects are not walked.
+ * `templates`) from [cdReleaseTemplateId]; sub-projects are not walked. `hasAutoReleaseTrigger` is true
+ * iff one of those buildTypes has an enabled finish-build trigger.
  */
 internal fun mapTcProjectsToComponentMatches(
     projects: List<ExternalTeamcityProject>,
@@ -134,11 +136,12 @@ internal fun mapTcProjectsToComponentMatches(
                 ?: return@mapNotNull null
             val uuid = componentsByName[componentName] ?: return@mapNotNull null
             val projectVersion = getProjectVersion(project, projectParams)
-            val hasCdRelease = projectHasCdReleaseBuild(project, cdReleaseTemplateId)
+            val releaseBuildTypes = releaseBuildTypes(project, cdReleaseTemplateId)
             uuid to TcProject(
                 id = project.id,
-                hasCdReleaseBuild = hasCdRelease,
+                hasCdReleaseBuild = releaseBuildTypes.isNotEmpty(),
                 projectVersion = projectVersion,
+                hasAutoReleaseTrigger = releaseBuildTypes.any { it.hasFinishBuildTrigger() },
             )
         }.groupBy({ it.first }, { it.second })
 
@@ -226,14 +229,22 @@ private fun resolveReferences(
         }
     }
 
-private fun projectHasCdReleaseBuild(
+private fun releaseBuildTypes(
     project: ExternalTeamcityProject,
     cdReleaseTemplateId: String,
-): Boolean =
+): List<ExternalTeamcityBuildType> =
     project.buildTypes
         ?.buildTypes
-        ?.filter { it.paused != true }
-        ?.any { bt ->
+        .orEmpty()
+        .filter { it.paused != true }
+        .filter { bt ->
             bt.template?.id == cdReleaseTemplateId ||
                 bt.templates?.buildTypes?.any { it.id == cdReleaseTemplateId } == true
+        }
+
+// TeamCity's "Finish Build Trigger": the release starts when the build it depends on finishes.
+private const val FINISH_BUILD_TRIGGER = "buildDependencyTrigger"
+
+private fun ExternalTeamcityBuildType.hasFinishBuildTrigger(): Boolean =
+    triggers?.triggers.orEmpty().any { it.type == FINISH_BUILD_TRIGGER && !it.disabled }
         } == true
