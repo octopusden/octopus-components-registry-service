@@ -37,5 +37,4 @@ internal fun TeamcityBuildType.toCompileConfig(): TcCompileConfig =
 fun compileConfigsOf(
     buildTypes: List<TeamcityBuildType>,
     compileTemplateIds: Set<String>,
-): List<TcCompileConfig> =
-    buildTypes.filter { it.isCompile(compileTemplateIds) && it.paused != true }.map { it.toCompileConfig() }
+): List<TcCompileConfig> = buildTypes.filter { it.isCompile(compileTemplateIds) && it.paused != true }.map { it.toCompileConfig() }
