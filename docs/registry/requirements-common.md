@@ -3736,10 +3736,15 @@ users who may create any component.
 6. A caller with both create permissions has every right of `CREATE_COMPONENTS`.
 7. Such a caller may edit a component they own.
 
-**Test method:** `RoleMapTest` (H2 `ft-db`) (1); `PermissionProfileAvailabilityTest` —
-`templateForTemplateOnlyCreator`, `profileForTemplateOnlyCreator`, `overrideForTemplateOnlyCreator`
-(2, 4), `bothCreatePermissions` (6); `ComponentProfileControllerV4Test.templateOnlyCreator` (2);
-`ComponentTemplateControllerV4Test` — `templateOnlyCreatorDryRun`, `templateOnlyCreatorCreate` (3),
-`templateOnlyCreatorOverridableOverride`, `templateOnlyCreatorNotOverridableOverride` (4);
-`ProfileOnCreateTest.templateOnlyCreatorRefused` (5);
-`` ComponentOwnershipEditSecurityTest.`template only creator owner allowed` `` (7).
+**Test method:** `RoleMapTest` (H2 `ft-db`) — `` `SYS-104 template creator role` ``;
+`BundledRoleMapTest` — `` `SYS-104 bundled template creator role` ``,
+`` `SYS-104 bundled editor role unchanged` ``, `` `SYS-104 bundled admin role unchanged` `` (1);
+`PermissionProfileAvailabilityTest` — `` `SYS-104 template for template only creator` ``,
+`` `SYS-104 profile for template only creator` ``, `` `SYS-104 override for template only creator` `` (2, 4),
+`` `SYS-104 both create permissions` `` (6); `ComponentProfileControllerV4Test` —
+`` `SYS-104 template only creator` ``, `` `SYS-104 usable for editor` `` (2);
+`ComponentTemplateControllerV4Test` — `` `SYS-104 template only creator dry run` ``,
+`` `SYS-104 template only creator create` `` (3), `` `SYS-104 template only creator overridable override` ``,
+`` `SYS-104 template only creator not overridable override` `` (4); `ProfileOnCreateTest` —
+`` `SYS-104 template only creator refused` `` (5); `ComponentOwnershipEditSecurityTest` —
+`` `SYS-104 template only creator owner allowed` `` (7).

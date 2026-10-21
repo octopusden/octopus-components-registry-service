@@ -234,7 +234,7 @@ octopus-security:
       - CREATE_COMPONENTS
       - ACCESS_AUDIT
     # Creates components only from templates, without overrides. CREATE_COMPONENTS
-    # already includes creating from a template, so the roles above do not list it.
+    # already includes creating from a template, so the other creating roles do not list it.
     ROLE_COMPONENTS_REGISTRY_TEMPLATE_CREATOR:
       - ACCESS_COMPONENTS
       - ACCESS_AUDIT
