@@ -592,7 +592,8 @@ class ExternalTcProjectFetcherTest {
         },
     )
 
-    private fun finishBuildTrigger(disabled: Boolean = false) = ExternalTeamcityTrigger("buildDependencyTrigger", disabled, null)
+    private fun finishBuildTrigger(disabled: Boolean = false) =
+        ExternalTeamcityTrigger("buildDependencyTrigger", disabled, ExternalTeamcityProperties())
 
     private fun autoReleaseOf(vararg buildTypes: ExternalTeamcityBuildType): Boolean {
         val project = tcProject(id = "Tc_Rel", webUrl = "http://tc/rel", componentName = "foo", buildTypes = buildTypes.toList())
@@ -620,7 +621,7 @@ class ExternalTcProjectFetcherTest {
         assertEquals(false, autoReleaseOf(release()))
         assertEquals(false, autoReleaseOf(release(finishBuildTrigger(disabled = true))))
         assertEquals(false, autoReleaseOf(release(finishBuildTrigger(), paused = true)))
-        assertEquals(false, autoReleaseOf(release(ExternalTeamcityTrigger("schedulingTrigger", false, null))))
+        assertEquals(false, autoReleaseOf(release(ExternalTeamcityTrigger("schedulingTrigger", false, ExternalTeamcityProperties()))))
         val compile = buildType("Compile", legacyTemplateId = "CDGradleBuild", triggers = listOf(finishBuildTrigger()))
         assertEquals(false, autoReleaseOf(compile))
     }

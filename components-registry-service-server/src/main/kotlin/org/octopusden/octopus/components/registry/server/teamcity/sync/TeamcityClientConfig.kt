@@ -33,7 +33,9 @@ private const val BUILD_TYPE_REQUIRED = "id,name,projectId,projectName,href"
 private const val PROJECT_FIELDS =
     "project(id,name,webUrl,href,archived," +
         "parameters(property(name,value))," +
-        "buildTypes(buildType($BUILD_TYPE_REQUIRED,paused,parameters(property(name,value)),triggers(trigger(type,disabled))," +
+        "buildTypes(buildType($BUILD_TYPE_REQUIRED,paused,parameters(property(name,value))," +
+        // `properties` too: the client's TeamcityTrigger requires it.
+        "triggers(trigger(type,disabled,properties(property(name,value))))," +
         "template($BUILD_TYPE_REQUIRED)," +
         "templates(buildType($BUILD_TYPE_REQUIRED)))))"
 
@@ -247,4 +249,3 @@ private const val FINISH_BUILD_TRIGGER = "buildDependencyTrigger"
 
 private fun ExternalTeamcityBuildType.hasFinishBuildTrigger(): Boolean =
     triggers?.triggers.orEmpty().any { it.type == FINISH_BUILD_TRIGGER && !it.disabled }
-        } == true
