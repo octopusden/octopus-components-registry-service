@@ -18,7 +18,7 @@ refresh it with `./gradlew :components-registry-service-server:generateOpenApiDo
 
 ## Unreleased
 
-- **Template-only creators (SYS-103).** New permission `CREATE_FROM_TEMPLATE`, carried by the new
+- **Template-only creators (SYS-104).** New permission `CREATE_FROM_TEMPLATE`, carried by the new
   role `ROLE_COMPONENTS_REGISTRY_TEMPLATE_CREATOR` (realm role
   `COMPONENTS_REGISTRY_TEMPLATE_CREATOR`) with `ACCESS_COMPONENTS` and `ACCESS_AUDIT`. No schema
   change; for a caller holding it without `CREATE_COMPONENTS`:

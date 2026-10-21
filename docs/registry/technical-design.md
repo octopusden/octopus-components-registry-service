@@ -344,7 +344,7 @@ The `PATCH /components/{id}` SpEL guard combines these (the path variable is a `
 ```
 Plain edits use the ownership/admin predicate; archive/rename payloads fail closed with 403 for anyone without the extra permission.
 
-**Who may create (SYS-103).** `POST /components` keeps `hasPermission('CREATE_COMPONENTS')`. Profiles and templates are decided by `ProfileAvailability` (`PermissionProfileAvailability`), asked by the profile listing, a create naming a profile, the template endpoints and the administrator read:
+**Who may create (SYS-104).** `POST /components` keeps `hasPermission('CREATE_COMPONENTS')`. Profiles and templates are decided by `ProfileAvailability` (`PermissionProfileAvailability`), asked by the profile listing, a create naming a profile, the template endpoints and the administrator read:
 
 | Caller holds | Regular profile | Template | Override |
 |---|---|---|---|

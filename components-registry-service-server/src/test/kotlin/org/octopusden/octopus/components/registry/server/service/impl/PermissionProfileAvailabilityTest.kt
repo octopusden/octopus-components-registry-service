@@ -53,7 +53,7 @@ class PermissionProfileAvailabilityTest {
     }
 
     @Test
-    @DisplayName("SYS-103: with CREATE_FROM_TEMPLATE only, a template is usable (Decision 3)")
+    @DisplayName("SYS-104: with CREATE_FROM_TEMPLATE only, a template is usable (Decision 3)")
     fun templateForTemplateOnlyCreator() {
         val availability = PermissionProfileAvailability { it in setOf("ACCESS_COMPONENTS", "CREATE_FROM_TEMPLATE") }
 
@@ -61,7 +61,7 @@ class PermissionProfileAvailabilityTest {
     }
 
     @Test
-    @DisplayName("SYS-103: with CREATE_FROM_TEMPLATE only, a regular profile is unusable, with the template-only reason (Decision 3)")
+    @DisplayName("SYS-104: with CREATE_FROM_TEMPLATE only, a regular profile is unusable, with the template-only reason (Decision 3)")
     fun profileForTemplateOnlyCreator() {
         val availability = PermissionProfileAvailability { it in setOf("ACCESS_COMPONENTS", "CREATE_FROM_TEMPLATE") }
 
@@ -72,7 +72,7 @@ class PermissionProfileAvailabilityTest {
     }
 
     @Test
-    @DisplayName("SYS-103: with CREATE_FROM_TEMPLATE only, a template may not be overridden (Decision 3)")
+    @DisplayName("SYS-104: with CREATE_FROM_TEMPLATE only, a template may not be overridden (Decision 3)")
     fun overrideForTemplateOnlyCreator() {
         val availability = PermissionProfileAvailability { it in setOf("ACCESS_COMPONENTS", "CREATE_FROM_TEMPLATE") }
 
@@ -80,7 +80,7 @@ class PermissionProfileAvailabilityTest {
     }
 
     @Test
-    @DisplayName("SYS-103: with both create permissions, CREATE_COMPONENTS decides (Decision 3)")
+    @DisplayName("SYS-104: with both create permissions, CREATE_COMPONENTS decides (Decision 3)")
     fun bothCreatePermissions() {
         val availability =
             PermissionProfileAvailability { it in setOf("ACCESS_COMPONENTS", "CREATE_COMPONENTS", "CREATE_FROM_TEMPLATE") }

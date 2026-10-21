@@ -323,7 +323,7 @@ class ProfileOnCreateTest {
     }
 
     @Test
-    @DisplayName("SYS-103: the regular create answers 403 to a template-only creator, with or without a profile (Decision 4)")
+    @DisplayName("SYS-104: the regular create answers 403 to a template-only creator, with or without a profile (Decision 4)")
     fun templateOnlyCreatorRefused() {
         val withoutProfile = "plain-${suffix()}"
         val withProfile = "profiled-${suffix()}"

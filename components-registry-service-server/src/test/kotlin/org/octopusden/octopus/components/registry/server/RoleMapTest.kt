@@ -51,7 +51,7 @@ class RoleMapTest {
     private fun me(jwt: RequestPostProcessor) = mvc.perform(get("/auth/me").with(jwt)).andExpect(status().isOk)
 
     @Test
-    @DisplayName("SYS-103: the template creator role carries ACCESS_COMPONENTS, ACCESS_AUDIT and CREATE_FROM_TEMPLATE (Decision 1)")
+    @DisplayName("SYS-104: the template creator role carries ACCESS_COMPONENTS, ACCESS_AUDIT and CREATE_FROM_TEMPLATE (Decision 1)")
     fun templateCreatorRole() {
         me(templateCreatorJwt())
             .andExpect(jsonPath("$.roles[0].name").value("ROLE_COMPONENTS_REGISTRY_TEMPLATE_CREATOR"))
@@ -61,14 +61,14 @@ class RoleMapTest {
     }
 
     @Test
-    @DisplayName("SYS-103: the editor role keeps its permissions, without CREATE_FROM_TEMPLATE (Decision 2)")
+    @DisplayName("SYS-104: the editor role keeps its permissions, without CREATE_FROM_TEMPLATE (Decision 2)")
     fun editorRoleUnchanged() {
         me(editorJwt())
             .andExpect(jsonPath("$.roles[0].permissions", containsInAnyOrder("ACCESS_COMPONENTS", "CREATE_COMPONENTS", "ACCESS_AUDIT")))
     }
 
     @Test
-    @DisplayName("SYS-103: the admin role keeps its permissions, without CREATE_FROM_TEMPLATE (Decision 2)")
+    @DisplayName("SYS-104: the admin role keeps its permissions, without CREATE_FROM_TEMPLATE (Decision 2)")
     fun adminRoleUnchanged() {
         me(adminJwt())
             .andExpect(

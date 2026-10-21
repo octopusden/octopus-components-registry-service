@@ -169,7 +169,7 @@ class ComponentProfileControllerV4Test {
     }
 
     @Test
-    @DisplayName("SYS-103: an editor may use every profile and every template (Decision 2)")
+    @DisplayName("SYS-104: an editor may use every profile and every template (Decision 2)")
     fun usableForEditor() {
         reloadWith(*standaloneTemplateProperties().toList().toTypedArray())
 
@@ -202,7 +202,7 @@ class ComponentProfileControllerV4Test {
     }
 
     @Test
-    @DisplayName("SYS-103: a template-only creator may use templates only, with the template-only reason on profiles (Decision 3)")
+    @DisplayName("SYS-104: a template-only creator may use templates only, with the template-only reason on profiles (Decision 3)")
     fun templateOnlyCreator() {
         reloadWith(*standaloneTemplateProperties().toList().toTypedArray())
 

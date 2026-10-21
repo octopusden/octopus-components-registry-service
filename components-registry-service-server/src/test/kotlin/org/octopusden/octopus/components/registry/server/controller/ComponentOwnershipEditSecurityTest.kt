@@ -226,7 +226,7 @@ class ComponentOwnershipEditSecurityTest {
     }
 
     @Test
-    @DisplayName("SYS-103: a template-only creator may PATCH a component they own")
+    @DisplayName("SYS-104: a template-only creator may PATCH a component they own")
     fun `template only creator owner allowed`() {
         val c = create(uniqueName("templateowner"), owner = "dave")
         performPatch(c.id(), c.version(), bumpDisplayName(), templateCreatorJwt("dave"))

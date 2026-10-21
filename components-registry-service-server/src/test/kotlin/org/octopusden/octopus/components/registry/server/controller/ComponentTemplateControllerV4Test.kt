@@ -666,7 +666,7 @@ class ComponentTemplateControllerV4Test {
     }
 
     @Test
-    @DisplayName("SYS-103: a template-only creator's dry run without overrides answers 200 (Decision 3)")
+    @DisplayName("SYS-104: a template-only creator's dry run without overrides answers 200 (Decision 3)")
     fun templateOnlyCreatorDryRun() {
         components(body(), jwt = templateCreatorJwt())
             .andExpect(status().isOk)
@@ -674,7 +674,7 @@ class ComponentTemplateControllerV4Test {
     }
 
     @Test
-    @DisplayName("SYS-103: a template-only creator's create without overrides answers 201 and creates the component (Decision 3)")
+    @DisplayName("SYS-104: a template-only creator's create without overrides answers 201 and creates the component (Decision 3)")
     fun templateOnlyCreatorCreate() {
         val components = componentRepository.count()
 
@@ -684,7 +684,7 @@ class ComponentTemplateControllerV4Test {
     }
 
     @Test
-    @DisplayName("SYS-103: a template-only creator's override of an overridable field answers 403, nothing created (Decision 5)")
+    @DisplayName("SYS-104: a template-only creator's override of an overridable field answers 403, nothing created (Decision 5)")
     fun templateOnlyCreatorOverridableOverride() {
         val before = counts()
         val overrides = mapOf("overrides" to mapOf("baseConfiguration.vcsEntries[0].vcsPath" to listOf("ssh://git@example.com/other.git")))
@@ -696,7 +696,7 @@ class ComponentTemplateControllerV4Test {
     }
 
     @Test
-    @DisplayName("SYS-103: a template-only creator's override of a non-overridable field is 403, not 400 (Decision 5)")
+    @DisplayName("SYS-104: a template-only creator's override of a non-overridable field is 403, not 400 (Decision 5)")
     fun templateOnlyCreatorNotOverridableOverride() {
         components(body(extra = mapOf("overrides" to mapOf("name" to listOf("my-name")))), jwt = templateCreatorJwt())
             .andExpect(status().isForbidden)
