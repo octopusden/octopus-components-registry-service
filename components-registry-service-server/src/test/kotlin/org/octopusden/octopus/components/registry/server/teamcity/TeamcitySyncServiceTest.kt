@@ -6,10 +6,15 @@ import org.junit.jupiter.api.Assertions.assertTrue
 import org.junit.jupiter.api.DisplayName
 import org.junit.jupiter.api.Test
 import org.junit.jupiter.api.assertThrows
+import org.mockito.kotlin.any
+import org.mockito.kotlin.mock
+import org.mockito.kotlin.whenever
+import org.octopusden.octopus.components.registry.server.entity.AuditLogEntity
 import org.octopusden.octopus.components.registry.server.entity.ComponentEntity
 import org.octopusden.octopus.components.registry.server.entity.TeamcityProjectEntity
 import org.octopusden.octopus.components.registry.server.entity.VersionLineEntity
 import org.octopusden.octopus.components.registry.server.event.AuditEvent
+import org.octopusden.octopus.components.registry.server.repository.AuditLogRepository
 import org.octopusden.octopus.components.registry.server.repository.ComponentChangeStampRow
 import org.octopusden.octopus.components.registry.server.repository.ComponentRepository
 import org.octopusden.octopus.components.registry.server.repository.TeamcityProjectRepository
@@ -82,6 +87,7 @@ class TeamcitySyncServiceTest {
         publisher: ApplicationEventPublisher,
         user: CurrentUserResolver,
         properties: TeamcityProperties = configuredProperties(),
+        auditLogRepository: AuditLogRepository = auditHistory(),
     ) = TeamcitySyncService(
         repo,
         versionLineRepo,
@@ -91,7 +97,14 @@ class TeamcitySyncServiceTest {
         user,
         inlineTx(),
         properties,
+        auditLogRepository,
     )
+
+    /** An audit history holding [rows] for every component. */
+    private fun auditHistory(vararg rows: AuditLogEntity): AuditLogRepository =
+        mock<AuditLogRepository>().also {
+            whenever(it.findByEntityTypeAndEntityIdAndActionInOrderByChangedAtDesc(any(), any(), any())).thenReturn(rows.toList())
+        }
 
     private fun configuredProperties() = TeamcityProperties(baseUrl = "https://teamcity.example.com")
 
@@ -385,6 +398,60 @@ class TeamcitySyncServiceTest {
         val result = svc.resync()
 
         assertTrue(alpha.autoRelease)
+        assertEquals(0, result.autoReleaseEnabled)
+    }
+
+    @Test
+    fun `SYS-104 resync keeps a manual off`() {
+        val alpha = component(alice, "alpha")
+        val project = TcProject("Alpha_Build", hasCdReleaseBuild = true, hasAutoReleaseTrigger = true)
+        val fetcher = stubFetcher(mapOf("alpha" to listOf(project)))
+        val turnedOff = AuditLogEntity(
+            entityType = "Component",
+            entityId = alice.toString(),
+            action = "UPDATE",
+            oldValue = mapOf("autoRelease" to true),
+            newValue = mapOf("autoRelease" to false),
+        )
+        val svc = service(
+            StubComponentRepository(listOf(alpha)),
+            StubVersionLineRepository(),
+            StubTeamcityProjectRepository(),
+            fetcher,
+            RecordingPublisher(),
+            fixedUser("admin"),
+            auditLogRepository = auditHistory(turnedOff),
+        )
+
+        val result = svc.resync()
+
+        assertFalse(alpha.autoRelease)
+        assertEquals(0, result.autoReleaseEnabled)
+    }
+
+    @Test
+    fun `SYS-104 resync needs the trigger on every linked line`() {
+        val alpha = component(alice, "alpha")
+        val fetcher = stubFetcher(
+            mapOf(
+                "alpha" to listOf(
+                    TcProject("Alpha_13", hasCdReleaseBuild = true, projectVersion = "1.3"),
+                    TcProject("Alpha_14", hasCdReleaseBuild = true, projectVersion = "1.4", hasAutoReleaseTrigger = true),
+                ),
+            ),
+        )
+        val svc = service(
+            StubComponentRepository(listOf(alpha)),
+            StubVersionLineRepository(),
+            StubTeamcityProjectRepository(),
+            fetcher,
+            RecordingPublisher(),
+            fixedUser("admin"),
+        )
+
+        val result = svc.resync()
+
+        assertFalse(alpha.autoRelease)
         assertEquals(0, result.autoReleaseEnabled)
     }
 
