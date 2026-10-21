@@ -30,7 +30,7 @@ private const val PROJECT_VERSION_PARAM = "PROJECT_VERSION"
 // since TC populates only one depending on version. Direct buildTypes only — sub-projects
 // aren't walked, on the convention that the project carrying COMPONENT_NAME owns the release build.
 private const val BUILD_TYPE_REQUIRED = "id,name,projectId,projectName,href"
-private const val PROJECT_FIELDS =
+internal const val PROJECT_FIELDS =
     "project(id,name,webUrl,href,archived," +
         "parameters(property(name,value))," +
         // Only *VERSION* build-type parameters (PROJECT_VERSION and what it references), and only the

@@ -6,6 +6,7 @@ import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.Assertions.assertTrue
 import org.junit.jupiter.api.DisplayName
 import org.junit.jupiter.api.Test
+import org.octopusden.octopus.components.registry.server.teamcity.sync.PROJECT_FIELDS
 import org.octopusden.octopus.components.registry.server.teamcity.sync.TcProject
 import org.octopusden.octopus.components.registry.server.teamcity.sync.mapTcProjectsToComponentMatches
 import java.util.UUID
@@ -601,6 +602,13 @@ class ExternalTcProjectFetcherTest {
             ExternalTeamcityBuildTypes(buildTypes = buildTypes)
         },
     )
+
+    /** The unfiltered response (~180 MB) exhausted the pod heap; only *VERSION* parameters and the trigger-property count are fetched. */
+    @Test
+    fun `resync fetch keeps the TeamCity response small`() {
+        assertTrue("parameters(\$locator(name:(value:VERSION,matchType:contains)),property(name,value))" in PROJECT_FIELDS)
+        assertTrue("triggers(trigger(type,disabled,properties(count)))" in PROJECT_FIELDS)
+    }
 
     private fun finishBuildTrigger(disabled: Boolean = false) =
         ExternalTeamcityTrigger("buildDependencyTrigger", disabled, ExternalTeamcityProperties())
