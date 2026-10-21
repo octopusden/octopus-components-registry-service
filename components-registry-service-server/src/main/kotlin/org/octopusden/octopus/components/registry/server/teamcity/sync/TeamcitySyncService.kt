@@ -148,9 +148,7 @@ class TeamcitySyncService(
                         // unresolved (ambiguous). The component-level skipped_* counters do NOT
                         // reflect this, so surface it separately.
                         droppedLines += ambiguousLineCount
-                        picks.firstOrNull { it.project.hasAutoReleaseTrigger }?.let { pick ->
-                            if (enableAutoRelease(componentId, pick.project.id, changedBy)) autoReleaseEnabled++
-                        }
+                        if (enableAutoRelease(componentId, picks, changedBy)) autoReleaseEnabled++
                     }
 
                     // No winner at all: ambiguous if a line was left unresolved, else no-match.
@@ -200,9 +198,10 @@ class TeamcitySyncService(
      */
     private fun enableAutoRelease(
         componentId: UUID,
-        projectId: String,
+        picks: List<Pick>,
         changedBy: String,
     ): Boolean {
+        val projectId = picks.firstOrNull { it.project.hasAutoReleaseTrigger }?.project?.id ?: return false
         val component = componentRepository.findById(componentId).orElse(null) ?: return false
         if (component.autoRelease) return false
         component.autoRelease = true
