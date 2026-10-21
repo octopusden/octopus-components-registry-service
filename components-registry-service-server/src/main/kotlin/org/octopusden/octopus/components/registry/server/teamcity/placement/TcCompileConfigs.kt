@@ -2,7 +2,7 @@ package org.octopusden.octopus.components.registry.server.teamcity.placement
 
 import org.octopusden.octopus.infrastructure.teamcity.client.dto.TeamcityBuildType
 
-/** ADR-001: the only two chain templates whose build carries `WORK_DIR` / checkout placement. */
+/** ADR-022: the only two chain templates whose build carries `WORK_DIR` / checkout placement. */
 private val COMPILE_TEMPLATE_IDS = setOf("CDGradleBuild", "CDJavaMavenBuild")
 
 internal fun TeamcityBuildType.isCompile(): Boolean =

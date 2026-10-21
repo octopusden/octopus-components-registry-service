@@ -378,7 +378,7 @@ class TeamcityPlacementDiffServiceTest {
 
     @Test
     fun `a single-root row with a derived source path only, no checkout directory, is in scope`() {
-        // ADR-001 allows a lone root with an empty Checkout Directory but a non-empty Source Path
+        // ADR-022 allows a lone root with an empty Checkout Directory but a non-empty Source Path
         // (a monorepo subdirectory with no rename): `+:mapper` -> PlacementValue(null, "mapper").
         // Regression: the scope filter only looked at Checkout Directory / Build Working
         // Directory, silently dropping this row (no CD, no BWD needed since the root is taken).
@@ -396,7 +396,7 @@ class TeamcityPlacementDiffServiceTest {
 
     @Test
     fun `a single-root row with a derived checkout directory is in scope`() {
-        // ADR-001: a lone root with a Checkout Directory leaves the checkout root empty, so a
+        // ADR-022: a lone root with a Checkout Directory leaves the checkout root empty, so a
         // Build Working Directory is required — the row derives fully only when WORK_DIR sets one.
         val comp = component()
         val row = ComponentConfigurationEntity(id = UUID.randomUUID(), component = comp, rowType = "BASE")
@@ -412,7 +412,7 @@ class TeamcityPlacementDiffServiceTest {
 
     @Test
     fun `a single-root row whose derived checkout directory has no build working directory is invalid`() {
-        // Same shape without WORK_DIR: still in scope (a derived CD exists), but ADR-001's rule --
+        // Same shape without WORK_DIR: still in scope (a derived CD exists), but ADR-022's rule --
         // every root has a Checkout Directory, so a Build Working Directory is required, and none
         // was derived -- is a CRS VALIDATION rule (VcsPlacementValidator.validateBuildWorkingDirectory),
         // not an unparseable rule shape, so this is INVALID, not UNEXPRESSIBLE.

@@ -2824,7 +2824,7 @@ class ComponentManagementServiceImpl(
         entries: List<VcsEntryRequest>,
     ) {
         entries.forEach { req -> req.repositoryType?.let { validateRepositoryType(it) } }
-        // Name derivation (ADR-001 decision 4) is shared with the TeamCity placement Diff job's
+        // Name derivation (ADR-022 decision 4) is shared with the TeamCity placement Diff job's
         // INVALID check — see VcsPlacementValidator.deriveNames' kdoc for the rule.
         val checkoutDirectories = entries.map { it.checkoutDirectory?.trim()?.ifEmpty { null } }
         val names = VcsPlacementValidator.deriveNames(

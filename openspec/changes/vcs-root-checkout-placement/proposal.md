@@ -4,8 +4,8 @@ A component can keep its sources in several VCS roots, or in one directory of a 
 with other components, but the registry has no way to say where each root's sources go on the
 build agent, which part of a shared repository belongs to the component, or where the build runs.
 The build-chain generator, the Portal and later escrow need that data from the registry. The
-cross-repository decision is recorded in the program repository (ADR-001 revision 3, change
-`onb-001-multi-vcs-root-component`); this change is the registry part and merges first.
+decision is [ADR-022](../../../docs/registry/adr/022-vcs-root-checkout-placement.md) (program
+change `onb-001-multi-vcs-root-component`); this change is the registry part and merges first.
 
 Revision 3 replaces revision 2's "first entry always at the checkout root": any entry may be
 placed in a Checkout Directory, and where the build runs is its own field.

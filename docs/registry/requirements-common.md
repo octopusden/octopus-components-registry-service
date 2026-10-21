@@ -3614,7 +3614,7 @@ only components where the user holds both roles. The Portal's "Mine" filter need
 **Status:** ✅ Tested
 
 **Motivation:**
-A component's VCS placement (Checkout Directory, Source Path, Build Working Directory; ADR-001)
+A component's VCS placement (Checkout Directory, Source Path, Build Working Directory; ADR-022)
 is already encoded in the TeamCity compile configurations of its linked project(s). Operators need
 a read-only report of where the registry differs from TeamCity, and a safe way to apply the
 unambiguous differences without overwriting manual edits or acting on a report that has since

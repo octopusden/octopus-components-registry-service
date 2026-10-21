@@ -501,7 +501,7 @@ DTO costs one source lookup (as routing already does) and a set membership; a li
 source read. Staleness bound across pods: 30 s after a change made on another pod.
 
 ### 6.10 TeamCity placement Diff/Sync (ONB-002)
-Two jobs that reconcile a component's VCS placement (ADR-001: Checkout Directory, Source Path,
+Two jobs that reconcile a component's VCS placement (ADR-022: Checkout Directory, Source Path,
 Build Working Directory) against its linked TeamCity project(s)' actual chains, scoped to compile configurations
 only (`CDGradleBuild` / `CDJavaMavenBuild`, non-paused; no `CDRelease` / `CdReleaseCandidateNew`
 fallback).
@@ -533,7 +533,7 @@ fallback).
     single-root row only when a Checkout Directory or a non-root Build Working Directory exists on
     either side (current or derived) — a lone root needing nothing never appears, not even as "in
     sync" (keeps single-root Checkout Directories, which would rename `main` in the escrow export,
-    out of scope per ADR-001). The filter judges derived values only, so a single-root row whose
+    out of scope per ADR-022). The filter judges derived values only, so a single-root row whose
     derivation is `CONFLICT` or `UNEXPRESSIBLE` (it derives none) is always reported, like
     `TC_ERROR` and `ROOTS_MISMATCH`.
   - **Status per row:** `RESOLVED` (apply-able), `INVALID`, `CONFLICT`, `UNEXPRESSIBLE`,
@@ -572,7 +572,7 @@ fallback).
     write that touches only one field can never "launder" an earlier manual edit of the other on
     the same entry), or the row's Build Working Directory — is overwritable — reported `RESOLVED`,
     not downgraded — in exactly two cases: no `audit_log` row has EVER changed it (it is still
-    null, or holds the ADR-001 `V8__` migration's raw-SQL back-fill, which bypassed the app and so
+    null, or holds the ADR-022 `V8__` migration's raw-SQL back-fill, which bypassed the app and so
     left no audit row either way), or the LAST audit row that changed it carries the Sync job's own
     `"sync from TeamCity"` tag (see below) in `change_comment`. It is `MANUAL_EDIT` only when the
     last change to THAT field is a real user write that does NOT carry that tag.
@@ -629,7 +629,7 @@ fallback).
   `migrationExecutor` (the standard Spring Security utility, no hand-rolled
   capture/set/clear) — `changed_by` is resolved from `SecurityContextHolder`
   at write time.
-- **Rollback trace (ADR-002 decision 5):** `PlacementSyncResult.fieldChanges` lists
+- **Rollback trace (ADR-023 decision 5):** `PlacementSyncResult.fieldChanges` lists
   one entry per field an applied row actually wrote — `componentKey`, `rowLabel`, `root` (the
   entry's name, or `""` for the row-level Build Working Directory), `field`
   (`checkoutDirectory` / `sourcePath` / `buildWorkingDirectory`), `before`, `after` — computed by

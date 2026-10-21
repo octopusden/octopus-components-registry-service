@@ -11,7 +11,7 @@ import java.util.UUID
  * overwrite a manual edit" rule: a field is manual only if its LAST
  * audited change was a real user write, not one tagged as coming from Sync itself
  * ([SYNC_CHANGE_COMMENT_PREFIX]). A field with NO audit record that ever touched it — a null
- * value, the ADR-001 V8 migration's raw-SQL back-fill (which bypassed the app and left no
+ * value, the ADR-022 V8 migration's raw-SQL back-fill (which bypassed the app and left no
  * `audit_log` row), or a never-touched V9 Build Working Directory — is non-manual: nothing has
  * ever "really" set it, so there's nothing to protect. A value Sync itself last wrote is also
  * non-manual, so a component TeamCity changed again after a Sync can resolve on the next Diff

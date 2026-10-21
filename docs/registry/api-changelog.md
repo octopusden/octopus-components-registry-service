@@ -203,7 +203,7 @@ refresh it with `./gradlew :components-registry-service-server:generateOpenApiDo
     for rollback. That tag is reserved: `POST /components`, `PATCH /components/{id}` and
     `PUT /components/{id}/supported-versions` now answer `400` when a user-supplied `changeComment`
     starts with `sync from TeamCity` (case-insensitive, after trim). A value the
-    ADR-001 `V8__` migration set automatically, or one whose last audited change was a Sync itself,
+    ADR-022 `V8__` migration set automatically, or one whose last audited change was a Sync itself,
     is overwritable; a value set by a real user edit never is (re-syncing after TeamCity changes
     again no longer gets permanently stuck reporting `MANUAL_EDIT` against Sync's own prior write) —
     Checkout Directory and Source Path are tracked independently for this, so a Sync write to one

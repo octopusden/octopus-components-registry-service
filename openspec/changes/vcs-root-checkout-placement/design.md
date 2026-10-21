@@ -1,7 +1,7 @@
 ## Context
 
 Program-level design: `onb-001-multi-vcs-root-component/design.md` in the program repository
-(ADR-001 revision 3). Baseline characterization tests on branch `test/onb-001-baseline`
+([ADR-022](../../../docs/registry/adr/022-vcs-root-checkout-placement.md)). Baseline characterization tests on branch `test/onb-001-baseline`
 (`fd47e79d`) pin today's v2 JSON, the DTO shape and the v4 write behaviour this change builds on.
 Revision 2 is implemented on this branch and deployed to QA (V8 applied there); revision 3 changes
 the placement rules and the name rule, and adds the Build Working Directory.
