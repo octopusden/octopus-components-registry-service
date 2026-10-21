@@ -7,6 +7,7 @@ import org.junit.jupiter.api.DisplayName
 import org.junit.jupiter.api.Test
 import org.junit.jupiter.api.assertThrows
 import org.mockito.kotlin.any
+import org.mockito.kotlin.eq
 import org.mockito.kotlin.mock
 import org.mockito.kotlin.whenever
 import org.octopusden.octopus.components.registry.server.entity.AuditLogEntity
@@ -399,6 +400,36 @@ class TeamcitySyncServiceTest {
 
         assertTrue(alpha.autoRelease)
         assertEquals(0, result.autoReleaseEnabled)
+    }
+
+    @Test
+    fun `SYS-104 a failure on one component is an error, not a rollback`() {
+        val alpha = component(alice, "alpha")
+        val beta = component(bob, "beta")
+        val withTrigger = { id: String -> listOf(TcProject(id, hasCdReleaseBuild = true, hasAutoReleaseTrigger = true)) }
+        val fetcher = stubFetcher(mapOf("alpha" to withTrigger("Alpha_Build"), "beta" to withTrigger("Beta_Build")))
+        val audit = auditHistory()
+        whenever(audit.findByEntityTypeAndEntityIdAndActionInOrderByChangedAtDesc(any(), eq(bob.toString()), any()))
+            .thenThrow(IllegalStateException("conflict"))
+        val vlRepo = StubVersionLineRepository()
+        val svc = service(
+            StubComponentRepository(listOf(alpha, beta)),
+            vlRepo,
+            StubTeamcityProjectRepository(),
+            fetcher,
+            RecordingPublisher(),
+            fixedUser("admin"),
+            auditLogRepository = audit,
+        )
+
+        val result = svc.resync()
+
+        assertTrue(alpha.autoRelease)
+        assertFalse(beta.autoRelease)
+        assertEquals(1, result.autoReleaseEnabled)
+        assertEquals(1, result.errors.size)
+        assertEquals(2, result.updated)
+        assertEquals(listOf("Beta_Build"), projectIds(vlRepo, bob))
     }
 
     @Test
