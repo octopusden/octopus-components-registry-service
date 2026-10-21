@@ -82,8 +82,7 @@
 - [x] 6.3 `BUILD_VERSION_FORMAT_FILE` on created configurations with a *Calculate Build Version*
       step when a Build Working Directory is set (ADR-022 decision 9)
 - [ ] 6.4 Compile template ids default to the original `CDCompileUTGradle`/`CDCompileUTMaven`
-      again (#78 had switched them to one installation's renamed ids), with
-      `--gradle-compile-template` / `--maven-compile-template` (#85)
+      again (#85)
 
 ## 7. Sonar automation (octopus-sonar-automation)
 

@@ -136,18 +136,13 @@ Directory is set.
 ### Requirement: Compile template ids
 
 The generator SHALL instantiate compile configurations from the Gradle compile template for
-Gradle-family build systems and the Maven compile template for Maven. The ids default to
-`CDCompileUTGradle` and `CDCompileUTMaven`, the original ids every TeamCity installation resolves
-(an installation that renamed the templates keeps resolving them), and are set with
-`--gradle-compile-template` / `--maven-compile-template`.
+Gradle-family build systems and the Maven one for Maven. The ids default to `CDCompileUTGradle` and
+`CDCompileUTMaven`, the original ids every TeamCity installation resolves; a library caller sets
+others through `BuildChainConfig`.
 
-#### Scenario: Maven Component, default ids
-- **WHEN** a chain is generated for a Maven Component without `--maven-compile-template`
+#### Scenario: Maven Component
+- **WHEN** a chain is generated for a Maven Component with the default configuration
 - **THEN** the compile configuration is based on template `CDCompileUTMaven`
-
-#### Scenario: Configured ids
-- **WHEN** a chain is generated with `--maven-compile-template=<id>` for a Maven Component
-- **THEN** the compile configuration is based on template `<id>`
 
 ### Requirement: Unsupported shapes fail before creation
 
