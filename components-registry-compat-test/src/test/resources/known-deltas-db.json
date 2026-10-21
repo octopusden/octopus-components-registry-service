@@ -153,85 +153,85 @@
       "endpoint": "GET /rest/api/2/components/{component}/versions/{version}/vcs-settings",
       "category": "STRUCTURAL_DIFF",
       "jsonPathPattern": "\\.versionControlSystemRoots\\[\\d+\\]\\.(checkoutDirectory|sourcePath)$",
-      "reason": "ONB-001 VCS entry placement (rev. 3, 2026-09): VCS roots carry sourcePath and checkoutDirectory (V8__ back-fills checkoutDirectory = name after the first entry of multi-root rows; the placement import and the Portal set either on any root, [0] included), and the v2 VersionControlSystemRootDTO serializes them NON_NULL. The baseline has no placement, so a migrated candidate adds them. Only additions are suppressed: a changed value is a VALUE_DIFF, not a STRUCTURAL_DIFF. Typed layer: Comparators.buildAssertion forgives baseline-null -> value on these fields. See docs/registry/api-compat-deltas.md.",
-      "regressionTest": "GitVsDbValidationTest.VAL-003a multi-root placement is the known difference"
+      "reason": "ONB-001 VCS entry checkout layout (rev. 3, 2026-09): VCS roots carry sourcePath and checkoutDirectory (V8__ back-fills checkoutDirectory = name after the first entry of multi-root rows; the checkout layout import and the Portal set either on any root, [0] included), and the v2 VersionControlSystemRootDTO serializes them NON_NULL. The baseline has no checkout layout, so a migrated candidate adds them. Only additions are suppressed: a changed value is a VALUE_DIFF, not a STRUCTURAL_DIFF. Typed layer: Comparators.buildAssertion forgives baseline-null -> value on these fields. See docs/registry/api-compat-deltas.md.",
+      "regressionTest": "GitVsDbValidationTest.VAL-003a multi-root checkout layout is the known difference"
     },
     {
       "endpoint": "GET /rest/api/2/projects/{projectKey}/versions/{version}/vcs-settings",
       "category": "STRUCTURAL_DIFF",
       "jsonPathPattern": "\\.versionControlSystemRoots\\[\\d+\\]\\.(checkoutDirectory|sourcePath)$",
-      "reason": "ONB-001 VCS entry placement (rev. 3, 2026-09): VCS roots carry sourcePath and checkoutDirectory (V8__ back-fills checkoutDirectory = name after the first entry of multi-root rows; the placement import and the Portal set either on any root, [0] included), and the v2 VersionControlSystemRootDTO serializes them NON_NULL. The baseline has no placement, so a migrated candidate adds them. Only additions are suppressed: a changed value is a VALUE_DIFF, not a STRUCTURAL_DIFF. Typed layer: Comparators.buildAssertion forgives baseline-null -> value on these fields. See docs/registry/api-compat-deltas.md.",
-      "regressionTest": "GitVsDbValidationTest.VAL-003a multi-root placement is the known difference"
+      "reason": "ONB-001 VCS entry checkout layout (rev. 3, 2026-09): VCS roots carry sourcePath and checkoutDirectory (V8__ back-fills checkoutDirectory = name after the first entry of multi-root rows; the checkout layout import and the Portal set either on any root, [0] included), and the v2 VersionControlSystemRootDTO serializes them NON_NULL. The baseline has no checkout layout, so a migrated candidate adds them. Only additions are suppressed: a changed value is a VALUE_DIFF, not a STRUCTURAL_DIFF. Typed layer: Comparators.buildAssertion forgives baseline-null -> value on these fields. See docs/registry/api-compat-deltas.md.",
+      "regressionTest": "GitVsDbValidationTest.VAL-003a multi-root checkout layout is the known difference"
     },
     {
       "endpoint": "GET /rest/api/2/projects/{projectKey}/jira-component-version-ranges",
       "category": "STRUCTURAL_DIFF",
       "jsonPathPattern": "\\.versionControlSystemRoots\\[\\d+\\]\\.(checkoutDirectory|sourcePath)$",
-      "reason": "ONB-001 VCS entry placement (rev. 3, 2026-09): VCS roots carry sourcePath and checkoutDirectory (V8__ back-fills checkoutDirectory = name after the first entry of multi-root rows; the placement import and the Portal set either on any root, [0] included), and the v2 VersionControlSystemRootDTO serializes them NON_NULL. The baseline has no placement, so a migrated candidate adds them. Only additions are suppressed: a changed value is a VALUE_DIFF, not a STRUCTURAL_DIFF. Typed layer: Comparators.buildAssertion forgives baseline-null -> value on these fields. See docs/registry/api-compat-deltas.md.",
-      "regressionTest": "GitVsDbValidationTest.VAL-003a multi-root placement is the known difference"
+      "reason": "ONB-001 VCS entry checkout layout (rev. 3, 2026-09): VCS roots carry sourcePath and checkoutDirectory (V8__ back-fills checkoutDirectory = name after the first entry of multi-root rows; the checkout layout import and the Portal set either on any root, [0] included), and the v2 VersionControlSystemRootDTO serializes them NON_NULL. The baseline has no checkout layout, so a migrated candidate adds them. Only additions are suppressed: a changed value is a VALUE_DIFF, not a STRUCTURAL_DIFF. Typed layer: Comparators.buildAssertion forgives baseline-null -> value on these fields. See docs/registry/api-compat-deltas.md.",
+      "regressionTest": "GitVsDbValidationTest.VAL-003a multi-root checkout layout is the known difference"
     },
     {
       "endpoint": "GET /rest/api/2/common/jira-component-version-ranges",
       "category": "STRUCTURAL_DIFF",
       "jsonPathPattern": "\\.versionControlSystemRoots\\[\\d+\\]\\.(checkoutDirectory|sourcePath)$",
-      "reason": "ONB-001 VCS entry placement (rev. 3, 2026-09): VCS roots carry sourcePath and checkoutDirectory (V8__ back-fills checkoutDirectory = name after the first entry of multi-root rows; the placement import and the Portal set either on any root, [0] included), and the v2 VersionControlSystemRootDTO serializes them NON_NULL. The baseline has no placement, so a migrated candidate adds them. Only additions are suppressed: a changed value is a VALUE_DIFF, not a STRUCTURAL_DIFF. Typed layer: Comparators.buildAssertion forgives baseline-null -> value on these fields. See docs/registry/api-compat-deltas.md.",
-      "regressionTest": "GitVsDbValidationTest.VAL-003a multi-root placement is the known difference"
+      "reason": "ONB-001 VCS entry checkout layout (rev. 3, 2026-09): VCS roots carry sourcePath and checkoutDirectory (V8__ back-fills checkoutDirectory = name after the first entry of multi-root rows; the checkout layout import and the Portal set either on any root, [0] included), and the v2 VersionControlSystemRootDTO serializes them NON_NULL. The baseline has no checkout layout, so a migrated candidate adds them. Only additions are suppressed: a changed value is a VALUE_DIFF, not a STRUCTURAL_DIFF. Typed layer: Comparators.buildAssertion forgives baseline-null -> value on these fields. See docs/registry/api-compat-deltas.md.",
+      "regressionTest": "GitVsDbValidationTest.VAL-003a multi-root checkout layout is the known difference"
     },
     {
       "endpoint": "GET /rest/api/2/components/{component}/versions/{version}/vcs-settings",
       "category": "STRUCTURAL_DIFF",
       "jsonPathPattern": "(^\\$|\\.vcsSettings)\\.buildWorkingDirectory$",
       "reason": "ONB-001 Build Working Directory (rev. 3, 2026-09): V9__ adds component_configurations.build_working_directory, and the v2 VCSSettingsDTO serializes it NON_NULL (property level) for versions whose VCS entries come from a row that has one. The baseline has none, so a candidate adds it. Only additions are suppressed; a changed value is a VALUE_DIFF. Typed layer: Comparators.buildAssertion forgives baseline-null -> value. See docs/registry/api-compat-deltas.md.",
-      "regressionTest": "VcsPlacementKnownDeltaTest.placement and build working directory are suppressed"
+      "regressionTest": "VcsCheckoutLayoutKnownDeltaTest.checkout layout and build working directory are suppressed"
     },
     {
       "endpoint": "GET /rest/api/2/projects/{projectKey}/versions/{version}/vcs-settings",
       "category": "STRUCTURAL_DIFF",
       "jsonPathPattern": "(^\\$|\\.vcsSettings)\\.buildWorkingDirectory$",
       "reason": "ONB-001 Build Working Directory (rev. 3, 2026-09): V9__ adds component_configurations.build_working_directory, and the v2 VCSSettingsDTO serializes it NON_NULL (property level) for versions whose VCS entries come from a row that has one. The baseline has none, so a candidate adds it. Only additions are suppressed; a changed value is a VALUE_DIFF. Typed layer: Comparators.buildAssertion forgives baseline-null -> value. See docs/registry/api-compat-deltas.md.",
-      "regressionTest": "VcsPlacementKnownDeltaTest.placement and build working directory are suppressed"
+      "regressionTest": "VcsCheckoutLayoutKnownDeltaTest.checkout layout and build working directory are suppressed"
     },
     {
       "endpoint": "GET /rest/api/2/projects/{projectKey}/jira-component-version-ranges",
       "category": "STRUCTURAL_DIFF",
       "jsonPathPattern": "(^\\$|\\.vcsSettings)\\.buildWorkingDirectory$",
       "reason": "ONB-001 Build Working Directory (rev. 3, 2026-09): V9__ adds component_configurations.build_working_directory, and the v2 VCSSettingsDTO serializes it NON_NULL (property level) for versions whose VCS entries come from a row that has one. The baseline has none, so a candidate adds it. Only additions are suppressed; a changed value is a VALUE_DIFF. Typed layer: Comparators.buildAssertion forgives baseline-null -> value. See docs/registry/api-compat-deltas.md.",
-      "regressionTest": "VcsPlacementKnownDeltaTest.placement and build working directory are suppressed"
+      "regressionTest": "VcsCheckoutLayoutKnownDeltaTest.checkout layout and build working directory are suppressed"
     },
     {
       "endpoint": "GET /rest/api/2/common/jira-component-version-ranges",
       "category": "STRUCTURAL_DIFF",
       "jsonPathPattern": "(^\\$|\\.vcsSettings)\\.buildWorkingDirectory$",
       "reason": "ONB-001 Build Working Directory (rev. 3, 2026-09): V9__ adds component_configurations.build_working_directory, and the v2 VCSSettingsDTO serializes it NON_NULL (property level) for versions whose VCS entries come from a row that has one. The baseline has none, so a candidate adds it. Only additions are suppressed; a changed value is a VALUE_DIFF. Typed layer: Comparators.buildAssertion forgives baseline-null -> value. See docs/registry/api-compat-deltas.md.",
-      "regressionTest": "VcsPlacementKnownDeltaTest.placement and build working directory are suppressed"
+      "regressionTest": "VcsCheckoutLayoutKnownDeltaTest.checkout layout and build working directory are suppressed"
     },
     {
       "endpoint": "GET /rest/api/2/components/{component}/versions/{version}",
       "category": "STRUCTURAL_DIFF",
       "jsonPathPattern": "\\.vcsSettings\\.versionControlSystemRoots\\[\\d+\\]\\.(checkoutDirectory|sourcePath)$",
-      "reason": "ONB-001 VCS entry placement (rev. 3, 2026-09): VCS roots carry sourcePath and checkoutDirectory (V8__ back-fills checkoutDirectory = name after the first entry of multi-root rows; the placement import and the Portal set either on any root, [0] included), and the v2 VersionControlSystemRootDTO serializes them NON_NULL. The baseline has no placement, so a migrated candidate adds them. Only additions are suppressed: a changed value is a VALUE_DIFF, not a STRUCTURAL_DIFF. Typed layer: Comparators.buildAssertion forgives baseline-null -> value on these fields. Here embedded in DetailedComponent.vcsSettings. See docs/registry/api-compat-deltas.md.",
-      "regressionTest": "GitVsDbValidationTest.VAL-003a multi-root placement is the known difference"
+      "reason": "ONB-001 VCS entry checkout layout (rev. 3, 2026-09): VCS roots carry sourcePath and checkoutDirectory (V8__ back-fills checkoutDirectory = name after the first entry of multi-root rows; the checkout layout import and the Portal set either on any root, [0] included), and the v2 VersionControlSystemRootDTO serializes them NON_NULL. The baseline has no checkout layout, so a migrated candidate adds them. Only additions are suppressed: a changed value is a VALUE_DIFF, not a STRUCTURAL_DIFF. Typed layer: Comparators.buildAssertion forgives baseline-null -> value on these fields. Here embedded in DetailedComponent.vcsSettings. See docs/registry/api-compat-deltas.md.",
+      "regressionTest": "GitVsDbValidationTest.VAL-003a multi-root checkout layout is the known difference"
     },
     {
       "endpoint": "GET /rest/api/2/components/{component}/versions/{version}",
       "category": "STRUCTURAL_DIFF",
       "jsonPathPattern": "\\.vcsSettings\\.buildWorkingDirectory$",
       "reason": "ONB-001 Build Working Directory (rev. 3, 2026-09): V9__ adds component_configurations.build_working_directory, and the v2 VCSSettingsDTO serializes it NON_NULL (property level) for versions whose VCS entries come from a row that has one. The baseline has none, so a candidate adds it. Only additions are suppressed; a changed value is a VALUE_DIFF. Typed layer: Comparators.buildAssertion forgives baseline-null -> value. Here embedded in DetailedComponent.vcsSettings. See docs/registry/api-compat-deltas.md.",
-      "regressionTest": "VcsPlacementKnownDeltaTest.placement and build working directory are suppressed"
+      "regressionTest": "VcsCheckoutLayoutKnownDeltaTest.checkout layout and build working directory are suppressed"
     },
     {
       "endpointPattern": "^GET /rest/api/2/((components|projects)/[^/{}]+/versions/[^/{}]+(/vcs-settings)?|projects/[^/{}]+/jira-component-version-ranges)$",
       "category": "STRUCTURAL_DIFF",
       "jsonPathPattern": "\\.versionControlSystemRoots\\[\\d+\\]\\.(checkoutDirectory|sourcePath)$",
-      "reason": "ONB-001 rev. 3 (2026-09), trace-replay twin of the templated placement entries above: the prod-trace replayer does not parameterize paths, so raw requests carry real component keys, which must not be committed here; this entry matches the path SHAPE of the vcs-settings, jira-component-version-ranges and detailed-version endpoints instead. V8__ back-filled checkoutDirectory into existing rows, so replays of these endpoints hit the delta. Only added fields are suppressed; a changed value is a VALUE_DIFF. See docs/registry/api-compat-deltas.md.",
-      "regressionTest": "VcsPlacementKnownDeltaTest.literal trace paths are suppressed"
+      "reason": "ONB-001 rev. 3 (2026-09), trace-replay twin of the templated checkout layout entries above: the prod-trace replayer does not parameterize paths, so raw requests carry real component keys, which must not be committed here; this entry matches the path SHAPE of the vcs-settings, jira-component-version-ranges and detailed-version endpoints instead. V8__ back-filled checkoutDirectory into existing rows, so replays of these endpoints hit the delta. Only added fields are suppressed; a changed value is a VALUE_DIFF. See docs/registry/api-compat-deltas.md.",
+      "regressionTest": "VcsCheckoutLayoutKnownDeltaTest.literal trace paths are suppressed"
     },
     {
       "endpointPattern": "^GET /rest/api/2/((components|projects)/[^/{}]+/versions/[^/{}]+(/vcs-settings)?|projects/[^/{}]+/jira-component-version-ranges)$",
       "category": "STRUCTURAL_DIFF",
       "jsonPathPattern": "(^\\$|\\.vcsSettings)\\.buildWorkingDirectory$",
-      "reason": "ONB-001 rev. 3 (2026-09), trace-replay twin of the templated placement entries above: the prod-trace replayer does not parameterize paths, so raw requests carry real component keys, which must not be committed here; this entry matches the path SHAPE of the vcs-settings, jira-component-version-ranges and detailed-version endpoints instead. V8__ back-filled checkoutDirectory into existing rows, so replays of these endpoints hit the delta. Only added fields are suppressed; a changed value is a VALUE_DIFF. See docs/registry/api-compat-deltas.md.",
-      "regressionTest": "VcsPlacementKnownDeltaTest.literal trace paths are suppressed"
+      "reason": "ONB-001 rev. 3 (2026-09), trace-replay twin of the templated checkout layout entries above: the prod-trace replayer does not parameterize paths, so raw requests carry real component keys, which must not be committed here; this entry matches the path SHAPE of the vcs-settings, jira-component-version-ranges and detailed-version endpoints instead. V8__ back-filled checkoutDirectory into existing rows, so replays of these endpoints hit the delta. Only added fields are suppressed; a changed value is a VALUE_DIFF. See docs/registry/api-compat-deltas.md.",
+      "regressionTest": "VcsCheckoutLayoutKnownDeltaTest.literal trace paths are suppressed"
     },
     {
       "endpointPattern": "^(GET /rest/api/[123]/components(/[^/]+(/versions/[^/]+)?)?|POST /rest/api/2/components/(find-by-artifact|findByArtifacts)|POST /rest/api/3/components/find-by-artifacts)$",

@@ -21,7 +21,7 @@ class VersionControlSystemRoot {
         return create(name, repositoryType, vcsPath, tag, branch, hotfixBranch, null, null)
     }
 
-    /** Placement (ONB-001) comes from the database only; the Groovy DSL leaves it null. */
+    /** Checkout layout (ONB-001) comes from the database only; the Groovy DSL leaves it null. */
     static VersionControlSystemRoot create(String name, RepositoryType repositoryType, String vcsPath,
                                            String tag, String branch, String hotfixBranch,
                                            String sourcePath, String checkoutDirectory) {

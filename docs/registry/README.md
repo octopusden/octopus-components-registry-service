@@ -65,8 +65,8 @@ PRD (why?) ──→ FS (what?) ──→ TDD (how?)
 | [ADR-019](adr/019-feedback.md) | User feedback storage, transport, and security (Accepted) |
 | [ADR-020](adr/020-component-key-format.md) | Component-key format depends on `clientCode` (Accepted) |
 | [ADR-021](adr/021-effective-jira-display-name.md) | Jira display name falls back to `componentDisplayName` (Accepted) |
-| [ADR-022](adr/022-vcs-root-checkout-placement.md) | VCS root checkout placement: Source Path, Checkout Directory, Build Working Directory (Accepted) |
-| [ADR-023](adr/023-teamcity-placement-diff-sync.md) | TeamCity → registry placement Diff/Sync jobs (Accepted) |
+| [ADR-022](adr/022-vcs-root-checkout-layout.md) | VCS root checkout layout: Source Path, Checkout Directory, Build Working Directory (Accepted) |
+| [ADR-023](adr/023-teamcity-checkout-layout-diff-sync.md) | TeamCity → registry checkout layout Diff/Sync jobs (Accepted) |
 
 ### Action Items
 

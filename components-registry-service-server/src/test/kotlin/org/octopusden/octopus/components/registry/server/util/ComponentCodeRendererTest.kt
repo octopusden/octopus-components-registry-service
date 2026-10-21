@@ -391,7 +391,7 @@ class ComponentCodeRendererTest {
 
     @Test
     @DisplayName("ONB-001: DSL export omits sourcePath, checkoutDirectory and buildWorkingDirectory (Groovy DSL has none)")
-    fun fullMultiVcsPlacementOmitted() {
+    fun fullMultiVcsCheckoutLayoutOmitted() {
         fun render(placed: Boolean): String {
             val c = component()
             val b = base(c) { buildSystem = "MAVEN" }

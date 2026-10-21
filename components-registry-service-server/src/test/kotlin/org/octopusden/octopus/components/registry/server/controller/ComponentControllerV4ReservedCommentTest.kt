@@ -20,7 +20,7 @@ import java.util.UUID
 
 /**
  * The "sync from TeamCity" change-comment prefix is the provenance tag
- * `PlacementEditHistory` trusts, so a REST client must not be able to forge it on any v4 write that
+ * `CheckoutLayoutEditHistory` trusts, so a REST client must not be able to forge it on any v4 write that
  * accepts a `changeComment`. If the guard is missing the request reaches the (stubbed-to-fail)
  * service and answers 500 (the stub's failure) instead of 400.
  */

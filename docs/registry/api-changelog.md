@@ -18,6 +18,17 @@ refresh it with `./gradlew :components-registry-service-server:generateOpenApiDo
 
 ## Unreleased
 
+- **TeamCity placement Diff/Sync renamed to "checkout layout" (SYS-102).** The endpoints move to
+  `/rest/api/4/admin/teamcity-checkout-layout/...` (same sub-paths, methods, permissions and bodies).
+  The old `/rest/api/4/admin/teamcity-placement/...` paths still answer, delegating to the new ones,
+  and are marked `deprecated`; they will be removed in a later release. Also renamed: the stale-Diff
+  `errorCode` `placement-diff-stale` → `checkout-layout-diff-stale` (on both paths), the gate's
+  conflict `code` `tc-placement-{diff,sync}-running` → `tc-checkout-layout-{diff,sync}-running` and
+  `activeKind` `TC_PLACEMENT_{DIFF,SYNC}` → `TC_CHECKOUT_LAYOUT_{DIFF,SYNC}`, the service event types
+  `TEAMCITY_PLACEMENT_{DIFF,SYNC}` → `TEAMCITY_CHECKOUT_LAYOUT_{DIFF,SYNC}` (recorded events are
+  migrated by `V10__`), the schemas `TeamcityPlacement*` / `Placement*` → `TeamcityCheckoutLayout*` /
+  `CheckoutLayout*`, and the CSV file names.
+
 - **`involves` / `involvesRoles` list filters added (SYS-101).** `GET /components?involves=<u>` returns
   components where any listed user is the owner OR a release manager OR a security champion;
   `involvesRoles` (any of `owner`, `releaseManager`, `securityChampion`; default all) narrows the

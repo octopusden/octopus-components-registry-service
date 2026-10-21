@@ -31,7 +31,7 @@ import org.octopusden.octopus.components.registry.server.service.ComponentManage
 import org.octopusden.octopus.components.registry.server.service.archivereadiness.ArchiveReadinessService
 import org.octopusden.octopus.components.registry.server.service.impl.ComponentCodeSearchService
 import org.octopusden.octopus.components.registry.server.service.impl.EmployeeDirectoryService
-import org.octopusden.octopus.components.registry.server.teamcity.placement.PlacementEditHistory
+import org.octopusden.octopus.components.registry.server.teamcity.checkoutlayout.CheckoutLayoutEditHistory
 import org.octopusden.octopus.escrow.BuildSystem
 import org.octopusden.octopus.escrow.RepositoryType
 import org.slf4j.LoggerFactory
@@ -261,7 +261,7 @@ class ComponentControllerV4(
     fun createComponent(
         @Valid @RequestBody request: ComponentCreateRequest,
     ): ComponentDetailResponse {
-        PlacementEditHistory.requireNotReserved(request.changeComment)
+        CheckoutLayoutEditHistory.requireNotReserved(request.changeComment)
         return withCanEdit(componentManagementService.createComponent(request))
     }
 
@@ -488,7 +488,7 @@ class ComponentControllerV4(
         @PathVariable id: UUID,
         @Valid @RequestBody request: ComponentUpdateRequest,
     ): ComponentDetailResponse {
-        PlacementEditHistory.requireNotReserved(request.changeComment)
+        CheckoutLayoutEditHistory.requireNotReserved(request.changeComment)
         return withCanEdit(componentManagementService.updateComponent(id, request))
     }
 
@@ -579,7 +579,7 @@ class ComponentControllerV4(
         @PathVariable id: UUID,
         @Valid @RequestBody request: SupportedVersionsRequest,
     ): SupportedVersionsResponse {
-        PlacementEditHistory.requireNotReserved(request.changeComment)
+        CheckoutLayoutEditHistory.requireNotReserved(request.changeComment)
         return componentManagementService.setSupportedVersions(id, request)
     }
 

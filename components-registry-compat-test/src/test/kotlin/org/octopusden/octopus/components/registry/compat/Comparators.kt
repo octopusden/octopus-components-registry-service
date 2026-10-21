@@ -405,12 +405,12 @@ object Comparators {
                         java.util.function.BiPredicate<Any?, Any?> { a, b -> Adr021DisplayName.detailedComponentEqual(a, b) },
                         "^detailedComponentVersion\\.component$",
                     )
-                    // ONB-001: a migrated candidate carries VCS placement (sourcePath / checkoutDirectory on
+                    // ONB-001: a migrated candidate carries VCS checkout layout (sourcePath / checkoutDirectory on
                     // any root) and a Build Working Directory, the baseline none. Forgive EXACTLY
                     // baseline-null -> value; a changed or dropped value is still a VALUE_DIFF.
                     .withEqualsForFieldsMatchingRegexes(
                         java.util.function.BiPredicate<Any?, Any?> { a, b -> a == null || a == b },
-                        *VcsPlacementFields.typedPathRegexes,
+                        *VcsCheckoutLayoutFields.typedPathRegexes,
                     )
                     // SYS-099: V11 flags the components labelled `test-component`; the baseline has no
                     // flag (reads false). Forgive EXACTLY baseline-false -> true; a dropped flag stays a VALUE_DIFF.
@@ -596,11 +596,11 @@ object ArtifactPatternComparator : Comparator<Any?> {
 }
 
 /**
- * ONB-001: the VCS placement fields a migrated candidate adds that the baseline never serves — per root
+ * ONB-001: the VCS checkout layout fields a migrated candidate adds that the baseline never serves — per root
  * and on the VCS settings. One definition for the typed comparator and the TD-022 element pairing
  * ([Adr021RangeRecovery]); the raw layer's `known-deltas-db.json` entries cover the same fields.
  */
-object VcsPlacementFields {
+object VcsCheckoutLayoutFields {
     val ROOT = listOf("checkoutDirectory", "sourcePath")
     val SETTINGS = listOf("buildWorkingDirectory")
 
@@ -610,7 +610,7 @@ object VcsPlacementFields {
             "^(.+\\.)?(${SETTINGS.joinToString("|")})$",
         )
 
-    /** [vcsSettings] (a JSON object, modified in place) without the placement fields. */
+    /** [vcsSettings] (a JSON object, modified in place) without the checkout layout fields. */
     fun strip(vcsSettings: JsonNode?) {
         val settings = vcsSettings as? ObjectNode ?: return
         SETTINGS.forEach { settings.remove(it) }

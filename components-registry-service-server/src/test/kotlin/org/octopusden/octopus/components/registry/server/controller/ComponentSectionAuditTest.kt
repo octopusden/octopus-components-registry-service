@@ -106,11 +106,11 @@ class ComponentSectionAuditTest {
     }
 
     @Test
-    @DisplayName("ONB-001: a placement-only vcsEntries PATCH (sourcePath / checkoutDirectory) writes an UPDATE audit row")
-    fun `placement-only vcsEntries PATCH is audited`() {
+    @DisplayName("ONB-001: a layout-only vcsEntries PATCH (sourcePath / checkoutDirectory) writes an UPDATE audit row")
+    fun `layout-only vcsEntries PATCH is audited`() {
         val id = createComponent("onb001p-${UUID.randomUUID().toString().take(8)}")
-        val entries = { placement: String ->
-            """{"baseConfiguration":{"vcsEntries":[{"vcsPath":"$REPO_A"},{"vcsPath":"$REPO_B"$placement}]}}"""
+        val entries = { layout: String ->
+            """{"baseConfiguration":{"vcsEntries":[{"vcsPath":"$REPO_A"},{"vcsPath":"$REPO_B"$layout}]}}"""
         }
         patchComponent(id, entries(""","checkoutDirectory":"feature""""))
         val before = updateRowCount(id)
@@ -134,12 +134,12 @@ class ComponentSectionAuditTest {
     }
 
     @Test
-    @DisplayName("ONB-001: a placement-only vcs.settings marker change writes an UPDATE audit row")
-    fun `placement-only marker PATCH is audited`() {
+    @DisplayName("ONB-001: a layout-only vcs.settings marker change writes an UPDATE audit row")
+    fun `layout-only marker PATCH is audited`() {
         val id = createComponent("onb001m-${UUID.randomUUID().toString().take(8)}")
-        val marker = { placement: String ->
+        val marker = { layout: String ->
             """{"fieldOverrides":[{"overriddenAttribute":"vcs.settings","versionRange":"[1.0,2.0)",""" +
-                """"markerChildren":{"vcsEntries":[{"vcsPath":"$REPO_A"$placement}]}}]}"""
+                """"markerChildren":{"vcsEntries":[{"vcsPath":"$REPO_A"$layout}]}}]}"""
         }
         patchComponent(id, marker(""))
         val markerId = overrideIds(id).single()

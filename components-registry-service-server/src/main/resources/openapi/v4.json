@@ -3080,7 +3080,7 @@
         },
         "type" : "object"
       },
-      "PlacementComponentSyncOutcome" : {
+      "CheckoutLayoutComponentSyncOutcome" : {
         "properties" : {
           "componentId" : {
             "format" : "uuid",
@@ -3091,7 +3091,7 @@
           },
           "rows" : {
             "items" : {
-              "$ref" : "#/components/schemas/PlacementRowSyncOutcome"
+              "$ref" : "#/components/schemas/CheckoutLayoutRowSyncOutcome"
             },
             "type" : "array"
           }
@@ -3103,7 +3103,7 @@
         ],
         "type" : "object"
       },
-      "PlacementDiffResult" : {
+      "CheckoutLayoutDiffResult" : {
         "properties" : {
           "diffId" : {
             "type" : "string"
@@ -3114,7 +3114,7 @@
           },
           "rows" : {
             "items" : {
-              "$ref" : "#/components/schemas/PlacementRowDiff"
+              "$ref" : "#/components/schemas/CheckoutLayoutRowDiff"
             },
             "type" : "array"
           }
@@ -3125,7 +3125,7 @@
         ],
         "type" : "object"
       },
-      "PlacementEntryDiff" : {
+      "CheckoutLayoutEntryDiff" : {
         "properties" : {
           "branch" : {
             "type" : "string"
@@ -3164,7 +3164,7 @@
         ],
         "type" : "object"
       },
-      "PlacementFieldChange" : {
+      "CheckoutLayoutFieldChange" : {
         "properties" : {
           "after" : {
             "type" : "string"
@@ -3193,7 +3193,7 @@
         ],
         "type" : "object"
       },
-      "PlacementRowDiff" : {
+      "CheckoutLayoutRowDiff" : {
         "properties" : {
           "componentId" : {
             "format" : "uuid",
@@ -3214,7 +3214,7 @@
           },
           "entries" : {
             "items" : {
-              "$ref" : "#/components/schemas/PlacementEntryDiff"
+              "$ref" : "#/components/schemas/CheckoutLayoutEntryDiff"
             },
             "type" : "array"
           },
@@ -3266,7 +3266,7 @@
         ],
         "type" : "object"
       },
-      "PlacementRowSyncOutcome" : {
+      "CheckoutLayoutRowSyncOutcome" : {
         "properties" : {
           "configurationRowId" : {
             "format" : "uuid",
@@ -3286,7 +3286,7 @@
         ],
         "type" : "object"
       },
-      "PlacementSyncResult" : {
+      "CheckoutLayoutSyncResult" : {
         "properties" : {
           "applied" : {
             "format" : "int32",
@@ -3294,7 +3294,7 @@
           },
           "components" : {
             "items" : {
-              "$ref" : "#/components/schemas/PlacementComponentSyncOutcome"
+              "$ref" : "#/components/schemas/CheckoutLayoutComponentSyncOutcome"
             },
             "type" : "array"
           },
@@ -3304,7 +3304,7 @@
           },
           "fieldChanges" : {
             "items" : {
-              "$ref" : "#/components/schemas/PlacementFieldChange"
+              "$ref" : "#/components/schemas/CheckoutLayoutFieldChange"
             },
             "type" : "array"
           },
@@ -3664,7 +3664,7 @@
         ],
         "type" : "object"
       },
-      "TeamcityPlacementDiffJobResponse" : {
+      "TeamcityCheckoutLayoutDiffJobResponse" : {
         "properties" : {
           "errorMessage" : {
             "type" : "string"
@@ -3704,7 +3704,7 @@
         ],
         "type" : "object"
       },
-      "TeamcityPlacementSyncJobResponse" : {
+      "TeamcityCheckoutLayoutSyncJobResponse" : {
         "properties" : {
           "errorMessage" : {
             "type" : "string"
@@ -3720,7 +3720,7 @@
             "type" : "string"
           },
           "result" : {
-            "$ref" : "#/components/schemas/PlacementSyncResult"
+            "$ref" : "#/components/schemas/CheckoutLayoutSyncResult"
           },
           "startedAt" : {
             "format" : "date-time",
@@ -3743,7 +3743,7 @@
         ],
         "type" : "object"
       },
-      "TeamcityPlacementSyncRequest" : {
+      "TeamcityCheckoutLayoutSyncRequest" : {
         "properties" : {
           "componentIds" : {
             "items" : {
@@ -7311,7 +7311,7 @@
         ]
       }
     },
-    "/rest/api/4/admin/teamcity-placement/diff" : {
+    "/rest/api/4/admin/teamcity-checkout-layout/diff" : {
       "post" : {
         "operationId" : "startDiff",
         "responses" : {
@@ -7319,7 +7319,7 @@
             "content" : {
               "*/*" : {
                 "schema" : {
-                  "$ref" : "#/components/schemas/TeamcityPlacementDiffJobResponse"
+                  "$ref" : "#/components/schemas/TeamcityCheckoutLayoutDiffJobResponse"
                 }
               }
             },
@@ -7417,11 +7417,11 @@
           }
         },
         "tags" : [
-          "teamcity-placement-controller-v-4"
+          "teamcity-checkout-layout-controller-v-4"
         ]
       }
     },
-    "/rest/api/4/admin/teamcity-placement/diff/job" : {
+    "/rest/api/4/admin/teamcity-checkout-layout/diff/job" : {
       "get" : {
         "operationId" : "getDiffJob",
         "responses" : {
@@ -7429,7 +7429,7 @@
             "content" : {
               "*/*" : {
                 "schema" : {
-                  "$ref" : "#/components/schemas/TeamcityPlacementDiffJobResponse"
+                  "$ref" : "#/components/schemas/TeamcityCheckoutLayoutDiffJobResponse"
                 }
               }
             },
@@ -7527,11 +7527,11 @@
           }
         },
         "tags" : [
-          "teamcity-placement-controller-v-4"
+          "teamcity-checkout-layout-controller-v-4"
         ]
       }
     },
-    "/rest/api/4/admin/teamcity-placement/diff/report.csv" : {
+    "/rest/api/4/admin/teamcity-checkout-layout/diff/report.csv" : {
       "get" : {
         "operationId" : "getReportCsv",
         "responses" : {
@@ -7637,11 +7637,11 @@
           }
         },
         "tags" : [
-          "teamcity-placement-controller-v-4"
+          "teamcity-checkout-layout-controller-v-4"
         ]
       }
     },
-    "/rest/api/4/admin/teamcity-placement/diff/report.html" : {
+    "/rest/api/4/admin/teamcity-checkout-layout/diff/report.html" : {
       "get" : {
         "operationId" : "getReportHtml",
         "responses" : {
@@ -7747,11 +7747,11 @@
           }
         },
         "tags" : [
-          "teamcity-placement-controller-v-4"
+          "teamcity-checkout-layout-controller-v-4"
         ]
       }
     },
-    "/rest/api/4/admin/teamcity-placement/diff/report.json" : {
+    "/rest/api/4/admin/teamcity-checkout-layout/diff/report.json" : {
       "get" : {
         "operationId" : "getReportJson",
         "responses" : {
@@ -7759,7 +7759,7 @@
             "content" : {
               "application/json" : {
                 "schema" : {
-                  "$ref" : "#/components/schemas/PlacementDiffResult"
+                  "$ref" : "#/components/schemas/CheckoutLayoutDiffResult"
                 }
               }
             },
@@ -7857,18 +7857,18 @@
           }
         },
         "tags" : [
-          "teamcity-placement-controller-v-4"
+          "teamcity-checkout-layout-controller-v-4"
         ]
       }
     },
-    "/rest/api/4/admin/teamcity-placement/sync" : {
+    "/rest/api/4/admin/teamcity-checkout-layout/sync" : {
       "post" : {
         "operationId" : "startSync",
         "requestBody" : {
           "content" : {
             "application/json" : {
               "schema" : {
-                "$ref" : "#/components/schemas/TeamcityPlacementSyncRequest"
+                "$ref" : "#/components/schemas/TeamcityCheckoutLayoutSyncRequest"
               }
             }
           },
@@ -7879,7 +7879,7 @@
             "content" : {
               "*/*" : {
                 "schema" : {
-                  "$ref" : "#/components/schemas/TeamcityPlacementSyncJobResponse"
+                  "$ref" : "#/components/schemas/TeamcityCheckoutLayoutSyncJobResponse"
                 }
               }
             },
@@ -7914,7 +7914,7 @@
                       "$ref" : "#/components/schemas/MigrationConflictResponse"
                     },
                     {
-                      "$ref" : "#/components/schemas/TeamcityPlacementSyncJobResponse"
+                      "$ref" : "#/components/schemas/TeamcityCheckoutLayoutSyncJobResponse"
                     },
                     {
                       "$ref" : "#/components/schemas/ErrorResponse"
@@ -7923,7 +7923,7 @@
                 }
               }
             },
-            "description" : "Three body shapes, checked in this order. (1) A Sync is already running: the in-flight TeamcityPlacementSyncJobResponse (kind \"job\"). (2) Another admin job holds the gate, a running Diff included: MigrationConflictResponse {code, message, activeKind, activeJobId}. (3) diffId is not the last completed Diff, or none has completed: ErrorResponse {errorMessage: \"diff replaced, re-run Diff\", errorCode: \"placement-diff-stale\"}, nothing written; Diff keeps only that one result (ADR-002 decision 1)."
+            "description" : "Three body shapes, checked in this order. (1) A Sync is already running: the in-flight TeamcityCheckoutLayoutSyncJobResponse (kind \"job\"). (2) Another admin job holds the gate, a running Diff included: MigrationConflictResponse {code, message, activeKind, activeJobId}. (3) diffId is not the last completed Diff, or none has completed: ErrorResponse {errorMessage: \"diff replaced, re-run Diff\", errorCode: \"checkout-layout-diff-stale\"}, nothing written; Diff keeps only that one result (ADR-002 decision 1)."
           },
           "413" : {
             "content" : {
@@ -7987,11 +7987,11 @@
           }
         },
         "tags" : [
-          "teamcity-placement-controller-v-4"
+          "teamcity-checkout-layout-controller-v-4"
         ]
       }
     },
-    "/rest/api/4/admin/teamcity-placement/sync/job" : {
+    "/rest/api/4/admin/teamcity-checkout-layout/sync/job" : {
       "get" : {
         "operationId" : "getSyncJob",
         "responses" : {
@@ -7999,7 +7999,7 @@
             "content" : {
               "*/*" : {
                 "schema" : {
-                  "$ref" : "#/components/schemas/TeamcityPlacementSyncJobResponse"
+                  "$ref" : "#/components/schemas/TeamcityCheckoutLayoutSyncJobResponse"
                 }
               }
             },
@@ -8097,11 +8097,11 @@
           }
         },
         "tags" : [
-          "teamcity-placement-controller-v-4"
+          "teamcity-checkout-layout-controller-v-4"
         ]
       }
     },
-    "/rest/api/4/admin/teamcity-placement/sync/report.csv" : {
+    "/rest/api/4/admin/teamcity-checkout-layout/sync/report.csv" : {
       "get" : {
         "operationId" : "getSyncReportCsv",
         "responses" : {
@@ -8207,7 +8207,7 @@
           }
         },
         "tags" : [
-          "teamcity-placement-controller-v-4"
+          "teamcity-checkout-layout-controller-v-4"
         ]
       }
     },
