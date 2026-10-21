@@ -34,7 +34,7 @@ private const val PROJECT_FIELDS =
     "project(id,name,webUrl,href,archived," +
         "parameters(property(name,value))," +
         "buildTypes(buildType($BUILD_TYPE_REQUIRED,paused,parameters(property(name,value))," +
-        // `properties` too: the client's TeamcityTrigger requires it.
+        // TeamcityTrigger.properties is non-null.
         "triggers(trigger(type,disabled,properties(property(name,value))))," +
         "template($BUILD_TYPE_REQUIRED)," +
         "templates(buildType($BUILD_TYPE_REQUIRED)))))"

@@ -3731,5 +3731,5 @@ releases may be started without a person.
 
 **Test method:**
 `V12AutoReleaseMigrationIntegrationTest`, `AutoReleaseFlagV4Test`; `ExternalTcProjectFetcherTest`
-(`autoReleaseFromFinishBuildTrigger`, `noAutoReleaseOtherwise`), `TeamcitySyncServiceTest`
-(`autoReleaseEnabledFromTeamcity`, `autoReleaseNeverTurnedOff`).
+(`SYS-104 finish-build trigger means auto release`, `SYS-104 no auto release otherwise`),
+`TeamcitySyncServiceTest` (`SYS-104 resync turns autoRelease on`, `SYS-104 resync never turns autoRelease off`).

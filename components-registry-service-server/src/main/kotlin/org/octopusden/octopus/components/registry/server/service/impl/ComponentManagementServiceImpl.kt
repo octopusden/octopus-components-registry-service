@@ -4885,7 +4885,6 @@ class ComponentManagementServiceImpl(
     private companion object {
         private val log = org.slf4j.LoggerFactory.getLogger(ComponentManagementServiceImpl::class.java)
 
-        // SYS-104 field-config path of the `autoRelease` flag.
         private const val AUTO_RELEASE_FIELD = "component.autoRelease"
 
         // SYS-101 `involvesRoles` values.

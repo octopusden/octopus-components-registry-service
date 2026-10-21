@@ -66,8 +66,9 @@ class TeamcitySyncService(
      * a slow/stalled TC server cannot hold a JDBC connection or extend a
      * transaction's lifetime. Per-component writes happen inside a single
      * [TransactionTemplate.execute] block so the bulk write is still atomic
-     * (either all changes commit, or none do on JPA failure). TC sync writes no
-     * audit rows — the re-link is logged at INFO instead (SYS-051).
+     * (either all changes commit, or none do on JPA failure). Re-links are logged at INFO,
+     * not audited (SYS-051). Turning `autoRelease` on runs after it, one short transaction
+     * per component, and is audited (SYS-104).
      */
     fun resync(): TeamcitySyncResult {
         check(teamcityProperties.baseUrl.isNotBlank()) {
@@ -102,7 +103,9 @@ class TeamcitySyncService(
         // execute() returns the callback's value; applyMatches never returns
         // null, so the !! cannot trip in practice — Kotlin just sees the API's
         // declared T? signature.
-        return transactionTemplate.execute { _ -> applyMatches(components, matches, changedBy) }!!
+        val autoReleaseCandidates = mutableListOf<Pair<UUID, String>>()
+        val result = transactionTemplate.execute { _ -> applyMatches(components, matches, changedBy, autoReleaseCandidates) }!!
+        return enableAutoRelease(result, autoReleaseCandidates, changedBy)
     }
 
     @Suppress("TooGenericExceptionCaught", "LongMethod")
@@ -110,6 +113,7 @@ class TeamcitySyncService(
         components: List<ComponentEntity>,
         matches: Map<UUID, List<TcProject>>,
         changedBy: String,
+        autoReleaseCandidates: MutableList<Pair<UUID, String>>,
     ): TeamcitySyncResult {
         val scanned = components.size
         var updated = 0
@@ -118,7 +122,6 @@ class TeamcitySyncService(
         var skippedAmbiguous = 0
         var ambiguousAutoResolved = 0
         var droppedLines = 0
-        var autoReleaseEnabled = 0
         val errors = mutableListOf<String>()
 
         for (component in components) {
@@ -148,7 +151,11 @@ class TeamcitySyncService(
                         // unresolved (ambiguous). The component-level skipped_* counters do NOT
                         // reflect this, so surface it separately.
                         droppedLines += ambiguousLineCount
-                        autoReleaseEnabled += enableAutoRelease(componentId, picks, changedBy)
+                        autoReleaseCandidates +=
+                            picks
+                                .filter { it.project.hasAutoReleaseTrigger }
+                                .take(1)
+                                .map { componentId to it.project.id }
                     }
 
                     // No winner at all: ambiguous if a line was left unresolved, else no-match.
@@ -176,7 +183,7 @@ class TeamcitySyncService(
             "TC sync done: scanned=$scanned, updated=$updated, unchanged=$unchanged, " +
                 "skippedNoMatch=$skippedNoMatch, skippedAmbiguous=$skippedAmbiguous, " +
                 "ambiguousAutoResolved=$ambiguousAutoResolved, droppedLines=$droppedLines, " +
-                "autoReleaseEnabled=$autoReleaseEnabled, errors=${errors.size}"
+                "errors=${errors.size}"
         }
         return TeamcitySyncResult(
             scanned = scanned,
@@ -187,24 +194,38 @@ class TeamcitySyncService(
             ambiguousAutoResolved = ambiguousAutoResolved,
             droppedLines = droppedLines,
             errors = errors.toList(),
-            autoReleaseEnabled = autoReleaseEnabled,
         )
     }
 
-    /**
-     * SYS-104, one way only: a linked release configuration with an enabled finish-build trigger
-     * turns `autoRelease` on; resync never turns it off and never writes to TeamCity. Audited, unlike
-     * re-links, so the component history says why the flag changed. Returns 1 when it turned the
-     * flag on, else 0 (a count, so the caller's loop stays branch-free).
-     */
+    /** SYS-104: turns `autoRelease` on (never off) for each candidate, audited; one transaction each. */
+    @Suppress("TooGenericExceptionCaught")
     private fun enableAutoRelease(
-        componentId: UUID,
-        picks: List<Pick>,
+        result: TeamcitySyncResult,
+        candidates: List<Pair<UUID, String>>,
         changedBy: String,
-    ): Int {
-        val projectId = picks.firstOrNull { it.project.hasAutoReleaseTrigger }?.project?.id ?: return 0
-        val component = componentRepository.findById(componentId).orElse(null) ?: return 0
-        if (component.autoRelease) return 0
+    ): TeamcitySyncResult {
+        val errors = mutableListOf<String>()
+        var enabled = 0
+        for ((componentId, projectId) in candidates) {
+            try {
+                if (transactionTemplate.execute { _ -> turnOnAutoRelease(componentId, projectId, changedBy) } == true) enabled++
+            } catch (e: Exception) {
+                val msg = "Failed to turn autoRelease on for component id=$componentId: ${e.message}"
+                log.error(e) { msg }
+                errors.add(msg)
+            }
+        }
+        log.info { "TC sync: autoRelease turned on for $enabled component(s)" }
+        return result.copy(autoReleaseEnabled = enabled, errors = result.errors + errors)
+    }
+
+    private fun turnOnAutoRelease(
+        componentId: UUID,
+        projectId: String,
+        changedBy: String,
+    ): Boolean {
+        val component = componentRepository.findById(componentId).orElse(null) ?: return false
+        if (component.autoRelease) return false
         component.autoRelease = true
         applicationEventPublisher.publishEvent(
             AuditEvent(
@@ -217,8 +238,7 @@ class TeamcitySyncService(
                 changeComment = "TeamCity resync: release configuration in $projectId has a finish-build trigger",
             ),
         )
-        log.info { "TeamCity sync turned autoRelease on for ${component.componentKey} (TeamCity project $projectId, by $changedBy)" }
-        return 1
+        return true
     }
 
     /** A resolved winner for one PROJECT_VERSION line, with whether a tie-break was needed. */

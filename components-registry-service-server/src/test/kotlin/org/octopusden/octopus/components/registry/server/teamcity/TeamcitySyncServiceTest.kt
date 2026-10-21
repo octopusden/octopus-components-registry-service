@@ -339,8 +339,7 @@ class TeamcitySyncServiceTest {
     }
 
     @Test
-    @DisplayName("SYS-104: a finish-build trigger on a linked release configuration turns autoRelease on")
-    fun autoReleaseEnabledFromTeamcity() {
+    fun `SYS-104 resync turns autoRelease on`() {
         val auto = component(alice, "alpha")
         val manual = component(bob, "beta")
         val fetcher = stubFetcher(
@@ -371,8 +370,7 @@ class TeamcitySyncServiceTest {
     }
 
     @Test
-    @DisplayName("SYS-104: resync never turns autoRelease off")
-    fun autoReleaseNeverTurnedOff() {
+    fun `SYS-104 resync never turns autoRelease off`() {
         val alpha = component(alice, "alpha").apply { autoRelease = true }
         val fetcher = stubFetcher(mapOf("alpha" to listOf(TcProject("Alpha_Build", hasCdReleaseBuild = true))))
         val svc = service(

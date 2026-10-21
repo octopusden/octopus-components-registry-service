@@ -284,6 +284,15 @@ class ExternalTcProjectFetcherTest {
                         "projectId": "Tc_Foo",
                         "projectName": "Foo",
                         "href": "/app/rest/buildTypes/id:Tc_Foo_Build",
+                        "triggers": {
+                          "trigger": [
+                            {
+                              "type": "buildDependencyTrigger",
+                              "disabled": false,
+                              "properties": {"property": [{"name": "dependsOn", "value": "Tc_Foo_RC"}]}
+                            }
+                          ]
+                        },
                         "template": {
                           "id": "CDRelease",
                           "name": "CDRelease",
@@ -319,6 +328,7 @@ class ExternalTcProjectFetcherTest {
         val tcProject = result[fooUuid]?.single() ?: error("expected exactly one match for foo")
         assertEquals("Tc_Foo", tcProject.id)
         assertEquals(true, tcProject.hasCdReleaseBuild)
+        assertEquals(true, tcProject.hasAutoReleaseTrigger)
     }
 
     @Test
@@ -608,16 +618,14 @@ class ExternalTcProjectFetcherTest {
     ) = buildType("Release", legacyTemplateId = "CDRelease", paused = paused, triggers = triggers.toList())
 
     @Test
-    @DisplayName("SYS-104: an enabled finish-build trigger on the release configuration means auto release")
-    fun autoReleaseFromFinishBuildTrigger() {
+    fun `SYS-104 finish-build trigger means auto release`() {
         assertEquals(true, autoReleaseOf(release(finishBuildTrigger())))
         val viaTemplates = buildType("Release", pluralTemplateIds = listOf("CDRelease"), triggers = listOf(finishBuildTrigger()))
         assertEquals(true, autoReleaseOf(viaTemplates))
     }
 
     @Test
-    @DisplayName("SYS-104: no auto release from a disabled trigger, a paused release, another trigger or another configuration")
-    fun noAutoReleaseOtherwise() {
+    fun `SYS-104 no auto release otherwise`() {
         assertEquals(false, autoReleaseOf(release()))
         assertEquals(false, autoReleaseOf(release(finishBuildTrigger(disabled = true))))
         assertEquals(false, autoReleaseOf(release(finishBuildTrigger(), paused = true), buildType("Compile")))
