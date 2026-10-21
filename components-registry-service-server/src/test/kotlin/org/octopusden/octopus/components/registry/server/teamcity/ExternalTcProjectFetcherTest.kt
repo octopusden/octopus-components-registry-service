@@ -289,7 +289,7 @@ class ExternalTcProjectFetcherTest {
                             {
                               "type": "buildDependencyTrigger",
                               "disabled": false,
-                              "properties": {"property": [{"name": "dependsOn", "value": "Tc_Foo_RC"}]}
+                              "properties": {"count": 1}
                             }
                           ]
                         },

@@ -33,9 +33,12 @@ private const val BUILD_TYPE_REQUIRED = "id,name,projectId,projectName,href"
 private const val PROJECT_FIELDS =
     "project(id,name,webUrl,href,archived," +
         "parameters(property(name,value))," +
-        "buildTypes(buildType($BUILD_TYPE_REQUIRED,paused,parameters(property(name,value))," +
-        // TeamcityTrigger.properties is non-null.
-        "triggers(trigger(type,disabled,properties(property(name,value))))," +
+        // Only *VERSION* build-type parameters (PROJECT_VERSION and what it references), and only the
+        // count of trigger properties (TeamcityTrigger.properties is non-null): the full response
+        // is ~180 MB and ran the pod out of heap.
+        "buildTypes(buildType($BUILD_TYPE_REQUIRED,paused," +
+        "parameters(\$locator(name:(value:VERSION,matchType:contains)),property(name,value))," +
+        "triggers(trigger(type,disabled,properties(count)))," +
         "template($BUILD_TYPE_REQUIRED)," +
         "templates(buildType($BUILD_TYPE_REQUIRED)))))"
 
