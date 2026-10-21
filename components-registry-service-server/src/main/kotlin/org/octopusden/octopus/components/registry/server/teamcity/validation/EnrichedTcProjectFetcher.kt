@@ -70,8 +70,8 @@ class CachingEnrichedTcProjectFetcher(
         // `name`. Mirrors the sync's PROJECT_FIELDS, plus steps.
         private const val BUILD_TYPE_REQUIRED = "id,name,projectId,projectName,href"
 
-        // ONB-002 (TeamCity placement Diff/Sync): each build type's attached VCS roots and their
-        // checkout rules, so TeamcityPlacementDiffService can derive Checkout Directory / Source
+        // ONB-002 (TeamCity checkout layout Diff/Sync): each build type's attached VCS roots and their
+        // checkout rules, so TeamcityCheckoutLayoutDiffService can derive Checkout Directory / Source
         // Path / Build Working Directory without a second TC call. Additive only — every existing
         // consumer of this cache (TeamcityValidationService) ignores the extra field. The entry's
         // `id` and the root's `name`/`href` are non-null on the client DTOs, so they are requested too.

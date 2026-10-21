@@ -1,8 +1,8 @@
 package org.octopusden.octopus.components.registry.server.teamcity.validation
 
-import org.octopusden.octopus.components.registry.server.teamcity.placement.TcCompileConfig
-import org.octopusden.octopus.components.registry.server.teamcity.placement.compareVcsRoots
-import org.octopusden.octopus.components.registry.server.teamcity.placement.repoDisplayName
+import org.octopusden.octopus.components.registry.server.teamcity.checkoutlayout.TcCompileConfig
+import org.octopusden.octopus.components.registry.server.teamcity.checkoutlayout.compareVcsRoots
+import org.octopusden.octopus.components.registry.server.teamcity.checkoutlayout.repoDisplayName
 import org.octopusden.octopus.validation.core.Status
 import org.octopusden.octopus.validation.core.ValidationResult
 import org.octopusden.octopus.validation.validators.type.TeamCityValidationType
@@ -10,7 +10,7 @@ import org.octopusden.octopus.validation.validators.type.TeamCityValidationType
 /**
  * The "VCS roots differ from the registry" finding of a TeamCity project. Needs the registry's roots,
  * so it lives server-side next to the module validators; the comparison itself is the Diff's
- * [org.octopusden.octopus.components.registry.server.teamcity.placement.compareVcsRoots].
+ * [org.octopusden.octopus.components.registry.server.teamcity.checkoutlayout.compareVcsRoots].
  */
 object VcsRootsValidation {
     fun check(

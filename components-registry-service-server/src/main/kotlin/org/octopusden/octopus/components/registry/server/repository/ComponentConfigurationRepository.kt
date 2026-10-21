@@ -78,7 +78,7 @@ interface ComponentConfigurationRepository : JpaRepository<ComponentConfiguratio
 
     /**
      * Every configuration row (BASE or `vcs.settings` override) of ANY component, archived
-     * included, that carries at least one VCS entry — the population `TeamcityPlacementDiffService`
+     * included, that carries at least one VCS entry — the population `TeamcityCheckoutLayoutDiffService`
      * walks; the service keeps only BASE rows of non-archived components. `JOIN FETCH` avoids a lazy-init
      * exception outside a transaction; `DISTINCT` because the fetch joins a to-many collection.
      */

@@ -41,8 +41,8 @@ interface AuditLogRepository :
     fun findAllByOrderByChangedAtDesc(pageable: Pageable): Page<AuditLogEntity>
 
     /**
-     * ONB-002 (TeamCity placement Sync): every real edit of a component, newest first, used by
-     * `PlacementEditHistory` to find the LAST audited change to a placement field and decide
+     * ONB-002 (TeamCity checkout layout Sync): every real edit of a component, newest first, used by
+     * `CheckoutLayoutEditHistory` to find the LAST audited change to a checkout layout field and decide
      * whether it was a real (manual) user write or the Sync job's own tagged write. `action IN
      * (UPDATE, RENAME)` excludes CREATE (nothing to compare a fresh component against) and MIGRATED
      * (git-history baseline noise, SYS-049).

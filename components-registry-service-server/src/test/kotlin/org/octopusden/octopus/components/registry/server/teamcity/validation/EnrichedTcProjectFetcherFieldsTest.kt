@@ -10,7 +10,7 @@ import org.octopusden.octopus.infrastructure.teamcity.client.dto.TeamcityVcsRoot
 /**
  * TeamCity returns only the columns a `fields=` spec names, and the client's DTOs have non-null
  * columns. A VCS root without `name` failed to deserialize on QA, so every project with a VCS root
- * came back as a TeamCity error in the placement Diff.
+ * came back as a TeamCity error in the checkout layout Diff.
  */
 class EnrichedTcProjectFetcherFieldsTest {
     @Test

@@ -1,0 +1,70 @@
+package org.octopusden.octopus.components.registry.server.controller
+
+import io.swagger.v3.oas.annotations.Operation
+import org.octopusden.octopus.components.registry.server.config.ConditionalOnDatabaseEnabled
+import org.octopusden.octopus.components.registry.server.dto.v4.TeamcityCheckoutLayoutDiffJobResponse
+import org.octopusden.octopus.components.registry.server.dto.v4.TeamcityCheckoutLayoutSyncJobResponse
+import org.octopusden.octopus.components.registry.server.dto.v4.TeamcityCheckoutLayoutSyncRequest
+import org.octopusden.octopus.components.registry.server.teamcity.checkoutlayout.CheckoutLayoutDiffResult
+import org.springframework.http.MediaType
+import org.springframework.http.ResponseEntity
+import org.springframework.web.bind.annotation.GetMapping
+import org.springframework.web.bind.annotation.PostMapping
+import org.springframework.web.bind.annotation.RequestBody
+import org.springframework.web.bind.annotation.RequestMapping
+import org.springframework.web.bind.annotation.RestController
+
+private const val DEPRECATED = "Deprecated: use the same path under /rest/api/4/admin/teamcity-checkout-layout"
+
+/**
+ * DEPRECATED (2026-10): the first name of [TeamcityCheckoutLayoutControllerV4]'s endpoints, kept
+ * for wire-compat. Every call delegates to it, so permissions and responses are the same.
+ */
+@ConditionalOnDatabaseEnabled
+@RestController
+@RequestMapping("rest/api/4/admin/teamcity-placement")
+class TeamcityPlacementLegacyControllerV4(
+    private val current: TeamcityCheckoutLayoutControllerV4,
+) {
+    @Deprecated(DEPRECATED)
+    @Operation(deprecated = true, summary = DEPRECATED)
+    @PostMapping("/diff")
+    fun startDiff(): ResponseEntity<TeamcityCheckoutLayoutDiffJobResponse> = current.startDiff()
+
+    @Deprecated(DEPRECATED)
+    @Operation(deprecated = true, summary = DEPRECATED)
+    @GetMapping("/diff/job")
+    fun getDiffJob(): ResponseEntity<TeamcityCheckoutLayoutDiffJobResponse> = current.getDiffJob()
+
+    @Deprecated(DEPRECATED)
+    @Operation(deprecated = true, summary = DEPRECATED)
+    @GetMapping("/diff/report.json", produces = [MediaType.APPLICATION_JSON_VALUE])
+    fun getReportJson(): ResponseEntity<CheckoutLayoutDiffResult> = current.getReportJson()
+
+    @Deprecated(DEPRECATED)
+    @Operation(deprecated = true, summary = DEPRECATED)
+    @GetMapping("/diff/report.html", produces = [MediaType.TEXT_HTML_VALUE])
+    fun getReportHtml(): ResponseEntity<String> = current.getReportHtml()
+
+    @Deprecated(DEPRECATED)
+    @Operation(deprecated = true, summary = DEPRECATED)
+    @GetMapping("/diff/report.csv")
+    fun getReportCsv(): ResponseEntity<String> = current.getReportCsv()
+
+    @Deprecated(DEPRECATED)
+    @Operation(deprecated = true, summary = DEPRECATED)
+    @PostMapping("/sync")
+    fun startSync(
+        @RequestBody request: TeamcityCheckoutLayoutSyncRequest,
+    ): ResponseEntity<TeamcityCheckoutLayoutSyncJobResponse> = current.startSync(request)
+
+    @Deprecated(DEPRECATED)
+    @Operation(deprecated = true, summary = DEPRECATED)
+    @GetMapping("/sync/job")
+    fun getSyncJob(): ResponseEntity<TeamcityCheckoutLayoutSyncJobResponse> = current.getSyncJob()
+
+    @Deprecated(DEPRECATED)
+    @Operation(deprecated = true, summary = DEPRECATED)
+    @GetMapping("/sync/report.csv")
+    fun getSyncReportCsv(): ResponseEntity<String> = current.getSyncReportCsv()
+}

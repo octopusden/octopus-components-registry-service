@@ -21,14 +21,14 @@ import org.octopusden.octopus.components.registry.server.entity.VersionLineEntit
 import org.octopusden.octopus.components.registry.server.repository.ComponentConfigurationRepository
 import org.octopusden.octopus.components.registry.server.repository.TeamcityValidationRepository
 import org.octopusden.octopus.components.registry.server.repository.VersionLineRepository
-import org.octopusden.octopus.components.registry.server.teamcity.placement.FakeEnrichedTcProjectFetcher
-import org.octopusden.octopus.components.registry.server.teamcity.placement.PlacementDiffRowStatus
-import org.octopusden.octopus.components.registry.server.teamcity.placement.PlacementEditHistory
-import org.octopusden.octopus.components.registry.server.teamcity.placement.TcCompileConfig
-import org.octopusden.octopus.components.registry.server.teamcity.placement.TcVcsRootEntry
-import org.octopusden.octopus.components.registry.server.teamcity.placement.TeamcityPlacementDiffService
-import org.octopusden.octopus.components.registry.server.teamcity.placement.compileBuildType
-import org.octopusden.octopus.components.registry.server.teamcity.placement.project
+import org.octopusden.octopus.components.registry.server.teamcity.checkoutlayout.CheckoutLayoutDiffRowStatus
+import org.octopusden.octopus.components.registry.server.teamcity.checkoutlayout.CheckoutLayoutEditHistory
+import org.octopusden.octopus.components.registry.server.teamcity.checkoutlayout.FakeEnrichedTcProjectFetcher
+import org.octopusden.octopus.components.registry.server.teamcity.checkoutlayout.TcCompileConfig
+import org.octopusden.octopus.components.registry.server.teamcity.checkoutlayout.TcVcsRootEntry
+import org.octopusden.octopus.components.registry.server.teamcity.checkoutlayout.TeamcityCheckoutLayoutDiffService
+import org.octopusden.octopus.components.registry.server.teamcity.checkoutlayout.compileBuildType
+import org.octopusden.octopus.components.registry.server.teamcity.checkoutlayout.project
 import org.octopusden.octopus.validation.core.Status
 import org.octopusden.octopus.validation.dto.teamcity.TemplateCatalog
 import org.springframework.transaction.support.TransactionTemplate
@@ -128,12 +128,12 @@ class VcsRootsValidationTest {
         rows: List<ComponentConfigurationEntity>,
         projectIdsByComponent: Map<UUID, List<String>>,
         projects: Map<String, ExternalTeamcityProject>,
-    ): Map<String, PlacementDiffRowStatus> {
+    ): Map<String, CheckoutLayoutDiffRowStatus> {
         val configRepo = mock<ComponentConfigurationRepository>()
         whenever(configRepo.findAllRowsWithVcsEntries()).thenReturn(rows)
         val versionLines = mock<VersionLineRepository>()
         projectIdsByComponent.forEach { (id, ps) -> whenever(versionLines.findDistinctTeamcityProjectIdsByComponentId(id)).thenReturn(ps) }
-        val diff = TeamcityPlacementDiffService(configRepo, versionLines, fetcher(projects), mock<PlacementEditHistory>())
+        val diff = TeamcityCheckoutLayoutDiffService(configRepo, versionLines, fetcher(projects), mock<CheckoutLayoutEditHistory>())
         return diff.runDiff().rows.associate { it.componentKey to it.status }
     }
 
@@ -177,7 +177,7 @@ class VcsRootsValidationTest {
         val findings = validationFindings(rows, listOf(line(a, "P"), line(b, "P")), projects)
         val statuses = diffStatuses(rows, mapOf(a.id!! to listOf("P"), b.id!! to listOf("P")), projects)
 
-        assertTrue(statuses.values.none { it == PlacementDiffRowStatus.ROOTS_MISMATCH })
+        assertTrue(statuses.values.none { it == CheckoutLayoutDiffRowStatus.ROOTS_MISMATCH })
         assertTrue(findings.isEmpty())
     }
 
@@ -196,8 +196,8 @@ class VcsRootsValidationTest {
         val findings = validationFindings(rows, listOf(line(a, "P"), line(b, "P")), projects)
         val statuses = diffStatuses(rows, mapOf(a.id!! to listOf("P"), b.id!! to listOf("P")), projects)
 
-        assertEquals(PlacementDiffRowStatus.ROOTS_MISMATCH, statuses["comp-one"])
-        assertTrue(statuses["comp-two"] != PlacementDiffRowStatus.ROOTS_MISMATCH)
+        assertEquals(CheckoutLayoutDiffRowStatus.ROOTS_MISMATCH, statuses["comp-one"])
+        assertTrue(statuses["comp-two"] != CheckoutLayoutDiffRowStatus.ROOTS_MISMATCH)
         val message = findings.getValue("P")!!
         assertTrue(message.contains("comp-one") && !message.contains("comp-two"))
     }
@@ -242,6 +242,6 @@ class VcsRootsValidationTest {
         val statuses = diffStatuses(rows, mapOf(a.id!! to listOf("P1", "P2")), split)
 
         assertTrue(findings.isEmpty())
-        assertTrue(statuses["comp-one"] != PlacementDiffRowStatus.ROOTS_MISMATCH)
+        assertTrue(statuses["comp-one"] != CheckoutLayoutDiffRowStatus.ROOTS_MISMATCH)
     }
 }
