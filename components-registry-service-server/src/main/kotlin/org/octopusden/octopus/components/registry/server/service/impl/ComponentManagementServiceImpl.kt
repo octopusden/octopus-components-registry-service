@@ -349,7 +349,7 @@ class ComponentManagementServiceImpl(
                 clientCode = stripIfHidden("component.clientCode", request.clientCode),
                 archived = request.archived,
                 testComponent = request.testComponent,
-                autoRelease = request.autoRelease && !fieldConfigService.isHidden("component.autoRelease"),
+                autoRelease = request.autoRelease && !fieldConfigService.isHidden(AUTO_RELEASE_FIELD),
                 solution = stripIfHidden("component.solution", request.solution),
                 parentComponent = parent,
                 // R1: group = migration-derived aggregator membership only; never assigned via API.
@@ -738,7 +738,7 @@ class ComponentManagementServiceImpl(
         request.solution?.let { if (!fieldConfigService.isHidden("component.solution")) entity.solution = it }
         request.archived?.let { entity.archived = it }
         request.testComponent?.let { entity.testComponent = it }
-        request.autoRelease?.let { if (!fieldConfigService.isHidden("component.autoRelease")) entity.autoRelease = it }
+        request.autoRelease?.let { if (!fieldConfigService.isHidden(AUTO_RELEASE_FIELD)) entity.autoRelease = it }
         val flaggedNow = !oldTestComponent && entity.testComponent
         val unflaggedNow = oldTestComponent && !entity.testComponent
         // Flagging, or renaming a flagged component, must keep the key inside the configured patterns.
@@ -2439,7 +2439,7 @@ class ComponentManagementServiceImpl(
         request.productType?.let { enforceFieldEditable("component.productType", it, entity.productType) }
         request.clientCode?.let { enforceFieldEditable("component.clientCode", it, entity.clientCode) }
         request.solution?.let { enforceFieldEditable("component.solution", it, entity.solution) }
-        request.autoRelease?.let { enforceFieldEditable("component.autoRelease", it, entity.autoRelease) }
+        request.autoRelease?.let { enforceFieldEditable(AUTO_RELEASE_FIELD, it, entity.autoRelease) }
         request.copyright?.let { enforceFieldEditable("component.copyright", it, entity.copyright) }
         request.releasesInDefaultBranch?.let {
             enforceFieldEditable("component.releasesInDefaultBranch", it, entity.releasesInDefaultBranch)
@@ -2524,7 +2524,7 @@ class ComponentManagementServiceImpl(
         request.productType?.let { enforceFieldEditable("component.productType", it, null) }
         request.clientCode?.let { enforceFieldEditable("component.clientCode", it, null) }
         request.solution?.let { enforceFieldEditable("component.solution", it, null) }
-        if (request.autoRelease) enforceFieldEditable("component.autoRelease", true, null)
+        if (request.autoRelease) enforceFieldEditable(AUTO_RELEASE_FIELD, true, null)
         request.copyright?.let { enforceFieldEditable("component.copyright", it, null) }
         request.releasesInDefaultBranch?.let { enforceFieldEditable("component.releasesInDefaultBranch", it, null) }
         request.jiraDisplayName?.let { enforceFieldEditable("component.jiraDisplayName", it, null) }
@@ -4884,6 +4884,9 @@ class ComponentManagementServiceImpl(
 
     private companion object {
         private val log = org.slf4j.LoggerFactory.getLogger(ComponentManagementServiceImpl::class.java)
+
+        // SYS-104 field-config path of the `autoRelease` flag.
+        private const val AUTO_RELEASE_FIELD = "component.autoRelease"
 
         // SYS-101 `involvesRoles` values.
         private const val INVOLVES_OWNER = "owner"
