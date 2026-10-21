@@ -96,7 +96,7 @@
 | SYS-101 | `GET /components?involves=<u>[&involvesRoles=…]` — components where any listed user is the owner OR a release manager OR a security champion (OR across the chosen roles; all three by default); combines with every other filter via AND; one row per component; unknown role → 400. `crsctl components list --involves/--involves-role` | High | integration-test | ✅ Tested |
 | SYS-102 | TeamCity placement Diff/Sync (`/admin/teamcity-placement`): Diff is a read-only report over the BASE rows of non-archived components; Sync writes only the `RESOLVED` rows of the last completed Diff (named by `diffId`, else 409 `placement-diff-stale`) through the normal v4 write path, tagged `sync from TeamCity (job <id>)`, a prefix user writes cannot set; single-root `CONFLICT`/`UNEXPRESSIBLE` rows are always reported; VCS roots that the component's own compile configurations attach but the registry lacks yield `ROOTS_MISMATCH` and the `VCS_ROOTS_DIFFER_FROM_REGISTRY` validation warning | High | unit + integration-test | ✅ Tested |
 | SYS-103 | `ClassicComponentsRegistryServiceClient` takes the retry policy for retryable failures (503, I/O errors) from its caller (`Retryer` constructor parameter); without one it keeps the default of 5 attempts, backoff 100 ms – 1 s (`defaultRetryer()`); the policy is per request, so one call exhausting it does not shorten the next | Medium | unit-test | ✅ Tested |
-| SYS-104 | Component flag `autoRelease` (default false), DB and v4 only: create/update requests, summary/detail responses, `?autoRelease=` list filter, field-config visibility/editability | Medium | unit + integration-test | ✅ Tested |
+| SYS-104 | Component flag `autoRelease` (default false), DB and v4 only: create/update requests, summary/detail responses, `?autoRelease=` list filter, field-config visibility/editability; the TeamCity resync turns it on (never off) when every linked release line has a finish-build trigger and nobody has changed the flag | Medium | unit + integration-test | ✅ Tested |
 
 ---
 
@@ -3723,11 +3723,11 @@ releases may be started without a person.
 - Field-config path `component.autoRelease` (`visibility`, `editable`). A create request without the
   field stores `false`.
 - The flag is not part of the Groovy DSL and is not exposed on v1-v3.
-- The TeamCity resync turns the flag on when a linked project's release configuration (based on
-  `teamcity.sync.cd-release-template-id`, not paused) has an enabled finish-build trigger: TeamCity
-  already releases that component automatically. It writes one audit row and counts the component
-  in `auto_release_enabled`. One way only: resync never turns the flag off and never changes
-  TeamCity.
+- The TeamCity resync turns the flag on when the release configuration of every linked release
+  line (based on `teamcity.sync.cd-release-template-id`, not paused) has an enabled finish-build
+  trigger, unless the flag has ever been changed (an `UPDATE` audit row on it): a person's "off"
+  stays off. One audit row per change, counted in `auto_release_enabled`. Never turns it off,
+  never changes TeamCity, and ignores the field-config visibility.
 
 **Test method:**
 `V12AutoReleaseMigrationIntegrationTest`, `AutoReleaseFlagV4Test`; `ExternalTcProjectFetcherTest`

@@ -6,6 +6,7 @@ import org.octopusden.octopus.components.registry.server.entity.ComponentEntity
 import org.octopusden.octopus.components.registry.server.entity.TeamcityProjectEntity
 import org.octopusden.octopus.components.registry.server.entity.VersionLineEntity
 import org.octopusden.octopus.components.registry.server.event.AuditEvent
+import org.octopusden.octopus.components.registry.server.repository.AuditLogRepository
 import org.octopusden.octopus.components.registry.server.repository.ComponentRepository
 import org.octopusden.octopus.components.registry.server.repository.TeamcityProjectRepository
 import org.octopusden.octopus.components.registry.server.repository.VersionLineRepository
@@ -56,6 +57,7 @@ class TeamcitySyncService(
     private val currentUserResolver: CurrentUserResolver,
     private val transactionTemplate: TransactionTemplate,
     private val teamcityProperties: TeamcityProperties,
+    private val auditLogRepository: AuditLogRepository,
 ) {
     private val log = KotlinLogging.logger {}
 
@@ -151,11 +153,9 @@ class TeamcitySyncService(
                         // unresolved (ambiguous). The component-level skipped_* counters do NOT
                         // reflect this, so surface it separately.
                         droppedLines += ambiguousLineCount
+                        // Only when every linked line releases automatically: older lines are what CVE fixes patch.
                         autoReleaseCandidates +=
-                            picks
-                                .filter { it.project.hasAutoReleaseTrigger }
-                                .take(1)
-                                .map { componentId to it.project.id }
+                            listOf(componentId to picks.first().project.id).filter { picks.all { it.project.hasAutoReleaseTrigger } }
                     }
 
                     // No winner at all: ambiguous if a line was left unresolved, else no-match.
@@ -197,7 +197,10 @@ class TeamcitySyncService(
         )
     }
 
-    /** SYS-104: turns `autoRelease` on (never off) for each candidate, audited; one transaction each. */
+    /**
+     * SYS-104: turns `autoRelease` on (never off) for each candidate, audited, one transaction each.
+     * Skipped once anyone has changed the flag, so a person's "off" stays off.
+     */
     @Suppress("TooGenericExceptionCaught")
     private fun enableAutoRelease(
         result: TeamcitySyncResult,
@@ -224,8 +227,9 @@ class TeamcitySyncService(
         projectId: String,
         changedBy: String,
     ): Boolean {
+        // Re-read: the loop's entities were loaded outside this transaction.
         val component = componentRepository.findById(componentId).orElse(null) ?: return false
-        if (component.autoRelease) return false
+        if (component.autoRelease || autoReleaseEverChanged(componentId)) return false
         component.autoRelease = true
         applicationEventPublisher.publishEvent(
             AuditEvent(
@@ -240,6 +244,15 @@ class TeamcitySyncService(
         )
         return true
     }
+
+    private fun autoReleaseEverChanged(componentId: UUID): Boolean =
+        auditLogRepository
+            .findByEntityTypeAndEntityIdAndActionInOrderByChangedAtDesc("Component", componentId.toString(), listOf("UPDATE"))
+            .any { row ->
+                val old = row.oldValue.orEmpty()
+                val new = row.newValue.orEmpty()
+                "autoRelease" in old && "autoRelease" in new && old["autoRelease"] != new["autoRelease"]
+            }
 
     /** A resolved winner for one PROJECT_VERSION line, with whether a tie-break was needed. */
     private data class Pick(
