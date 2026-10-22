@@ -19,10 +19,10 @@ import org.octopusden.octopus.components.registry.server.repository.ComponentCha
 import org.octopusden.octopus.components.registry.server.repository.ComponentRepository
 import org.octopusden.octopus.components.registry.server.repository.TeamcityProjectRepository
 import org.octopusden.octopus.components.registry.server.repository.VersionLineRepository
-import org.octopusden.octopus.components.registry.server.security.CurrentUserResolver
 import org.octopusden.octopus.components.registry.server.teamcity.TeamcityProperties
 import org.octopusden.octopus.components.registry.server.teamcity.sync.TcProject
 import org.octopusden.octopus.components.registry.server.teamcity.sync.TcProjectFetcher
+import org.octopusden.octopus.components.registry.server.teamcity.sync.TeamcitySyncScheduler
 import org.octopusden.octopus.components.registry.server.teamcity.sync.TeamcitySyncService
 import org.springframework.context.ApplicationEvent
 import org.springframework.context.ApplicationEventPublisher
@@ -85,7 +85,6 @@ class TeamcitySyncServiceTest {
         teamcityProjectRepo: StubTeamcityProjectRepository,
         fetcher: TcProjectFetcher,
         publisher: ApplicationEventPublisher,
-        user: CurrentUserResolver,
         properties: TeamcityProperties = configuredProperties(),
         auditLogRepository: AuditLogRepository = auditHistory(),
     ) = TeamcitySyncService(
@@ -94,7 +93,6 @@ class TeamcitySyncServiceTest {
         teamcityProjectRepo,
         fetcher,
         publisher,
-        user,
         inlineTx(),
         properties,
         auditLogRepository,
@@ -124,9 +122,9 @@ class TeamcitySyncServiceTest {
         val vlRepo = StubVersionLineRepository()
         val tpRepo = StubTeamcityProjectRepository()
         val publisher = RecordingPublisher()
-        val svc = service(repo, vlRepo, tpRepo, fetcher, publisher, fixedUser("admin"))
+        val svc = service(repo, vlRepo, tpRepo, fetcher, publisher)
 
-        val result = svc.resync()
+        val result = svc.resync("admin")
 
         assertEquals(1, result.scanned)
         assertEquals(1, result.updated)
@@ -158,9 +156,9 @@ class TeamcitySyncServiceTest {
         // Pre-seed: alpha already has the correct link (version null).
         vlRepo.preload(versionLine(alphaComponent, "Alpha_Build"))
         val publisher = RecordingPublisher()
-        val svc = service(repo, vlRepo, tpRepo, fetcher, publisher, fixedUser("admin"))
+        val svc = service(repo, vlRepo, tpRepo, fetcher, publisher)
 
-        val result = svc.resync()
+        val result = svc.resync("admin")
 
         assertEquals(1, result.scanned)
         assertEquals(0, result.updated)
@@ -185,9 +183,9 @@ class TeamcitySyncServiceTest {
         val vlRepo = StubVersionLineRepository()
         val tpRepo = StubTeamcityProjectRepository()
         val publisher = RecordingPublisher()
-        val svc = service(repo, vlRepo, tpRepo, fetcher, publisher, fixedUser("admin"))
+        val svc = service(repo, vlRepo, tpRepo, fetcher, publisher)
 
-        val result = svc.resync()
+        val result = svc.resync("admin")
 
         assertEquals(1, result.scanned)
         assertEquals(0, result.updated)
@@ -216,9 +214,9 @@ class TeamcitySyncServiceTest {
         val vlRepo = StubVersionLineRepository()
         val tpRepo = StubTeamcityProjectRepository()
         val publisher = RecordingPublisher()
-        val svc = service(repo, vlRepo, tpRepo, fetcher, publisher, fixedUser("admin"))
+        val svc = service(repo, vlRepo, tpRepo, fetcher, publisher)
 
-        val result = svc.resync()
+        val result = svc.resync("admin")
 
         assertEquals(1, result.scanned)
         assertEquals(1, result.updated)
@@ -251,9 +249,9 @@ class TeamcitySyncServiceTest {
         val vlRepo = StubVersionLineRepository()
         val tpRepo = StubTeamcityProjectRepository()
         val publisher = RecordingPublisher()
-        val svc = service(repo, vlRepo, tpRepo, fetcher, publisher, fixedUser("admin"))
+        val svc = service(repo, vlRepo, tpRepo, fetcher, publisher)
 
-        val result = svc.resync()
+        val result = svc.resync("admin")
 
         assertEquals(1, result.updated)
         assertEquals(0, result.skippedAmbiguous)
@@ -276,9 +274,9 @@ class TeamcitySyncServiceTest {
         val vlRepo = StubVersionLineRepository()
         val tpRepo = StubTeamcityProjectRepository()
         val publisher = RecordingPublisher()
-        val svc = service(repo, vlRepo, tpRepo, fetcher, publisher, fixedUser("admin"))
+        val svc = service(repo, vlRepo, tpRepo, fetcher, publisher)
 
-        val result = svc.resync()
+        val result = svc.resync("admin")
 
         assertEquals(1, result.scanned)
         assertEquals(0, result.updated)
@@ -296,9 +294,9 @@ class TeamcitySyncServiceTest {
         val vlRepo = StubVersionLineRepository()
         val tpRepo = StubTeamcityProjectRepository()
         val publisher = RecordingPublisher()
-        val svc = service(repo, vlRepo, tpRepo, fetcher, publisher, fixedUser("admin"))
+        val svc = service(repo, vlRepo, tpRepo, fetcher, publisher)
 
-        val result = svc.resync()
+        val result = svc.resync("admin")
 
         assertEquals(2, result.scanned)
         assertEquals(1, result.updated)
@@ -316,9 +314,9 @@ class TeamcitySyncServiceTest {
         val vlRepo = StubVersionLineRepository()
         val tpRepo = StubTeamcityProjectRepository()
         val publisher = RecordingPublisher()
-        val svc = service(repo, vlRepo, tpRepo, fetcher, publisher, fixedUser("admin"), TeamcityProperties())
+        val svc = service(repo, vlRepo, tpRepo, fetcher, publisher, TeamcityProperties())
 
-        val ex = assertThrows<IllegalStateException> { svc.resync() }
+        val ex = assertThrows<IllegalStateException> { svc.resync("admin") }
         assertTrue(ex.message!!.contains("teamcity.base-url"), "message should mention the config property")
     }
 
@@ -330,9 +328,9 @@ class TeamcitySyncServiceTest {
         val vlRepo = StubVersionLineRepository()
         val tpRepo = StubTeamcityProjectRepository()
         val publisher = RecordingPublisher()
-        val svc = service(repo, vlRepo, tpRepo, fetcher, publisher, fixedUser("admin"), TeamcityProperties())
+        val svc = service(repo, vlRepo, tpRepo, fetcher, publisher, TeamcityProperties())
 
-        val ex = assertThrows<IllegalStateException> { svc.resync() }
+        val ex = assertThrows<IllegalStateException> { svc.resync("admin") }
         assertTrue(ex.message!!.contains("teamcity.base-url"), "message should mention the config property")
     }
 
@@ -345,9 +343,9 @@ class TeamcitySyncServiceTest {
         val vlRepo = StubVersionLineRepository()
         val tpRepo = StubTeamcityProjectRepository()
         val publisher = RecordingPublisher()
-        val svc = service(repo, vlRepo, tpRepo, fetcher, publisher, fixedUser("admin"))
+        val svc = service(repo, vlRepo, tpRepo, fetcher, publisher)
 
-        val ex = assertThrows<RuntimeException> { svc.resync() }
+        val ex = assertThrows<RuntimeException> { svc.resync("admin") }
         assertEquals("TC unavailable", ex.message)
     }
 
@@ -368,10 +366,9 @@ class TeamcitySyncServiceTest {
             StubTeamcityProjectRepository(),
             fetcher,
             publisher,
-            fixedUser("admin"),
         )
 
-        val result = svc.resync()
+        val result = svc.resync("admin")
 
         assertTrue(auto.autoRelease)
         assertFalse(manual.autoRelease)
@@ -380,6 +377,7 @@ class TeamcitySyncServiceTest {
         assertEquals(alice.toString(), audit.entityId)
         assertEquals(mapOf("autoRelease" to false), audit.oldValue)
         assertEquals(mapOf("autoRelease" to true), audit.newValue)
+        assertEquals("admin", audit.changedBy)
     }
 
     @Test
@@ -392,10 +390,9 @@ class TeamcitySyncServiceTest {
             StubTeamcityProjectRepository(),
             fetcher,
             RecordingPublisher(),
-            fixedUser("admin"),
         )
 
-        val result = svc.resync()
+        val result = svc.resync("admin")
 
         assertTrue(alpha.autoRelease)
         assertEquals(0, result.autoReleaseEnabled)
@@ -417,11 +414,10 @@ class TeamcitySyncServiceTest {
             StubTeamcityProjectRepository(),
             fetcher,
             RecordingPublisher(),
-            fixedUser("admin"),
             auditLogRepository = audit,
         )
 
-        val result = svc.resync()
+        val result = svc.resync("admin")
 
         assertTrue(alpha.autoRelease)
         assertFalse(beta.autoRelease)
@@ -442,11 +438,10 @@ class TeamcitySyncServiceTest {
             StubTeamcityProjectRepository(),
             fetcher,
             RecordingPublisher(),
-            fixedUser("admin"),
             auditLogRepository = auditHistory(autoReleaseChanged = true),
         )
 
-        val result = svc.resync()
+        val result = svc.resync("admin")
 
         assertFalse(alpha.autoRelease)
         assertEquals(0, result.autoReleaseEnabled)
@@ -462,10 +457,9 @@ class TeamcitySyncServiceTest {
             StubTeamcityProjectRepository(),
             stubFetcher(mapOf("alpha" to listOf(project))),
             RecordingPublisher(),
-            fixedUser(CurrentUserResolver.SYSTEM_USER),
         )
 
-        val result = svc.resync()
+        val result = svc.resync(TeamcitySyncScheduler.TRIGGERED_BY_SCHEDULER)
 
         assertFalse(alpha.autoRelease)
         assertEquals(0, result.autoReleaseEnabled)
@@ -481,14 +475,13 @@ class TeamcitySyncServiceTest {
             StubTeamcityProjectRepository(),
             stubFetcher(mapOf("alpha" to listOf(project))),
             RecordingPublisher(),
-            fixedUser(CurrentUserResolver.SYSTEM_USER),
             TeamcityProperties(
                 baseUrl = "https://teamcity.example.com",
                 sync = TeamcityProperties.SyncProperties(autoReleaseOnCron = true),
             ),
         )
 
-        val result = svc.resync()
+        val result = svc.resync(TeamcitySyncScheduler.TRIGGERED_BY_SCHEDULER)
 
         assertTrue(alpha.autoRelease)
         assertEquals(1, result.autoReleaseEnabled)
@@ -511,10 +504,9 @@ class TeamcitySyncServiceTest {
             StubTeamcityProjectRepository(),
             fetcher,
             RecordingPublisher(),
-            fixedUser("admin"),
         )
 
-        val result = svc.resync()
+        val result = svc.resync("admin")
 
         assertFalse(alpha.autoRelease)
         assertEquals(0, result.autoReleaseEnabled)
@@ -541,9 +533,9 @@ class TeamcitySyncServiceTest {
         // Pre-seed beta as already correct so it counts as unchanged.
         vlRepo.preload(versionLine(betaComponent, "Beta_Build"))
         val publisher = RecordingPublisher()
-        val svc = service(repo, vlRepo, tpRepo, fetcher, publisher, fixedUser("alice"))
+        val svc = service(repo, vlRepo, tpRepo, fetcher, publisher)
 
-        val result = svc.resync()
+        val result = svc.resync("admin")
 
         assertEquals(3, result.scanned)
         assertEquals(1, result.updated) // alpha newly written
@@ -570,9 +562,9 @@ class TeamcitySyncServiceTest {
         val vlRepo = StubVersionLineRepository()
         val tpRepo = StubTeamcityProjectRepository()
         val publisher = RecordingPublisher()
-        val svc = service(repo, vlRepo, tpRepo, fetcher, publisher, fixedUser("admin"))
+        val svc = service(repo, vlRepo, tpRepo, fetcher, publisher)
 
-        val result = svc.resync()
+        val result = svc.resync("admin")
 
         assertEquals(1, result.updated)
         assertEquals(0, result.skippedAmbiguous)
@@ -599,9 +591,9 @@ class TeamcitySyncServiceTest {
         val vlRepo = StubVersionLineRepository()
         val tpRepo = StubTeamcityProjectRepository()
         val publisher = RecordingPublisher()
-        val svc = service(repo, vlRepo, tpRepo, fetcher, publisher, fixedUser("admin"))
+        val svc = service(repo, vlRepo, tpRepo, fetcher, publisher)
 
-        val result = svc.resync()
+        val result = svc.resync("admin")
 
         assertEquals(1, result.updated)
         assertEquals(0, result.skippedAmbiguous)
@@ -630,9 +622,9 @@ class TeamcitySyncServiceTest {
         val vlRepo = StubVersionLineRepository()
         val tpRepo = StubTeamcityProjectRepository()
         val publisher = RecordingPublisher()
-        val svc = service(repo, vlRepo, tpRepo, fetcher, publisher, fixedUser("admin"))
+        val svc = service(repo, vlRepo, tpRepo, fetcher, publisher)
 
-        val result = svc.resync()
+        val result = svc.resync("admin")
 
         // Component counts as updated because at least one line produced a winner.
         assertEquals(1, result.updated)
@@ -659,9 +651,9 @@ class TeamcitySyncServiceTest {
         val vlRepo = StubVersionLineRepository()
         val tpRepo = StubTeamcityProjectRepository()
         val publisher = RecordingPublisher()
-        val svc = service(repo, vlRepo, tpRepo, fetcher, publisher, fixedUser("admin"))
+        val svc = service(repo, vlRepo, tpRepo, fetcher, publisher)
 
-        val result = svc.resync()
+        val result = svc.resync("admin")
 
         assertEquals(1, result.updated)
         val rows = vlRepo.findByComponentId(alice).sortedBy { it.teamcityProject.projectId }
@@ -686,9 +678,9 @@ class TeamcitySyncServiceTest {
         val vlRepo = StubVersionLineRepository()
         val tpRepo = StubTeamcityProjectRepository()
         val publisher = RecordingPublisher()
-        val svc = service(repo, vlRepo, tpRepo, fetcher, publisher, fixedUser("admin"))
+        val svc = service(repo, vlRepo, tpRepo, fetcher, publisher)
 
-        val result = svc.resync()
+        val result = svc.resync("admin")
 
         // Both null → single null group → CDRelease tie-break picks one row.
         assertEquals(1, result.updated)
@@ -699,11 +691,6 @@ class TeamcitySyncServiceTest {
     }
 
     // -- Test doubles ---------------------------------------------------------
-
-    private fun fixedUser(name: String): CurrentUserResolver =
-        object : CurrentUserResolver() {
-            override fun currentUsername(): String = name
-        }
 
     /** No-op [TransactionTemplate] that runs the callback inline. */
     private fun inlineTx(): TransactionTemplate =

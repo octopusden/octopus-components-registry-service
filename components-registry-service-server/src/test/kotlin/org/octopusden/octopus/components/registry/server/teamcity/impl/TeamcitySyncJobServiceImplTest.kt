@@ -7,6 +7,7 @@ import org.junit.jupiter.api.Assertions.assertNull
 import org.junit.jupiter.api.Assertions.assertTrue
 import org.junit.jupiter.api.DisplayName
 import org.junit.jupiter.api.Test
+import org.mockito.ArgumentMatchers.anyString
 import org.mockito.Mockito.mock
 import org.mockito.Mockito.never
 import org.mockito.Mockito.times
@@ -39,9 +40,8 @@ import kotlin.test.assertFailsWith
  *
  * [SyncTaskExecutor] runs the work inline so terminal state is observable
  * the moment `startAsync` returns. [TeamcitySyncService] is mocked via
- * Mockito here — `resync()` takes no arguments, so the Kotlin non-nullable
- * arg trap that the migration-job tests work around with handwritten stubs
- * does not apply.
+ * Mockito here; `resync(triggeredBy)` is matched with `anyString()`, which returns a
+ * non-null placeholder, so the Kotlin non-nullable arg trap does not apply.
  */
 class TeamcitySyncJobServiceImplTest {
     private val emptyResult =
@@ -78,7 +78,7 @@ class TeamcitySyncJobServiceImplTest {
                 errors = listOf("oops on alpha"),
             )
         val syncService = mock(TeamcitySyncService::class.java)
-        `when`(syncService.resync()).thenReturn(populated)
+        `when`(syncService.resync(anyString())).thenReturn(populated)
         val gate = MigrationLifecycleGate()
         val service = TeamcitySyncJobServiceImpl(syncService, SyncTaskExecutor(), gate)
 
@@ -88,7 +88,7 @@ class TeamcitySyncJobServiceImplTest {
         // SyncTaskExecutor: by the time startAsync returns, the work has finished.
         assertEquals(JobState.COMPLETED, result.state.state)
         assertEquals(populated, result.state.result)
-        verify(syncService, times(1)).resync()
+        verify(syncService, times(1)).resync(anyString())
         assertNull(gate.current(), "gate must be released on COMPLETED")
     }
 
@@ -97,7 +97,7 @@ class TeamcitySyncJobServiceImplTest {
     fun secondStartAttaches() {
         val deferred = DeferredExecutor()
         val syncService = mock(TeamcitySyncService::class.java)
-        `when`(syncService.resync()).thenReturn(emptyResult)
+        `when`(syncService.resync(anyString())).thenReturn(emptyResult)
         val service = TeamcitySyncJobServiceImpl(syncService, deferred, MigrationLifecycleGate())
 
         val first = service.startAsync()
@@ -124,7 +124,7 @@ class TeamcitySyncJobServiceImplTest {
         val ex = assertFailsWith<MigrationConflictException> { service.startAsync() }
         assertEquals(MigrationLifecycleGate.JobKind.COMPONENTS, ex.active.kind)
         assertEquals("components-1", ex.active.jobId)
-        verify(syncService, never()).resync()
+        verify(syncService, never()).resync(anyString())
     }
 
     @Test
@@ -139,7 +139,7 @@ class TeamcitySyncJobServiceImplTest {
         val ex = assertFailsWith<MigrationConflictException> { service.startAsync() }
         assertEquals(MigrationLifecycleGate.JobKind.HISTORY, ex.active.kind)
         assertEquals("history-1", ex.active.jobId)
-        verify(syncService, never()).resync()
+        verify(syncService, never()).resync(anyString())
     }
 
     @Test
@@ -156,7 +156,7 @@ class TeamcitySyncJobServiceImplTest {
         assertEquals(JobState.FAILED, state.state)
         assertNotNull(state.finishedAt)
         assertEquals("Failed to submit teamcity resync: pool shutting down", state.errorMessage)
-        verify(syncService, never()).resync()
+        verify(syncService, never()).resync(anyString())
         assertNull(gate.current(), "rejection must release the gate to avoid wedging follow-up runs")
     }
 
@@ -164,7 +164,7 @@ class TeamcitySyncJobServiceImplTest {
     @DisplayName("runtime exception inside resync transitions slot to FAILED, gate released")
     fun resyncFailureTransitionsToFailed() {
         val syncService = mock(TeamcitySyncService::class.java)
-        `when`(syncService.resync()).thenThrow(IllegalStateException("TC unavailable"))
+        `when`(syncService.resync(anyString())).thenThrow(IllegalStateException("TC unavailable"))
         val gate = MigrationLifecycleGate()
         val service = TeamcitySyncJobServiceImpl(syncService, SyncTaskExecutor(), gate)
 
@@ -182,7 +182,7 @@ class TeamcitySyncJobServiceImplTest {
     @DisplayName("after job COMPLETES the next startAsync starts a fresh job with a different id")
     fun nextStartAfterCompleted() {
         val syncService = mock(TeamcitySyncService::class.java)
-        `when`(syncService.resync()).thenReturn(emptyResult)
+        `when`(syncService.resync(anyString())).thenReturn(emptyResult)
         val service = TeamcitySyncJobServiceImpl(syncService, SyncTaskExecutor(), MigrationLifecycleGate())
 
         val first = service.startAsync()
@@ -191,7 +191,7 @@ class TeamcitySyncJobServiceImplTest {
         val second = service.startAsync()
         assertTrue(second.isNewlyStarted)
         assertTrue(first.state.id != second.state.id, "completed job should not block a new run")
-        verify(syncService, times(2)).resync()
+        verify(syncService, times(2)).resync(anyString())
     }
 
     @Test
@@ -210,7 +210,7 @@ class TeamcitySyncJobServiceImplTest {
                 autoReleaseEnabled = 4,
             )
         val syncService = mock(TeamcitySyncService::class.java)
-        `when`(syncService.resync()).thenReturn(populated)
+        `when`(syncService.resync(anyString())).thenReturn(populated)
         val recorder = RecordingServiceEventRecorder()
         val service = TeamcitySyncJobServiceImpl(syncService, SyncTaskExecutor(), MigrationLifecycleGate(), recorder)
 
@@ -222,6 +222,7 @@ class TeamcitySyncJobServiceImplTest {
         assertEquals(ServiceEventType.TEAMCITY_RESYNC, start.type)
         assertEquals(ServiceEventSource.CRS, start.source)
         assertEquals("alice", start.triggeredBy)
+        verify(syncService).resync("alice")
         val finish = recorder.finishes.single()
         assertEquals(ServiceEventStatus.COMPLETED, finish.status)
         assertEquals(start.correlationId, finish.correlationId)
@@ -233,7 +234,7 @@ class TeamcitySyncJobServiceImplTest {
     @DisplayName("SYS-060 failed run records FAILED with the error message")
     fun sys060RecordsFailed() {
         val syncService = mock(TeamcitySyncService::class.java)
-        `when`(syncService.resync()).thenThrow(IllegalStateException("TC unavailable"))
+        `when`(syncService.resync(anyString())).thenThrow(IllegalStateException("TC unavailable"))
         val recorder = RecordingServiceEventRecorder()
         val service = TeamcitySyncJobServiceImpl(syncService, SyncTaskExecutor(), MigrationLifecycleGate(), recorder)
 
