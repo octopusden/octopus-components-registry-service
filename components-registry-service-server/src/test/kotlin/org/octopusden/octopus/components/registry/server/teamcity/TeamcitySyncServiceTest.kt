@@ -10,7 +10,6 @@ import org.mockito.kotlin.any
 import org.mockito.kotlin.eq
 import org.mockito.kotlin.mock
 import org.mockito.kotlin.whenever
-import org.octopusden.octopus.components.registry.server.entity.AuditLogEntity
 import org.octopusden.octopus.components.registry.server.entity.ComponentEntity
 import org.octopusden.octopus.components.registry.server.entity.TeamcityProjectEntity
 import org.octopusden.octopus.components.registry.server.entity.VersionLineEntity
@@ -101,10 +100,10 @@ class TeamcitySyncServiceTest {
         auditLogRepository,
     )
 
-    /** An audit history holding [rows] for every component. */
-    private fun auditHistory(vararg rows: AuditLogEntity): AuditLogRepository =
+    /** An audit history in which someone has (or has not) changed `autoRelease` of every component. */
+    private fun auditHistory(autoReleaseChanged: Boolean = false): AuditLogRepository =
         mock<AuditLogRepository>().also {
-            whenever(it.findByEntityTypeAndEntityIdAndActionInOrderByChangedAtDesc(any(), any(), any())).thenReturn(rows.toList())
+            whenever(it.existsAutoReleaseChange(any())).thenReturn(autoReleaseChanged)
         }
 
     private fun configuredProperties() = TeamcityProperties(baseUrl = "https://teamcity.example.com")
@@ -409,7 +408,7 @@ class TeamcitySyncServiceTest {
         val withTrigger = { id: String -> listOf(TcProject(id, hasCdReleaseBuild = true, hasAutoReleaseTrigger = true)) }
         val fetcher = stubFetcher(mapOf("alpha" to withTrigger("Alpha_Build"), "beta" to withTrigger("Beta_Build")))
         val audit = auditHistory()
-        whenever(audit.findByEntityTypeAndEntityIdAndActionInOrderByChangedAtDesc(any(), eq(bob.toString()), any()))
+        whenever(audit.existsAutoReleaseChange(eq(bob.toString())))
             .thenThrow(IllegalStateException("conflict"))
         val vlRepo = StubVersionLineRepository()
         val svc = service(
@@ -437,13 +436,6 @@ class TeamcitySyncServiceTest {
         val alpha = component(alice, "alpha")
         val project = TcProject("Alpha_Build", hasCdReleaseBuild = true, hasAutoReleaseTrigger = true)
         val fetcher = stubFetcher(mapOf("alpha" to listOf(project)))
-        val turnedOff = AuditLogEntity(
-            entityType = "Component",
-            entityId = alice.toString(),
-            action = "UPDATE",
-            oldValue = mapOf("autoRelease" to true),
-            newValue = mapOf("autoRelease" to false),
-        )
         val svc = service(
             StubComponentRepository(listOf(alpha)),
             StubVersionLineRepository(),
@@ -451,13 +443,55 @@ class TeamcitySyncServiceTest {
             fetcher,
             RecordingPublisher(),
             fixedUser("admin"),
-            auditLogRepository = auditHistory(turnedOff),
+            auditLogRepository = auditHistory(autoReleaseChanged = true),
         )
 
         val result = svc.resync()
 
         assertFalse(alpha.autoRelease)
         assertEquals(0, result.autoReleaseEnabled)
+    }
+
+    @Test
+    fun `SYS-104 the weekly cron leaves autoRelease alone by default`() {
+        val alpha = component(alice, "alpha")
+        val project = TcProject("Alpha_Build", hasCdReleaseBuild = true, hasAutoReleaseTrigger = true)
+        val svc = service(
+            StubComponentRepository(listOf(alpha)),
+            StubVersionLineRepository(),
+            StubTeamcityProjectRepository(),
+            stubFetcher(mapOf("alpha" to listOf(project))),
+            RecordingPublisher(),
+            fixedUser(CurrentUserResolver.SYSTEM_USER),
+        )
+
+        val result = svc.resync()
+
+        assertFalse(alpha.autoRelease)
+        assertEquals(0, result.autoReleaseEnabled)
+    }
+
+    @Test
+    fun `SYS-104 the weekly cron turns autoRelease on when enabled`() {
+        val alpha = component(alice, "alpha")
+        val project = TcProject("Alpha_Build", hasCdReleaseBuild = true, hasAutoReleaseTrigger = true)
+        val svc = service(
+            StubComponentRepository(listOf(alpha)),
+            StubVersionLineRepository(),
+            StubTeamcityProjectRepository(),
+            stubFetcher(mapOf("alpha" to listOf(project))),
+            RecordingPublisher(),
+            fixedUser(CurrentUserResolver.SYSTEM_USER),
+            TeamcityProperties(
+                baseUrl = "https://teamcity.example.com",
+                sync = TeamcityProperties.SyncProperties(autoReleaseOnCron = true),
+            ),
+        )
+
+        val result = svc.resync()
+
+        assertTrue(alpha.autoRelease)
+        assertEquals(1, result.autoReleaseEnabled)
     }
 
     @Test
