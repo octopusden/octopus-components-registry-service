@@ -39,8 +39,8 @@ import java.util.UUID
  *
  * Auto release (SYS-104): when a kept project's release configuration has an enabled
  * finish-build trigger, the component's `autoRelease` is turned on, with an audit row. Never off.
- * `changedBy` is `"system"` for the cron, or the admin's username for a triggered run. The cron
- * does this only with `teamcity.sync.auto-release-on-cron`.
+ * `changedBy` is the admin who started the run, or `"system"` for the cron. The cron does this
+ * only with `teamcity.sync.auto-release-on-cron`.
  *
  * Error handling: a fetcher failure propagates out of [resync] (502/500 for the admin
  * endpoint; logged-and-swallowed by the scheduler). A per-write JPA failure rolls back
@@ -55,7 +55,6 @@ class TeamcitySyncService(
     private val tcProjectFetcher: TcProjectFetcher,
     // Re-links are deliberately NOT audited (SYS-051); only turning `autoRelease` on is (SYS-104).
     private val applicationEventPublisher: ApplicationEventPublisher,
-    private val currentUserResolver: CurrentUserResolver,
     private val transactionTemplate: TransactionTemplate,
     private val teamcityProperties: TeamcityProperties,
     private val auditLogRepository: AuditLogRepository,
@@ -73,7 +72,7 @@ class TeamcitySyncService(
      * not audited (SYS-051). Turning `autoRelease` on runs after it, one short transaction
      * per component, and is audited (SYS-104).
      */
-    fun resync(): TeamcitySyncResult {
+    fun resync(triggeredBy: String): TeamcitySyncResult {
         check(teamcityProperties.baseUrl.isNotBlank()) {
             "TC sync is not configured: teamcity.base-url is blank. " +
                 "Set teamcity.base-url in service-config (components-registry-service.yml)."
@@ -97,18 +96,16 @@ class TeamcitySyncService(
         // HTTP calls to TC happen here, deliberately OUTSIDE any DB tx.
         val matches = tcProjectFetcher.findByComponentNames(componentsByName)
 
-        // CurrentUserResolver returns "system" when there is no auth context
-        // (the scheduled cron path), or the JWT's preferred_username captured
-        // from the admin request that started the async resync job. Either way
-        // it never returns null.
-        val changedBy = currentUserResolver.currentUsername()
+        // Passed in by the job: the async run has no security context of its own.
+        val onCron = triggeredBy == TeamcitySyncScheduler.TRIGGERED_BY_SCHEDULER
+        val changedBy = if (onCron) CurrentUserResolver.SYSTEM_USER else triggeredBy
 
         // execute() returns the callback's value; applyMatches never returns
         // null, so the !! cannot trip in practice — Kotlin just sees the API's
         // declared T? signature.
         val autoReleaseCandidates = mutableListOf<Pair<UUID, String>>()
         val result = transactionTemplate.execute { _ -> applyMatches(components, matches, changedBy, autoReleaseCandidates) }!!
-        if (changedBy == CurrentUserResolver.SYSTEM_USER && !teamcityProperties.sync.autoReleaseOnCron) {
+        if (onCron && !teamcityProperties.sync.autoReleaseOnCron) {
             log.info { "TC sync: autoRelease left alone on the cron (teamcity.sync.auto-release-on-cron=false)" }
             return result
         }

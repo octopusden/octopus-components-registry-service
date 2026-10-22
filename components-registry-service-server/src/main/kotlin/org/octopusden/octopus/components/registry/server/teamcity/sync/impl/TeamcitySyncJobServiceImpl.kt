@@ -121,7 +121,7 @@ class TeamcitySyncJobServiceImpl(
             summary = "TeamCity resync running",
         )
         try {
-            val result = teamcitySyncService.resync()
+            val result = teamcitySyncService.resync(triggeredBy)
             lifecycle.update(jobId) { current ->
                 current.copy(
                     state = JobState.COMPLETED,
