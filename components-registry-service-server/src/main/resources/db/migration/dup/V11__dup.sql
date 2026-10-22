@@ -1,0 +1,1 @@
+-- temporary: proves migrations/append-only rejects a duplicate version; reverted next
