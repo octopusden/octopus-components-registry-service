@@ -121,6 +121,11 @@ All existing v1/v2/v3 endpoints (34 endpoints, 28 Feign client methods) must rem
 - **Groovy:** CodeNarc (report-only, not blocking).
 - Config files in `config/checkstyle/`, `config/pmd/`, `config/detekt/`, `config/codenarc/`.
 
+## Tests
+
+- Bug fix: first a test that reproduces it and fails (`test:` commit), then the fix (`fix:` commit).
+- New behaviour ships with its tests in the same PR. A test counts only if it fails without the change.
+
 ## Quality Gates
 
 - Java checks (Checkstyle, PMD) are **blocking**.
