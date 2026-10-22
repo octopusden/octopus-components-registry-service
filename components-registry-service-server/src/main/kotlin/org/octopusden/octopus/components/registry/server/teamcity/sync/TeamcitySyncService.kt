@@ -155,9 +155,7 @@ class TeamcitySyncService(
                         // unresolved (ambiguous). The component-level skipped_* counters do NOT
                         // reflect this, so surface it separately.
                         droppedLines += ambiguousLineCount
-                        // Only when every linked line releases automatically: older lines are what CVE fixes patch.
-                        autoReleaseCandidates +=
-                            listOf(componentId to picks.first().project.id).filter { picks.all { it.project.hasAutoReleaseTrigger } }
+                        autoReleaseCandidates += listOfNotNull(autoReleaseCandidate(componentId, picks, ambiguousLineCount))
                     }
 
                     // No winner at all: ambiguous if a line was left unresolved, else no-match.
@@ -198,6 +196,17 @@ class TeamcitySyncService(
             errors = errors.toList(),
         )
     }
+
+    /**
+     * SYS-104: a component qualifies only when every one of its release lines was resolved and releases
+     * automatically; older lines are what CVE fixes patch.
+     */
+    private fun autoReleaseCandidate(
+        componentId: UUID,
+        picks: List<Pick>,
+        unresolvedLines: Int,
+    ): Pair<UUID, String>? =
+        (componentId to picks.first().project.id).takeIf { unresolvedLines == 0 && picks.all { it.project.hasAutoReleaseTrigger } }
 
     /**
      * SYS-104: turns `autoRelease` on (never off) for each candidate, audited, one transaction each.

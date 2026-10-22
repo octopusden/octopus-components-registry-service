@@ -82,7 +82,7 @@ class TeamcitySyncJobServiceImplTest {
         val gate = MigrationLifecycleGate()
         val service = TeamcitySyncJobServiceImpl(syncService, SyncTaskExecutor(), gate)
 
-        val result = service.startAsync()
+        val result = service.startAsync("alice")
 
         assertTrue(result.isNewlyStarted, "fresh job should be newly-started")
         // SyncTaskExecutor: by the time startAsync returns, the work has finished.
@@ -100,12 +100,12 @@ class TeamcitySyncJobServiceImplTest {
         `when`(syncService.resync(anyString())).thenReturn(emptyResult)
         val service = TeamcitySyncJobServiceImpl(syncService, deferred, MigrationLifecycleGate())
 
-        val first = service.startAsync()
+        val first = service.startAsync("alice")
         // DeferredExecutor: the work hasn't actually run yet, so the slot is RUNNING.
         assertEquals(JobState.RUNNING, first.state.state)
         assertTrue(first.isNewlyStarted)
 
-        val second = service.startAsync()
+        val second = service.startAsync("alice")
 
         assertFalse(second.isNewlyStarted, "second start while RUNNING must NOT be flagged newly-started")
         assertEquals(first.state.id, second.state.id, "second start must echo back the SAME job id")
@@ -121,7 +121,7 @@ class TeamcitySyncJobServiceImplTest {
 
         val service = TeamcitySyncJobServiceImpl(syncService, SyncTaskExecutor(), gate)
 
-        val ex = assertFailsWith<MigrationConflictException> { service.startAsync() }
+        val ex = assertFailsWith<MigrationConflictException> { service.startAsync("alice") }
         assertEquals(MigrationLifecycleGate.JobKind.COMPONENTS, ex.active.kind)
         assertEquals("components-1", ex.active.jobId)
         verify(syncService, never()).resync(anyString())
@@ -136,7 +136,7 @@ class TeamcitySyncJobServiceImplTest {
 
         val service = TeamcitySyncJobServiceImpl(syncService, SyncTaskExecutor(), gate)
 
-        val ex = assertFailsWith<MigrationConflictException> { service.startAsync() }
+        val ex = assertFailsWith<MigrationConflictException> { service.startAsync("alice") }
         assertEquals(MigrationLifecycleGate.JobKind.HISTORY, ex.active.kind)
         assertEquals("history-1", ex.active.jobId)
         verify(syncService, never()).resync(anyString())
@@ -149,7 +149,7 @@ class TeamcitySyncJobServiceImplTest {
         val gate = MigrationLifecycleGate()
         val service = TeamcitySyncJobServiceImpl(syncService, RejectingExecutor("pool shutting down"), gate)
 
-        val thrown = assertFailsWith<java.util.concurrent.RejectedExecutionException> { service.startAsync() }
+        val thrown = assertFailsWith<java.util.concurrent.RejectedExecutionException> { service.startAsync("alice") }
         assertEquals("pool shutting down", thrown.message)
 
         val state = service.current()!!
@@ -168,7 +168,7 @@ class TeamcitySyncJobServiceImplTest {
         val gate = MigrationLifecycleGate()
         val service = TeamcitySyncJobServiceImpl(syncService, SyncTaskExecutor(), gate)
 
-        service.startAsync()
+        service.startAsync("alice")
         val state = service.current()!!
 
         assertEquals(JobState.FAILED, state.state)
@@ -185,10 +185,10 @@ class TeamcitySyncJobServiceImplTest {
         `when`(syncService.resync(anyString())).thenReturn(emptyResult)
         val service = TeamcitySyncJobServiceImpl(syncService, SyncTaskExecutor(), MigrationLifecycleGate())
 
-        val first = service.startAsync()
+        val first = service.startAsync("alice")
         assertEquals(JobState.COMPLETED, first.state.state)
 
-        val second = service.startAsync()
+        val second = service.startAsync("alice")
         assertTrue(second.isNewlyStarted)
         assertTrue(first.state.id != second.state.id, "completed job should not block a new run")
         verify(syncService, times(2)).resync(anyString())

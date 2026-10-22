@@ -3729,7 +3729,9 @@ releases may be started without a person.
   stays off. One audit row per change, counted in `auto_release_enabled`. Never turns it off,
   never changes TeamCity, and ignores the field-config visibility. The weekly cron does this only
   with `teamcity.sync.auto-release-on-cron=true` (default `false`). The names of the components it
-  turned on are logged.
+  turned on are logged. A release line the resync leaves unresolved (several candidates, none a
+  release build) keeps the flag off. An admin who starts a resync while the cron run is going gets
+  that run, so the cron rule applies to it.
 
 **Test method:**
 `V12AutoReleaseMigrationIntegrationTest`, `AutoReleaseFlagV4Test`; `ExternalTcProjectFetcherTest`
