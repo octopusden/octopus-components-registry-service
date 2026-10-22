@@ -92,9 +92,33 @@ jobs:
           echo "::error::$SURFACE changed but $CHANGELOG did not."
           exit 1
 
+  # Applied Flyway migrations are immutable: production runs Flyway validate,
+  # so an edited, removed or renamed V<n>__ file stops the service from
+  # starting. Same file-list source as changelog/v4; the rule itself lives in
+  # the script so it can be run offline against a saved file list.
+  migrations-append-only:
+    name: migrations/append-only
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      pull-requests: read
+    steps:
+      - uses: actions/checkout@v4
+      - name: Self-test the check
+        run: scripts/ci/test-check-migrations-append-only.sh
+      - name: Reject changes to existing migrations
+        env:
+          GH_TOKEN: ${{ github.token }}
+          PR: ${{ github.event.pull_request.number }}
+          REPO: ${{ github.repository }}
+        run: |
+          set -euo pipefail
+          gh api --paginate "repos/$REPO/pulls/$PR/files?per_page=100" >"$RUNNER_TEMP/pr-files.json"
+          scripts/ci/check-migrations-append-only.sh "$RUNNER_TEMP/pr-files.json"
+
   gate-merge:
     name: gate/merge
-    needs: [ build, quality, security, api-changelog ]
+    needs: [ build, quality, security, api-changelog, migrations-append-only ]
     if: always()
     runs-on: ubuntu-latest
     steps:
