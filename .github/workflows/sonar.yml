@@ -12,7 +12,8 @@ on:
 permissions:
   contents: read
 
-# A newer push to a PR supersedes its analysis; main runs are never cancelled, each one is a baseline.
+# A newer push to a PR supersedes its analysis. A running main analysis is never cancelled; a
+# superseded pending one may be dropped, and the newest main SHA is always analysed.
 concurrency:
   group: sonar-${{ github.event.pull_request.number || github.ref }}
   cancel-in-progress: ${{ github.event_name == 'pull_request' }}
