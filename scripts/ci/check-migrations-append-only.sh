@@ -45,7 +45,8 @@ git diff-tree -r -z --no-renames --name-status "$BASE" "$CHECKED" -- "$DIR" >"$t
 git ls-tree -r -z --name-only "$BASE" -- "$DIR" >"$tmp/base"
 git ls-tree -r -z --name-only "$CHECKED" -- "$DIR" >"$tmp/checked"
 
-versioned() { [[ $1 == "$DIR"/* && ${1##*/} == V*.sql ]]; }
+# Lowercase v too: Flyway skips a v14__x.sql silently, so it must fail by name.
+versioned() { [[ $1 == "$DIR"/* && ${1##*/} == [Vv]*.sql ]]; }
 # Version of a V<digits>__ name, or nothing when it has none (or too many digits).
 version_of() {
   local name=${1##*/}
@@ -53,6 +54,7 @@ version_of() {
 }
 
 errors=()
+changed_existing=
 
 max=0
 while IFS= read -r -d '' path; do
@@ -65,6 +67,7 @@ while IFS= read -r -d '' status && IFS= read -r -d '' path; do
   versioned "$path" || continue
   if [ "$status" != "A" ]; then
     errors+=("existing migration changed ($status): $path")
+    changed_existing=1
   elif [[ ! ${path##*/} =~ $NAME ]]; then
     errors+=("bad name, expected V<n>__<lowercase_description>.sql: $path")
   elif [ "$(version_of "$path")" -le "$max" ]; then
@@ -88,11 +91,14 @@ if [ ${#errors[@]} -eq 0 ]; then
 fi
 
 printf '%s\n' "${errors[@]}" >&2
-cat >&2 <<'MSG'
-
+echo >&2
+if [ -n "$changed_existing" ]; then
+  cat >&2 <<'MSG'
 Applied migrations are immutable: production runs Flyway validate, and a changed,
 removed or renamed version stops the service from starting. Revert the change and
-add it as the next V<n>__ migration instead.
+add it as a new migration instead.
 MSG
+fi
+echo "Next free version on the base: V$((max + 1))__<lowercase_description>.sql" >&2
 echo "::error::Flyway migration check failed: ${errors[0]}"
 exit 1

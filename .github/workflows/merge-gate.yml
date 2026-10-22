@@ -111,9 +111,11 @@ jobs:
           persist-credentials: false
       - name: Self-test the check
         run: scripts/ci/test-check-migrations-append-only.sh
-      # The base is the merge commit's first parent, the main it merges into.
-      # pull_request.base.sha is not refreshed when main moves, and against an
-      # older main a PR version below one main added since would pass.
+      # The base is the merge commit's first parent: main as it was when the
+      # event fired. github.sha is a snapshot and pull_request does not re-fire
+      # when main moves, so that base is only current because the ruleset
+      # requires branches to be up to date before merge. pull_request.base.sha
+      # is not used: it can be older still.
       - name: Check migrations are append-only and in order
         env:
           CHECKED: ${{ github.sha }}

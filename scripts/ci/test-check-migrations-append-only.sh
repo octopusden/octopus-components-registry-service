@@ -27,7 +27,7 @@ new_repo() {
 commit() { git_ add -A && git_ commit -qm change && git rev-parse HEAD; }
 
 # expect pass <name> <base> <checked>
-# expect fail <name> <base> <checked> <text the failure must print>
+# expect fail <name> <base> <checked> <text the failure must print> [text it must not]
 expect() {
   local out got
   if out=$(cd "$work/repo" && "$CHECK" "$3" "$4" 2>&1); then got=pass; else got=fail; fi
@@ -35,6 +35,8 @@ expect() {
     echo "FAIL $2 (expected $1, got $got)"; failures=$((failures + 1))
   elif [ "$1" = fail ] && ! grep -qF -- "$5" <<<"$out"; then
     echo "FAIL $2 (failed without '$5')"; failures=$((failures + 1))
+  elif [ -n "${6:-}" ] && grep -qF -- "$6" <<<"$out"; then
+    echo "FAIL $2 (printed '$6')"; failures=$((failures + 1))
   else
     echo "ok   $2"
   fi
@@ -42,11 +44,11 @@ expect() {
 
 # Each case: start from the base, change the tree, check base..change.
 case_() {
-  local want=$1 name=$2 change=$3 text=${4:-}
+  local want=$1 name=$2 change=$3 text=${4:-} absent=${5:-}
   new_repo
   local base; base=$(git rev-parse HEAD)
   "$change"
-  expect "$want" "$name" "$base" "$(commit)" "$text"
+  expect "$want" "$name" "$base" "$(commit)" "$text" "$absent"
 }
 
 modify()      { echo "-- edit" >>"$DIR/V2__step_2.sql"; }
@@ -61,6 +63,7 @@ add_zero()    { echo "select 4;" >"$DIR/V04__add_x.sql"; }
 add_dotted()  { echo "select 4;" >"$DIR/V4.1__add_x.sql"; }
 add_upper()   { echo "select 4;" >"$DIR/V4__Add_X.sql"; }
 add_accent()  { echo "select 4;" >"$DIR/V4__é.sql"; }
+add_lower_v() { echo "select 4;" >"$DIR/v4__add_x.sql"; }
 add_long()    { echo "select 4;" >"$DIR/V1234567890123456789__add_x.sql"; }
 add_low()     { echo "select 3;" >"$DIR/V3__again.sql"; }
 add_same()    { echo "a" >"$DIR/V4__a.sql"; mkdir -p "$DIR/sub" && echo "b" >"$DIR/sub/V4__b.sql"; }
@@ -69,6 +72,7 @@ readme_only() { echo "more" >>"$DIR/README.md"; }
 changed="existing migration changed"
 bad_name="bad name"
 case_ fail "modified migration"                   modify      "$changed (M)"
+case_ fail "changed migration gets revert advice" modify      "Revert the change"
 case_ fail "deleted migration"                    delete      "$changed (D)"
 case_ fail "renamed within the directory"         rename_in   "$changed (D)"
 case_ fail "moved out of the directory"           move_out    "$changed (D)"
@@ -79,7 +83,9 @@ case_ fail "added with a non-integer version"     add_dotted  "$bad_name"
 case_ fail "added with an uppercase description"  add_upper   "$bad_name"
 case_ fail "added with a non-ASCII description"   add_accent  "$bad_name"
 case_ fail "added with a 19-digit version"        add_long    "$bad_name"
+case_ fail "added with a lowercase v prefix"      add_lower_v "$bad_name"
 case_ fail "added at or below the base maximum"   add_low     "is not above V3"
+case_ fail "next free version, no revert advice"  add_low     "Next free version on the base: V4__" "Revert the change"
 case_ fail "two added with the same version"      add_same    "version 4 appears more than once"
 case_ pass "added next version"                   add_ok
 case_ pass "added next version in a subdirectory" add_sub_ok
