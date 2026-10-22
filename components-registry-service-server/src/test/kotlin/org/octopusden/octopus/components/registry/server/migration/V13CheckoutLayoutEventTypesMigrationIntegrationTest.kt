@@ -2,6 +2,7 @@ package org.octopusden.octopus.components.registry.server.migration
 
 import org.flywaydb.core.Flyway
 import org.junit.jupiter.api.Assertions.assertEquals
+import org.junit.jupiter.api.DisplayName
 import org.junit.jupiter.api.Tag
 import org.junit.jupiter.api.Test
 import org.junit.jupiter.api.Timeout
@@ -13,6 +14,7 @@ import java.sql.DriverManager
 @Tag("integration")
 class V13CheckoutLayoutEventTypesMigrationIntegrationTest {
     @Test
+    @DisplayName("SYS-102: V13 renames the stored placement event types to checkout layout")
     fun `SYS-102 V13 renames the placement event types`() {
         PostgreSQLContainer("postgres:16-alpine").use { postgres ->
             postgres.start()
