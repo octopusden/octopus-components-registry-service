@@ -1,3 +1,4 @@
+-- temporary edit to prove migrations/append-only fails; reverted in the next commit
 -- A synthetic component (e.g. a CVELAB stand component): consumers filter on this flag instead of
 -- string-matching the free-text `test-component` label. Components already carrying that label are
 -- flagged; the label itself is kept.
