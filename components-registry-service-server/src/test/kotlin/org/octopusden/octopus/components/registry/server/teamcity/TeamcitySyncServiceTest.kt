@@ -513,6 +513,33 @@ class TeamcitySyncServiceTest {
     }
 
     @Test
+    fun `SYS-104 a release line left unresolved keeps autoRelease off`() {
+        val alpha = component(alice, "alpha")
+        val fetcher = stubFetcher(
+            mapOf(
+                "alpha" to listOf(
+                    TcProject("Alpha_13a", hasCdReleaseBuild = false, projectVersion = "1.3"),
+                    TcProject("Alpha_13b", hasCdReleaseBuild = false, projectVersion = "1.3"),
+                    TcProject("Alpha_14", hasCdReleaseBuild = true, projectVersion = "1.4", hasAutoReleaseTrigger = true),
+                ),
+            ),
+        )
+        val svc = service(
+            StubComponentRepository(listOf(alpha)),
+            StubVersionLineRepository(),
+            StubTeamcityProjectRepository(),
+            fetcher,
+            RecordingPublisher(),
+        )
+
+        val result = svc.resync("admin")
+
+        assertEquals(1, result.droppedLines)
+        assertFalse(alpha.autoRelease)
+        assertEquals(0, result.autoReleaseEnabled)
+    }
+
+    @Test
     @DisplayName("mixed batch: counts every category in one pass")
     fun mixedBatch() {
         val alphaComponent = component(alice, "alpha")
