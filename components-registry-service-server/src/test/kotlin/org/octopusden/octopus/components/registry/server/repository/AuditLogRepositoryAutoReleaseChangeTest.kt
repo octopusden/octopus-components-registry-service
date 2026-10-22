@@ -48,6 +48,13 @@ class AuditLogRepositoryAutoReleaseChangeTest {
     }
 
     @Test
+    fun `a RENAME saved together with an autoRelease change counts`() {
+        save("c1", "RENAME", mapOf("autoRelease" to true, "name" to "a"), mapOf("autoRelease" to false, "name" to "b"))
+
+        assertTrue(auditLogRepository.existsAutoReleaseChange("c1"))
+    }
+
+    @Test
     fun `other changes, other components and other actions do not count`() {
         save("c1", "UPDATE", mapOf("autoRelease" to false, "owner" to "a"), mapOf("autoRelease" to false, "owner" to "b"))
         save("c1", "UPDATE", mapOf("owner" to "a"), mapOf("owner" to "b"))
