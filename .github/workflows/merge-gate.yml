@@ -92,9 +92,66 @@ jobs:
           echo "::error::$SURFACE changed but $CHANGELOG did not."
           exit 1
 
+  # The compat module's own self-tests: the comparator, known-deltas matcher and
+  # other pure-Kotlin suites (`:unitTest`, everything not tagged `http`) plus the
+  # shell self-tests of the local-stands scripts. Neither runs in `build` — the
+  # module's `check` is disabled so the URL-gated HTTP suites stay opt-in — so
+  # this job is what executes them on a PR. Each count must be non-zero: a
+  # suite that silently runs nothing must not read as green.
+  compat-unit:
+    name: compat/unit
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up JDK 21
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '21'
+
+      - name: Compat unit tests
+        run: |
+          set -euo pipefail
+          rc=0
+          ./gradlew :components-registry-compat-test:unitTest --no-daemon || rc=$?
+          count=$(python3 -c 'import glob,sys,xml.etree.ElementTree as E; print(sum(int(E.parse(f).getroot().get("tests")) for f in glob.glob(sys.argv[1])))' \
+            'components-registry-compat-test/build/test-results/unitTest/*.xml')
+          echo "compat/unit: $count unitTest tests executed"
+          if [ "$count" -eq 0 ]; then echo "::error:::unitTest executed no tests."; exit 1; fi
+          exit "$rc"
+
+      - name: Shell self-tests
+        run: |
+          set -uo pipefail
+          ran=0 failed=0
+          for t in scripts/local-stands/test/test-*.sh; do
+            [ -f "$t" ] || continue
+            ran=$((ran + 1))
+            echo "::group::$t"
+            if bash "$t"; then echo "ok: $t"; else echo "::error::$t failed"; failed=$((failed + 1)); fi
+            echo "::endgroup::"
+          done
+          echo "compat/unit: $ran shell self-tests executed, $failed failed"
+          if [ "$ran" -eq 0 ]; then echo "::error::no scripts/local-stands/test/test-*.sh found."; exit 1; fi
+          [ "$failed" -eq 0 ]
+
+      - name: Upload unitTest reports
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: compat-unit-reports
+          path: |
+            components-registry-compat-test/build/reports/tests/unitTest/**
+            components-registry-compat-test/build/test-results/unitTest/**
+          if-no-files-found: warn
+
   gate-merge:
     name: gate/merge
-    needs: [ build, quality, security, api-changelog ]
+    needs: [ build, quality, security, api-changelog, compat-unit ]
     if: always()
     runs-on: ubuntu-latest
     steps:

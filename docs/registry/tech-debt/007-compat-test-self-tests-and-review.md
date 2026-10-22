@@ -3,7 +3,10 @@
 ## Status
 
 In progress · P1 · framework correctness · belongs to the addendum of
-`~/.claude/plans/async-stirring-koala.md` (TASK-D). Layers 1-4 landed.
+`~/.claude/plans/async-stirring-koala.md` (TASK-D). Layers 1-4 landed. The
+L1/L2/L4 self-tests run on every PR in the merge gate's `compat/unit` job
+(`.github/workflows/merge-gate.yml`), which fails if either suite executes
+zero tests.
 
 ## Context
 
@@ -37,7 +40,7 @@ stricter review protocol for any future change touching this code.
 | L1 — Comparator-logic unit tests | `ComparatorLogicTest` (13 cases) pinning `Comparators.compareRaw` — status divergence, transport failure on EITHER side, key permutation, additive/removed field, array size mismatch, header allow-list with case-insensitive keys, context-threading. Required extracting `compareRaw` out of `CompatibilityTestBase` into an `object Comparators` so it's testable without HTTP scaffolding. | `Comparators.kt` (NEW), `ComparatorLogicTest.kt` (NEW), `CompatibilityTestBase.kt` (delegate) | #230 | Merged |
 | L2 — Shell self-tests | `scripts/local-stands/test/test-verify-lib.sh` — 14 pure-bash cases exercising `kill_port` (incl. PR #220 argv-shape regression guard), `wait_port_free`, `check_migration_health` (incl. greedy-left sed bug regression guard). Mocks `lsof` / `kill` / `sleep` via shell function redefinition. | `scripts/local-stands/test/test-verify-lib.sh` (NEW), `scripts/local-stands/verify.sh` (sourcing guard), `.gitignore` | #229 | Merged |
 | L3 — Preflight assertions | Extend `SnapshotPreconditionTest` to record `CANDIDATE_NOT_DB_MODE` env-level diff when candidate `/service/status` reports `defaultSource != "db"` OR `dbComponentCount` below the `0.9 × baselineComponentCount` threshold. Required adding `defaultSource: String?` + `dbComponentCount: Long?` to `ServiceStatusDTO` (nullable, default-null for backward-compat with old baselines). Activated the dormant `CANDIDATE_NOT_DB_MODE` category in `DiffClassifier`; the env-categories filter in `build.gradle` makes it non-suppressible via `known-deltas.json`. | `ServiceStatusDTO.kt`, `ApplicationConfig.kt`, `SnapshotPreconditionTest.kt`, `EnvironmentPreflightEvaluator.kt` + test (NEW), `DiffClassifier.kt`, `build.gradle` | #223 | Merged |
-| L4 — CI binding | Split the compat-test module into two Gradle tasks: `:test` (URL-gated, runs every `CompatibilityTestBase` subclass via `@Tag("http")` inherited from the base) and `:unitTest` (pure-Kotlin, no URL config, runs everything not tagged `http`). PR-time CI binds to `:unitTest`; full HTTP integration stays on TC manual-run via `:test`. The `excludeTags 'http'` polarity protects against new untagged tests silently disappearing. | `components-registry-compat-test/build.gradle` (split), `CompatibilityTestBase.kt` (`@Tag("http")`) | #228 | Merged |
+| L4 — CI binding | Split the compat-test module into two Gradle tasks: `:test` (URL-gated, runs every `CompatibilityTestBase` subclass via `@Tag("http")` inherited from the base) and `:unitTest` (pure-Kotlin, no URL config, runs everything not tagged `http`). The merge gate's `compat/unit` job runs `:unitTest` on every PR; full HTTP integration stays on TC manual-run via `:test`. The `excludeTags 'http'` polarity protects against new untagged tests silently disappearing. | `components-registry-compat-test/build.gradle` (split), `CompatibilityTestBase.kt` (`@Tag("http")`) | #228 | Merged |
 
 Plus, separately:
 
@@ -96,12 +99,15 @@ For schema-touching PRs, also `--reset-db`.
 
 ## Outcomes after Phase 2
 
-- `:unitTest` runs in ~8s on every PR (40 tests today: JsonShape,
-  RawArraySorters, EnvironmentPreflightEvaluator, ComparatorLogic).
+- `:unitTest` runs on every PR in the merge gate's `compat/unit` job
+  (ComparatorLogic, known-deltas matcher, JsonShape, RawArraySorters,
+  EnvironmentPreflightEvaluator and the rest of the non-`http` suites); the
+  job logs the executed-test count.
 - `:test` runs against deployed stands when URLs are configured; records
   `CANDIDATE_NOT_DB_MODE` env-level diff if the candidate is in V1 mode.
-- `scripts/local-stands/test/test-verify-lib.sh` (14 cases) runs in <1s
-  and pins the macOS / sed / source-guard regressions.
+- Every `scripts/local-stands/test/test-*.sh` runs in the same job; each
+  must exit 0. `test-verify-lib.sh` pins the macOS / sed / source-guard
+  regressions.
 - Future PRs touching this code follow the two-stage review.
 
 ## Related

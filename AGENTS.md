@@ -69,7 +69,7 @@ Quality reports index: `build/reports/quality/index.html`
 | `components-registry-service-light-client` | Lightweight Feign client (Java 8, legacy Jackson) for consumers on older Gradle-plugin toolchains |
 | `components-registry-service-client` | Feign HTTP client |
 | `components-registry-service-server` | Spring Boot REST API (main application) |
-| `components-registry-compat-test` | API v1/v2/v3 wire-compatibility tests: baseline (prod/`main`) vs candidate (v3). On-demand only — gated on `compat.*.url`; contributes nothing to `build`/`check` |
+| `components-registry-compat-test` | API v1/v2/v3 wire-compatibility tests: baseline (prod/`main`) vs candidate (v3). HTTP suites on-demand only — gated on `compat.*.url`; contributes nothing to `build`/`check`. Its pure-Kotlin `:unitTest` and the `scripts/local-stands/test/test-*.sh` self-tests run in the merge gate (`compat/unit`) |
 | `test-common` | Shared test utilities |
 | `components-registry-cli` | `crsctl` — read-only command-line client for the v4 API (Kotlin/JVM fat jar) |
 

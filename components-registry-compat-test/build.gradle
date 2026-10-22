@@ -162,8 +162,8 @@ test {
 //
 // NOTE on `check` integration: this module's `check` is `enabled = false` (line ~25
 // above) — `gradlew build` does NOT auto-call `:unitTest`. Operators invoke it
-// directly: `./gradlew :components-registry-compat-test:unitTest`. CI configuration
-// (TeamCity / GitHub Actions step) names this task explicitly. Keeping `check`
+// directly: `./gradlew :components-registry-compat-test:unitTest`. The merge gate's
+// `compat/unit` job (.github/workflows/merge-gate.yml) names this task explicitly. Keeping `check`
 // disabled preserves the existing "compat module is opt-in" guarantee for the root
 // `./gradlew build`.
 tasks.register('unitTest', Test) {
