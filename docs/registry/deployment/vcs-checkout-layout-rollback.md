@@ -1,4 +1,4 @@
-# Runbook: rolling back across the VCS checkout layout migrations (`V8__`, `V9__`)
+# Runbook: rolling back across the VCS checkout layout migrations (`V8__`, `V9__`, `V13__`)
 
 `V8__add_vcs_entry_placement.sql` adds `source_path` and `checkout_directory` to
 `vcs_settings_entries` (and sets `checkout_directory = name` after the first entry of multi-entry
@@ -83,3 +83,23 @@ where c.build_working_directory is not null
 ```
 
 Drop `vcs_checkout_layout_snapshot` once the repair is verified.
+
+## 4. Event types renamed by `V13__`
+
+`V13__rename_placement_event_types.sql` renames the stored `service_event.event_type` values
+`TEAMCITY_PLACEMENT_{DIFF,SYNC}` to `TEAMCITY_CHECKOUT_LAYOUT_{DIFF,SYNC}`. A release before it reads
+a name it does not know as category `SYSTEM` (`ServiceEventType.categoryOf`), so the events list keeps
+working, but a category filter misses those rows. After rolling back:
+
+```sql
+update service_event set event_type = 'TEAMCITY_PLACEMENT_DIFF' where event_type = 'TEAMCITY_CHECKOUT_LAYOUT_DIFF';
+update service_event set event_type = 'TEAMCITY_PLACEMENT_SYNC' where event_type = 'TEAMCITY_CHECKOUT_LAYOUT_SYNC';
+```
+
+After rolling forward again (Flyway does not re-run `V13__`), and after a rolling deploy in which an
+old pod wrote events, run its two updates again:
+
+```sql
+update service_event set event_type = 'TEAMCITY_CHECKOUT_LAYOUT_DIFF' where event_type = 'TEAMCITY_PLACEMENT_DIFF';
+update service_event set event_type = 'TEAMCITY_CHECKOUT_LAYOUT_SYNC' where event_type = 'TEAMCITY_PLACEMENT_SYNC';
+```

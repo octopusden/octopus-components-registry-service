@@ -19,8 +19,9 @@ refresh it with `./gradlew :components-registry-service-server:generateOpenApiDo
 ## Unreleased
 
 - **TeamCity placement Diff/Sync renamed to checkout layout (SYS-102).** Endpoints move to
-  `/admin/teamcity-checkout-layout/...`; `/admin/teamcity-placement/...` stays as a deprecated alias.
-  Renamed: errorCode `checkout-layout-diff-stale`, gate code `tc-checkout-layout-{diff,sync}-running`,
+  `/admin/teamcity-checkout-layout/...`; `/admin/teamcity-placement/...` stays as a deprecated alias,
+  removed once the Portal uses the new paths in every environment. Both paths return the renamed codes
+  (the Portal before this change still detects a stale Diff by its `errorMessage`). Renamed: errorCode `checkout-layout-diff-stale`, gate code `tc-checkout-layout-{diff,sync}-running`,
   activeKind `TC_CHECKOUT_LAYOUT_{DIFF,SYNC}`, event types `TEAMCITY_CHECKOUT_LAYOUT_{DIFF,SYNC}`
   (migrated by `V13__`), `CheckoutLayout*` schemas, CSV file names.
 - **`autoRelease` component flag (SYS-104).** v4 create/update/summary/detail field (default `false`)

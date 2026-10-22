@@ -17,8 +17,9 @@ import org.springframework.web.bind.annotation.RestController
 private const val DEPRECATED = "Deprecated: use the same path under /rest/api/4/admin/teamcity-checkout-layout"
 
 /**
- * DEPRECATED (2026-10): the first name of [TeamcityCheckoutLayoutControllerV4]'s endpoints, kept
- * for wire-compat. Every call delegates to it, so permissions and responses are the same.
+ * DEPRECATED (2026-10): the first name of [TeamcityCheckoutLayoutControllerV4]'s endpoints. Every call
+ * delegates to it: same permissions and bodies, with the renamed error and gate codes. Removed once the
+ * Portal uses the new paths in every environment.
  */
 @ConditionalOnDatabaseEnabled
 @RestController

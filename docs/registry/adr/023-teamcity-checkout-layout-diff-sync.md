@@ -34,7 +34,8 @@ selective apply and no repeatable "has this drifted" check.
    `vcs-root-entries(checkout-rules, vcs-root(url))`, with the existing read-only TeamCity user.
    Endpoints under `/rest/api/4/admin/teamcity-checkout-layout`: `POST /diff`, `GET /diff/job`,
    `GET /diff/report.{json,html,csv}`, `POST /sync`, `GET /sync/job`, `GET /sync/report.csv`. Deprecated
-   aliases under `/teamcity-placement`.
+   aliases under `/teamcity-placement` return the new codes; they are removed once the Portal uses the
+   new paths in every environment.
 3. **Derivation** assigns each component exactly one status, checked in this order: `TC_ERROR`,
    `ROOTS_MISMATCH`, then the derivation outcomes (`NO_CHAIN`, `COMPILE_PAUSED`,
    `OUTSIDE_TEMPLATES`, `UNEXPRESSIBLE`, `CONFLICT`), then `IN_SYNC`, `INVALID`, `MANUAL_EDIT`,
