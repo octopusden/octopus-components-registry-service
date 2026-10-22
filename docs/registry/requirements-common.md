@@ -96,6 +96,7 @@
 | SYS-101 | `GET /components?involves=<u>[&involvesRoles=…]` — components where any listed user is the owner OR a release manager OR a security champion (OR across the chosen roles; all three by default); combines with every other filter via AND; one row per component; unknown role → 400. `crsctl components list --involves/--involves-role` | High | integration-test | ✅ Tested |
 | SYS-102 | TeamCity placement Diff/Sync (`/admin/teamcity-placement`): Diff is a read-only report over the BASE rows of non-archived components; Sync writes only the `RESOLVED` rows of the last completed Diff (named by `diffId`, else 409 `placement-diff-stale`) through the normal v4 write path, tagged `sync from TeamCity (job <id>)`, a prefix user writes cannot set; single-root `CONFLICT`/`UNEXPRESSIBLE` rows are always reported; VCS roots that the component's own compile configurations attach but the registry lacks yield `ROOTS_MISMATCH` and the `VCS_ROOTS_DIFFER_FROM_REGISTRY` validation warning | High | unit + integration-test | ✅ Tested |
 | SYS-103 | `ClassicComponentsRegistryServiceClient` takes the retry policy for retryable failures (503, I/O errors) from its caller (`Retryer` constructor parameter); without one it keeps the default of 5 attempts, backoff 100 ms – 1 s (`defaultRetryer()`); the policy is per request, so one call exhausting it does not shorten the next | Medium | unit-test | ✅ Tested |
+| SYS-104 | Template-only creators: the permission `CREATE_FROM_TEMPLATE` (role `ROLE_COMPONENTS_REGISTRY_TEMPLATE_CREATOR`, with `ACCESS_COMPONENTS` and `ACCESS_AUDIT`) lets a caller without `CREATE_COMPONENTS` create components from templates only: templates usable, regular profiles unusable with "You may create components from templates only", any template override `403`, the regular create `403`. `CREATE_COMPONENTS` keeps every right and wins over it; editing by ownership is unchanged | High | unit + integration-test | ✅ Tested |
 
 ---
 
@@ -3700,3 +3701,50 @@ the whole client in its own retry loop.
 **Test method:**
 `RetryOn503Test` — `` `SYS-103 caller-supplied retryer outlasts the default` `` (1),
 `` `SYS-103 retryer state is not shared between requests` `` (2).
+
+### SYS-104: Template-only creators
+
+**Priority:** High
+**Test layer:** unit + integration-test
+**Status:** ✅ Tested
+
+**Motivation:**
+Some users should create components only from a template, and change nothing the template fills
+in. With one create permission, `CREATE_COMPONENTS`, the registry could not tell them apart from
+users who may create any component.
+
+**Description:**
+- New permission `CREATE_FROM_TEMPLATE`, carried by the bundled role
+  `ROLE_COMPONENTS_REGISTRY_TEMPLATE_CREATOR` with `ACCESS_COMPONENTS` and `ACCESS_AUDIT`. Which
+  users hold the role is realm configuration; the registry reads no AD groups.
+- `ProfileAvailability` decides from the two create permissions, `CREATE_COMPONENTS` first:
+  everything with `CREATE_COMPONENTS`; templates without overrides with `CREATE_FROM_TEMPLATE`
+  alone; nothing with neither.
+- `POST /rest/api/4/components` keeps its `CREATE_COMPONENTS` guard. `ROLE_COMPONENTS_REGISTRY_EDITOR`
+  and `ROLE_ADMIN` are unchanged.
+
+**Acceptance criteria:**
+1. `GET /auth/me` lists `ACCESS_COMPONENTS`, `ACCESS_AUDIT` and `CREATE_FROM_TEMPLATE` for the
+   template creator role; the editor and admin roles keep their permissions.
+2. For a caller with `CREATE_FROM_TEMPLATE` only, the listing marks templates usable and regular
+   profiles unusable with "You may create components from templates only".
+3. Such a caller's dry run and create from a template without overrides succeed (`200`, `201`).
+4. Such a caller's request with any override answers `403`, before the override paths are checked,
+   and creates nothing.
+5. Such a caller's `POST /rest/api/4/components` answers `403`, with or without a profile, and
+   creates nothing.
+6. A caller with both create permissions has every right of `CREATE_COMPONENTS`.
+7. Such a caller may edit a component they own.
+
+**Test method:** `RoleMapTest` (H2 `ft-db`) — `` `SYS-104 template creator role` ``;
+`BundledRoleMapTest` — `` `SYS-104 bundled template creator role` ``,
+`` `SYS-104 bundled editor role unchanged` ``, `` `SYS-104 bundled admin role unchanged` `` (1);
+`PermissionProfileAvailabilityTest` — `` `SYS-104 template for template only creator` ``,
+`` `SYS-104 profile for template only creator` ``, `` `SYS-104 override for template only creator` `` (2, 4),
+`` `SYS-104 both create permissions` `` (6); `ComponentProfileControllerV4Test` —
+`` `SYS-104 template only creator` ``, `` `SYS-104 usable for editor` `` (2);
+`ComponentTemplateControllerV4Test` — `` `SYS-104 template only creator dry run` ``,
+`` `SYS-104 template only creator create` `` (3), `` `SYS-104 template only creator overridable override` ``,
+`` `SYS-104 template only creator not overridable override` `` (4); `ProfileOnCreateTest` —
+`` `SYS-104 template only creator refused` `` (5); `ComponentOwnershipEditSecurityTest` —
+`` `SYS-104 template only creator owner allowed` `` (7).

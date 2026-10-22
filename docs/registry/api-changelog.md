@@ -18,6 +18,17 @@ refresh it with `./gradlew :components-registry-service-server:generateOpenApiDo
 
 ## Unreleased
 
+- **Template-only creators (SYS-104).** New permission `CREATE_FROM_TEMPLATE`, carried by the new
+  role `ROLE_COMPONENTS_REGISTRY_TEMPLATE_CREATOR` (realm role
+  `COMPONENTS_REGISTRY_TEMPLATE_CREATOR`) with `ACCESS_COMPONENTS` and `ACCESS_AUDIT`. No schema
+  change; for a caller holding it without `CREATE_COMPONENTS`:
+  - `GET /component-profiles` marks templates usable and regular profiles unusable, with
+    `unusableReason` "You may create components from templates only";
+  - `POST /component-templates/{id}/components` accepts a dry run or create without `overrides`,
+    and answers `403` to any `overrides`;
+  - `POST /components` answers `403`, as for any caller without `CREATE_COMPONENTS`.
+  - Callers holding `CREATE_COMPONENTS` see no change. `GET /auth/me` lists the new permission
+    under the new role.
 - **`involves` / `involvesRoles` list filters added (SYS-101).** `GET /components?involves=<u>` returns
   components where any listed user is the owner OR a release manager OR a security champion;
   `involvesRoles` (any of `owner`, `releaseManager`, `securityChampion`; default all) narrows the

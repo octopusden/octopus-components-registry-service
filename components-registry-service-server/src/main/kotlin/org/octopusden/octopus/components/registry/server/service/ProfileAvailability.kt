@@ -5,9 +5,9 @@ import org.octopusden.octopus.components.registry.server.model.ComponentTemplate
 
 /**
  * Whether the current user may use a profile or a template, and override a template's fields
- * (profiles Decision 6, templates Decision 12). The listing, the create check and the template
- * endpoints all ask this one rule, so a later restriction — Delivery & Support creating from templates only, without
- * overrides — changes one implementation.
+ * (profiles Decision 6, templates Decision 12). The listing, the create check, the template
+ * endpoints and the administrator read all ask this one rule, so who may create from templates
+ * only, and without overrides, is decided in one implementation.
  */
 interface ProfileAvailability {
     fun evaluate(profile: ComponentProfile): Availability

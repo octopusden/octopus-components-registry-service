@@ -18,6 +18,7 @@ import org.octopusden.octopus.components.registry.server.repository.RegistryConf
 import org.octopusden.octopus.components.registry.server.service.ProfileAvailability
 import org.octopusden.octopus.components.registry.server.service.impl.ComponentProfileCatalog
 import org.octopusden.octopus.components.registry.server.support.adminJwt
+import org.octopusden.octopus.components.registry.server.support.templateCreatorJwt
 import org.springframework.beans.factory.annotation.Autowired
 import org.springframework.boot.test.autoconfigure.web.servlet.AutoConfigureMockMvc
 import org.springframework.boot.test.context.SpringBootTest
@@ -319,5 +320,21 @@ class ProfileOnCreateTest {
                     .contentType(MediaType.APPLICATION_JSON)
                     .content("""{"version":${detail["version"].asLong()},"name":"payments-solution-${suffix()}"}"""),
             ).andExpect(status().isOk)
+    }
+
+    @Test
+    @DisplayName("SYS-104: the regular create answers 403 to a template-only creator, with or without a profile (Decision 4)")
+    fun `SYS-104 template only creator refused`() {
+        val withoutProfile = "plain-${suffix()}"
+        val withProfile = "profiled-${suffix()}"
+
+        listOf(regularBody(withoutProfile), regularBody(withProfile, ""","profile":"regular-internal"""")).forEach { body ->
+            mvc
+                .perform(post("/rest/api/4/components").with(templateCreatorJwt()).contentType(MediaType.APPLICATION_JSON).content(body))
+                .andExpect(status().isForbidden)
+        }
+
+        assertNotCreated(withoutProfile)
+        assertNotCreated(withProfile)
     }
 }

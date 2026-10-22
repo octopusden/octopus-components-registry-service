@@ -1,6 +1,8 @@
 package org.octopusden.octopus.components.registry.server.controller
 
 import org.hamcrest.Matchers.contains
+import org.hamcrest.Matchers.everyItem
+import org.hamcrest.Matchers.nullValue
 import org.junit.jupiter.api.AfterEach
 import org.junit.jupiter.api.DisplayName
 import org.junit.jupiter.api.Tag
@@ -10,7 +12,9 @@ import org.octopusden.cloud.commons.security.client.AuthServerClient
 import org.octopusden.octopus.components.registry.server.ComponentRegistryServiceApplication
 import org.octopusden.octopus.components.registry.server.service.impl.ComponentProfileCatalog
 import org.octopusden.octopus.components.registry.server.support.adminJwt
+import org.octopusden.octopus.components.registry.server.support.editorJwt
 import org.octopusden.octopus.components.registry.server.support.standaloneTemplateProperties
+import org.octopusden.octopus.components.registry.server.support.templateCreatorJwt
 import org.octopusden.octopus.components.registry.server.support.viewerJwt
 import org.springframework.beans.factory.annotation.Autowired
 import org.springframework.boot.test.autoconfigure.web.servlet.AutoConfigureMockMvc
@@ -165,6 +169,16 @@ class ComponentProfileControllerV4Test {
     }
 
     @Test
+    @DisplayName("SYS-104: an editor may use every profile and every template (Decision 2)")
+    fun `SYS-104 usable for editor`() {
+        reloadWith(*standaloneTemplateProperties().toList().toTypedArray())
+
+        list(editorJwt())
+            .andExpect(jsonPath("$.profiles[*].usable", contains(true, true, true, true, true)))
+            .andExpect(jsonPath("$.profiles[*].unusableReason", everyItem(nullValue())))
+    }
+
+    @Test
     @DisplayName("a user who may not create components may use none, with the reason")
     fun unusableForViewer() {
         list(viewerJwt())
@@ -185,5 +199,26 @@ class ComponentProfileControllerV4Test {
         reloadWith("solution.rules.name.pattern" to "^[a-z-]+-solution$")
 
         list().andExpect(jsonPath("$.profiles[2].rules[0].pattern").value("^[a-z-]+-solution$"))
+    }
+
+    @Test
+    @DisplayName("SYS-104: a template-only creator may use templates only, with the template-only reason on profiles (Decision 3)")
+    fun `SYS-104 template only creator`() {
+        reloadWith(*standaloneTemplateProperties().toList().toTypedArray())
+
+        list(templateCreatorJwt())
+            .andExpect(jsonPath("$.profiles[?(@.kind == 'template')].usable", contains(true)))
+            .andExpect(jsonPath("$.profiles[?(@.kind == 'regular')].usable", contains(false, false, false, false)))
+            .andExpect(
+                jsonPath(
+                    "$.profiles[?(@.kind == 'regular')].unusableReason",
+                    contains(
+                        "You may create components from templates only",
+                        "You may create components from templates only",
+                        "You may create components from templates only",
+                        "You may create components from templates only",
+                    ),
+                ),
+            )
     }
 }
