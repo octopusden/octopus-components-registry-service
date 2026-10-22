@@ -42,7 +42,7 @@ inherits to every subclass:
 | Task | Filter | URL gate | Use |
 |---|---|---|---|
 | `:components-registry-compat-test:test` | `includeTags 'http'` (every `CompatibilityTestBase` subclass) | required: at least one of `compat.baseline.url` / `compat.candidate.url` | TeamCity manual run; full baseline-vs-candidate compat sweep |
-| `:components-registry-compat-test:unitTest` | `excludeTags 'http'` (everything else) | none | PR-time fast lane for framework self-tests — JsonShape, RawArraySorters, EnvironmentPreflightEvaluator, future `DiffClassifierTest`, etc. Runs in ~8s |
+| `:components-registry-compat-test:unitTest` | `excludeTags 'http'` (everything else) | none | Framework self-tests — JsonShape, RawArraySorters, EnvironmentPreflightEvaluator, ComparatorLogic, known-deltas matcher, etc. Runs on every PR in the merge gate's `compat/unit` job |
 
 A new pure-unit test class that forgets a `@Tag` annotation still executes via
 `:unitTest` — the polarity is "everything not tagged `http`" rather than "only
@@ -54,7 +54,7 @@ This module deliberately does **not** participate in the regular `gradlew build`
 - The `:test` task has `onlyIf { at least one of compat.baseline.url / compat.candidate.url is set }` — if **both** are missing (or their `COMPAT_BASELINE_URL` / `COMPAT_CANDIDATE_URL` env equivalents), the task is **skipped at the Gradle level** (no JVM fork, no JUnit launcher). `gradlew build` therefore costs nothing extra for contributors who don't pass compat URLs.
 - Setting exactly one of `compat.baseline.url` / `compat.candidate.url` lets the test JVM start so `CompatConfig.explainInvalid()` can surface a fail-fast configuration error at `@BeforeAll`. Gating on "both" at the Gradle layer would silently skip the partial-config case as BUILD SUCCESSFUL, which would hide misconfigured TC / manual runs.
 
-The `:test` task is intended to be triggered from a TeamCity manual-run build configuration (or explicit local `./gradlew :components-registry-compat-test:test -P...`), not from any automated PR/build trigger. `:unitTest` is the opposite: it has no external dependencies and is suitable for any per-PR CI step.
+The `:test` task is intended to be triggered from a TeamCity manual-run build configuration (or explicit local `./gradlew :components-registry-compat-test:test -P...`), not from any automated PR/build trigger. `:unitTest` is the opposite: it has no external dependencies and runs on every PR in the merge gate's `compat/unit` job.
 
 ## Failure model
 
