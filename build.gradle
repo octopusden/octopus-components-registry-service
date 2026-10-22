@@ -160,7 +160,14 @@ tasks.register('adocPublishToWiki', DockerTask) {
         // directory. Under rootless Podman that uid maps to a subordinate uid that cannot write the
         // mount (AccessDeniedException on /var/asciidoc-root-folder/templates), so keep the user's
         // own uid there - as the Gradle steps in .teamcity/settings.kts do. Docker has no such flag.
-        if (['docker', '--version'].execute().text.toLowerCase().contains('podman')) {
+        // Probe the binary DockerTask runs (its container-bin overrides, else docker). Podman reached
+        // through the podman-docker wrapper says so in --version; through a plain symlink it prints
+        // "docker version", so the resolved executable's name counts as well.
+        def binEnv = rootProject.findProperty('platformlib.container-bin.env-parameter')
+        def bin = (binEnv ? System.getenv(binEnv as String) : null) ?: rootProject.findProperty('platformlib.container-bin.command') ?: 'docker'
+        def exe = new File(bin as String).absolute ? new File(bin as String) :
+                System.getenv('PATH').split(File.pathSeparator).collect { new File(it, bin as String) }.find { it.canExecute() }
+        if (exe?.canonicalFile?.name?.contains('podman') || [bin, '--version'].execute().text.toLowerCase().contains('podman')) {
             dockerOptions = dockerOptions + ['--userns=keep-id']
         }
     }
