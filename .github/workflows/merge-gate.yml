@@ -94,30 +94,30 @@ jobs:
 
   # Applied Flyway migrations are immutable: production runs Flyway validate,
   # so an edited, removed or renamed V<n>__ file stops the service from
-  # starting. Same file-list source as changelog/v4; the rule itself lives in
-  # the script so it can be run offline against a saved file list.
+  # starting. Compares main with the merge commit under test, so a branch
+  # behind main does not look like it deletes main's newer migrations.
+  # The rule lives in the script so it can be run locally on any two commits.
   migrations-append-only:
     name: migrations/append-only
     runs-on: ubuntu-latest
     permissions:
       contents: read
-      pull-requests: read
     steps:
+      # Full history: the base commit is not an ancestor a shallow merge-ref
+      # checkout is guaranteed to contain.
       - uses: actions/checkout@v4
         with:
+          fetch-depth: 0
           persist-credentials: false
       - name: Self-test the check
         run: scripts/ci/test-check-migrations-append-only.sh
-      - name: Reject changes to existing migrations
+      # The base is the merge commit's first parent, the main it merges into.
+      # pull_request.base.sha is not refreshed when main moves, and against an
+      # older main a PR version below one main added since would pass.
+      - name: Check migrations are append-only and in order
         env:
-          GH_TOKEN: ${{ github.token }}
-          PR: ${{ github.event.pull_request.number }}
-          REPO: ${{ github.repository }}
-          CHANGED: ${{ github.event.pull_request.changed_files }}
-        run: |
-          set -euo pipefail
-          gh api --paginate "repos/$REPO/pulls/$PR/files?per_page=100" >"$RUNNER_TEMP/pr-files.json"
-          scripts/ci/check-migrations-append-only.sh "$RUNNER_TEMP/pr-files.json" "$CHANGED"
+          CHECKED: ${{ github.sha }}
+        run: scripts/ci/check-migrations-append-only.sh "$CHECKED^1" "$CHECKED"
 
   gate-merge:
     name: gate/merge

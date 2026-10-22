@@ -1,52 +1,93 @@
 #!/bin/bash
-# Fail when a PR modifies, removes or renames an applied Flyway migration.
+# Fail when a PR changes an applied Flyway migration or adds one Flyway would
+# reject or apply out of order.
 #
 # Production runs Flyway validate: a changed checksum or a missing applied
-# version stops the service from starting. A new version is the only safe
-# change, so `added` is the only status that passes; every other one,
-# `copied` included, is blocked. Flyway scans db/migration recursively, so
-# subdirectories count. Repeatable `R__` migrations are out of scope: there
-# are none, and Flyway re-applies them on change by design.
+# version stops the service from starting. So between the PR base and the
+# commit under test:
+#   - an existing V*.sql under db/migration/ (any depth: Flyway scans
+#     recursively) may not be modified, removed, renamed or moved out;
+#   - an added one must be named V<n>__<description>.sql, with an integer
+#     version and no leading zero;
+#   - its version must be above every version in the base, since production
+#     does not apply out-of-order migrations;
+#   - no version may appear twice in the tree under test.
+# Repeatable R__ migrations are out of scope: there are none, and Flyway
+# re-applies them on change by design.
 #
-# Usage: check-migrations-append-only.sh <pr-files.json> [expected-count]
-#   The file is the output of `gh api --paginate repos/<repo>/pulls/<n>/files`:
-#   one or more JSON arrays of file entries (filename, status,
-#   previous_filename). A rename is checked on both names, so moving a
-#   migration out of the directory is caught too. expected-count is the PR's
-#   changed_files; the files API stops listing at 3000, so a shorter list
-#   fails instead of passing unchecked.
+# Usage: check-migrations-append-only.sh <base-sha> <checked-sha>
+#   Run inside the repository; any revision expression works. <checked-sha>
+#   is the PR merge commit and <base-sha> its first parent: against the branch
+#   head, a branch that predates a migration on main would look like it
+#   deletes it.
 set -euo pipefail
 
-if ! jq -s -e 'length > 0 and all(type == "array")' "$1" >/dev/null 2>&1; then
-  echo "::error::$1 is not a PR file list (empty or not JSON arrays)."
-  exit 1
-fi
+DIR=components-registry-service-server/src/main/resources/db/migration
+BASE=${1:-}
+CHECKED=${2:-}
 
-listed=$(jq -s 'map(length) | add' "$1")
-if [ -n "${2:-}" ] && [ "$listed" -lt "$2" ]; then
-  echo "::error::The files API listed $listed of $2 changed files; cannot check the rest."
-  exit 1
-fi
+for sha in "$BASE" "$CHECKED"; do
+  if [ -z "$sha" ] || ! git cat-file -e "$sha^{commit}" 2>/dev/null; then
+    echo "::error::Commit '$sha' is missing or not fetched; cannot check migrations."
+    exit 1
+  fi
+done
+echo "base:    $BASE"
+echo "checked: $CHECKED"
 
-offending=$(jq -r '
-  .[]
-  | select(.status != "added")
-  | select([.filename, .previous_filename]
-           | any(. != null and test("^components-registry-service-server/src/main/resources/db/migration/(.*/)?V[^/]*\\.sql$")))
-  | "\(.status)\t\(.previous_filename // "-") -> \(.filename)"
-' "$1")
+# Versioned migrations only: a V*.sql basename at any depth under $DIR.
+versioned() { grep -E "^$DIR/(.*/)?V[^/]*\.sql$" || true; }
+version_of() { local name=${1##*/}; name=${name#V}; echo $((10#${name%%__*})); }
 
-if [ -z "$offending" ]; then
-  echo "ok — no applied migration changed."
+errors=()
+
+changes=$(git diff --no-renames --name-status "$BASE" "$CHECKED" -- "$DIR")
+while IFS=$'\t' read -r status path; do
+  [ -n "$path" ] || continue
+  [ -n "$(versioned <<<"$path")" ] || continue
+  if [ "$status" != "A" ]; then
+    errors+=("existing migration changed ($status): $path")
+  elif [[ ! ${path##*/} =~ ^V[1-9][0-9]*__[a-z0-9_]+\.sql$ ]]; then
+    errors+=("bad name, expected V<n>__<lowercase_description>.sql: $path")
+  fi
+done <<<"$changes"
+
+base_files=$(git ls-tree -r --name-only "$BASE" -- "$DIR")
+checked_files=$(git ls-tree -r --name-only "$CHECKED" -- "$DIR")
+
+max=0
+while read -r path; do
+  [[ ${path##*/} =~ ^V[0-9]+__ ]] || continue
+  v=$(version_of "$path")
+  if [ "$v" -gt "$max" ]; then max=$v; fi
+done < <(versioned <<<"$base_files")
+
+while IFS=$'\t' read -r status path; do
+  [ "$status" = "A" ] || continue
+  [[ ${path##*/} =~ ^V[1-9][0-9]*__[a-z0-9_]+\.sql$ ]] || continue
+  v=$(version_of "$path")
+  if [ "$v" -le "$max" ]; then errors+=("version $v is not above V$max, the highest on the base: $path"); fi
+done <<<"$changes"
+
+versions=$(while read -r path; do
+  if [[ ${path##*/} =~ ^V[0-9]+__ ]]; then echo "$(version_of "$path") $path"; fi
+done < <(versioned <<<"$checked_files"))
+while read -r v; do
+  [ -n "$v" ] || continue
+  errors+=("version $v appears more than once: $(awk -v v="$v" '$1 == v { printf "%s ", $2 }' <<<"$versions")")
+done < <(awk '{ print $1 }' <<<"$versions" | sort -n | uniq -d)
+
+if [ ${#errors[@]} -eq 0 ]; then
+  echo "ok — migrations are append-only, well named and in order."
   exit 0
 fi
 
-echo "$offending" >&2
+printf '%s\n' "${errors[@]}" >&2
 cat >&2 <<'MSG'
 
-Applied migrations are immutable: production runs Flyway validate, and an edited,
+Applied migrations are immutable: production runs Flyway validate, and a changed,
 removed or renamed version stops the service from starting. Revert the change and
-add the correction as the next V<n>__ migration instead.
+add it as the next V<n>__ migration instead.
 MSG
-echo "::error::A PR may only add Flyway migrations; it changed an existing one."
+echo "::error::Flyway migration check failed: ${errors[0]}"
 exit 1

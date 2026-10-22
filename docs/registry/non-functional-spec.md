@@ -199,7 +199,7 @@ rule-text change from silently re-recording a fresh baseline.
 | Fitness Function | Where | How |
 |-----------------|-------|-----|
 | Flyway migrations are valid | CI | Testcontainers: fresh DB → apply all migrations → verify schema |
-| Flyway migrations are append-only | CI (`migrations/append-only`, required by `gate/merge`) | A PR may only add `V*.sql` files under `db/migration/`; one that modifies, removes or renames an existing one fails (`scripts/ci/check-migrations-append-only.sh`). Production runs Flyway validate, which refuses to start on a changed checksum |
+| Flyway migrations are append-only and ordered | CI (`migrations/append-only`, required by `gate/merge`) | `scripts/ci/check-migrations-append-only.sh` compares the PR merge commit with main, the merge commit's first parent, over every `V*.sql` under `db/migration/` at any depth. An existing migration may not be modified, removed or renamed. An added one must be named `V<n>__<lowercase_description>.sql` with no leading zero, and its version must be above every version on main. No version may appear twice. Production runs Flyway validate, which refuses to start on a changed checksum or a missing applied version |
 | No schema drift | CI | Compare actual schema vs expected DDL (Flyway validate) |
 | Optimistic locking works | CI | Concurrent update test → one succeeds, one gets `OptimisticLockException` |
 | Foreign keys consistent | CI | Orphan record checks after import |
