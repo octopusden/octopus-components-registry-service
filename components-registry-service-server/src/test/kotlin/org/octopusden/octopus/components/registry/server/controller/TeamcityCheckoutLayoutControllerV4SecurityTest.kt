@@ -263,6 +263,31 @@ class TeamcityCheckoutLayoutControllerV4SecurityTest {
     }
 
     @Test
+    @DisplayName("deprecated path: viewer JWT POST /sync, GET /sync/job and GET /sync/report.csv -> 403")
+    fun legacySyncEndpointsViewerReturns403() {
+        mvc
+            .perform(
+                post("/rest/api/4/admin/teamcity-placement/sync")
+                    .with(viewerJwt())
+                    .contentType(MediaType.APPLICATION_JSON)
+                    .content("""{"diffId":"D1","componentIds":[]}"""),
+            ).andExpect(status().isForbidden)
+        mvc.perform(get("/rest/api/4/admin/teamcity-placement/sync/job").with(viewerJwt())).andExpect(status().isForbidden)
+        mvc.perform(get("/rest/api/4/admin/teamcity-placement/sync/report.csv").with(viewerJwt())).andExpect(status().isForbidden)
+    }
+
+    @Test
+    @DisplayName("deprecated path: viewer JWT GET /diff/report.csv -> 200, text/csv")
+    fun legacyGetReportCsvViewerReturns200() {
+        `when`(diffJobService.lastCompleted()).thenReturn(completedDiff())
+
+        mvc
+            .perform(get("/rest/api/4/admin/teamcity-placement/diff/report.csv").with(viewerJwt()))
+            .andExpect(status().isOk)
+            .andExpect(content().contentTypeCompatibleWith(MediaType.valueOf("text/csv;charset=UTF-8")))
+    }
+
+    @Test
     @DisplayName("deprecated path: admin JWT POST /sync with a replaced Diff -> 409, the message a released Portal matches")
     fun legacyPostSyncStaleDiffReturns409() {
         `when`(syncJobService.startAsync(eq("alice"), eq(emptyList()), eq("OLD"), any()))
