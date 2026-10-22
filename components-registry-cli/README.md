@@ -134,6 +134,7 @@ Filters (repeatable ones may be passed multiple times):
 | `--involves <user>` | yes | Owner OR release manager OR security champion. |
 | `--involves-role <role>` | yes | Narrow `--involves`: `owner`, `releaseManager`, `securityChampion`. |
 | `--test-component <true\|false>` | | Without it, test components are listed. |
+| `--auto-release <true\|false>` | | Exact match on the `autoRelease` flag. |
 | `--can-be-parent <true\|false>` | | |
 | `--distribution-explicit <true\|false>` | | |
 | `--distribution-external <true\|false>` | | |

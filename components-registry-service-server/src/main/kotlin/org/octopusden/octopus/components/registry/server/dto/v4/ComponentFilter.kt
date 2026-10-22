@@ -141,4 +141,6 @@ data class ComponentFilter(
     val distributionExternal: Boolean? = null,
     /** Exact match on `components.test_component`. Null = test components are included. */
     val testComponent: Boolean? = null,
+    /** Exact match on `components.auto_release`. Null = no filter. */
+    val autoRelease: Boolean? = null,
 )

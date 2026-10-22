@@ -96,6 +96,7 @@
 | SYS-101 | `GET /components?involves=<u>[&involvesRoles=…]` — components where any listed user is the owner OR a release manager OR a security champion (OR across the chosen roles; all three by default); combines with every other filter via AND; one row per component; unknown role → 400. `crsctl components list --involves/--involves-role` | High | integration-test | ✅ Tested |
 | SYS-102 | TeamCity placement Diff/Sync (`/admin/teamcity-placement`): Diff is a read-only report over the BASE rows of non-archived components; Sync writes only the `RESOLVED` rows of the last completed Diff (named by `diffId`, else 409 `placement-diff-stale`) through the normal v4 write path, tagged `sync from TeamCity (job <id>)`, a prefix user writes cannot set; single-root `CONFLICT`/`UNEXPRESSIBLE` rows are always reported; VCS roots that the component's own compile configurations attach but the registry lacks yield `ROOTS_MISMATCH` and the `VCS_ROOTS_DIFFER_FROM_REGISTRY` validation warning | High | unit + integration-test | ✅ Tested |
 | SYS-103 | `ClassicComponentsRegistryServiceClient` takes the retry policy for retryable failures (503, I/O errors) from its caller (`Retryer` constructor parameter); without one it keeps the default of 5 attempts, backoff 100 ms – 1 s (`defaultRetryer()`); the policy is per request, so one call exhausting it does not shorten the next | Medium | unit-test | ✅ Tested |
+| SYS-104 | Component flag `autoRelease` (default false), DB and v4 only: create/update requests, summary/detail responses, `?autoRelease=` list filter, field-config visibility/editability; an admin-started TeamCity resync turns it on (never off) when every linked release line has a finish-build trigger and nobody has changed the flag; the weekly cron only with `teamcity.sync.auto-release-on-cron` | Medium | unit + integration-test | ✅ Tested |
 
 ---
 
@@ -2379,7 +2380,8 @@ Persistence is the transitional `version_line` → `teamcity_project` model: one
 row per kept line (`version` is sync-owned, nullable, a reconciliation discriminator — see
 `VersionLineEntity`), pointing at a deduplicated `teamcity_project`. Reconciliation is
 idempotent (writes only when the (projectId, version) set changes). Counters are reported per
-component (`updated`/`unchanged`/`skipped_no_match`/`skipped_ambiguous`/`ambiguous_auto_resolved`);
+component (`updated`/`unchanged`/`skipped_no_match`/`skipped_ambiguous`/`ambiguous_auto_resolved`,
+`auto_release_enabled` — SYS-104);
 `dropped_lines` separately surfaces lines dropped from otherwise-linked components. A v4 PATCH
 preserves the sync-owned `version` for project ids it retains.
 
@@ -3700,3 +3702,39 @@ the whole client in its own retry loop.
 **Test method:**
 `RetryOn503Test` — `` `SYS-103 caller-supplied retryer outlasts the default` `` (1),
 `` `SYS-103 retryer state is not shared between requests` `` (2).
+
+### SYS-104: Component flag `autoRelease`
+
+**Priority:** Medium
+**Test layer:** unit + integration-test
+**Status:** ✅ Tested
+
+**Motivation:**
+Release automation (for example the CVE remediation service) needs to know whether a component's
+releases may be started without a person.
+
+**Description:**
+- `components.auto_release BOOLEAN NOT NULL DEFAULT false` (`V12__`). Meaning: releases of the
+  component may be started automatically by release automation once a release candidate passes its
+  gates; `false`: a person starts every release.
+- v4: `ComponentCreateRequest.autoRelease` (default false), `ComponentUpdateRequest.autoRelease`
+  (null = unchanged), `ComponentSummaryResponse.autoRelease`, `ComponentDetailResponse.autoRelease`;
+  `GET /components?autoRelease=true|false` filters (absent = both).
+- Field-config path `component.autoRelease` (`visibility`, `editable`). A create request without the
+  field stores `false`.
+- The flag is not part of the Groovy DSL and is not exposed on v1-v3.
+- A TeamCity resync started by an admin turns the flag on when the release configuration of every linked release
+  line (based on `teamcity.sync.cd-release-template-id`, not paused) has an enabled finish-build
+  trigger, unless the flag has ever been changed (an `UPDATE` or `RENAME` audit row on it): a person's "off"
+  stays off. One audit row per change, counted in `auto_release_enabled`. Never turns it off,
+  never changes TeamCity, and ignores the field-config visibility. The weekly cron does this only
+  with `teamcity.sync.auto-release-on-cron=true` (default `false`). The names of the components it
+  turned on are logged. A release line the resync leaves unresolved (several candidates, none a
+  release build) keeps the flag off. An admin who starts a resync while the cron run is going gets
+  that run, so the cron rule applies to it.
+
+**Test method:**
+`V12AutoReleaseMigrationIntegrationTest`, `AutoReleaseFlagV4Test`; `ExternalTcProjectFetcherTest`
+(`SYS-104 finish-build trigger means auto release`, `SYS-104 no auto release otherwise`),
+`TeamcitySyncServiceTest` (`SYS-104 resync turns autoRelease on`, `SYS-104 resync never turns autoRelease off`,
+`SYS-104 the weekly cron leaves autoRelease alone by default`), `AuditLogRepositoryAutoReleaseChangeTest`.

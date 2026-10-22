@@ -116,6 +116,7 @@ private fun detailTable(detail: ComponentDetailResponse): String =
             listOf("productType", detail.productType),
             listOf("archived", detail.archived.toString()),
             listOf("testComponent", detail.testComponent.toString()),
+            listOf("autoRelease", detail.autoRelease.toString()),
             listOf("canBeParent", detail.canBeParent.toString()),
             listOf("labels", detail.labels.joinToString(", ")),
         ),

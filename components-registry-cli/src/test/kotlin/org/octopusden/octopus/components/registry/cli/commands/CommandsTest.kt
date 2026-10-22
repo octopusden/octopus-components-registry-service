@@ -117,6 +117,8 @@ class CommandsTest {
                 "false",
                 "--test-component",
                 "false",
+                "--auto-release",
+                "true",
                 "--can-be-parent",
                 "true",
                 "--distribution-explicit",
@@ -156,6 +158,7 @@ class CommandsTest {
         assertTrue(q.contains("groupKey=g1"))
         assertTrue(q.contains("archived=false"))
         assertTrue(q.contains("testComponent=false"))
+        assertTrue(q.contains("autoRelease=true"))
         assertTrue(q.contains("canBeParent=true"))
         assertTrue(q.contains("distributionExplicit=true"))
         assertTrue(q.contains("distributionExternal=false"))
