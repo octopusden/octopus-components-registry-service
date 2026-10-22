@@ -26,6 +26,14 @@ import org.springframework.web.bind.annotation.RequestBody
 import org.springframework.web.bind.annotation.RequestMapping
 import org.springframework.web.bind.annotation.RestController
 
+/** The 409 shapes of `POST /sync`, shared with the deprecated alias. */
+internal const val SYNC_CONFLICT_DESCRIPTION =
+    "Three body shapes, checked in this order. (1) A Sync is already running: the in-flight " +
+        "TeamcityCheckoutLayoutSyncJobResponse (kind \"job\"). (2) Another admin job holds the gate, a running Diff " +
+        "included: MigrationConflictResponse {code, message, activeKind, activeJobId}. (3) diffId is not the last " +
+        "completed Diff, or none has completed: ErrorResponse {errorMessage: \"diff replaced, re-run Diff\", " +
+        "errorCode: \"checkout-layout-diff-stale\"}, nothing written; Diff keeps only that one result (ADR-023 decision 1)."
+
 /**
  * ONB-002: TeamCity -> CRS VCS checkout-layout Diff (read-only) and Sync (writes through the same v4
  * service methods a human PATCH uses). Split out of [AdminControllerV4] because, unlike every
@@ -42,7 +50,7 @@ class TeamcityCheckoutLayoutControllerV4(
     private val currentUserResolver: CurrentUserResolver,
 ) {
     /** 202 on a freshly-started run, or (same-kind attach) the running job's state with 409; a
-     * cross-kind conflict is mapped by [AdminControllerV4.handleCrossKindConflict]. */
+     * cross-kind conflict is mapped by [ControllerExceptionHandler.migrationConflictExceptionHandler]. */
     @PostMapping("/diff")
     @PreAuthorize("@permissionEvaluator.canImport()")
     fun startDiff(): ResponseEntity<TeamcityCheckoutLayoutDiffJobResponse> {
@@ -92,11 +100,7 @@ class TeamcityCheckoutLayoutControllerV4(
         ApiResponse(responseCode = "202", description = "A new Sync job was started"),
         ApiResponse(
             responseCode = "409",
-            description = "Three body shapes, checked in this order. (1) A Sync is already running: the in-flight " +
-                "TeamcityCheckoutLayoutSyncJobResponse (kind \"job\"). (2) Another admin job holds the gate, a running Diff " +
-                "included: MigrationConflictResponse {code, message, activeKind, activeJobId}. (3) diffId is not the last " +
-                "completed Diff, or none has completed: ErrorResponse {errorMessage: \"diff replaced, re-run Diff\", " +
-                "errorCode: \"checkout-layout-diff-stale\"}, nothing written; Diff keeps only that one result (ADR-023 decision 1).",
+            description = SYNC_CONFLICT_DESCRIPTION,
             content = [
                 Content(
                     schema = Schema(

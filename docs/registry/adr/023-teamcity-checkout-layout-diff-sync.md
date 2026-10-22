@@ -36,7 +36,7 @@ selective apply and no repeatable "has this drifted" check.
    `GET /diff/report.{json,html,csv}`, `POST /sync`, `GET /sync/job`, `GET /sync/report.csv`. Deprecated
    aliases under `/teamcity-placement` return the new codes; they are removed once the Portal uses the
    new paths in every environment.
-3. **Derivation** assigns each component exactly one status, checked in this order: `TC_ERROR`,
+3. **Derivation** assigns each configuration row exactly one status, checked in this order: `TC_ERROR`,
    `ROOTS_MISMATCH`, then the derivation outcomes (`NO_CHAIN`, `COMPILE_PAUSED`,
    `OUTSIDE_TEMPLATES`, `UNEXPRESSIBLE`, `CONFLICT`), then `IN_SYNC`, `INVALID`, `MANUAL_EDIT`,
    `RESOLVED`.
@@ -83,7 +83,7 @@ selective apply and no repeatable "has this drifted" check.
    only component-view access.
 7. **Rollout.** QA first: Diff, Sync a few components, Diff again to confirm them `IN_SYNC`.
    Production after the Portal that edits these fields is released there.
-9. **Out of scope:** a scheduled sync, Diff history in the database, writes back to TeamCity,
+8. **Out of scope:** a scheduled sync, Diff history in the database, writes back to TeamCity,
    adding or removing roots, the template parameter of ADR-022 decision 9.
 
 ## Alternatives considered
