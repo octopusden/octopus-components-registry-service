@@ -8,12 +8,11 @@
 #   - an existing V*.sql under db/migration/ (any depth: Flyway scans
 #     recursively) may not be modified, removed, renamed or moved out;
 #   - an added one must be named V<n>__<description>.sql, with an integer
-#     version and no leading zero;
+#     version of at most 18 digits and no leading zero;
 #   - its version must be above every version in the base, since production
 #     does not apply out-of-order migrations;
 #   - no version may appear twice in the tree under test.
-# Repeatable R__ migrations are out of scope: there are none, and Flyway
-# re-applies them on change by design.
+# Repeatable R__ and Java/Kotlin migrations are out of scope: there are none.
 #
 # Usage: check-migrations-append-only.sh <base-sha> <checked-sha>
 #   Run inside the repository; any revision expression works. <checked-sha>
@@ -21,10 +20,13 @@
 #   head, a branch that predates a migration on main would look like it
 #   deletes it.
 set -euo pipefail
+# Byte-wise [a-z]: a locale may otherwise let accented letters through.
+export LC_ALL=C
 
 DIR=components-registry-service-server/src/main/resources/db/migration
 BASE=${1:-}
 CHECKED=${2:-}
+NAME='^V[1-9][0-9]{0,17}__[a-z0-9_]+\.sql$'
 
 for sha in "$BASE" "$CHECKED"; do
   if [ -z "$sha" ] || ! git cat-file -e "$sha^{commit}" 2>/dev/null; then
@@ -35,47 +37,50 @@ done
 echo "base:    $BASE"
 echo "checked: $CHECKED"
 
-# Versioned migrations only: a V*.sql basename at any depth under $DIR.
-versioned() { grep -E "^$DIR/(.*/)?V[^/]*\.sql$" || true; }
-version_of() { local name=${1##*/}; name=${name#V}; echo $((10#${name%%__*})); }
+# NUL-separated plumbing output, so no path is quoted or split. Written to
+# files because a variable cannot hold NUL and a failing git must stop here.
+tmp=$(mktemp -d)
+trap 'rm -rf "$tmp"' EXIT
+git diff-tree -r -z --no-renames --name-status "$BASE" "$CHECKED" -- "$DIR" >"$tmp/changes"
+git ls-tree -r -z --name-only "$BASE" -- "$DIR" >"$tmp/base"
+git ls-tree -r -z --name-only "$CHECKED" -- "$DIR" >"$tmp/checked"
+
+versioned() { [[ $1 == "$DIR"/* && ${1##*/} == V*.sql ]]; }
+# Version of a V<digits>__ name, or nothing when it has none (or too many digits).
+version_of() {
+  local name=${1##*/}
+  if [[ $name =~ ^V([0-9]{1,18})__ ]]; then echo $((10#${BASH_REMATCH[1]})); fi
+}
 
 errors=()
 
-changes=$(git diff --no-renames --name-status "$BASE" "$CHECKED" -- "$DIR")
-while IFS=$'\t' read -r status path; do
-  [ -n "$path" ] || continue
-  [ -n "$(versioned <<<"$path")" ] || continue
+max=0
+while IFS= read -r -d '' path; do
+  versioned "$path" || continue
+  v=$(version_of "$path")
+  if [ -n "$v" ] && [ "$v" -gt "$max" ]; then max=$v; fi
+done <"$tmp/base"
+
+while IFS= read -r -d '' status && IFS= read -r -d '' path; do
+  versioned "$path" || continue
   if [ "$status" != "A" ]; then
     errors+=("existing migration changed ($status): $path")
-  elif [[ ! ${path##*/} =~ ^V[1-9][0-9]*__[a-z0-9_]+\.sql$ ]]; then
+  elif [[ ! ${path##*/} =~ $NAME ]]; then
     errors+=("bad name, expected V<n>__<lowercase_description>.sql: $path")
+  elif [ "$(version_of "$path")" -le "$max" ]; then
+    errors+=("version $(version_of "$path") is not above V$max, the highest on the base: $path")
   fi
-done <<<"$changes"
+done <"$tmp/changes"
 
-base_files=$(git ls-tree -r --name-only "$BASE" -- "$DIR")
-checked_files=$(git ls-tree -r --name-only "$CHECKED" -- "$DIR")
-
-max=0
-while read -r path; do
-  [[ ${path##*/} =~ ^V[0-9]+__ ]] || continue
+: >"$tmp/versions"
+while IFS= read -r -d '' path; do
+  versioned "$path" || continue
   v=$(version_of "$path")
-  if [ "$v" -gt "$max" ]; then max=$v; fi
-done < <(versioned <<<"$base_files")
-
-while IFS=$'\t' read -r status path; do
-  [ "$status" = "A" ] || continue
-  [[ ${path##*/} =~ ^V[1-9][0-9]*__[a-z0-9_]+\.sql$ ]] || continue
-  v=$(version_of "$path")
-  if [ "$v" -le "$max" ]; then errors+=("version $v is not above V$max, the highest on the base: $path"); fi
-done <<<"$changes"
-
-versions=$(while read -r path; do
-  if [[ ${path##*/} =~ ^V[0-9]+__ ]]; then echo "$(version_of "$path") $path"; fi
-done < <(versioned <<<"$checked_files"))
-while read -r v; do
-  [ -n "$v" ] || continue
-  errors+=("version $v appears more than once: $(awk -v v="$v" '$1 == v { printf "%s ", $2 }' <<<"$versions")")
-done < <(awk '{ print $1 }' <<<"$versions" | sort -n | uniq -d)
+  if [ -n "$v" ]; then printf '%s\t%s\n' "$v" "$path" >>"$tmp/versions"; fi
+done <"$tmp/checked"
+while IFS= read -r v; do
+  errors+=("version $v appears more than once: $(awk -F'\t' -v v="$v" '$1 == v { printf "%s ", $2 }' "$tmp/versions")")
+done < <(cut -f1 "$tmp/versions" | sort -n | uniq -d)
 
 if [ ${#errors[@]} -eq 0 ]; then
   echo "ok — migrations are append-only, well named and in order."

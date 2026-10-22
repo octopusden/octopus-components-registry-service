@@ -100,14 +100,14 @@ jobs:
   migrations-append-only:
     name: migrations/append-only
     runs-on: ubuntu-latest
+    timeout-minutes: 5
     permissions:
       contents: read
     steps:
-      # Full history: the base commit is not an ancestor a shallow merge-ref
-      # checkout is guaranteed to contain.
+      # Depth 2: the merge commit and its parents, which is all the check reads.
       - uses: actions/checkout@v4
         with:
-          fetch-depth: 0
+          fetch-depth: 2
           persist-credentials: false
       - name: Self-test the check
         run: scripts/ci/test-check-migrations-append-only.sh
