@@ -13,6 +13,7 @@ import org.octopusden.octopus.components.registry.server.service.JobState
 import org.octopusden.octopus.components.registry.server.support.adminJwt
 import org.octopusden.octopus.components.registry.server.support.viewerJwt
 import org.octopusden.octopus.components.registry.server.teamcity.checkoutlayout.CheckoutLayoutDiffResult
+import org.octopusden.octopus.components.registry.server.teamcity.checkoutlayout.CheckoutLayoutDiffStaleException
 import org.octopusden.octopus.components.registry.server.teamcity.checkoutlayout.CheckoutLayoutSyncResult
 import org.octopusden.octopus.components.registry.server.teamcity.checkoutlayout.StartCheckoutLayoutDiffResult
 import org.octopusden.octopus.components.registry.server.teamcity.checkoutlayout.StartCheckoutLayoutSyncResult
@@ -30,6 +31,7 @@ import org.springframework.test.web.servlet.MockMvc
 import org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get
 import org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post
 import org.springframework.test.web.servlet.result.MockMvcResultMatchers.content
+import org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath
 import org.springframework.test.web.servlet.result.MockMvcResultMatchers.status
 import java.nio.file.Path
 import java.nio.file.Paths
@@ -258,6 +260,23 @@ class TeamcityCheckoutLayoutControllerV4SecurityTest {
             .perform(get("/rest/api/4/admin/teamcity-placement/diff/report.json").with(viewerJwt()))
             .andExpect(status().isOk)
             .andExpect(content().contentTypeCompatibleWith(MediaType.APPLICATION_JSON))
+    }
+
+    @Test
+    @DisplayName("deprecated path: admin JWT POST /sync with a replaced Diff -> 409, the message a released Portal matches")
+    fun legacyPostSyncStaleDiffReturns409() {
+        `when`(syncJobService.startAsync(eq("alice"), eq(emptyList()), eq("OLD"), any()))
+            .thenThrow(CheckoutLayoutDiffStaleException())
+
+        mvc
+            .perform(
+                post("/rest/api/4/admin/teamcity-placement/sync")
+                    .with(adminJwt())
+                    .contentType(MediaType.APPLICATION_JSON)
+                    .content("""{"diffId":"OLD","componentIds":[]}"""),
+            ).andExpect(status().isConflict)
+            .andExpect(jsonPath("$.errorMessage").value("diff replaced, re-run Diff"))
+            .andExpect(jsonPath("$.errorCode").value(CheckoutLayoutDiffStaleException.ERROR_CODE))
     }
 
     companion object {
