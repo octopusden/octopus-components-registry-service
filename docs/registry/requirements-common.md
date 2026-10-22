@@ -3725,7 +3725,7 @@ releases may be started without a person.
 - The flag is not part of the Groovy DSL and is not exposed on v1-v3.
 - A TeamCity resync started by an admin turns the flag on when the release configuration of every linked release
   line (based on `teamcity.sync.cd-release-template-id`, not paused) has an enabled finish-build
-  trigger, unless the flag has ever been changed (an `UPDATE` audit row on it): a person's "off"
+  trigger, unless the flag has ever been changed (an `UPDATE` or `RENAME` audit row on it): a person's "off"
   stays off. One audit row per change, counted in `auto_release_enabled`. Never turns it off,
   never changes TeamCity, and ignores the field-config visibility. The weekly cron does this only
   with `teamcity.sync.auto-release-on-cron=true` (default `false`). The names of the components it

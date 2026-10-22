@@ -54,14 +54,15 @@ interface AuditLogRepository :
     ): List<AuditLogEntity>
 
     /**
-     * SYS-104: whether any UPDATE of component [entityId] changed `autoRelease`, so resync keeps a person's choice.
-     * Both snapshots must carry the key: rows from before the flag existed have it in neither.
+     * SYS-104: whether any edit of component [entityId] changed `autoRelease`, so resync keeps a person's choice.
+     * An edit that also renames is one RENAME row. Both snapshots must carry the key: rows from before the flag
+     * existed have it in neither.
      */
     @Query(
         value = """
         SELECT EXISTS (
             SELECT 1 FROM audit_log
-            WHERE entity_type = 'Component' AND entity_id = :entityId AND action = 'UPDATE'
+            WHERE entity_type = 'Component' AND entity_id = :entityId AND action IN ('UPDATE', 'RENAME')
               AND jsonb_exists(CAST(old_value AS jsonb), 'autoRelease')
               AND jsonb_exists(CAST(new_value AS jsonb), 'autoRelease')
               AND CAST(old_value AS jsonb) -> 'autoRelease' <> CAST(new_value AS jsonb) -> 'autoRelease'
