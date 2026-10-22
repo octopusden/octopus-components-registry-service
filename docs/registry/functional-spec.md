@@ -112,7 +112,7 @@ shape/format rules on both `POST /rest/api/4/components` and
 These format checks are skipped for a field whose admin field-config visibility is
 `HIDDEN`. On `PATCH`, the hidden value is also stripped before persistence.
 
-#### VCS entry placement and Build Working Directory (create + update + field overrides)
+#### VCS entry checkout layout and Build Working Directory (create + update + field overrides)
 
 Each VCS entry of a configuration row (base or `vcs.settings` marker) may carry `sourcePath` (the
 repository directory that belongs to the component; absent = whole repository) and
@@ -164,10 +164,10 @@ The legacy v2 VCS settings carry `sourcePath` / `checkoutDirectory` per root
 supplies the version's entries, all omitted when empty, so a component without them serves the same
 v2 JSON as before. The Groovy DSL mode and the as-code export do not carry them.
 
-**Deriving these fields from an existing TeamCity chain (ONB-002).** `rest/api/4/admin/teamcity-placement`
+**Deriving these fields from an existing TeamCity chain (ONB-002).** `rest/api/4/admin/teamcity-checkout-layout`
 offers a read-only Diff that compares a component's linked TeamCity project(s)' compile build
 chains against these fields, and a Sync that writes the resolved rows through this same validated
-path (never direct SQL) — see [technical-design.md §6.10](technical-design.md#610-teamcity-placement-diffsync-onb-002).
+path (never direct SQL) — see [technical-design.md §6.10](technical-design.md#610-teamcity-checkout-layout-diffsync-onb-002).
 
 #### Intentional legacy-validation relaxations
 
@@ -504,7 +504,7 @@ A template is a `kind: template` entry of `components-registry.component-profile
 | Duplicate name on **create** | 400 | `{ "errorMessage": "name: a component with name '...' already exists" }` (field-prefixed → Portal routes inline) |
 | Duplicate name on **rename** (PATCH name) | 409 | `{ "errorMessage": "Component with name '...' already exists" }` (`ComponentNameConflictException`) |
 | Duplicate `displayName` (create/update) | 400 | `{ "errorMessage": "displayName: a component with display name '...' already exists" }` |
-| Invalid VCS entry placement or Build Working Directory (§1.4) | 400 | `{ "errorMessage": "vcsEntries[1].checkoutDirectory: required: VCS root 1 (app) is already checked out at the checkout root, and only one VCS root can be. Set a Checkout Directory for this VCS root, a folder name such as 'plugins', or give one to VCS root 1." }` or `buildWorkingDirectory: …` (`fieldOverrides[<j>].` prefix inside a PATCH `fieldOverrides` row) |
+| Invalid VCS entry checkout layout or Build Working Directory (§1.4) | 400 | `{ "errorMessage": "vcsEntries[1].checkoutDirectory: required: VCS root 1 (app) is already checked out at the checkout root, and only one VCS root can be. Set a Checkout Directory for this VCS root, a folder name such as 'plugins', or give one to VCS root 1." }` or `buildWorkingDirectory: …` (`fieldOverrides[<j>].` prefix inside a PATCH `fieldOverrides` row) |
 | Optimistic lock conflict | 409 | `{ "error": "Component was modified by another user" }` |
 | Validation failure | 400 | `{ "errors": [{ "field": "name", "message": "must not be blank" }] }` |
 | Unauthorized | 401 | Standard Spring Security response |

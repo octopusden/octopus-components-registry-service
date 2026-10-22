@@ -635,6 +635,257 @@
         ],
         "type" : "object"
       },
+      "CheckoutLayoutComponentSyncOutcome" : {
+        "properties" : {
+          "componentId" : {
+            "format" : "uuid",
+            "type" : "string"
+          },
+          "componentKey" : {
+            "type" : "string"
+          },
+          "rows" : {
+            "items" : {
+              "$ref" : "#/components/schemas/CheckoutLayoutRowSyncOutcome"
+            },
+            "type" : "array"
+          }
+        },
+        "required" : [
+          "componentId",
+          "componentKey",
+          "rows"
+        ],
+        "type" : "object"
+      },
+      "CheckoutLayoutDiffResult" : {
+        "properties" : {
+          "diffId" : {
+            "type" : "string"
+          },
+          "generatedAt" : {
+            "format" : "date-time",
+            "type" : "string"
+          },
+          "rows" : {
+            "items" : {
+              "$ref" : "#/components/schemas/CheckoutLayoutRowDiff"
+            },
+            "type" : "array"
+          }
+        },
+        "required" : [
+          "generatedAt",
+          "rows"
+        ],
+        "type" : "object"
+      },
+      "CheckoutLayoutEntryDiff" : {
+        "properties" : {
+          "branch" : {
+            "type" : "string"
+          },
+          "currentCheckoutDirectory" : {
+            "type" : "string"
+          },
+          "currentSourcePath" : {
+            "type" : "string"
+          },
+          "derivedCheckoutDirectory" : {
+            "type" : "string"
+          },
+          "derivedSourcePath" : {
+            "type" : "string"
+          },
+          "hotfixBranch" : {
+            "type" : "string"
+          },
+          "name" : {
+            "type" : "string"
+          },
+          "repositoryType" : {
+            "type" : "string"
+          },
+          "tag" : {
+            "type" : "string"
+          },
+          "vcsPath" : {
+            "type" : "string"
+          }
+        },
+        "required" : [
+          "name",
+          "vcsPath"
+        ],
+        "type" : "object"
+      },
+      "CheckoutLayoutFieldChange" : {
+        "properties" : {
+          "after" : {
+            "type" : "string"
+          },
+          "before" : {
+            "type" : "string"
+          },
+          "componentKey" : {
+            "type" : "string"
+          },
+          "field" : {
+            "type" : "string"
+          },
+          "root" : {
+            "type" : "string"
+          },
+          "rowLabel" : {
+            "type" : "string"
+          }
+        },
+        "required" : [
+          "componentKey",
+          "field",
+          "root",
+          "rowLabel"
+        ],
+        "type" : "object"
+      },
+      "CheckoutLayoutRowDiff" : {
+        "properties" : {
+          "componentId" : {
+            "format" : "uuid",
+            "type" : "string"
+          },
+          "componentKey" : {
+            "type" : "string"
+          },
+          "configurationRowId" : {
+            "format" : "uuid",
+            "type" : "string"
+          },
+          "currentBuildWorkingDirectory" : {
+            "type" : "string"
+          },
+          "derivedBuildWorkingDirectory" : {
+            "type" : "string"
+          },
+          "entries" : {
+            "items" : {
+              "$ref" : "#/components/schemas/CheckoutLayoutEntryDiff"
+            },
+            "type" : "array"
+          },
+          "notes" : {
+            "items" : {
+              "type" : "string"
+            },
+            "type" : "array"
+          },
+          "rowLabel" : {
+            "type" : "string"
+          },
+          "sourceBuildTypeIds" : {
+            "items" : {
+              "type" : "string"
+            },
+            "type" : "array"
+          },
+          "status" : {
+            "enum" : [
+              "RESOLVED",
+              "CONFLICT",
+              "UNEXPRESSIBLE",
+              "NO_CHAIN",
+              "OUTSIDE_TEMPLATES",
+              "COMPILE_PAUSED",
+              "MANUAL_EDIT",
+              "IN_SYNC",
+              "INVALID",
+              "TC_ERROR",
+              "ROOTS_MISMATCH"
+            ],
+            "type" : "string"
+          },
+          "versionRange" : {
+            "type" : "string"
+          }
+        },
+        "required" : [
+          "componentId",
+          "componentKey",
+          "configurationRowId",
+          "entries",
+          "notes",
+          "rowLabel",
+          "sourceBuildTypeIds",
+          "status",
+          "versionRange"
+        ],
+        "type" : "object"
+      },
+      "CheckoutLayoutRowSyncOutcome" : {
+        "properties" : {
+          "configurationRowId" : {
+            "format" : "uuid",
+            "type" : "string"
+          },
+          "outcome" : {
+            "type" : "string"
+          },
+          "rowLabel" : {
+            "type" : "string"
+          }
+        },
+        "required" : [
+          "configurationRowId",
+          "outcome",
+          "rowLabel"
+        ],
+        "type" : "object"
+      },
+      "CheckoutLayoutSyncResult" : {
+        "properties" : {
+          "applied" : {
+            "format" : "int32",
+            "type" : "integer"
+          },
+          "components" : {
+            "items" : {
+              "$ref" : "#/components/schemas/CheckoutLayoutComponentSyncOutcome"
+            },
+            "type" : "array"
+          },
+          "failed" : {
+            "format" : "int32",
+            "type" : "integer"
+          },
+          "fieldChanges" : {
+            "items" : {
+              "$ref" : "#/components/schemas/CheckoutLayoutFieldChange"
+            },
+            "type" : "array"
+          },
+          "requested" : {
+            "format" : "int32",
+            "type" : "integer"
+          },
+          "skipped" : {
+            "format" : "int32",
+            "type" : "integer"
+          },
+          "triggeredBy" : {
+            "type" : "string"
+          }
+        },
+        "required" : [
+          "applied",
+          "components",
+          "failed",
+          "fieldChanges",
+          "requested",
+          "skipped",
+          "triggeredBy"
+        ],
+        "type" : "object"
+      },
       "Classification" : {
         "properties" : {
           "explicit" : {
@@ -3094,257 +3345,6 @@
         },
         "type" : "object"
       },
-      "PlacementComponentSyncOutcome" : {
-        "properties" : {
-          "componentId" : {
-            "format" : "uuid",
-            "type" : "string"
-          },
-          "componentKey" : {
-            "type" : "string"
-          },
-          "rows" : {
-            "items" : {
-              "$ref" : "#/components/schemas/PlacementRowSyncOutcome"
-            },
-            "type" : "array"
-          }
-        },
-        "required" : [
-          "componentId",
-          "componentKey",
-          "rows"
-        ],
-        "type" : "object"
-      },
-      "PlacementDiffResult" : {
-        "properties" : {
-          "diffId" : {
-            "type" : "string"
-          },
-          "generatedAt" : {
-            "format" : "date-time",
-            "type" : "string"
-          },
-          "rows" : {
-            "items" : {
-              "$ref" : "#/components/schemas/PlacementRowDiff"
-            },
-            "type" : "array"
-          }
-        },
-        "required" : [
-          "generatedAt",
-          "rows"
-        ],
-        "type" : "object"
-      },
-      "PlacementEntryDiff" : {
-        "properties" : {
-          "branch" : {
-            "type" : "string"
-          },
-          "currentCheckoutDirectory" : {
-            "type" : "string"
-          },
-          "currentSourcePath" : {
-            "type" : "string"
-          },
-          "derivedCheckoutDirectory" : {
-            "type" : "string"
-          },
-          "derivedSourcePath" : {
-            "type" : "string"
-          },
-          "hotfixBranch" : {
-            "type" : "string"
-          },
-          "name" : {
-            "type" : "string"
-          },
-          "repositoryType" : {
-            "type" : "string"
-          },
-          "tag" : {
-            "type" : "string"
-          },
-          "vcsPath" : {
-            "type" : "string"
-          }
-        },
-        "required" : [
-          "name",
-          "vcsPath"
-        ],
-        "type" : "object"
-      },
-      "PlacementFieldChange" : {
-        "properties" : {
-          "after" : {
-            "type" : "string"
-          },
-          "before" : {
-            "type" : "string"
-          },
-          "componentKey" : {
-            "type" : "string"
-          },
-          "field" : {
-            "type" : "string"
-          },
-          "root" : {
-            "type" : "string"
-          },
-          "rowLabel" : {
-            "type" : "string"
-          }
-        },
-        "required" : [
-          "componentKey",
-          "field",
-          "root",
-          "rowLabel"
-        ],
-        "type" : "object"
-      },
-      "PlacementRowDiff" : {
-        "properties" : {
-          "componentId" : {
-            "format" : "uuid",
-            "type" : "string"
-          },
-          "componentKey" : {
-            "type" : "string"
-          },
-          "configurationRowId" : {
-            "format" : "uuid",
-            "type" : "string"
-          },
-          "currentBuildWorkingDirectory" : {
-            "type" : "string"
-          },
-          "derivedBuildWorkingDirectory" : {
-            "type" : "string"
-          },
-          "entries" : {
-            "items" : {
-              "$ref" : "#/components/schemas/PlacementEntryDiff"
-            },
-            "type" : "array"
-          },
-          "notes" : {
-            "items" : {
-              "type" : "string"
-            },
-            "type" : "array"
-          },
-          "rowLabel" : {
-            "type" : "string"
-          },
-          "sourceBuildTypeIds" : {
-            "items" : {
-              "type" : "string"
-            },
-            "type" : "array"
-          },
-          "status" : {
-            "enum" : [
-              "RESOLVED",
-              "CONFLICT",
-              "UNEXPRESSIBLE",
-              "NO_CHAIN",
-              "OUTSIDE_TEMPLATES",
-              "COMPILE_PAUSED",
-              "MANUAL_EDIT",
-              "IN_SYNC",
-              "INVALID",
-              "TC_ERROR",
-              "ROOTS_MISMATCH"
-            ],
-            "type" : "string"
-          },
-          "versionRange" : {
-            "type" : "string"
-          }
-        },
-        "required" : [
-          "componentId",
-          "componentKey",
-          "configurationRowId",
-          "entries",
-          "notes",
-          "rowLabel",
-          "sourceBuildTypeIds",
-          "status",
-          "versionRange"
-        ],
-        "type" : "object"
-      },
-      "PlacementRowSyncOutcome" : {
-        "properties" : {
-          "configurationRowId" : {
-            "format" : "uuid",
-            "type" : "string"
-          },
-          "outcome" : {
-            "type" : "string"
-          },
-          "rowLabel" : {
-            "type" : "string"
-          }
-        },
-        "required" : [
-          "configurationRowId",
-          "outcome",
-          "rowLabel"
-        ],
-        "type" : "object"
-      },
-      "PlacementSyncResult" : {
-        "properties" : {
-          "applied" : {
-            "format" : "int32",
-            "type" : "integer"
-          },
-          "components" : {
-            "items" : {
-              "$ref" : "#/components/schemas/PlacementComponentSyncOutcome"
-            },
-            "type" : "array"
-          },
-          "failed" : {
-            "format" : "int32",
-            "type" : "integer"
-          },
-          "fieldChanges" : {
-            "items" : {
-              "$ref" : "#/components/schemas/PlacementFieldChange"
-            },
-            "type" : "array"
-          },
-          "requested" : {
-            "format" : "int32",
-            "type" : "integer"
-          },
-          "skipped" : {
-            "format" : "int32",
-            "type" : "integer"
-          },
-          "triggeredBy" : {
-            "type" : "string"
-          }
-        },
-        "required" : [
-          "applied",
-          "components",
-          "failed",
-          "fieldChanges",
-          "requested",
-          "skipped",
-          "triggeredBy"
-        ],
-        "type" : "object"
-      },
       "RMSSweepStatusResponse" : {
         "properties" : {
           "componentsWithData" : {
@@ -3678,7 +3678,7 @@
         ],
         "type" : "object"
       },
-      "TeamcityPlacementDiffJobResponse" : {
+      "TeamcityCheckoutLayoutDiffJobResponse" : {
         "properties" : {
           "errorMessage" : {
             "type" : "string"
@@ -3718,7 +3718,7 @@
         ],
         "type" : "object"
       },
-      "TeamcityPlacementSyncJobResponse" : {
+      "TeamcityCheckoutLayoutSyncJobResponse" : {
         "properties" : {
           "errorMessage" : {
             "type" : "string"
@@ -3734,7 +3734,7 @@
             "type" : "string"
           },
           "result" : {
-            "$ref" : "#/components/schemas/PlacementSyncResult"
+            "$ref" : "#/components/schemas/CheckoutLayoutSyncResult"
           },
           "startedAt" : {
             "format" : "date-time",
@@ -3757,7 +3757,7 @@
         ],
         "type" : "object"
       },
-      "TeamcityPlacementSyncRequest" : {
+      "TeamcityCheckoutLayoutSyncRequest" : {
         "properties" : {
           "componentIds" : {
             "items" : {
@@ -7330,19 +7330,19 @@
         ]
       }
     },
-    "/rest/api/4/admin/teamcity-placement/diff" : {
+    "/rest/api/4/admin/teamcity-checkout-layout/diff" : {
       "post" : {
         "operationId" : "startDiff",
         "responses" : {
-          "200" : {
+          "202" : {
             "content" : {
               "*/*" : {
                 "schema" : {
-                  "$ref" : "#/components/schemas/TeamcityPlacementDiffJobResponse"
+                  "$ref" : "#/components/schemas/TeamcityCheckoutLayoutDiffJobResponse"
                 }
               }
             },
-            "description" : "OK"
+            "description" : "A new Diff job was started"
           },
           "400" : {
             "content" : {
@@ -7368,11 +7368,18 @@
             "content" : {
               "*/*" : {
                 "schema" : {
-                  "$ref" : "#/components/schemas/ErrorResponse"
+                  "oneOf" : [
+                    {
+                      "$ref" : "#/components/schemas/MigrationConflictResponse"
+                    },
+                    {
+                      "$ref" : "#/components/schemas/TeamcityCheckoutLayoutDiffJobResponse"
+                    }
+                  ]
                 }
               }
             },
-            "description" : "Conflict"
+            "description" : "Two body shapes. (1) A Diff is already running: the in-flight TeamcityCheckoutLayoutDiffJobResponse. (2) Another admin job holds the gate: MigrationConflictResponse {code, message, activeKind, activeJobId}."
           },
           "413" : {
             "content" : {
@@ -7436,11 +7443,11 @@
           }
         },
         "tags" : [
-          "teamcity-placement-controller-v-4"
+          "teamcity-checkout-layout-controller-v-4"
         ]
       }
     },
-    "/rest/api/4/admin/teamcity-placement/diff/job" : {
+    "/rest/api/4/admin/teamcity-checkout-layout/diff/job" : {
       "get" : {
         "operationId" : "getDiffJob",
         "responses" : {
@@ -7448,7 +7455,7 @@
             "content" : {
               "*/*" : {
                 "schema" : {
-                  "$ref" : "#/components/schemas/TeamcityPlacementDiffJobResponse"
+                  "$ref" : "#/components/schemas/TeamcityCheckoutLayoutDiffJobResponse"
                 }
               }
             },
@@ -7546,11 +7553,11 @@
           }
         },
         "tags" : [
-          "teamcity-placement-controller-v-4"
+          "teamcity-checkout-layout-controller-v-4"
         ]
       }
     },
-    "/rest/api/4/admin/teamcity-placement/diff/report.csv" : {
+    "/rest/api/4/admin/teamcity-checkout-layout/diff/report.csv" : {
       "get" : {
         "operationId" : "getReportCsv",
         "responses" : {
@@ -7656,11 +7663,11 @@
           }
         },
         "tags" : [
-          "teamcity-placement-controller-v-4"
+          "teamcity-checkout-layout-controller-v-4"
         ]
       }
     },
-    "/rest/api/4/admin/teamcity-placement/diff/report.html" : {
+    "/rest/api/4/admin/teamcity-checkout-layout/diff/report.html" : {
       "get" : {
         "operationId" : "getReportHtml",
         "responses" : {
@@ -7766,11 +7773,11 @@
           }
         },
         "tags" : [
-          "teamcity-placement-controller-v-4"
+          "teamcity-checkout-layout-controller-v-4"
         ]
       }
     },
-    "/rest/api/4/admin/teamcity-placement/diff/report.json" : {
+    "/rest/api/4/admin/teamcity-checkout-layout/diff/report.json" : {
       "get" : {
         "operationId" : "getReportJson",
         "responses" : {
@@ -7778,7 +7785,7 @@
             "content" : {
               "application/json" : {
                 "schema" : {
-                  "$ref" : "#/components/schemas/PlacementDiffResult"
+                  "$ref" : "#/components/schemas/CheckoutLayoutDiffResult"
                 }
               }
             },
@@ -7876,18 +7883,18 @@
           }
         },
         "tags" : [
-          "teamcity-placement-controller-v-4"
+          "teamcity-checkout-layout-controller-v-4"
         ]
       }
     },
-    "/rest/api/4/admin/teamcity-placement/sync" : {
+    "/rest/api/4/admin/teamcity-checkout-layout/sync" : {
       "post" : {
         "operationId" : "startSync",
         "requestBody" : {
           "content" : {
             "application/json" : {
               "schema" : {
-                "$ref" : "#/components/schemas/TeamcityPlacementSyncRequest"
+                "$ref" : "#/components/schemas/TeamcityCheckoutLayoutSyncRequest"
               }
             }
           },
@@ -7898,7 +7905,7 @@
             "content" : {
               "*/*" : {
                 "schema" : {
-                  "$ref" : "#/components/schemas/TeamcityPlacementSyncJobResponse"
+                  "$ref" : "#/components/schemas/TeamcityCheckoutLayoutSyncJobResponse"
                 }
               }
             },
@@ -7933,7 +7940,7 @@
                       "$ref" : "#/components/schemas/MigrationConflictResponse"
                     },
                     {
-                      "$ref" : "#/components/schemas/TeamcityPlacementSyncJobResponse"
+                      "$ref" : "#/components/schemas/TeamcityCheckoutLayoutSyncJobResponse"
                     },
                     {
                       "$ref" : "#/components/schemas/ErrorResponse"
@@ -7942,7 +7949,7 @@
                 }
               }
             },
-            "description" : "Three body shapes, checked in this order. (1) A Sync is already running: the in-flight TeamcityPlacementSyncJobResponse (kind \"job\"). (2) Another admin job holds the gate, a running Diff included: MigrationConflictResponse {code, message, activeKind, activeJobId}. (3) diffId is not the last completed Diff, or none has completed: ErrorResponse {errorMessage: \"diff replaced, re-run Diff\", errorCode: \"placement-diff-stale\"}, nothing written; Diff keeps only that one result (ADR-002 decision 1)."
+            "description" : "Three body shapes, checked in this order. (1) A Sync is already running: the in-flight TeamcityCheckoutLayoutSyncJobResponse (kind \"job\"). (2) Another admin job holds the gate, a running Diff included: MigrationConflictResponse {code, message, activeKind, activeJobId}. (3) diffId is not the last completed Diff, or none has completed: ErrorResponse {errorMessage: \"diff replaced, re-run Diff\", errorCode: \"checkout-layout-diff-stale\"}, nothing written; Diff keeps only that one result (ADR-023 decision 1)."
           },
           "413" : {
             "content" : {
@@ -8006,11 +8013,11 @@
           }
         },
         "tags" : [
-          "teamcity-placement-controller-v-4"
+          "teamcity-checkout-layout-controller-v-4"
         ]
       }
     },
-    "/rest/api/4/admin/teamcity-placement/sync/job" : {
+    "/rest/api/4/admin/teamcity-checkout-layout/sync/job" : {
       "get" : {
         "operationId" : "getSyncJob",
         "responses" : {
@@ -8018,7 +8025,7 @@
             "content" : {
               "*/*" : {
                 "schema" : {
-                  "$ref" : "#/components/schemas/TeamcityPlacementSyncJobResponse"
+                  "$ref" : "#/components/schemas/TeamcityCheckoutLayoutSyncJobResponse"
                 }
               }
             },
@@ -8116,11 +8123,11 @@
           }
         },
         "tags" : [
-          "teamcity-placement-controller-v-4"
+          "teamcity-checkout-layout-controller-v-4"
         ]
       }
     },
-    "/rest/api/4/admin/teamcity-placement/sync/report.csv" : {
+    "/rest/api/4/admin/teamcity-checkout-layout/sync/report.csv" : {
       "get" : {
         "operationId" : "getSyncReportCsv",
         "responses" : {
@@ -8226,7 +8233,930 @@
           }
         },
         "tags" : [
-          "teamcity-placement-controller-v-4"
+          "teamcity-checkout-layout-controller-v-4"
+        ]
+      }
+    },
+    "/rest/api/4/admin/teamcity-placement/diff" : {
+      "post" : {
+        "deprecated" : true,
+        "operationId" : "startDiffLegacy",
+        "responses" : {
+          "202" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/TeamcityCheckoutLayoutDiffJobResponse"
+                }
+              }
+            },
+            "description" : "A new Diff job was started"
+          },
+          "400" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description" : "Bad Request"
+          },
+          "404" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description" : "Not Found"
+          },
+          "409" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "oneOf" : [
+                    {
+                      "$ref" : "#/components/schemas/MigrationConflictResponse"
+                    },
+                    {
+                      "$ref" : "#/components/schemas/TeamcityCheckoutLayoutDiffJobResponse"
+                    }
+                  ]
+                }
+              }
+            },
+            "description" : "Two body shapes. (1) A Diff is already running: the in-flight TeamcityCheckoutLayoutDiffJobResponse. (2) Another admin job holds the gate: MigrationConflictResponse {code, message, activeKind, activeJobId}."
+          },
+          "413" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description" : "Payload Too Large"
+          },
+          "425" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description" : "Too Early"
+          },
+          "500" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description" : "Internal Server Error"
+          },
+          "501" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description" : "Not Implemented"
+          },
+          "502" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description" : "Bad Gateway"
+          },
+          "503" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description" : "Service Unavailable"
+          }
+        },
+        "summary" : "Deprecated: use the same path under /rest/api/4/admin/teamcity-checkout-layout",
+        "tags" : [
+          "teamcity-placement-legacy-controller-v-4"
+        ]
+      }
+    },
+    "/rest/api/4/admin/teamcity-placement/diff/job" : {
+      "get" : {
+        "deprecated" : true,
+        "operationId" : "getDiffJobLegacy",
+        "responses" : {
+          "200" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/TeamcityCheckoutLayoutDiffJobResponse"
+                }
+              }
+            },
+            "description" : "OK"
+          },
+          "400" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description" : "Bad Request"
+          },
+          "404" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description" : "Not Found"
+          },
+          "409" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description" : "Conflict"
+          },
+          "413" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description" : "Payload Too Large"
+          },
+          "425" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description" : "Too Early"
+          },
+          "500" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description" : "Internal Server Error"
+          },
+          "501" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description" : "Not Implemented"
+          },
+          "502" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description" : "Bad Gateway"
+          },
+          "503" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description" : "Service Unavailable"
+          }
+        },
+        "summary" : "Deprecated: use the same path under /rest/api/4/admin/teamcity-checkout-layout",
+        "tags" : [
+          "teamcity-placement-legacy-controller-v-4"
+        ]
+      }
+    },
+    "/rest/api/4/admin/teamcity-placement/diff/report.csv" : {
+      "get" : {
+        "deprecated" : true,
+        "operationId" : "getReportCsvLegacy",
+        "responses" : {
+          "200" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "type" : "string"
+                }
+              }
+            },
+            "description" : "OK"
+          },
+          "400" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description" : "Bad Request"
+          },
+          "404" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description" : "Not Found"
+          },
+          "409" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description" : "Conflict"
+          },
+          "413" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description" : "Payload Too Large"
+          },
+          "425" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description" : "Too Early"
+          },
+          "500" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description" : "Internal Server Error"
+          },
+          "501" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description" : "Not Implemented"
+          },
+          "502" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description" : "Bad Gateway"
+          },
+          "503" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description" : "Service Unavailable"
+          }
+        },
+        "summary" : "Deprecated: use the same path under /rest/api/4/admin/teamcity-checkout-layout",
+        "tags" : [
+          "teamcity-placement-legacy-controller-v-4"
+        ]
+      }
+    },
+    "/rest/api/4/admin/teamcity-placement/diff/report.html" : {
+      "get" : {
+        "deprecated" : true,
+        "operationId" : "getReportHtmlLegacy",
+        "responses" : {
+          "200" : {
+            "content" : {
+              "text/html" : {
+                "schema" : {
+                  "type" : "string"
+                }
+              }
+            },
+            "description" : "OK"
+          },
+          "400" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description" : "Bad Request"
+          },
+          "404" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description" : "Not Found"
+          },
+          "409" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description" : "Conflict"
+          },
+          "413" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description" : "Payload Too Large"
+          },
+          "425" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description" : "Too Early"
+          },
+          "500" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description" : "Internal Server Error"
+          },
+          "501" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description" : "Not Implemented"
+          },
+          "502" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description" : "Bad Gateway"
+          },
+          "503" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description" : "Service Unavailable"
+          }
+        },
+        "summary" : "Deprecated: use the same path under /rest/api/4/admin/teamcity-checkout-layout",
+        "tags" : [
+          "teamcity-placement-legacy-controller-v-4"
+        ]
+      }
+    },
+    "/rest/api/4/admin/teamcity-placement/diff/report.json" : {
+      "get" : {
+        "deprecated" : true,
+        "operationId" : "getReportJsonLegacy",
+        "responses" : {
+          "200" : {
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/CheckoutLayoutDiffResult"
+                }
+              }
+            },
+            "description" : "OK"
+          },
+          "400" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description" : "Bad Request"
+          },
+          "404" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description" : "Not Found"
+          },
+          "409" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description" : "Conflict"
+          },
+          "413" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description" : "Payload Too Large"
+          },
+          "425" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description" : "Too Early"
+          },
+          "500" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description" : "Internal Server Error"
+          },
+          "501" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description" : "Not Implemented"
+          },
+          "502" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description" : "Bad Gateway"
+          },
+          "503" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description" : "Service Unavailable"
+          }
+        },
+        "summary" : "Deprecated: use the same path under /rest/api/4/admin/teamcity-checkout-layout",
+        "tags" : [
+          "teamcity-placement-legacy-controller-v-4"
+        ]
+      }
+    },
+    "/rest/api/4/admin/teamcity-placement/sync" : {
+      "post" : {
+        "deprecated" : true,
+        "operationId" : "startSyncLegacy",
+        "requestBody" : {
+          "content" : {
+            "application/json" : {
+              "schema" : {
+                "$ref" : "#/components/schemas/TeamcityCheckoutLayoutSyncRequest"
+              }
+            }
+          },
+          "required" : true
+        },
+        "responses" : {
+          "202" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/TeamcityCheckoutLayoutSyncJobResponse"
+                }
+              }
+            },
+            "description" : "A new Sync job was started"
+          },
+          "400" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description" : "Bad Request"
+          },
+          "404" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description" : "Not Found"
+          },
+          "409" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "oneOf" : [
+                    {
+                      "$ref" : "#/components/schemas/MigrationConflictResponse"
+                    },
+                    {
+                      "$ref" : "#/components/schemas/TeamcityCheckoutLayoutSyncJobResponse"
+                    },
+                    {
+                      "$ref" : "#/components/schemas/ErrorResponse"
+                    }
+                  ]
+                }
+              }
+            },
+            "description" : "Three body shapes, checked in this order. (1) A Sync is already running: the in-flight TeamcityCheckoutLayoutSyncJobResponse (kind \"job\"). (2) Another admin job holds the gate, a running Diff included: MigrationConflictResponse {code, message, activeKind, activeJobId}. (3) diffId is not the last completed Diff, or none has completed: ErrorResponse {errorMessage: \"diff replaced, re-run Diff\", errorCode: \"checkout-layout-diff-stale\"}, nothing written; Diff keeps only that one result (ADR-023 decision 1)."
+          },
+          "413" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description" : "Payload Too Large"
+          },
+          "425" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description" : "Too Early"
+          },
+          "500" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description" : "Internal Server Error"
+          },
+          "501" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description" : "Not Implemented"
+          },
+          "502" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description" : "Bad Gateway"
+          },
+          "503" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description" : "Service Unavailable"
+          }
+        },
+        "summary" : "Deprecated: use the same path under /rest/api/4/admin/teamcity-checkout-layout",
+        "tags" : [
+          "teamcity-placement-legacy-controller-v-4"
+        ]
+      }
+    },
+    "/rest/api/4/admin/teamcity-placement/sync/job" : {
+      "get" : {
+        "deprecated" : true,
+        "operationId" : "getSyncJobLegacy",
+        "responses" : {
+          "200" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/TeamcityCheckoutLayoutSyncJobResponse"
+                }
+              }
+            },
+            "description" : "OK"
+          },
+          "400" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description" : "Bad Request"
+          },
+          "404" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description" : "Not Found"
+          },
+          "409" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description" : "Conflict"
+          },
+          "413" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description" : "Payload Too Large"
+          },
+          "425" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description" : "Too Early"
+          },
+          "500" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description" : "Internal Server Error"
+          },
+          "501" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description" : "Not Implemented"
+          },
+          "502" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description" : "Bad Gateway"
+          },
+          "503" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description" : "Service Unavailable"
+          }
+        },
+        "summary" : "Deprecated: use the same path under /rest/api/4/admin/teamcity-checkout-layout",
+        "tags" : [
+          "teamcity-placement-legacy-controller-v-4"
+        ]
+      }
+    },
+    "/rest/api/4/admin/teamcity-placement/sync/report.csv" : {
+      "get" : {
+        "deprecated" : true,
+        "operationId" : "getSyncReportCsvLegacy",
+        "responses" : {
+          "200" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "type" : "string"
+                }
+              }
+            },
+            "description" : "OK"
+          },
+          "400" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description" : "Bad Request"
+          },
+          "404" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description" : "Not Found"
+          },
+          "409" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description" : "Conflict"
+          },
+          "413" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description" : "Payload Too Large"
+          },
+          "425" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description" : "Too Early"
+          },
+          "500" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description" : "Internal Server Error"
+          },
+          "501" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description" : "Not Implemented"
+          },
+          "502" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description" : "Bad Gateway"
+          },
+          "503" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description" : "Service Unavailable"
+          }
+        },
+        "summary" : "Deprecated: use the same path under /rest/api/4/admin/teamcity-checkout-layout",
+        "tags" : [
+          "teamcity-placement-legacy-controller-v-4"
         ]
       }
     },

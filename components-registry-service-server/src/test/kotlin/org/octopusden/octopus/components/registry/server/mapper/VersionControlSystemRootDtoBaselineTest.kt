@@ -88,8 +88,8 @@ class VersionControlSystemRootDtoBaselineTest {
     }
 
     @Test
-    @DisplayName("ONB-001: placement properties are appended after the six existing ones and omitted from JSON when null")
-    fun `placement properties appended`() {
+    @DisplayName("ONB-001: checkout layout properties are appended after the six existing ones and omitted from JSON when null")
+    fun `checkout layout properties appended`() {
         val placed = dto.copy(sourcePath = "data", checkoutDirectory = "feature")
         val (name, path) = placed
 

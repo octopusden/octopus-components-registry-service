@@ -53,7 +53,7 @@ import java.util.concurrent.TimeUnit
  * dropped and new ones carry no id, so the DB assigns fresh ids through `orphanRemoval` + generated
  * UUIDs); `sortOrder` is the request list index.
  *
- * ONB-001 placement rules (`vcsEntries[<i>].<field>: ` errors) are driven here too; the two-unnamed-entries
+ * ONB-001 checkout layout rules (`vcsEntries[<i>].<field>: ` errors) are driven here too; the two-unnamed-entries
  * baseline is superseded by the rule that at most one entry of a row goes without a `checkoutDirectory`.
  */
 @Timeout(30, unit = TimeUnit.SECONDS)
@@ -239,7 +239,7 @@ class ReplaceVcsEntriesBaselineTest {
 
     @Test
     @DisplayName("ONB-001: checkoutDirectory and sourcePath are at most 255 characters (VARCHAR(255))")
-    fun `placement length bound`() {
+    fun `checkout layout length bound`() {
         val long = "a".repeat(256)
         assertRejected(
             "vcsEntries[1].checkoutDirectory: is 256 characters long; a Checkout Directory can have at most 255",
@@ -274,8 +274,8 @@ class ReplaceVcsEntriesBaselineTest {
     }
 
     @Test
-    @DisplayName("ONB-001: valid placement is accepted: one repository split by sourcePath, nested sourcePath, dotted directory")
-    fun `valid placement accepted`() {
+    @DisplayName("ONB-001: valid checkout layout is accepted: one repository split by sourcePath, nested sourcePath, dotted directory")
+    fun `valid checkout layout accepted`() {
         val config = baseRow()
         write(
             config,
@@ -347,8 +347,8 @@ class ReplaceVcsEntriesBaselineTest {
     ): String = assertThrows(InvocationTargetException::class.java) { write(config, *requests) }.targetException.message!!
 
     @Test
-    @DisplayName("ONB-001: placement errors name VCS roots 1-based with their repository and say what to do")
-    fun `user-facing placement messages`() {
+    @DisplayName("ONB-001: checkout layout errors name VCS roots 1-based with their repository and say what to do")
+    fun `user-facing checkout layout messages`() {
         val tds = "ssh://git@example.test/proj/tdsecure.git"
         val plugins = "ssh://git@example.test/proj/tdsecure-plugins.git"
         assertEquals(

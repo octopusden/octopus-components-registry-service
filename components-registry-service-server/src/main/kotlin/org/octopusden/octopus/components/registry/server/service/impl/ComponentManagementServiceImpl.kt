@@ -106,7 +106,7 @@ import org.octopusden.octopus.components.registry.server.util.JavaVersionCompara
 import org.octopusden.octopus.components.registry.server.util.JiraRowView
 import org.octopusden.octopus.components.registry.server.util.MavenGavCollision
 import org.octopusden.octopus.components.registry.server.util.MavenVersionComparator
-import org.octopusden.octopus.components.registry.server.util.VcsPlacementValidator
+import org.octopusden.octopus.components.registry.server.util.VcsCheckoutLayoutValidator
 import org.octopusden.octopus.components.registry.server.util.VersionRangePartition
 import org.octopusden.octopus.components.registry.server.util.computeEffectiveJiraPairs
 import org.octopusden.octopus.escrow.config.ConfigHelper
@@ -2701,7 +2701,7 @@ class ComponentManagementServiceImpl(
         request.buildWorkingDirectory?.let { config.buildWorkingDirectory = it.trim().ifEmpty { null } }
         request.vcsEntries?.let { replaceVcsEntries(config, it) }
             ?: request.buildWorkingDirectory?.let {
-                VcsPlacementValidator.validateBuildWorkingDirectory(config.vcsEntries, config.buildWorkingDirectory)
+                VcsCheckoutLayoutValidator.validateBuildWorkingDirectory(config.vcsEntries, config.buildWorkingDirectory)
             }
         request.mavenArtifacts?.let { replaceMavenArtifacts(config, it) }
         request.fileUrlArtifacts?.let { replaceFileUrlArtifacts(config, it) }
@@ -2805,7 +2805,7 @@ class ComponentManagementServiceImpl(
         patch.buildWorkingDirectory?.let { config.buildWorkingDirectory = it.trim().ifEmpty { null } }
         patch.vcsEntries?.let { replaceVcsEntries(config, it) }
             ?: patch.buildWorkingDirectory?.let {
-                VcsPlacementValidator.validateBuildWorkingDirectory(config.vcsEntries, config.buildWorkingDirectory)
+                VcsCheckoutLayoutValidator.validateBuildWorkingDirectory(config.vcsEntries, config.buildWorkingDirectory)
             }
         patch.mavenArtifacts?.let { replaceMavenArtifacts(config, it) }
         patch.fileUrlArtifacts?.let { replaceFileUrlArtifacts(config, it) }
@@ -2828,10 +2828,10 @@ class ComponentManagementServiceImpl(
         entries: List<VcsEntryRequest>,
     ) {
         entries.forEach { req -> req.repositoryType?.let { validateRepositoryType(it) } }
-        // Name derivation (ADR-001 decision 4) is shared with the TeamCity placement Diff job's
-        // INVALID check — see VcsPlacementValidator.deriveNames' kdoc for the rule.
+        // Name derivation (ADR-022 decision 4) is shared with the TeamCity checkout layout Diff job's
+        // INVALID check — see VcsCheckoutLayoutValidator.deriveNames' kdoc for the rule.
         val checkoutDirectories = entries.map { it.checkoutDirectory?.trim()?.ifEmpty { null } }
-        val names = VcsPlacementValidator.deriveNames(
+        val names = VcsCheckoutLayoutValidator.deriveNames(
             config.vcsEntries.toList(),
             entries.mapIndexed { index, req -> Triple(req.vcsPath, req.repositoryType, checkoutDirectories[index]) },
         )
@@ -2850,8 +2850,8 @@ class ComponentManagementServiceImpl(
                     checkoutDirectory = checkoutDirectories[index],
                 )
             }
-        VcsPlacementValidator.validateVcsPlacement(replacement)
-        VcsPlacementValidator.validateBuildWorkingDirectory(replacement, config.buildWorkingDirectory)
+        VcsCheckoutLayoutValidator.validateVcsCheckoutLayout(replacement)
+        VcsCheckoutLayoutValidator.validateBuildWorkingDirectory(replacement, config.buildWorkingDirectory)
         config.vcsEntries.clear()
         config.vcsEntries.addAll(replacement)
     }

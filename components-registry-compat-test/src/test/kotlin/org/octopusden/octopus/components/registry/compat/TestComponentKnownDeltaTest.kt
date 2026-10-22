@@ -13,7 +13,7 @@ import org.octopusden.octopus.components.registry.core.dto.ComponentV2
 /**
  * SYS-099: every v1/v2/v3 component payload gains `testComponent` (false, or true for the
  * components V11 flagged); the baseline has no key. In both modes the added key is a suppressed
- * known delta on both layers; a dropped key is not. Same matching rules as [VcsPlacementKnownDeltaTest].
+ * known delta on both layers; a dropped key is not. Same matching rules as [VcsCheckoutLayoutKnownDeltaTest].
  */
 @Tag("unit")
 class TestComponentKnownDeltaTest {

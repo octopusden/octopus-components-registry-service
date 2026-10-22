@@ -105,7 +105,7 @@ class PermissionEvaluator(
     fun canImport(): Boolean = hasPermission(IMPORT_DATA)
 
     /**
-     * ONB-002: the TeamCity placement Diff's report (GET, read-only) is gated by plain component
+     * ONB-002: the TeamCity checkout layout Diff's report (GET, read-only) is gated by plain component
      * read access, not [IMPORT_DATA] — running the Diff (and Sync entirely) still requires
      * [canImport]. Same permission [canEditComponent] itself requires before its own per-component check.
      */

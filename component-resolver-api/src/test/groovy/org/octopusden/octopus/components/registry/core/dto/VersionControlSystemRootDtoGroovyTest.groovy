@@ -4,7 +4,7 @@ import groovy.transform.CompileStatic
 
 /**
  * ONB-001: Groovy consumers keep calling the six-argument constructor of the v2 DTO after the
- * placement properties are appended (statically compiled, so a missing constructor fails the build).
+ * checkout layout properties are appended (statically compiled, so a missing constructor fails the build).
  */
 @CompileStatic
 class VersionControlSystemRootDtoGroovyTest extends GroovyTestCase {
