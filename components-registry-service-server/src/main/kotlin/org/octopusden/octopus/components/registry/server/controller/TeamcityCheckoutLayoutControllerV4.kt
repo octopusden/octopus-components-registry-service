@@ -26,6 +26,11 @@ import org.springframework.web.bind.annotation.RequestBody
 import org.springframework.web.bind.annotation.RequestMapping
 import org.springframework.web.bind.annotation.RestController
 
+/** The 409 shapes of `POST /diff`, shared with the deprecated alias. */
+internal const val DIFF_CONFLICT_DESCRIPTION =
+    "Two body shapes. (1) A Diff is already running: the in-flight TeamcityCheckoutLayoutDiffJobResponse. " +
+        "(2) Another admin job holds the gate: MigrationConflictResponse {code, message, activeKind, activeJobId}."
+
 /** The 409 shapes of `POST /sync`, shared with the deprecated alias. */
 internal const val SYNC_CONFLICT_DESCRIPTION =
     "Three body shapes, checked in this order. (1) A Sync is already running: the in-flight " +
@@ -52,6 +57,18 @@ class TeamcityCheckoutLayoutControllerV4(
     /** 202 on a freshly-started run, or (same-kind attach) the running job's state with 409; a
      * cross-kind conflict is mapped by [ControllerExceptionHandler.migrationConflictExceptionHandler]. */
     @PostMapping("/diff")
+    @ApiResponses(
+        ApiResponse(responseCode = "202", description = "A new Diff job was started"),
+        ApiResponse(
+            responseCode = "409",
+            description = DIFF_CONFLICT_DESCRIPTION,
+            content = [
+                Content(
+                    schema = Schema(oneOf = [MigrationConflictResponse::class, TeamcityCheckoutLayoutDiffJobResponse::class]),
+                ),
+            ],
+        ),
+    )
     @PreAuthorize("@permissionEvaluator.canImport()")
     fun startDiff(): ResponseEntity<TeamcityCheckoutLayoutDiffJobResponse> {
         val outcome = diffJobService.startAsync(currentUserResolver.currentUsername())

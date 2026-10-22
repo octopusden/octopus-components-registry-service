@@ -7334,7 +7334,7 @@
       "post" : {
         "operationId" : "startDiff",
         "responses" : {
-          "200" : {
+          "202" : {
             "content" : {
               "*/*" : {
                 "schema" : {
@@ -7342,7 +7342,7 @@
                 }
               }
             },
-            "description" : "OK"
+            "description" : "A new Diff job was started"
           },
           "400" : {
             "content" : {
@@ -7368,11 +7368,18 @@
             "content" : {
               "*/*" : {
                 "schema" : {
-                  "$ref" : "#/components/schemas/ErrorResponse"
+                  "oneOf" : [
+                    {
+                      "$ref" : "#/components/schemas/MigrationConflictResponse"
+                    },
+                    {
+                      "$ref" : "#/components/schemas/TeamcityCheckoutLayoutDiffJobResponse"
+                    }
+                  ]
                 }
               }
             },
-            "description" : "Conflict"
+            "description" : "Two body shapes. (1) A Diff is already running: the in-flight TeamcityCheckoutLayoutDiffJobResponse. (2) Another admin job holds the gate: MigrationConflictResponse {code, message, activeKind, activeJobId}."
           },
           "413" : {
             "content" : {
@@ -8235,7 +8242,7 @@
         "deprecated" : true,
         "operationId" : "startDiffLegacy",
         "responses" : {
-          "200" : {
+          "202" : {
             "content" : {
               "*/*" : {
                 "schema" : {
@@ -8243,7 +8250,7 @@
                 }
               }
             },
-            "description" : "OK"
+            "description" : "A new Diff job was started"
           },
           "400" : {
             "content" : {
@@ -8269,11 +8276,18 @@
             "content" : {
               "*/*" : {
                 "schema" : {
-                  "$ref" : "#/components/schemas/ErrorResponse"
+                  "oneOf" : [
+                    {
+                      "$ref" : "#/components/schemas/MigrationConflictResponse"
+                    },
+                    {
+                      "$ref" : "#/components/schemas/TeamcityCheckoutLayoutDiffJobResponse"
+                    }
+                  ]
                 }
               }
             },
-            "description" : "Conflict"
+            "description" : "Two body shapes. (1) A Diff is already running: the in-flight TeamcityCheckoutLayoutDiffJobResponse. (2) Another admin job holds the gate: MigrationConflictResponse {code, message, activeKind, activeJobId}."
           },
           "413" : {
             "content" : {

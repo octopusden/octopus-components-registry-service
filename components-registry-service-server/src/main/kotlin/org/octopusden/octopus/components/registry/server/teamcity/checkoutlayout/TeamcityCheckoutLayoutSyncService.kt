@@ -177,7 +177,7 @@ class TeamcityCheckoutLayoutSyncService(
                 ),
                 // The fixed provenance tag CheckoutLayoutEditHistory keys on, plus THIS Sync run's own
                 // id — so an audit row it writes can be told apart from any other Sync run's, and
-                // a rollback (technical-design.md §6.8) can select exactly this run's writes.
+                // a rollback (technical-design.md §6.10) can select exactly this run's writes.
                 changeComment = "${CheckoutLayoutEditHistory.SYNC_CHANGE_COMMENT_PREFIX} (job $jobId)",
             ),
         )

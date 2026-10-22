@@ -35,6 +35,18 @@ class TeamcityPlacementLegacyControllerV4(
 ) {
     @Deprecated(DEPRECATED)
     @Operation(deprecated = true, summary = DEPRECATED, operationId = "startDiffLegacy")
+    @ApiResponses(
+        ApiResponse(responseCode = "202", description = "A new Diff job was started"),
+        ApiResponse(
+            responseCode = "409",
+            description = DIFF_CONFLICT_DESCRIPTION,
+            content = [
+                Content(
+                    schema = Schema(oneOf = [MigrationConflictResponse::class, TeamcityCheckoutLayoutDiffJobResponse::class]),
+                ),
+            ],
+        ),
+    )
     @PostMapping("/diff")
     fun startDiff(): ResponseEntity<TeamcityCheckoutLayoutDiffJobResponse> = current.startDiff()
 

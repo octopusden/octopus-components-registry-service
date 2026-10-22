@@ -134,7 +134,7 @@ class CheckoutLayoutEditHistory(
     companion object {
         /** Prefix `TeamcityCheckoutLayoutSyncService` writes into `audit_log.change_comment` on every
          * field it writes — the provenance marker above, and the rollback trace (technical-design.md
-         * §6.8): every row a Sync job wrote carries its job id right after this prefix. */
+         * §6.10): every row a Sync job wrote carries its job id right after this prefix. */
         const val SYNC_CHANGE_COMMENT_PREFIX = "sync from TeamCity"
 
         /** The REST write endpoints call this on every user-supplied `changeComment`, so the

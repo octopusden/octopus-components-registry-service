@@ -103,7 +103,7 @@ object CheckoutLayoutReportRenderer {
 
     /** Rollback trace (ADR-023 decision 5): one row per field a Sync run
      * actually wrote, before and after -- what an operator rolling back that run reads to restore
-     * each field's prior value (technical-design.md §6.8, "Rolling back a Sync"). */
+     * each field's prior value (technical-design.md §6.10, "Rolling back a Sync"). */
     fun toSyncReportCsv(result: CheckoutLayoutSyncResult): String {
         val header = listOf("componentKey", "rowLabel", "root", "field", "before", "after")
         val lines = mutableListOf(header.joinToString(",") { csvCell(it) })
