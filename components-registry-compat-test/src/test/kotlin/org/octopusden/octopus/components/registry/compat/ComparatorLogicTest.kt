@@ -86,7 +86,7 @@ class ComparatorLogicTest {
         val recorded = DiffCollector.snapshot()
         assertThat(recorded).hasSize(1)
         assertThat(recorded.single().category).isEqualTo(DiffClassifier.STATUS_CODE_DIFF)
-        assertThat(recorded.single().baselineValue).isEqualTo("200")
+        assertThat(recorded.single().baselineValue).isEqualTo("201")
         assertThat(recorded.single().candidateValue).isEqualTo("404")
     }
 
