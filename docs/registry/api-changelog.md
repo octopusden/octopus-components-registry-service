@@ -19,8 +19,9 @@ refresh it with `./gradlew :components-registry-service-server:generateOpenApiDo
 ## Unreleased
 
 - **`autoRelease` component flag (SYS-104).** v4 create/update/summary/detail field (default `false`)
-  and `?autoRelease=` list filter; not in the DSL or v1-v3. The TeamCity resync turns it on (never off)
-  when every linked release line has an enabled finish-build trigger and nobody changed the flag; `TeamcitySyncResult.auto_release_enabled`
+  and `?autoRelease=` list filter; not in the DSL or v1-v3. An admin-started TeamCity resync turns it on
+  (never off) when every linked release line has an enabled finish-build trigger and nobody changed the
+  flag (the weekly cron only with `teamcity.sync.auto-release-on-cron`); `TeamcitySyncResult.auto_release_enabled`
   counts these.
 - **`involves` / `involvesRoles` list filters added (SYS-101).** `GET /components?involves=<u>` returns
   components where any listed user is the owner OR a release manager OR a security champion;

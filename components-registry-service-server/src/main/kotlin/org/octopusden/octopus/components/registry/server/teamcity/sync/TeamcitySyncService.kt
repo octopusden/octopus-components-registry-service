@@ -39,7 +39,8 @@ import java.util.UUID
  *
  * Auto release (SYS-104): when a kept project's release configuration has an enabled
  * finish-build trigger, the component's `autoRelease` is turned on, with an audit row. Never off.
- * `changedBy` is `"system"` for the cron, or the admin's username for a triggered run.
+ * `changedBy` is `"system"` for the cron, or the admin's username for a triggered run. The cron
+ * does this only with `teamcity.sync.auto-release-on-cron`.
  *
  * Error handling: a fetcher failure propagates out of [resync] (502/500 for the admin
  * endpoint; logged-and-swallowed by the scheduler). A per-write JPA failure rolls back
@@ -107,6 +108,10 @@ class TeamcitySyncService(
         // declared T? signature.
         val autoReleaseCandidates = mutableListOf<Pair<UUID, String>>()
         val result = transactionTemplate.execute { _ -> applyMatches(components, matches, changedBy, autoReleaseCandidates) }!!
+        if (changedBy == CurrentUserResolver.SYSTEM_USER && !teamcityProperties.sync.autoReleaseOnCron) {
+            log.info { "TC sync: autoRelease left alone on the cron (teamcity.sync.auto-release-on-cron=false)" }
+            return result
+        }
         return enableAutoRelease(result, autoReleaseCandidates, changedBy)
     }
 
@@ -208,28 +213,28 @@ class TeamcitySyncService(
         changedBy: String,
     ): TeamcitySyncResult {
         val errors = mutableListOf<String>()
-        var enabled = 0
+        val enabled = mutableListOf<String>()
         for ((componentId, projectId) in candidates) {
             try {
-                if (transactionTemplate.execute { _ -> turnOnAutoRelease(componentId, projectId, changedBy) } == true) enabled++
+                transactionTemplate.execute { _ -> turnOnAutoRelease(componentId, projectId, changedBy) }?.let { enabled += it }
             } catch (e: Exception) {
                 val msg = "Failed to turn autoRelease on for component id=$componentId: ${e.message}"
                 log.error(e) { msg }
                 errors.add(msg)
             }
         }
-        log.info { "TC sync: autoRelease turned on for $enabled component(s)" }
-        return result.copy(autoReleaseEnabled = enabled, errors = result.errors + errors)
+        log.info { "TC sync: autoRelease turned on for ${enabled.size} component(s): ${enabled.joinToString()}" }
+        return result.copy(autoReleaseEnabled = enabled.size, errors = result.errors + errors)
     }
 
     private fun turnOnAutoRelease(
         componentId: UUID,
         projectId: String,
         changedBy: String,
-    ): Boolean {
+    ): String? {
         // Re-read: the loop's entities were loaded outside this transaction.
-        val component = componentRepository.findById(componentId).orElse(null) ?: return false
-        if (component.autoRelease || autoReleaseEverChanged(componentId)) return false
+        val component = componentRepository.findById(componentId).orElse(null) ?: return null
+        if (component.autoRelease || auditLogRepository.existsAutoReleaseChange(componentId.toString())) return null
         component.autoRelease = true
         applicationEventPublisher.publishEvent(
             AuditEvent(
@@ -242,17 +247,8 @@ class TeamcitySyncService(
                 changeComment = "TeamCity resync: release configuration in $projectId has a finish-build trigger",
             ),
         )
-        return true
+        return component.componentKey
     }
-
-    private fun autoReleaseEverChanged(componentId: UUID): Boolean =
-        auditLogRepository
-            .findByEntityTypeAndEntityIdAndActionInOrderByChangedAtDesc("Component", componentId.toString(), listOf("UPDATE"))
-            .any { row ->
-                val old = row.oldValue.orEmpty()
-                val new = row.newValue.orEmpty()
-                "autoRelease" in old && "autoRelease" in new && old["autoRelease"] != new["autoRelease"]
-            }
 
     /** A resolved winner for one PROJECT_VERSION line, with whether a tie-break was needed. */
     private data class Pick(
