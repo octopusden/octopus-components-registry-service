@@ -166,6 +166,7 @@ Identity + fields that never vary per version range.
 | `client_code` | VARCHAR(255) | nullable | |
 | `archived` | BOOLEAN | NOT NULL DEFAULT false | |
 | `test_component` | BOOLEAN | NOT NULL DEFAULT false | Synthetic (test-stand) component, SYS-099. `V11__` sets it on components labelled `test-component`. A non-test component may not reference a test component as parent or doc component (service-layer rule). |
+| `auto_release` | BOOLEAN | NOT NULL DEFAULT false | Releases may be started by release automation once a candidate passes its gates (SYS-104); DB/v4 only. |
 | `solution` | BOOLEAN | nullable | |
 | `parent_component_id` | UUID | FK → components(id) | DSL `parentComponent = "X"` reference between peers |
 | `can_be_parent` | BOOLEAN | NOT NULL DEFAULT false | True when referenced as a `parentComponent` by ≥1 other component — i.e. eligible to be selected as a parent in the Portal picker. **NOT the same as an aggregator:** being a `parentComponent` target is a flat peer reference, whereas an aggregator owns a `components { }` block (§4.3); the two are independent. Seeded by import (Pass 2 sets `true` for DSL-referenced parents, never `false`) and editable via v4. Service invariants: a chosen parent must be `can_be_parent`; a `can_be_parent` component may not have a parent (single-level — a parent cannot have a parent, matching the DSL validator); `can_be_parent` may not be disabled while children still reference it. Grandfathered parent-of-parent rows are tolerated on no-op updates. The `?canBeParent=true` list filter backs the Portal parent picker. |
@@ -346,7 +347,7 @@ SINGLE-VCS is "1 entry with `name = NULL`"; MULTI-VCS is "N entries with names".
 | `source_path` | VARCHAR(255), nullable | Repository directory that belongs to the component; NULL = whole repository (`V8__`) |
 | `checkout_directory` | VARCHAR(255), nullable | Directory the entry is checked out to; NULL = the checkout root, which at most one entry of a row may use (v4 write path) (`V8__`) |
 
-VCS placement (`V8__`): the migration adds `source_path` / `checkout_directory` and sets
+VCS checkout layout (`V8__`): the migration adds `source_path` / `checkout_directory` and sets
 `checkout_directory = name` on every entry with `sort_order > 0`; the DSL import applies the same
 rule to the rows it creates. (The migration's SQL comment still says "NULL on the primary entry";
 applied migrations are immutable, and since revision 3 any entry may have a checkout directory, so
@@ -354,7 +355,7 @@ this table is authoritative.) Names are copied verbatim, so a row whose later na
 not distinct checkout directories stays readable and fails its next v4 VCS write with `400`. On v4
 writes `name` is derived: an entry's `checkout_directory`, else the stored name of the row's previous
 entry on the same repository, else `main`. The row's Build Working Directory is
-`component_configurations.build_working_directory` (`V9__`). Placement rules: functional-spec §1.4.
+`component_configurations.build_working_directory` (`V9__`). Checkout layout rules: functional-spec §1.4.
 
 `vcs.type` (GIT/EXTERNAL/null) computed at API layer:
 - `components.vcs_external_registry IS NOT NULL` → `EXTERNAL`

@@ -11,7 +11,7 @@
 - **Input**: Optional filters, ANDed when combined.
   - **Main:** `search` (case-insensitive LIKE on name/displayName), `system` (multi-value, OR), `owner` (multi-value, OR on `componentOwner`, `SYS-035`), `involves` + `involvesRoles` (owner OR release manager OR security champion for any listed user, `SYS-101`), `buildSystem` (multi-value, OR on the BASE row), `labels` (multi-value, AND), `archived`, `testComponent` (SYS-099; without it test components are included), `productType`.
   - **Extended — multi-value (OR, exact `IN`; back the Portal "extended search" multi-select dropdowns, `SYS-046`):** `clientCode`, `jiraProjectKey` (BASE row), `parentComponentName` (the parent's component key — children of any listed parent), `groupKey` (the owning group), `javaVersion` (BASE row — same scalar-on-BASE-row shape as `buildSystem`). CSV or repeatable params, normalised like the Main multi-value filters; the BASE-row join uses `distinct`. (The first four were substring/exact single-value before `SYS-046`.)
-  - **Extended — single-value:** `solution`, `jiraTechnical`, `distributionExplicit`, `distributionExternal` (booleans; `=false` matches only rows explicitly set false — rows where the column is NULL are excluded — `SYS-045`), `vcsPath` (LIKE on a BASE VCS entry), `productionBranch` (LIKE on a BASE VCS entry's `branch`), `canBeParent`. The VCS-entry joins use `distinct` so a multi-entry component is counted once.
+  - **Extended — single-value:** `solution`, `autoRelease` (SYS-104), `jiraTechnical`, `distributionExplicit`, `distributionExternal` (booleans; `=false` matches only rows explicitly set false — rows where the column is NULL are excluded — `SYS-045`), `vcsPath` (LIKE on a BASE VCS entry), `productionBranch` (LIKE on a BASE VCS entry's `branch`), `canBeParent`. The VCS-entry joins use `distinct` so a multi-entry component is counted once.
   - **Meta option lists** (populate the filter-bar pickers; each returns sorted distinct values **in use**, gated by `ACCESS_COMPONENTS`): `/meta/owners`, `/meta/labels`, `/meta/systems`, `/meta/client-codes`, `/meta/jira-project-keys`, `/meta/parent-component-names` (only keys actually referenced as a parent), `/meta/group-keys` (only groups with ≥1 member), `/meta/release-managers`, `/meta/security-champions` (separate lists for the `releaseManager` / `securityChampion` filters). The full master-dictionary variants `/meta/labels/dictionary` and `/meta/systems/dictionary` back the editor multi-selects.
   - **Domain option lists** (populate editor dropdowns, gated by `ACCESS_COMPONENTS`): `/meta/build-systems`, `/meta/repository-types`, `/meta/escrow-generations` (enum-sourced), plus `/meta/java-versions` and `/meta/maven-versions` — the allowed build-tool versions sourced from `components-registry.build-tool-versions.{java,maven}` (application.yml default, per-installation override via service-config), returned numeric-sorted.
   - **Editors** (read-only "who can edit" projection, gated by `ACCESS_COMPONENTS`): `GET /rest/api/4/components/{idOrName}/editors` → `{ componentOwner, releaseManagers[], securityChampions[], manager }` — `manager` (`SYS-063`) is the owner's manager per employee-service, null when unresolvable. Informational only — administrators (`EDIT_ANY_COMPONENT`) may also edit any component but are, unlike the manager, not enumerated (an open-ended realm-role, not per-component data).
@@ -112,7 +112,7 @@ shape/format rules on both `POST /rest/api/4/components` and
 These format checks are skipped for a field whose admin field-config visibility is
 `HIDDEN`. On `PATCH`, the hidden value is also stripped before persistence.
 
-#### VCS entry placement and Build Working Directory (create + update + field overrides)
+#### VCS entry checkout layout and Build Working Directory (create + update + field overrides)
 
 Each VCS entry of a configuration row (base or `vcs.settings` marker) may carry `sourcePath` (the
 repository directory that belongs to the component; absent = whole repository) and
@@ -164,10 +164,10 @@ The legacy v2 VCS settings carry `sourcePath` / `checkoutDirectory` per root
 supplies the version's entries, all omitted when empty, so a component without them serves the same
 v2 JSON as before. The Groovy DSL mode and the as-code export do not carry them.
 
-**Deriving these fields from an existing TeamCity chain (ONB-002).** `rest/api/4/admin/teamcity-placement`
+**Deriving these fields from an existing TeamCity chain (ONB-002).** `rest/api/4/admin/teamcity-checkout-layout`
 offers a read-only Diff that compares a component's linked TeamCity project(s)' compile build
 chains against these fields, and a Sync that writes the resolved rows through this same validated
-path (never direct SQL) — see [technical-design.md §6.10](technical-design.md#610-teamcity-placement-diffsync-onb-002).
+path (never direct SQL) — see [technical-design.md §6.10](technical-design.md#610-teamcity-checkout-layout-diffsync-onb-002).
 
 #### Intentional legacy-validation relaxations
 
@@ -504,7 +504,7 @@ A template is a `kind: template` entry of `components-registry.component-profile
 | Duplicate name on **create** | 400 | `{ "errorMessage": "name: a component with name '...' already exists" }` (field-prefixed → Portal routes inline) |
 | Duplicate name on **rename** (PATCH name) | 409 | `{ "errorMessage": "Component with name '...' already exists" }` (`ComponentNameConflictException`) |
 | Duplicate `displayName` (create/update) | 400 | `{ "errorMessage": "displayName: a component with display name '...' already exists" }` |
-| Invalid VCS entry placement or Build Working Directory (§1.4) | 400 | `{ "errorMessage": "vcsEntries[1].checkoutDirectory: required: VCS root 1 (app) is already checked out at the checkout root, and only one VCS root can be. Set a Checkout Directory for this VCS root, a folder name such as 'plugins', or give one to VCS root 1." }` or `buildWorkingDirectory: …` (`fieldOverrides[<j>].` prefix inside a PATCH `fieldOverrides` row) |
+| Invalid VCS entry checkout layout or Build Working Directory (§1.4) | 400 | `{ "errorMessage": "vcsEntries[1].checkoutDirectory: required: VCS root 1 (app) is already checked out at the checkout root, and only one VCS root can be. Set a Checkout Directory for this VCS root, a folder name such as 'plugins', or give one to VCS root 1." }` or `buildWorkingDirectory: …` (`fieldOverrides[<j>].` prefix inside a PATCH `fieldOverrides` row) |
 | Optimistic lock conflict | 409 | `{ "error": "Component was modified by another user" }` |
 | Validation failure | 400 | `{ "errors": [{ "field": "name", "message": "must not be blank" }] }` |
 | Unauthorized | 401 | Standard Spring Security response |

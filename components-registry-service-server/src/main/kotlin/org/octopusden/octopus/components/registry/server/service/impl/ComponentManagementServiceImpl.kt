@@ -106,7 +106,7 @@ import org.octopusden.octopus.components.registry.server.util.JavaVersionCompara
 import org.octopusden.octopus.components.registry.server.util.JiraRowView
 import org.octopusden.octopus.components.registry.server.util.MavenGavCollision
 import org.octopusden.octopus.components.registry.server.util.MavenVersionComparator
-import org.octopusden.octopus.components.registry.server.util.VcsPlacementValidator
+import org.octopusden.octopus.components.registry.server.util.VcsCheckoutLayoutValidator
 import org.octopusden.octopus.components.registry.server.util.VersionRangePartition
 import org.octopusden.octopus.components.registry.server.util.computeEffectiveJiraPairs
 import org.octopusden.octopus.escrow.config.ConfigHelper
@@ -349,6 +349,7 @@ class ComponentManagementServiceImpl(
                 clientCode = stripIfHidden("component.clientCode", request.clientCode),
                 archived = request.archived,
                 testComponent = request.testComponent,
+                autoRelease = request.autoRelease && !fieldConfigService.isHidden(AUTO_RELEASE_FIELD),
                 solution = stripIfHidden("component.solution", request.solution),
                 parentComponent = parent,
                 // R1: group = migration-derived aggregator membership only; never assigned via API.
@@ -737,6 +738,7 @@ class ComponentManagementServiceImpl(
         request.solution?.let { if (!fieldConfigService.isHidden("component.solution")) entity.solution = it }
         request.archived?.let { entity.archived = it }
         request.testComponent?.let { entity.testComponent = it }
+        request.autoRelease?.let { if (!fieldConfigService.isHidden(AUTO_RELEASE_FIELD)) entity.autoRelease = it }
         val flaggedNow = !oldTestComponent && entity.testComponent
         val unflaggedNow = oldTestComponent && !entity.testComponent
         // Flagging, or renaming a flagged component, must keep the key inside the configured patterns.
@@ -2437,6 +2439,7 @@ class ComponentManagementServiceImpl(
         request.productType?.let { enforceFieldEditable("component.productType", it, entity.productType) }
         request.clientCode?.let { enforceFieldEditable("component.clientCode", it, entity.clientCode) }
         request.solution?.let { enforceFieldEditable("component.solution", it, entity.solution) }
+        request.autoRelease?.let { enforceFieldEditable(AUTO_RELEASE_FIELD, it, entity.autoRelease) }
         request.copyright?.let { enforceFieldEditable("component.copyright", it, entity.copyright) }
         request.releasesInDefaultBranch?.let {
             enforceFieldEditable("component.releasesInDefaultBranch", it, entity.releasesInDefaultBranch)
@@ -2521,6 +2524,7 @@ class ComponentManagementServiceImpl(
         request.productType?.let { enforceFieldEditable("component.productType", it, null) }
         request.clientCode?.let { enforceFieldEditable("component.clientCode", it, null) }
         request.solution?.let { enforceFieldEditable("component.solution", it, null) }
+        if (request.autoRelease) enforceFieldEditable(AUTO_RELEASE_FIELD, true, null)
         request.copyright?.let { enforceFieldEditable("component.copyright", it, null) }
         request.releasesInDefaultBranch?.let { enforceFieldEditable("component.releasesInDefaultBranch", it, null) }
         request.jiraDisplayName?.let { enforceFieldEditable("component.jiraDisplayName", it, null) }
@@ -2697,7 +2701,7 @@ class ComponentManagementServiceImpl(
         request.buildWorkingDirectory?.let { config.buildWorkingDirectory = it.trim().ifEmpty { null } }
         request.vcsEntries?.let { replaceVcsEntries(config, it) }
             ?: request.buildWorkingDirectory?.let {
-                VcsPlacementValidator.validateBuildWorkingDirectory(config.vcsEntries, config.buildWorkingDirectory)
+                VcsCheckoutLayoutValidator.validateBuildWorkingDirectory(config.vcsEntries, config.buildWorkingDirectory)
             }
         request.mavenArtifacts?.let { replaceMavenArtifacts(config, it) }
         request.fileUrlArtifacts?.let { replaceFileUrlArtifacts(config, it) }
@@ -2801,7 +2805,7 @@ class ComponentManagementServiceImpl(
         patch.buildWorkingDirectory?.let { config.buildWorkingDirectory = it.trim().ifEmpty { null } }
         patch.vcsEntries?.let { replaceVcsEntries(config, it) }
             ?: patch.buildWorkingDirectory?.let {
-                VcsPlacementValidator.validateBuildWorkingDirectory(config.vcsEntries, config.buildWorkingDirectory)
+                VcsCheckoutLayoutValidator.validateBuildWorkingDirectory(config.vcsEntries, config.buildWorkingDirectory)
             }
         patch.mavenArtifacts?.let { replaceMavenArtifacts(config, it) }
         patch.fileUrlArtifacts?.let { replaceFileUrlArtifacts(config, it) }
@@ -2824,10 +2828,10 @@ class ComponentManagementServiceImpl(
         entries: List<VcsEntryRequest>,
     ) {
         entries.forEach { req -> req.repositoryType?.let { validateRepositoryType(it) } }
-        // Name derivation (ADR-001 decision 4) is shared with the TeamCity placement Diff job's
-        // INVALID check — see VcsPlacementValidator.deriveNames' kdoc for the rule.
+        // Name derivation (ADR-022 decision 4) is shared with the TeamCity checkout layout Diff job's
+        // INVALID check — see VcsCheckoutLayoutValidator.deriveNames' kdoc for the rule.
         val checkoutDirectories = entries.map { it.checkoutDirectory?.trim()?.ifEmpty { null } }
-        val names = VcsPlacementValidator.deriveNames(
+        val names = VcsCheckoutLayoutValidator.deriveNames(
             config.vcsEntries.toList(),
             entries.mapIndexed { index, req -> Triple(req.vcsPath, req.repositoryType, checkoutDirectories[index]) },
         )
@@ -2846,8 +2850,8 @@ class ComponentManagementServiceImpl(
                     checkoutDirectory = checkoutDirectories[index],
                 )
             }
-        VcsPlacementValidator.validateVcsPlacement(replacement)
-        VcsPlacementValidator.validateBuildWorkingDirectory(replacement, config.buildWorkingDirectory)
+        VcsCheckoutLayoutValidator.validateVcsCheckoutLayout(replacement)
+        VcsCheckoutLayoutValidator.validateBuildWorkingDirectory(replacement, config.buildWorkingDirectory)
         config.vcsEntries.clear()
         config.vcsEntries.addAll(replacement)
     }
@@ -4355,6 +4359,9 @@ class ComponentManagementServiceImpl(
         filter.archived?.let { archived ->
             spec = spec.and(Specification { root, _, cb -> cb.equal(root.get<Boolean>("archived"), archived) })
         }
+        filter.autoRelease?.let { autoRelease ->
+            spec = spec.and(Specification { root, _, cb -> cb.equal(root.get<Boolean>("autoRelease"), autoRelease) })
+        }
         filter.testComponent?.let { testComponent ->
             spec = spec.and(Specification { root, _, cb -> cb.equal(root.get<Boolean>("testComponent"), testComponent) })
         }
@@ -4644,6 +4651,7 @@ class ComponentManagementServiceImpl(
             "clientCode" to entity.clientCode,
             "archived" to entity.archived,
             "testComponent" to entity.testComponent,
+            "autoRelease" to entity.autoRelease,
             "solution" to entity.solution,
             "parentComponentName" to entity.parentComponent?.componentKey,
             "canBeParent" to entity.canBeParent,
@@ -4876,6 +4884,8 @@ class ComponentManagementServiceImpl(
 
     private companion object {
         private val log = org.slf4j.LoggerFactory.getLogger(ComponentManagementServiceImpl::class.java)
+
+        private const val AUTO_RELEASE_FIELD = "component.autoRelease"
 
         // SYS-101 `involvesRoles` values.
         private const val INVOLVES_OWNER = "owner"

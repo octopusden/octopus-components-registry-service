@@ -420,7 +420,7 @@ class AdminControllerV4(
     // Cross-kind gate conflicts (MigrationConflictException -> 409 MigrationConflictResponse) are
     // handled globally by ControllerExceptionHandler (@ControllerAdvice) — not locally here — so
     // the mapping also covers other controllers whose jobs share MigrationLifecycleGate
-    // (TeamcityPlacementControllerV4's Diff/Sync). A local @ExceptionHandler only ever sees
+    // (TeamcityCheckoutLayoutControllerV4's Diff/Sync). A local @ExceptionHandler only ever sees
     // exceptions thrown by ITS OWN controller's methods. Same-kind 409 is NOT routed through an
     // exception at all — it returns from startAsync as `isNewlyStarted=false` with the existing
     // job state body so the SPA can attach.

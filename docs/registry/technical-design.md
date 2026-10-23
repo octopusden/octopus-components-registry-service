@@ -81,7 +81,7 @@ Schema v2 (Model A') replaces the V1..V6 polymorphic-FK / JSONB-metadata model:
 - **`component_versions` table removed.** Version_range lives directly on `component_configurations` rows.
 - **Per-attribute version-range overrides.** Each row carries an explicit `row_type` classifier with four values: BASE, SCALAR_OVERRIDE (`overridden_attribute = 'aspect.field'`), MARKER (`overridden_attribute` is one of six marker names, replaces a child collection), and RANGE_PRESENCE (the coverage layer — see below; hidden from V4 editor APIs).
 - **Decoupled version model (ADR-018).** Coverage ("supported versions") and per-attribute values are **two independent layers**. The BASE row is **always** at `ALL_VERSIONS`; its VALUE is the effective config of the **OPEN-UPPER (newest) range** (base-row semantics superseded 2026-07 — was `top-level ⊕ Defaults`; see [ADR-018 §2 amendment](adr/018-decoupled-version-model.md)), with older blocks kept as overrides. The old *synthetic-bounded base* is gone (`is_synthetic_base` is vestigial / always `false`). Coverage is `supported = ∪` of the declared bounded ranges, each stored verbatim as a `RANGE_PRESENCE` row; a component with no bounded block has a single `ALL_VERSIONS` base and no `RANGE_PRESENCE` rows (`supported = ALL`). `resolve(v)` 404s outside `supported`, else applies per attribute the narrowest override whose range **contains** `v` (containment, incl. open-upper — TD-010), else the base. Migration is byte-identical to the prior v4 output on real versions (audit A1; ~130k compat baseline is the merge gate). The base `build_system NOT NULL` CHECK is unchanged (audit A2). Write-side invariants land in a follow-up (PR-3). See [ADR-018](adr/018-decoupled-version-model.md) for the decision record.
-- **Unified VCS model.** SINGLE-VCS = 1 entry in `vcs_settings_entries` with `name = NULL`; MULTI-VCS = N named entries. Entries carry optional placement (`source_path`, `checkout_directory`, ONB-001): each entry is checked out under its `checkout_directory`, which is also its name, and at most one entry of a row goes without one, at the checkout root; the row's `build_working_directory` says where the build runs. Validated in `replaceVcsEntries` (functional-spec §1.4).
+- **Unified VCS model.** SINGLE-VCS = 1 entry in `vcs_settings_entries` with `name = NULL`; MULTI-VCS = N named entries. Entries carry optional checkout layout (`source_path`, `checkout_directory`, ONB-001): each entry is checked out under its `checkout_directory`, which is also its name, and at most one entry of a row goes without one, at the checkout root; the row's `build_working_directory` says where the build runs. Validated in `replaceVcsEntries` (functional-spec §1.4).
 - **Distribution split** into four specialized child tables (Maven coords, file URLs, Docker images, DEB/RPM packages).
 - **Aggregator grouping.** `component_groups` table + `components.component_group_id` FK preserve the DSL `components { ... }` nesting relationship that was previously lost in migration.
 - **Reference dictionaries** for `labels`, `systems`, `tools` (admin-managed).
@@ -374,6 +374,8 @@ The fallback path is exercised by code paths that don't carry a request context.
 - **Release line:** the project's line is its `PROJECT_VERSION` parameter; when absent on the project it falls back to the first non-paused buildType that declares it. A component may own **one row per distinct `PROJECT_VERSION` line** (persisted in `project_version`, ordered by version then id for a stable `sort_order`).
 - **Null-version discard:** if any candidate for a component declares a `PROJECT_VERSION`, the null-version ("line-less") candidates are dropped; nulls are kept only when every candidate is null (the single default line). This is useful for the case where there is main parent TC project with no `PROJECT_VERSION` that aggregates multiple projects with different line.
 - **Per-line tie-break:** when a line has >1 candidate, keep those owning a **non-paused** CDRelease build (`teamcity.sync.cd-release-template-id`, default `CDRelease`), then the lexicographically smallest project id; a line where no candidate has a release build is left unresolved and counted `skipped_ambiguous`.
+- **Fetch size:** one batched request for every project with `COMPONENT_NAME`. Build-type parameters are limited to names containing `VERSION` (`PROJECT_VERSION` and what it references), and trigger properties to their count. Unfiltered, the response is about 180 MB and exhausted the pod heap; filtered, about 70 MB.
+- **Auto release (SYS-104):** after the re-link transaction, one short transaction per component sets `autoRelease = true` when no line was left unresolved and every kept line has a non-paused CDRelease build with an enabled finish-build trigger (`buildDependencyTrigger`) and no `UPDATE` or `RENAME` audit row ever changed the flag (one `EXISTS` query over `audit_log`); one audit row each, counted as `auto_release_enabled`, names logged. Never sets `false`, never writes to TeamCity. The weekly cron skips this step unless `teamcity.sync.auto-release-on-cron=true`.
 - **URL guard:** a winner without a usable `http(s)` `webUrl` is dropped. Counters are per **component**, not per line: dropping one line's winner does not by itself count `skipped_no_match`. The component still counts `updated`/`unchanged` if another line has a usable winner, `skipped_ambiguous` if another line was left unresolved, and `skipped_no_match` only when no line yields a usable winner and none was ambiguous.
 
 ### 6.5 Backward Compatibility
@@ -429,7 +431,7 @@ IO edges; the module stays `server → component-validation` (one-way dependency
   TeamCity sync completes, so a post-sync validation run never serves a pre-sync snapshot.
 - **Registry-aware rule:** `VCS_ROOTS_DIFFER_FROM_REGISTRY` (`WARNING`) needs registry data, so it
   is evaluated by `TeamcityValidationService` (`VcsRootsValidation`), not by a module validator.
-  The unit of comparison is the **component**, exactly as in the placement Diff: for each
+  The unit of comparison is the **component**, exactly as in the checkout layout Diff: for each
   non-archived component linked to the validated project, its BASE-row VCS paths are compared
   (`compareVcsRoots`, shared with the Diff) with the compile configurations of ALL the projects that
   component is linked to, so a shared project and a component spanning several projects give the
@@ -500,18 +502,18 @@ flags one); Git-sourced and no-db → the `test-component` label of the resolved
 DTO costs one source lookup (as routing already does) and a set membership; a list costs one bulk
 source read. Staleness bound across pods: 30 s after a change made on another pod.
 
-### 6.10 TeamCity placement Diff/Sync (ONB-002)
-Two jobs that reconcile a component's VCS placement (ADR-001: Checkout Directory, Source Path,
+### 6.10 TeamCity checkout layout Diff/Sync (ONB-002)
+Two jobs that reconcile a component's VCS checkout layout (ADR-022: Checkout Directory, Source Path,
 Build Working Directory) against its linked TeamCity project(s)' actual chains, scoped to compile configurations
-only (`CDGradleBuild` / `CDJavaMavenBuild`, non-paused; no `CDRelease` / `CdReleaseCandidateNew`
-fallback).
+only (based on the templates configured in `teamcity.validation.{gradle,maven}-build-template-id`, e.g.
+`CDGradleBuild` / `CDJavaMavenBuild`; non-paused; no release-template fallback).
 
-- **Diff (read-only):** `TeamcityPlacementDiffService` walks every component's configuration rows
+- **Diff (read-only):** `TeamcityCheckoutLayoutDiffService` walks every component's configuration rows
   (base or `vcs.settings` override) that carry VCS entries — `ComponentConfigurationRepository
   .findAllRowsWithVcsEntries` fetches archived components too — reads each linked project's compile build
   types via `EnrichedTcProjectFetcher` (extended with `vcs-root-entries(checkout-rules, vcs-root
-  url)`, additive to the shared cache TeamCity validation also uses), and derives per-row placement
-  with `PlacementRules.derive` — match a TeamCity root to a
+  url)`, additive to the shared cache TeamCity validation also uses), and derives per-row checkout layout
+  with `CheckoutLayoutRules.derive` — match a TeamCity root to a
   registry entry by its FULL canonical URL (`util.VcsUrlCanonicalizer` — scheme ignored, **host
   included**, Git-case-insensitive, `.git` stripped;
   matching on the last two path segments only would silently match same-named repositories across
@@ -525,7 +527,7 @@ fallback).
   (a null parse is a SHAPE problem, not just another "distinct value" a resolvable duplicate could
   turn into a conflict). `parseWorkDir` similarly rejects
   (`Unexpressible`) only a value containing a TeamCity property reference (`%...%`) — a leading `/`
-  or a `.`/`..` segment PARSES, deferring to `VcsPlacementValidator.validateBuildWorkingDirectory`
+  or a `.`/`..` segment PARSES, deferring to `VcsCheckoutLayoutValidator.validateBuildWorkingDirectory`
   to classify it `INVALID` (those are CRS validation rules, not
   unparseable shapes, so the pure engine must not pre-empt them).
   - **Scope:** only the current (BASE) configuration of a non-archived component (archived components and version-range (`vcs.settings` marker) rows are
@@ -533,7 +535,7 @@ fallback).
     single-root row only when a Checkout Directory or a non-root Build Working Directory exists on
     either side (current or derived) — a lone root needing nothing never appears, not even as "in
     sync" (keeps single-root Checkout Directories, which would rename `main` in the escrow export,
-    out of scope per ADR-001). The filter judges derived values only, so a single-root row whose
+    out of scope per ADR-022). The filter judges derived values only, so a single-root row whose
     derivation is `CONFLICT` or `UNEXPRESSIBLE` (it derives none) is always reported, like
     `TC_ERROR` and `ROOTS_MISMATCH`.
   - **Status per row:** `RESOLVED` (apply-able), `INVALID`, `CONFLICT`, `UNEXPRESSIBLE`,
@@ -541,7 +543,7 @@ fallback).
     TeamCity fetch failure; a 403 is recognised and reported as "no permission to read VCS root
     entries" rather than a raw exception; reported for every linked row, single-root ones too,
     since without the chain nothing is derived to decide scope).
-  - **`ROOTS_MISMATCH`:** `compareVcsRoots` (in `PlacementRules.kt`, using `repoKey`) compares the
+  - **`ROOTS_MISMATCH`:** `compareVcsRoots` (in `CheckoutLayoutRules.kt`, using `repoKey`) compares the
     row's registry VCS paths with the roots of the non-paused compile configurations. Roots a
     configuration attaches that the registry lacks (a shared tooling repository) make the row `ROOTS_MISMATCH`,
     but only configurations that attach at least one of the row's repositories are judged (a sibling
@@ -551,32 +553,32 @@ fallback).
     chain configuration" note. The same function drives the TeamCity Validation finding
     `VCS_ROOTS_DIFFER_FROM_REGISTRY` (§6.7).
   - **`UNEXPRESSIBLE` vs `INVALID`:** `UNEXPRESSIBLE` is narrow —
-    only a checkout-rule or `WORK_DIR` SHAPE that `PlacementRules` can't parse at all (a remap,
+    only a checkout-rule or `WORK_DIR` SHAPE that `CheckoutLayoutRules` can't parse at all (a remap,
     several rules on one entry, `%VAR%`). The pure engine does not re-implement CRS validation (root uniqueness,
     reserved/duplicate Checkout Directory names, Build Working Directory rules); that check runs
     only below. A derivation that resolves and differs from the current value is
     downgraded from `RESOLVED` to `INVALID`, never offered to Sync, when the derived values parse
     fine but themselves fail the SAME validation a real v4 write runs —
-    `util.VcsPlacementValidator.validateVcsPlacement` / `validateBuildWorkingDirectory`, extracted
+    `util.VcsCheckoutLayoutValidator.validateVcsCheckoutLayout` / `validateBuildWorkingDirectory`, extracted
     out of `ComponentManagementServiceImpl` so the rule lives in exactly one place, and this is
     the ONLY place it runs. The candidate's per-entry `name` is derived by the SAME rule the real
-    write uses (`VcsPlacementValidator.deriveNames`, also shared): a placed
+    write uses (`VcsCheckoutLayoutValidator.deriveNames`, also shared): a placed
     entry (has a derived Checkout Directory) is named by it; an unplaced entry keeps its CURRENT
     registry name UNLESS that name collides with a new Checkout Directory, in which case it falls
     back to `"main"` exactly as a real write would — so this candidate construction never flags a
     row `INVALID` that the real write would actually accept. The validation message is recorded in
     the row's `notes`.
-  - **Manual edit vs Sync-or-never-touched (`PlacementEditHistory`):** a placement
+  - **Manual edit vs Sync-or-never-touched (`CheckoutLayoutEditHistory`):** a checkout layout
     field — a repository's Checkout Directory or Source Path (tracked INDEPENDENTLY of each other:
     `isCheckoutDirectoryManuallySet` / `isSourcePathManuallySet`, so a Sync
     write that touches only one field can never "launder" an earlier manual edit of the other on
     the same entry), or the row's Build Working Directory — is overwritable — reported `RESOLVED`,
     not downgraded — in exactly two cases: no `audit_log` row has EVER changed it (it is still
-    null, or holds the ADR-001 `V8__` migration's raw-SQL back-fill, which bypassed the app and so
+    null, or holds the ADR-022 `V8__` migration's raw-SQL back-fill, which bypassed the app and so
     left no audit row either way), or the LAST audit row that changed it carries the Sync job's own
     `"sync from TeamCity"` tag (see below) in `change_comment`. It is `MANUAL_EDIT` only when the
     last change to THAT field is a real user write that does NOT carry that tag.
-    `PlacementEditHistory` walks a component's `CREATE`, `UPDATE` and `RENAME` audit rows
+    `CheckoutLayoutEditHistory` walks a component's `CREATE`, `UPDATE` and `RENAME` audit rows
     newest-first (a value set at creation is a human choice too: `CREATE` has no `oldValue`, so a
     non-null field in its `newValue` counts as a change; the Git import writes no audit row) (no time-window /
     V8-timestamp gate needed: V8's back-fill left no row regardless of a cutoff, so scoping by one
@@ -586,41 +588,41 @@ fallback).
     not count as manual. An unreadable audit query still fails closed (the exception
     propagates; nothing here swallows it into "not manual").
   - **Result** is in-memory only, held by the job service, and carries this run's own id
-    (`TeamcityPlacementDiffJobState.id`) — see Sync's `diffId` below. The job service keeps
+    (`TeamcityCheckoutLayoutDiffJobState.id`) — see Sync's `diffId` below. The job service keeps
     `lastCompleted` apart from the `current` slot (set only on COMPLETED): the report endpoints and
     Sync's `diffId` check read `lastCompleted`, so the report stays readable while a newer Diff
     runs and survives that run failing.
 - **Sync:** requires the id of the Diff run it acts on (`diffId`) and applies the selected component
   ids' `RESOLVED` rows from THAT run. Nothing is written and no component is individually skipped
   when the request is refused with `409`, which has three distinct bodies, decided in this order
-  inside `TeamcityPlacementSyncJobServiceImpl.startAsync` (via `AsyncJobLifecycle.claimAndSubmit`):
+  inside `TeamcityCheckoutLayoutSyncJobServiceImpl.startAsync` (via `AsyncJobLifecycle.claimAndSubmit`):
   1. a Sync is already running — the same-kind attach, the running job's response (`kind: "job"`);
   2. another admin job holds the cross-kind gate — a RUNNING Diff included, whose result is not
-     final — `MigrationConflictResponse` (`code` e.g. `tc-placement-diff-running`);
-  3. `diffId` is not `lastCompleted`'s id, or no Diff has completed — `PlacementDiffStaleException`,
+     final — `MigrationConflictResponse` (`code` e.g. `tc-checkout-layout-diff-running`);
+  3. `diffId` is not `lastCompleted`'s id, or no Diff has completed — `CheckoutLayoutDiffStaleException`,
      mapped in `ControllerExceptionHandler` to `ErrorResponse(errorMessage = "diff replaced, re-run
-     Diff", errorCode = "placement-diff-stale")`.
+     Diff", errorCode = "checkout-layout-diff-stale")`.
   The `diffId` comparison runs after the gate is won (a `beforePublish` hook, gate released if it
   throws), so what it read cannot change before the job is published. Diff keeps no history, so a
   Sync must always act on the result the caller actually looked at, never on one a later Diff has
-  since replaced. The exact `PlacementDiffResult` read for that check is passed straight through
+  since replaced. The exact `CheckoutLayoutDiffResult` read for that check is passed straight through
   into the async job — never re-fetched once the work actually runs.
-  Given a current `diffId`, `TeamcityPlacementSyncService` re-reads TeamCity/the registry and
+  Given a current `diffId`, `TeamcityCheckoutLayoutSyncService` re-reads TeamCity/the registry and
   re-derives before writing; a row whose fresh derivation differs from the Diff snapshot is skipped
   ("changed since diff") rather than applied blind. The write carries the component `version` read
-  together with the fresh derivation (`PlacementRowDiff.componentVersion`, not in the report API),
+  together with the fresh derivation (`CheckoutLayoutRowDiff.componentVersion`, not in the report API),
   so a manual edit between the re-derivation and the write fails the optimistic lock (outcome
   `failed`) instead of being overwritten. The version is not part of the "changed since diff"
-  comparison: an edit between the Diff and the Sync that changes the row (placement, branch, tag)
+  comparison: an edit between the Diff and the Sync that changes the row (checkout layout, branch, tag)
   already shows up in the fresh derivation, and an unrelated one must not skip it. Every write goes through `ComponentManagementService`'s base-row
   `updateComponent` — `changeComment = "sync from TeamCity (job <jobId>)"`, this Sync run's OWN id
-  appended to the fixed tag `PlacementEditHistory.isCheckoutDirectoryManuallySet` /
+  appended to the fixed tag `CheckoutLayoutEditHistory.isCheckoutDirectoryManuallySet` /
   `isSourcePathManuallySet` / `isBuildWorkingDirectoryManuallySet` key on (the
   per-run id is the rollback grouping key). The tag is
   unforgeable from outside: `ComponentControllerV4`'s create (`POST /components`), update
   (`PATCH /components/{id}`) and supported-versions (`PUT .../supported-versions`) endpoints — the
   v4 writes that accept a `changeComment` — reject a user-supplied one that starts with it
-  (case-insensitive, after trim) with 400 (`PlacementEditHistory.requireNotReserved`). Sync calls
+  (case-insensitive, after trim) with 400 (`CheckoutLayoutEditHistory.requireNotReserved`). Sync calls
   `ComponentManagementService` directly and never passes through a controller, so it is the only
   writer that can set it; both the provenance rule above and the rollback query below can therefore
   trust the prefix. The triggering
@@ -629,7 +631,7 @@ fallback).
   `migrationExecutor` (the standard Spring Security utility, no hand-rolled
   capture/set/clear) — `changed_by` is resolved from `SecurityContextHolder`
   at write time.
-- **Rollback trace (ADR-002 decision 5):** `PlacementSyncResult.fieldChanges` lists
+- **Rollback trace (ADR-023 decision 5):** `CheckoutLayoutSyncResult.fieldChanges` lists
   one entry per field an applied row actually wrote — `componentKey`, `rowLabel`, `root` (the
   entry's name, or `""` for the row-level Build Working Directory), `field`
   (`checkoutDirectory` / `sourcePath` / `buildWorkingDirectory`), `before`, `after` — computed by
@@ -640,9 +642,9 @@ fallback).
   other run's:
   1. Select that run's audit rows: `SELECT * FROM audit_log WHERE entity_type = 'Component' AND
      change_comment LIKE 'sync from TeamCity (job <jobId>)%' ORDER BY changed_at`.
-  2. For each row, read the placement fields' values out of `old_value` (the snapshot immediately
+  2. For each row, read the checkout layout fields' values out of `old_value` (the snapshot immediately
      BEFORE that row's write — always captured pre-mutation, never derived after the fact) — this is
-     the same information `PlacementSyncResult.fieldChanges[].before` already gives per field,
+     the same information `CheckoutLayoutSyncResult.fieldChanges[].before` already gives per field,
      without needing to query the audit log directly.
   3. PATCH each affected component back to its `before` values through the ordinary v4
      `updateComponent` (or the `vcs.settings` field-override endpoint, for a marker row a PAST
@@ -654,14 +656,14 @@ fallback).
   would silently undo work the later run never touched relative to it. Pick the run to roll back by
   reading the audit trail (`changed_by`, `changed_at`, `change_comment`'s job id) or the Sync job's
   own recorded `fieldChanges`.
-- **Jobs and permissions:** `TeamcityPlacementDiffJobService` / `-SyncJobService` follow the same
-  `AsyncJobLifecycle` + `MigrationLifecycleGate` pattern as resync/validation (`TC_PLACEMENT_DIFF`
-  / `TC_PLACEMENT_SYNC` job kinds; 202-then-poll; same-kind attach; cross-kind 409). Unlike every
+- **Jobs and permissions:** `TeamcityCheckoutLayoutDiffJobService` / `-SyncJobService` follow the same
+  `AsyncJobLifecycle` + `MigrationLifecycleGate` pattern as resync/validation (`TC_CHECKOUT_LAYOUT_DIFF`
+  / `TC_CHECKOUT_LAYOUT_SYNC` job kinds; 202-then-poll; same-kind attach; cross-kind 409). Unlike every
   other admin job, the Diff's report is readable by anyone who can view components
   (`ACCESS_COMPONENTS`, `PermissionEvaluator.canViewComponents()`) — only the two run endpoints and
-  Sync entirely require `IMPORT_DATA`; `TeamcityPlacementControllerV4` is a dedicated controller
+  Sync entirely require `IMPORT_DATA`; `TeamcityCheckoutLayoutControllerV4` is a dedicated controller
   because a single class-level `@PreAuthorize` cannot express that split.
-- **Endpoints (`rest/api/4/admin/teamcity-placement`):** `POST /diff`, `GET /diff/job`, `GET
+- **Endpoints (`rest/api/4/admin/teamcity-checkout-layout`):** `POST /diff`, `GET /diff/job`, `GET
   /diff/report.{json,html,csv}` (JSON for the Portal table; HTML/CSV as downloads), `POST /sync`
   (body `{diffId, componentIds}`), `GET /sync/job`, `GET /sync/report.csv` (the rollback trace).
 

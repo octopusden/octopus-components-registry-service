@@ -41,8 +41,8 @@ interface AuditLogRepository :
     fun findAllByOrderByChangedAtDesc(pageable: Pageable): Page<AuditLogEntity>
 
     /**
-     * ONB-002 (TeamCity placement Sync): every real edit of a component, newest first, used by
-     * `PlacementEditHistory` to find the LAST audited change to a placement field and decide
+     * ONB-002 (TeamCity checkout layout Sync): every real edit of a component, newest first, used by
+     * `CheckoutLayoutEditHistory` to find the LAST audited change to a checkout layout field and decide
      * whether it was a real (manual) user write or the Sync job's own tagged write. `action IN
      * (UPDATE, RENAME)` excludes CREATE (nothing to compare a fresh component against) and MIGRATED
      * (git-history baseline noise, SYS-049).
@@ -52,6 +52,25 @@ interface AuditLogRepository :
         entityId: String,
         actions: Collection<String>,
     ): List<AuditLogEntity>
+
+    /**
+     * SYS-104: whether any edit of component [entityId] changed `autoRelease`, so resync keeps a person's choice.
+     * An edit that also renames is one RENAME row. Both snapshots must carry the key: rows from before the flag
+     * existed have it in neither.
+     */
+    @Query(
+        value = """
+        SELECT EXISTS (
+            SELECT 1 FROM audit_log
+            WHERE entity_type = 'Component' AND entity_id = :entityId AND action IN ('UPDATE', 'RENAME')
+              AND jsonb_exists(CAST(old_value AS jsonb), 'autoRelease')
+              AND jsonb_exists(CAST(new_value AS jsonb), 'autoRelease')
+              AND CAST(old_value AS jsonb) -> 'autoRelease' <> CAST(new_value AS jsonb) -> 'autoRelease'
+        )
+        """,
+        nativeQuery = true,
+    )
+    fun existsAutoReleaseChange(entityId: String): Boolean
 
     @Modifying
     @Transactional

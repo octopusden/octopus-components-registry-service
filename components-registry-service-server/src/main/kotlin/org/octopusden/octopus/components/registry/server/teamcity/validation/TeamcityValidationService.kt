@@ -6,7 +6,8 @@ import org.octopusden.octopus.components.registry.server.entity.TeamcityValidati
 import org.octopusden.octopus.components.registry.server.repository.ComponentConfigurationRepository
 import org.octopusden.octopus.components.registry.server.repository.TeamcityValidationRepository
 import org.octopusden.octopus.components.registry.server.repository.VersionLineRepository
-import org.octopusden.octopus.components.registry.server.teamcity.placement.compileConfigsOf
+import org.octopusden.octopus.components.registry.server.teamcity.checkoutlayout.compileConfigsOf
+import org.octopusden.octopus.components.registry.server.teamcity.checkoutlayout.compileTemplateIds
 import org.octopusden.octopus.validation.core.Status
 import org.octopusden.octopus.validation.dto.teamcity.TemplateCatalog
 import org.octopusden.octopus.validation.validators.TeamCityValidators
@@ -33,6 +34,7 @@ class TeamcityValidationService(
 
     // The module suite is stateless given a catalog — build once.
     private val validators = TeamCityValidators(templateCatalog)
+    private val compileTemplateIds = templateCatalog.compileTemplateIds()
 
     @Suppress("TooGenericExceptionCaught")
     fun validate(): TeamcityValidationResult {
@@ -134,7 +136,7 @@ class TeamcityValidationService(
         val projectIds: Set<String>,
     )
 
-    /** Project id -> the live components linked to it; the unit of comparison is the component, as in the placement Diff. */
+    /** Project id -> the live components linked to it; the unit of comparison is the component, as in the checkout layout Diff. */
     private fun registryRootsByProject(projectIds: Set<String>): Map<String, List<ComponentRoots>> {
         val pathsByComponent =
             componentConfigurationRepository
@@ -175,7 +177,7 @@ class TeamcityValidationService(
                         } catch (e: Exception) {
                             null
                         } ?: return@mapNotNull null
-                        compileConfigsOf(external.buildTypes?.buildTypes.orEmpty())
+                        compileConfigsOf(external.buildTypes?.buildTypes.orEmpty(), compileTemplateIds)
                     }
                 VcsRootsValidation.check(c.key, c.paths, configs)
             },

@@ -18,6 +18,17 @@ refresh it with `./gradlew :components-registry-service-server:generateOpenApiDo
 
 ## Unreleased
 
+- **TeamCity placement Diff/Sync renamed to checkout layout (SYS-102).** Endpoints move to
+  `/admin/teamcity-checkout-layout/...`; `/admin/teamcity-placement/...` stays as a deprecated alias,
+  removed once the Portal uses the new paths in every environment. Both paths return the renamed codes
+  (the Portal before this change still detects a stale Diff by its `errorMessage`). Renamed: errorCode `checkout-layout-diff-stale`, gate code `tc-checkout-layout-{diff,sync}-running`,
+  activeKind `TC_CHECKOUT_LAYOUT_{DIFF,SYNC}`, event types `TEAMCITY_CHECKOUT_LAYOUT_{DIFF,SYNC}`
+  (migrated by `V13__`), `CheckoutLayout*` schemas, CSV file names.
+- **`autoRelease` component flag (SYS-104).** v4 create/update/summary/detail field (default `false`)
+  and `?autoRelease=` list filter; not in the DSL or v1-v3. An admin-started TeamCity resync turns it on
+  (never off) when every linked release line has an enabled finish-build trigger and nobody changed the
+  flag (the weekly cron only with `teamcity.sync.auto-release-on-cron`); `TeamcitySyncResult.auto_release_enabled`
+  counts these.
 - **`involves` / `involvesRoles` list filters added (SYS-101).** `GET /components?involves=<u>` returns
   components where any listed user is the owner OR a release manager OR a security champion;
   `involvesRoles` (any of `owner`, `releaseManager`, `securityChampion`; default all) narrows the
@@ -203,7 +214,7 @@ refresh it with `./gradlew :components-registry-service-server:generateOpenApiDo
     for rollback. That tag is reserved: `POST /components`, `PATCH /components/{id}` and
     `PUT /components/{id}/supported-versions` now answer `400` when a user-supplied `changeComment`
     starts with `sync from TeamCity` (case-insensitive, after trim). A value the
-    ADR-001 `V8__` migration set automatically, or one whose last audited change was a Sync itself,
+    ADR-022 `V8__` migration set automatically, or one whose last audited change was a Sync itself,
     is overwritable; a value set by a real user edit never is (re-syncing after TeamCity changes
     again no longer gets permanently stuck reporting `MANUAL_EDIT` against Sync's own prior write) —
     Checkout Directory and Source Path are tracked independently for this, so a Sync write to one

@@ -54,9 +54,10 @@ interface TeamcitySyncJobService {
      *
      * [triggeredBy] is the actor recorded on the service-event journal row (SYS-060): a username
      * for admin-triggered runs, `"scheduler"` for the cron. Captured on the caller thread since
-     * the background executor doesn't carry the security context.
+     * the background executor doesn't carry the security context. No default: [TeamcitySyncService.resync]
+     * treats `"scheduler"` as the cron and anything else as an admin run.
      */
-    fun startAsync(triggeredBy: String = "system"): StartTeamcitySyncResult
+    fun startAsync(triggeredBy: String): StartTeamcitySyncResult
 
     /** Latest known state, or `null` if no job has been started since the pod booted. */
     fun current(): TeamcitySyncJobState?

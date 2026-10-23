@@ -94,8 +94,9 @@
 | SYS-099 | A component carries a component-level boolean `testComponent` (default false; V11 sets it on components labelled `test-component`). v4 create/update/detail/summary expose it and the list accepts `?testComponent=`; without it test components are listed. v1/v2/v3 always carry it (read from the DB); released clients ignore the new key (their concrete DTOs ignore unknown properties). Setting it needs a key matching `components-registry.test-components.name-patterns` (default `^test-`, `^cvelab-`; served by `GET /meta/test-component-name-patterns`), also on rename of a flagged component (400). A non-test component may not reference a test component as parent or doc component (400 naming both); the `test-component` label stays for compatibility and a label without the flag only yields a write warning; health statistics and the TeamCity validation views exclude test components. The legacy Groovy DSL does not carry it | High | unit + integration-test | ✅ Tested |
 | SYS-100 | `GET /components/as-code/search` — global case-insensitive substring (or `regex=true`) search over every component's FULL as-code view, grouped by component with line number, line text and enclosing block path; `archived` / `limit` / `maxMatchesPerComponent` params; in-memory index rebuilt when the DB change stamp moves or after 5 minutes; `crsctl search` client command | High | unit + integration-test | ✅ Tested |
 | SYS-101 | `GET /components?involves=<u>[&involvesRoles=…]` — components where any listed user is the owner OR a release manager OR a security champion (OR across the chosen roles; all three by default); combines with every other filter via AND; one row per component; unknown role → 400. `crsctl components list --involves/--involves-role` | High | integration-test | ✅ Tested |
-| SYS-102 | TeamCity placement Diff/Sync (`/admin/teamcity-placement`): Diff is a read-only report over the BASE rows of non-archived components; Sync writes only the `RESOLVED` rows of the last completed Diff (named by `diffId`, else 409 `placement-diff-stale`) through the normal v4 write path, tagged `sync from TeamCity (job <id>)`, a prefix user writes cannot set; single-root `CONFLICT`/`UNEXPRESSIBLE` rows are always reported; VCS roots that the component's own compile configurations attach but the registry lacks yield `ROOTS_MISMATCH` and the `VCS_ROOTS_DIFFER_FROM_REGISTRY` validation warning | High | unit + integration-test | ✅ Tested |
+| SYS-102 | TeamCity checkout layout Diff/Sync (`/admin/teamcity-checkout-layout`): Diff is a read-only report over the BASE rows of non-archived components; Sync writes only the `RESOLVED` rows of the last completed Diff (named by `diffId`, else 409 `checkout-layout-diff-stale`) through the normal v4 write path, tagged `sync from TeamCity (job <id>)`, a prefix user writes cannot set; single-root `CONFLICT`/`UNEXPRESSIBLE` rows are always reported; VCS roots that the component's own compile configurations attach but the registry lacks yield `ROOTS_MISMATCH` and the `VCS_ROOTS_DIFFER_FROM_REGISTRY` validation warning | High | unit + integration-test | ✅ Tested |
 | SYS-103 | `ClassicComponentsRegistryServiceClient` takes the retry policy for retryable failures (503, I/O errors) from its caller (`Retryer` constructor parameter); without one it keeps the default of 5 attempts, backoff 100 ms – 1 s (`defaultRetryer()`); the policy is per request, so one call exhausting it does not shorten the next | Medium | unit-test | ✅ Tested |
+| SYS-104 | Component flag `autoRelease` (default false), DB and v4 only: create/update requests, summary/detail responses, `?autoRelease=` list filter, field-config visibility/editability; an admin-started TeamCity resync turns it on (never off) when every linked release line has a finish-build trigger and nobody has changed the flag; the weekly cron only with `teamcity.sync.auto-release-on-cron` | Medium | unit + integration-test | ✅ Tested |
 
 ---
 
@@ -2379,7 +2380,8 @@ Persistence is the transitional `version_line` → `teamcity_project` model: one
 row per kept line (`version` is sync-owned, nullable, a reconciliation discriminator — see
 `VersionLineEntity`), pointing at a deduplicated `teamcity_project`. Reconciliation is
 idempotent (writes only when the (projectId, version) set changes). Counters are reported per
-component (`updated`/`unchanged`/`skipped_no_match`/`skipped_ambiguous`/`ambiguous_auto_resolved`);
+component (`updated`/`unchanged`/`skipped_no_match`/`skipped_ambiguous`/`ambiguous_auto_resolved`,
+`auto_release_enabled` — SYS-104);
 `dropped_lines` separately surfaces lines dropped from otherwise-linked components. A v4 PATCH
 preserves the sync-owned `version` for project ids it retains.
 
@@ -3607,21 +3609,21 @@ only components where the user holds both roles. The Portal's "Mine" filter need
 `` `SYS-101 involvesRoles narrows` `` (3), `` `SYS-101 combines with archived` `` (4),
 `` `SYS-101 unknown role is 400` `` (5), `` `SYS-101 several users paginate without duplicates` `` (6); `CommandsTest` — `` `SYS-101 components list maps --involves and --involves-role` ``.
 
-### SYS-102: TeamCity placement Diff/Sync
+### SYS-102: TeamCity checkout layout Diff/Sync
 
 **Priority:** High
 **Test layer:** unit + integration-test
 **Status:** ✅ Tested
 
 **Motivation:**
-A component's VCS placement (Checkout Directory, Source Path, Build Working Directory; ADR-001)
+A component's VCS checkout layout (Checkout Directory, Source Path, Build Working Directory; ADR-022)
 is already encoded in the TeamCity compile configurations of its linked project(s). Operators need
 a read-only report of where the registry differs from TeamCity, and a safe way to apply the
 unambiguous differences without overwriting manual edits or acting on a report that has since
 been replaced.
 
 **Description:**
-- `POST /rest/api/4/admin/teamcity-placement/diff` starts a read-only Diff job; its report is
+- `POST /rest/api/4/admin/teamcity-checkout-layout/diff` starts a read-only Diff job; its report is
   readable by anyone who can view components. `POST .../sync` applies selected rows and requires
   `IMPORT_DATA`.
 - Sync re-derives each selected row and writes through `ComponentManagementService`, so it passes
@@ -3630,7 +3632,7 @@ been replaced.
 **Acceptance criteria:**
 1. Diff scope: only the BASE configuration row of a non-archived component is diffed; archived
    components and version-range (`vcs.settings` marker) rows are left out of the report.
-2. Provenance: a placement field is `MANUAL_EDIT` (never overwritten) when the last audited change
+2. Provenance: a checkout layout field is `MANUAL_EDIT` (never overwritten) when the last audited change
    to that field is a user write not tagged `sync from TeamCity`; it is overwritable when no audit
    row ever changed it or the last change was a Sync write. Checkout Directory and Source Path are
    judged independently.
@@ -3640,7 +3642,7 @@ been replaced.
    in the controller, because Sync calls the service directly.
 4. Sync is bound to the last completed Diff: the request's `diffId` must equal that Diff's id,
    otherwise nothing is written and the answer is 409 `ErrorResponse` with `errorCode`
-   `placement-diff-stale` (also when no Diff has completed). The three 409 shapes are decided in
+   `checkout-layout-diff-stale` (also when no Diff has completed). The three 409 shapes are decided in
    this order: a running Sync (the running job, `kind: "job"`), then another admin job holding the
    cross-kind gate (a running Diff included; `MigrationConflictResponse`), then the stale `diffId`.
    The `diffId` is read under the gate.
@@ -3648,7 +3650,7 @@ been replaced.
    after a newer Diff fails, and a Sync naming it is still accepted.
 6. A single-root row whose derivation is `CONFLICT` or `UNEXPRESSIBLE`, or whose TeamCity read
    failed (`TC_ERROR`), is always reported, even when the scope filter would drop a single-root row
-   with no placement on either side.
+   with no checkout layout on either side.
 7. `ROOTS_MISMATCH`: a row whose compile configurations attach VCS roots the registry does not
    list is reported as `ROOTS_MISMATCH` and never synced; the TeamCity Validation type
    `VCS_ROOTS_DIFFER_FROM_REGISTRY` reports the same comparison as a WARNING. Only configurations
@@ -3660,20 +3662,20 @@ been replaced.
 
 **Test method:**
 `ComponentControllerV4ReservedCommentTest` — `` `SYS-102 PATCH with the reserved sync comment is a 400` `` and the other reserved-comment tests (3);
-`TeamcityPlacementControllerV4ContractTest` — `` `SYS-102 a stale diffId on an idle gate answers the placement-diff-stale code` ``,
+`TeamcityCheckoutLayoutControllerV4ContractTest` — `` `SYS-102 a stale diffId on an idle gate answers the checkout-layout-diff-stale code` ``,
 `` `SYS-102 a Sync while a Sync runs answers the running job (kind job)` ``,
 `` `SYS-102 a Sync while another admin job runs answers the gate's conflict` `` (4),
 `` `SYS-102 the report stays readable while a new Diff runs` ``,
 `` `SYS-102 a failed Diff keeps the previous report` `` (5);
-`TeamcityPlacementDiffServiceTest` — `` `SYS-102 an archived component is left out of the Diff entirely` ``,
+`TeamcityCheckoutLayoutDiffServiceTest` — `` `SYS-102 an archived component is left out of the Diff entirely` ``,
 `` `SYS-102 a version-range override (vcs_settings marker) row is left out of the Diff` `` (1),
 `` `SYS-102 a manually re-saved value is reported as manual edit, not overwritten` `` (2),
 `` `SYS-102 a single-root row TeamCity places where CRS cannot express it is reported, not dropped` `` (6),
 `` `SYS-102 a compile configuration attaching an extra tooling root is a roots mismatch, not invalid` `` (7);
-`PlacementEditHistoryTest` — `` `SYS-102 a user edit after a sync is manual again` `` (2);
-`PlacementRulesTest` — `` `SYS-102 only derived statuses are scope-filtered, any other status is always reported` `` (6);
+`CheckoutLayoutEditHistoryTest` — `` `SYS-102 a user edit after a sync is manual again` `` (2);
+`CheckoutLayoutRulesTest` — `` `SYS-102 only derived statuses are scope-filtered, any other status is always reported` `` (6);
 `VcsRootsComparisonTest` and `VcsRootsValidationTest` — `SYS-102 ...` tests (7);
-`TeamcityPlacementSyncServiceTest` — `` `SYS-102 an invalid row is skipped even if selected` ``,
+`TeamcityCheckoutLayoutSyncServiceTest` — `` `SYS-102 an invalid row is skipped even if selected` ``,
 `` `SYS-102 an applied row's before and after values are recorded per field` `` (8).
 
 ### SYS-103: Configurable retry policy in `ClassicComponentsRegistryServiceClient`
@@ -3700,3 +3702,39 @@ the whole client in its own retry loop.
 **Test method:**
 `RetryOn503Test` — `` `SYS-103 caller-supplied retryer outlasts the default` `` (1),
 `` `SYS-103 retryer state is not shared between requests` `` (2).
+
+### SYS-104: Component flag `autoRelease`
+
+**Priority:** Medium
+**Test layer:** unit + integration-test
+**Status:** ✅ Tested
+
+**Motivation:**
+Release automation (for example the CVE remediation service) needs to know whether a component's
+releases may be started without a person.
+
+**Description:**
+- `components.auto_release BOOLEAN NOT NULL DEFAULT false` (`V12__`). Meaning: releases of the
+  component may be started automatically by release automation once a release candidate passes its
+  gates; `false`: a person starts every release.
+- v4: `ComponentCreateRequest.autoRelease` (default false), `ComponentUpdateRequest.autoRelease`
+  (null = unchanged), `ComponentSummaryResponse.autoRelease`, `ComponentDetailResponse.autoRelease`;
+  `GET /components?autoRelease=true|false` filters (absent = both).
+- Field-config path `component.autoRelease` (`visibility`, `editable`). A create request without the
+  field stores `false`.
+- The flag is not part of the Groovy DSL and is not exposed on v1-v3.
+- A TeamCity resync started by an admin turns the flag on when the release configuration of every linked release
+  line (based on `teamcity.sync.cd-release-template-id`, not paused) has an enabled finish-build
+  trigger, unless the flag has ever been changed (an `UPDATE` or `RENAME` audit row on it): a person's "off"
+  stays off. One audit row per change, counted in `auto_release_enabled`. Never turns it off,
+  never changes TeamCity, and ignores the field-config visibility. The weekly cron does this only
+  with `teamcity.sync.auto-release-on-cron=true` (default `false`). The names of the components it
+  turned on are logged. A release line the resync leaves unresolved (several candidates, none a
+  release build) keeps the flag off. An admin who starts a resync while the cron run is going gets
+  that run, so the cron rule applies to it.
+
+**Test method:**
+`V12AutoReleaseMigrationIntegrationTest`, `AutoReleaseFlagV4Test`; `ExternalTcProjectFetcherTest`
+(`SYS-104 finish-build trigger means auto release`, `SYS-104 no auto release otherwise`),
+`TeamcitySyncServiceTest` (`SYS-104 resync turns autoRelease on`, `SYS-104 resync never turns autoRelease off`,
+`SYS-104 the weekly cron leaves autoRelease alone by default`), `AuditLogRepositoryAutoReleaseChangeTest`.
