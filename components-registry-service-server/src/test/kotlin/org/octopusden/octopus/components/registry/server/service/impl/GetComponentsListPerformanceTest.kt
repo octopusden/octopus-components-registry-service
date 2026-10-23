@@ -210,7 +210,7 @@ class GetComponentsListPerformanceTest {
         private const val MEASURED_ITERATIONS = 5
 
         // Guards against a mapper CPU/allocation regression, not remote-DB latency (which the
-        // query-count test covers structurally). Set at about 1.7x the p99 of CI-run medians.
+        // query-count test covers structurally).
         private const val MEDIAN_CEILING_MS = 600L
 
         @JvmStatic

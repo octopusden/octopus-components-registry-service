@@ -1117,8 +1117,7 @@ object id17CompatLocalStandManual : BuildType({
     }
 
     failureConditions {
-        // Budget for the full sweep, including cold image pulls, Postgres and auto-migrate.
-        executionTimeoutMin = 65
+        executionTimeoutMin = 70
     }
 
     features {
@@ -1392,7 +1391,6 @@ object id18CompatLocalStandGitModeAuto : BuildType({
     }
 
     failureConditions {
-        // Budget for the git-mode sweep, including cold image pulls and two stand boots.
         executionTimeoutMin = 50
     }
 
