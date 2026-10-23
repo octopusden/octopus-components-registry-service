@@ -24,21 +24,16 @@ set -euo pipefail
 export LC_ALL=C
 
 DIR=components-registry-service-server/src/main/resources/db/migration
-BASE=${1:-}
-CHECKED=${2:-}
+BASE=${1:?base sha}
+CHECKED=${2:?checked sha}
 NAME='^V[1-9][0-9]{0,17}__[a-z0-9_]+\.sql$'
 
-for sha in "$BASE" "$CHECKED"; do
-  if [ -z "$sha" ] || ! git cat-file -e "$sha^{commit}" 2>/dev/null; then
-    echo "::error::Commit '$sha' is missing or not fetched; cannot check migrations."
-    exit 1
-  fi
-done
 echo "base:    $BASE"
 echo "checked: $CHECKED"
 
 # NUL-separated plumbing output, so no path is quoted or split. Written to
-# files because a variable cannot hold NUL and a failing git must stop here.
+# files because a variable cannot hold NUL and a failing git (an unknown or
+# unfetched commit) must stop here.
 tmp=$(mktemp -d)
 trap 'rm -rf "$tmp"' EXIT
 git diff-tree -r -z --no-renames --name-status "$BASE" "$CHECKED" -- "$DIR" >"$tmp/changes"
@@ -46,7 +41,7 @@ git ls-tree -r -z --name-only "$BASE" -- "$DIR" >"$tmp/base"
 git ls-tree -r -z --name-only "$CHECKED" -- "$DIR" >"$tmp/checked"
 
 # Lowercase v too: Flyway skips a v14__x.sql silently, so it must fail by name.
-versioned() { [[ $1 == "$DIR"/* && ${1##*/} == [Vv]*.sql ]]; }
+versioned() { [[ ${1##*/} == [Vv]*.sql ]]; }
 # Version of a V<digits>__ name, or nothing when it has none (or too many digits).
 version_of() {
   local name=${1##*/}
@@ -68,26 +63,24 @@ while IFS= read -r -d '' status && IFS= read -r -d '' path; do
   if [ "$status" != "A" ]; then
     errors+=("existing migration changed ($status): $path")
     changed_existing=1
-  elif [[ ${path##*/} =~ $NAME ]] && [ "$(version_of "$path")" -le "$max" ]; then
-    errors+=("version $(version_of "$path") is not above V$max, the highest on the base: $path")
+  elif [[ ${path##*/} =~ $NAME ]]; then
+    v=$(version_of "$path")
+    if [ "$v" -le "$max" ]; then errors+=("version $v is not above V$max, the highest on the base: $path"); fi
   fi
 done <"$tmp/changes"
 
 # Every migration in the tree under test must have a supported name, so none
 # is skipped by the version rules below (or by Flyway, for a lowercase v).
-next=$max
-: >"$tmp/versions"
 while IFS= read -r -d '' path; do
   versioned "$path" || continue
   if [[ ! ${path##*/} =~ $NAME ]]; then
     errors+=("unsupported migration name, expected V<n>__<lowercase_description>.sql: $path")
     continue
   fi
-  v=$(version_of "$path")
-  if [ "$v" -gt "$next" ]; then next=$v; fi
-  printf '%s\t%s\n' "$v" "$path" >>"$tmp/versions"
-done <"$tmp/checked"
-next=$((next + 1))
+  printf '%s\t%s\n' "$(version_of "$path")" "$path"
+done <"$tmp/checked" >"$tmp/versions"
+last=$(cut -f1 "$tmp/versions" | sort -n | tail -1)
+next=$((${last:-0} + 1))
 
 dups=$(cut -f1 "$tmp/versions" | sort -n | uniq -d)
 for v in $dups; do

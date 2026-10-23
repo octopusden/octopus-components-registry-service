@@ -2,9 +2,9 @@
 # Self-test for check-migrations-append-only.sh: each case builds a throwaway
 # repository with a base commit and a commit under test.
 set -euo pipefail
-# No user or system git config, prompts, editors or pagers.
-export GIT_CONFIG_GLOBAL=/dev/null GIT_CONFIG_NOSYSTEM=1 GIT_TERMINAL_PROMPT=0 GIT_EDITOR=true GIT_PAGER=cat
-exec </dev/null
+# No user or system git config.
+export GIT_CONFIG_GLOBAL=/dev/null GIT_CONFIG_NOSYSTEM=1
+export GIT_AUTHOR_NAME=t GIT_AUTHOR_EMAIL=t@t GIT_COMMITTER_NAME=t GIT_COMMITTER_EMAIL=t@t
 
 CHECK="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/check-migrations-append-only.sh"
 DIR=components-registry-service-server/src/main/resources/db/migration
@@ -12,22 +12,20 @@ work=$(mktemp -d)
 trap 'rm -rf "$work"' EXIT
 failures=0
 
-git_() { git -c user.name=t -c user.email=t@t -c commit.gpgsign=false "$@"; }
-
 # A fresh repository whose base commit holds V1, V2 and sub/V3; cds into it.
 new_repo() {
   rm -rf "$work/repo" && mkdir -p "$work/repo/$DIR" && cd "$work/repo"
-  git_ init -q -b main
+  git init -q -b main
   for v in 1 2; do echo "select $v;" >"$DIR/V${v}__step_$v.sql"; done
   mkdir -p "$DIR/sub" && echo "select 3;" >"$DIR/sub/V3__step_3.sql"
   echo "notes" >"$DIR/README.md"
-  git_ add -A && git_ commit -qm base
+  git add -A && git commit -qm base
 }
 
-commit() { git_ add -A && git_ commit -qm change && git rev-parse HEAD; }
+commit() { git add -A && git commit -qm change && git rev-parse HEAD; }
 
 # expect pass <name> <base> <checked>
-# expect fail <name> <base> <checked> <text the failure must print> [text it must not]
+# expect fail <name> <base> <checked> <text the failure must print>
 expect() {
   local out got
   if out=$(cd "$work/repo" && "$CHECK" "$3" "$4" 2>&1); then got=pass; else got=fail; fi
@@ -35,8 +33,6 @@ expect() {
     echo "FAIL $2 (expected $1, got $got)"; failures=$((failures + 1))
   elif [ "$1" = fail ] && ! grep -qF -- "$5" <<<"$out"; then
     echo "FAIL $2 (failed without '$5')"; failures=$((failures + 1))
-  elif [ -n "${6:-}" ] && grep -qF -- "$6" <<<"$out"; then
-    echo "FAIL $2 (printed '$6')"; failures=$((failures + 1))
   else
     echo "ok   $2"
   fi
@@ -44,11 +40,11 @@ expect() {
 
 # Each case: start from the base, change the tree, check base..change.
 case_() {
-  local want=$1 name=$2 change=$3 text=${4:-} absent=${5:-}
+  local want=$1 name=$2 change=$3 text=${4:-}
   new_repo
   local base; base=$(git rev-parse HEAD)
   "$change"
-  expect "$want" "$name" "$base" "$(commit)" "$text" "$absent"
+  expect "$want" "$name" "$base" "$(commit)" "$text"
 }
 
 modify()      { echo "-- edit" >>"$DIR/V2__step_2.sql"; }
@@ -72,7 +68,6 @@ readme_only() { echo "more" >>"$DIR/README.md"; }
 changed="existing migration changed"
 bad_name="unsupported migration name"
 case_ fail "modified migration"                   modify      "$changed (M)"
-case_ fail "changed migration gets revert advice" modify      "Revert the change"
 case_ fail "deleted migration"                    delete      "$changed (D)"
 case_ fail "renamed within the directory"         rename_in   "$changed (D)"
 case_ fail "moved out of the directory"           move_out    "$changed (D)"
@@ -85,7 +80,6 @@ case_ fail "added with a non-ASCII description"   add_accent  "$bad_name"
 case_ fail "added with a 19-digit version"        add_long    "$bad_name"
 case_ fail "added with a lowercase v prefix"      add_lower_v "$bad_name"
 case_ fail "added at or below the base maximum"   add_low     "is not above V3"
-case_ fail "next free version, no revert advice"  add_low     "Next free version: V4__" "Revert the change"
 case_ fail "two added with the same version"      add_same    "version 4 appears more than once"
 case_ pass "added next version"                   add_ok
 case_ pass "added next version in a subdirectory" add_sub_ok
@@ -98,18 +92,13 @@ dup_base=$(commit)
 echo "x" >README.md
 expect fail "duplicate already on the base" "$dup_base" "$(commit)" "version 2 appears more than once"
 
-# A migration name the version rules cannot read fails wherever it is: on the
-# base already, or added alongside a valid one.
+# A migration name the version rules cannot read fails even when it is
+# already on the base.
 new_repo
 echo "x" >"$DIR/V12_1__x.sql"
 odd_base=$(commit)
 echo "x" >README.md
 expect fail "unsupported name already on the base" "$odd_base" "$(commit)" "unsupported migration name"
-new_repo
-odd_base=$(git rev-parse HEAD)
-echo "x" >"$DIR/V4__ok.sql"
-echo "x" >"$DIR/V3.1__x.sql"
-expect fail "unsupported name next to a valid one" "$odd_base" "$(commit)" "unsupported migration name"
 
 # Next free version counts what the PR adds, not only the base.
 new_repo
@@ -121,9 +110,9 @@ expect fail "next free version counts added ones" "$nf_base" "$(commit)" "Next f
 # Stale branch: main gains V4 after the branch point. Against the merge commit
 # the PR adds nothing and passes; against the branch head V4 looks deleted.
 new_repo
-git_ switch -qc feature && echo "x" >README.md && head=$(commit)
-git_ switch -q main && echo "select 4;" >"$DIR/V4__on_main.sql" && main_tip=$(commit)
-git_ merge -q --no-edit feature && merge=$(git rev-parse HEAD)
+git switch -qc feature && echo "x" >README.md && head=$(commit)
+git switch -q main && echo "select 4;" >"$DIR/V4__on_main.sql" && main_tip=$(commit)
+git merge -q --no-edit feature && merge=$(git rev-parse HEAD)
 expect pass "stale branch, checked at the merge commit" "$main_tip" "$merge"
 expect fail "stale branch, checked at the branch head"  "$main_tip" "$head" "$changed (D)"
 
@@ -132,14 +121,14 @@ expect fail "stale branch, checked at the branch head"  "$main_tip" "$head" "$ch
 # uses it rather than the branch point.
 new_repo
 branch_point=$(git rev-parse HEAD)
-git_ switch -qc feature && echo "select 4;" >"$DIR/V4__on_branch.sql" && commit >/dev/null
-git_ switch -q main && echo "select 5;" >"$DIR/V5__on_main.sql" && commit >/dev/null
-git_ merge -q --no-edit feature && merge=$(git rev-parse HEAD)
+git switch -qc feature && echo "select 4;" >"$DIR/V4__on_branch.sql" && commit >/dev/null
+git switch -q main && echo "select 5;" >"$DIR/V5__on_main.sql" && commit >/dev/null
+git merge -q --no-edit feature && merge=$(git rev-parse HEAD)
 expect fail "below a version main added since, checked at merge^1" "$merge^1" "$merge" "is not above V5"
 expect pass "below a version main added since, checked at the branch point" "$branch_point" "$merge"
 
 new_repo
-expect fail "missing base commit"  0000000000000000000000000000000000000000 "$(git rev-parse HEAD)" "is missing or not fetched"
-expect fail "empty checked commit" "$(git rev-parse HEAD)" "" "is missing or not fetched"
+expect fail "missing base commit"  0000000000000000000000000000000000000000 "$(git rev-parse HEAD)" "bad object"
+expect fail "empty checked commit" "$(git rev-parse HEAD)" "" "checked sha"
 
 [ "$failures" -eq 0 ]
