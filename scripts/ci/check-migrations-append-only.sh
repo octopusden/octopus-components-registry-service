@@ -68,22 +68,31 @@ while IFS= read -r -d '' status && IFS= read -r -d '' path; do
   if [ "$status" != "A" ]; then
     errors+=("existing migration changed ($status): $path")
     changed_existing=1
-  elif [[ ! ${path##*/} =~ $NAME ]]; then
-    errors+=("bad name, expected V<n>__<lowercase_description>.sql: $path")
-  elif [ "$(version_of "$path")" -le "$max" ]; then
+  elif [[ ${path##*/} =~ $NAME ]] && [ "$(version_of "$path")" -le "$max" ]; then
     errors+=("version $(version_of "$path") is not above V$max, the highest on the base: $path")
   fi
 done <"$tmp/changes"
 
+# Every migration in the tree under test must have a supported name, so none
+# is skipped by the version rules below (or by Flyway, for a lowercase v).
+next=$max
 : >"$tmp/versions"
 while IFS= read -r -d '' path; do
   versioned "$path" || continue
+  if [[ ! ${path##*/} =~ $NAME ]]; then
+    errors+=("unsupported migration name, expected V<n>__<lowercase_description>.sql: $path")
+    continue
+  fi
   v=$(version_of "$path")
-  if [ -n "$v" ]; then printf '%s\t%s\n' "$v" "$path" >>"$tmp/versions"; fi
+  if [ "$v" -gt "$next" ]; then next=$v; fi
+  printf '%s\t%s\n' "$v" "$path" >>"$tmp/versions"
 done <"$tmp/checked"
-while IFS= read -r v; do
+next=$((next + 1))
+
+dups=$(cut -f1 "$tmp/versions" | sort -n | uniq -d)
+for v in $dups; do
   errors+=("version $v appears more than once: $(awk -F'\t' -v v="$v" '$1 == v { printf "%s ", $2 }' "$tmp/versions")")
-done < <(cut -f1 "$tmp/versions" | sort -n | uniq -d)
+done
 
 if [ ${#errors[@]} -eq 0 ]; then
   echo "ok — migrations are append-only, well named and in order."
@@ -99,6 +108,6 @@ removed or renamed version stops the service from starting. Revert the change an
 add it as a new migration instead.
 MSG
 fi
-echo "Next free version on the base: V$((max + 1))__<lowercase_description>.sql" >&2
+echo "Next free version: V${next}__<lowercase_description>.sql" >&2
 echo "::error::Flyway migration check failed: ${errors[0]}"
 exit 1

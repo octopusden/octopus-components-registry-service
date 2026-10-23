@@ -70,7 +70,7 @@ add_same()    { echo "a" >"$DIR/V4__a.sql"; mkdir -p "$DIR/sub" && echo "b" >"$D
 readme_only() { echo "more" >>"$DIR/README.md"; }
 
 changed="existing migration changed"
-bad_name="bad name"
+bad_name="unsupported migration name"
 case_ fail "modified migration"                   modify      "$changed (M)"
 case_ fail "changed migration gets revert advice" modify      "Revert the change"
 case_ fail "deleted migration"                    delete      "$changed (D)"
@@ -85,7 +85,7 @@ case_ fail "added with a non-ASCII description"   add_accent  "$bad_name"
 case_ fail "added with a 19-digit version"        add_long    "$bad_name"
 case_ fail "added with a lowercase v prefix"      add_lower_v "$bad_name"
 case_ fail "added at or below the base maximum"   add_low     "is not above V3"
-case_ fail "next free version, no revert advice"  add_low     "Next free version on the base: V4__" "Revert the change"
+case_ fail "next free version, no revert advice"  add_low     "Next free version: V4__" "Revert the change"
 case_ fail "two added with the same version"      add_same    "version 4 appears more than once"
 case_ pass "added next version"                   add_ok
 case_ pass "added next version in a subdirectory" add_sub_ok
@@ -97,6 +97,26 @@ echo "dup" >"$DIR/V2__duplicate.sql"
 dup_base=$(commit)
 echo "x" >README.md
 expect fail "duplicate already on the base" "$dup_base" "$(commit)" "version 2 appears more than once"
+
+# A migration name the version rules cannot read fails wherever it is: on the
+# base already, or added alongside a valid one.
+new_repo
+echo "x" >"$DIR/V12_1__x.sql"
+odd_base=$(commit)
+echo "x" >README.md
+expect fail "unsupported name already on the base" "$odd_base" "$(commit)" "unsupported migration name"
+new_repo
+odd_base=$(git rev-parse HEAD)
+echo "x" >"$DIR/V4__ok.sql"
+echo "x" >"$DIR/V3.1__x.sql"
+expect fail "unsupported name next to a valid one" "$odd_base" "$(commit)" "unsupported migration name"
+
+# Next free version counts what the PR adds, not only the base.
+new_repo
+nf_base=$(git rev-parse HEAD)
+echo "x" >"$DIR/V4__a.sql"
+echo "x" >"$DIR/V3__low.sql"
+expect fail "next free version counts added ones" "$nf_base" "$(commit)" "Next free version: V5__"
 
 # Stale branch: main gains V4 after the branch point. Against the merge commit
 # the PR adds nothing and passes; against the branch head V4 looks deleted.
