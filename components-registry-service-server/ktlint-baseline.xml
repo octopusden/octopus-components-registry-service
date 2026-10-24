@@ -24,7 +24,7 @@
         <error line="31" column="1" source="standard:no-consecutive-comments" />
     </file>
     <file name="src/main/kotlin/org/octopusden/octopus/components/registry/server/mapper/EntityMappers.kt">
-        <error line="396" column="1" source="standard:no-consecutive-comments" />
+        <error line="369" column="1" source="standard:no-consecutive-comments" />
     </file>
     <file name="src/main/kotlin/org/octopusden/octopus/components/registry/server/mapper/V4Mappers.kt">
         <error line="431" column="140" source="standard:max-line-length" />

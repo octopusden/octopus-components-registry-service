@@ -1939,6 +1939,116 @@
         ],
         "type" : "object"
       },
+      "DistributionPathPreview" : {
+        "description" : "The source one distribution.* marker path takes for the version.",
+        "properties" : {
+          "attribute" : {
+            "description" : "Marker attribute, e.g. distribution.maven.",
+            "example" : "distribution.maven",
+            "type" : "string"
+          },
+          "matchedRanges" : {
+            "description" : "versionRange of each matching override, byte-for-byte as it was sent or stored.",
+            "items" : {
+              "description" : "versionRange of each matching override, byte-for-byte as it was sent or stored.",
+              "type" : "string"
+            },
+            "type" : "array"
+          },
+          "source" : {
+            "description" : "BASE: no override range contains the version; OVERRIDE: exactly one does; CONFLICT: more than one does (a candidate set has not been through write validation).",
+            "enum" : [
+              "BASE",
+              "OVERRIDE",
+              "CONFLICT"
+            ],
+            "type" : "string"
+          },
+          "unevaluableRanges" : {
+            "description" : "versionRange of each override on this path that does not parse (never matches), byte-for-byte as it was sent or stored.",
+            "items" : {
+              "description" : "versionRange of each override on this path that does not parse (never matches), byte-for-byte as it was sent or stored.",
+              "type" : "string"
+            },
+            "type" : "array"
+          }
+        },
+        "required" : [
+          "attribute",
+          "matchedRanges",
+          "source",
+          "unevaluableRanges"
+        ],
+        "type" : "object"
+      },
+      "DistributionPreviewCoverage" : {
+        "description" : "Candidate supported versions, same shape as the supported-versions PUT.",
+        "properties" : {
+          "all" : {
+            "description" : "true (or no ranges) = every version is supported.",
+            "type" : "boolean"
+          },
+          "ranges" : {
+            "description" : "Supported ranges; a blank or unparseable range counts as covering.",
+            "items" : {
+              "description" : "Supported ranges; a blank or unparseable range counts as covering.",
+              "type" : "string"
+            },
+            "type" : "array"
+          }
+        },
+        "type" : "object"
+      },
+      "DistributionPreviewRequest" : {
+        "description" : "Distribution preview request: which source each distribution.* marker path takes for `version`, over a candidate override set and candidate supported versions. An omitted field means the saved state.",
+        "properties" : {
+          "fieldOverrides" : {
+            "description" : "Candidate override set, the same full-set list a component PATCH sends. When present it replaces the saved overrides entirely; only entries on distribution.* attributes are evaluated. Omitted = the saved overrides.",
+            "items" : {
+              "$ref" : "#/components/schemas/FieldOverrideUpsertRequest"
+            },
+            "type" : "array"
+          },
+          "supportedVersions" : {
+            "$ref" : "#/components/schemas/DistributionPreviewCoverage"
+          },
+          "version" : {
+            "description" : "The concrete version to resolve. Must contain at least one numeric item, otherwise 400.",
+            "example" : "1.2-0003",
+            "type" : "string"
+          }
+        },
+        "required" : [
+          "version"
+        ],
+        "type" : "object"
+      },
+      "DistributionPreviewResponse" : {
+        "description" : "Distribution preview verdict for one version.",
+        "properties" : {
+          "paths" : {
+            "description" : "One entry per distribution.* marker family, in a stable order; empty when supported is false.",
+            "items" : {
+              "$ref" : "#/components/schemas/DistributionPathPreview"
+            },
+            "type" : "array"
+          },
+          "supported" : {
+            "description" : "false when the version lies outside the supported versions; paths is then empty.",
+            "type" : "boolean"
+          },
+          "version" : {
+            "description" : "The version as sent (trimmed).",
+            "type" : "string"
+          }
+        },
+        "required" : [
+          "paths",
+          "supported",
+          "version"
+        ],
+        "type" : "object"
+      },
       "DocLinkRequest" : {
         "properties" : {
           "docComponentKey" : {
@@ -13644,6 +13754,138 @@
         },
         "tags" : [
           "component-controller-v-4"
+        ]
+      }
+    },
+    "/rest/api/4/components/{idOrName}/distribution/preview" : {
+      "post" : {
+        "description" : "Resolves, for a concrete version, whether each distribution.* marker path takes BASE, OVERRIDE or CONFLICT over the candidate overrides and supported versions in the body (an omitted field = the saved state). Nothing is persisted.",
+        "operationId" : "preview_1",
+        "parameters" : [
+          {
+            "in" : "path",
+            "name" : "idOrName",
+            "required" : true,
+            "schema" : {
+              "type" : "string"
+            }
+          }
+        ],
+        "requestBody" : {
+          "content" : {
+            "application/json" : {
+              "schema" : {
+                "$ref" : "#/components/schemas/DistributionPreviewRequest"
+              }
+            }
+          },
+          "required" : true
+        },
+        "responses" : {
+          "200" : {
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/DistributionPreviewResponse"
+                }
+              }
+            },
+            "description" : "OK"
+          },
+          "400" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description" : "Bad Request"
+          },
+          "404" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description" : "Not Found"
+          },
+          "409" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description" : "Conflict"
+          },
+          "413" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description" : "Payload Too Large"
+          },
+          "425" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description" : "Too Early"
+          },
+          "500" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description" : "Internal Server Error"
+          },
+          "501" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description" : "Not Implemented"
+          },
+          "502" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description" : "Bad Gateway"
+          },
+          "503" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description" : "Service Unavailable"
+          }
+        },
+        "summary" : "Preview which source each distribution path takes for a version",
+        "tags" : [
+          "distribution-preview-controller-v-4"
         ]
       }
     },
