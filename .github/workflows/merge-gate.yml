@@ -113,10 +113,12 @@ jobs:
         run: scripts/ci/test-check-migrations-append-only.sh
       # The base is the merge commit's first parent: main as it was when the
       # event fired. pull_request does not re-fire when main moves, and the
-      # policy/checks-common ruleset does not require gate/merge branches to be
-      # up to date (strict is off). So two PRs that each add the same version
-      # can both pass and both merge, and Flyway validate then fails at startup.
-      # Turning strict on for gate/merge closes that gap. pull_request.base.sha
+      # policy/checks-common ruleset requires gate/merge without strict, so a
+      # branch need not be up to date with main to merge. Two PRs that each add
+      # a migration can then both pass and both merge even when one version is
+      # not above the other (the same version, or a lower one merged second),
+      # and Flyway then refuses to start. Turning strict on for gate/merge
+      # closes that gap. pull_request.base.sha
       # is not used: it can be older still.
       - name: Check migrations are append-only and in order
         env:
