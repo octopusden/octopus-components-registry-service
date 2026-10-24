@@ -1,9 +1,10 @@
 package org.octopusden.octopus.components.registry.server.dto.v4
 
+import io.swagger.v3.oas.annotations.media.ArraySchema
 import io.swagger.v3.oas.annotations.media.Schema
 
 /**
- * SYS-099: request/response DTOs for the distribution preview
+ * SYS-105: request/response DTOs for the distribution preview
  * (`POST /rest/api/4/components/{idOrName}/distribution/preview`).
  *
  * The Portal's Distribution tab posts the unsaved override set and supported
@@ -21,10 +22,13 @@ data class DistributionPreviewRequest(
         example = "1.2-0003",
     )
     val version: String,
-    @field:Schema(
-        description = "Candidate override set, the same full-set list a component PATCH sends. When present it " +
-            "replaces the saved overrides entirely; only entries on distribution.* attributes are evaluated. " +
-            "Omitted = the saved overrides.",
+    // ArraySchema, not Schema: a plain Schema description lands on the shared FieldOverrideUpsertRequest component.
+    @field:ArraySchema(
+        arraySchema = Schema(
+            description = "Candidate override set, the same full-set list a component PATCH sends. When present it " +
+                "replaces the saved overrides entirely; only entries on distribution.* attributes are evaluated. " +
+                "Omitted = the saved overrides.",
+        ),
     )
     val fieldOverrides: List<FieldOverrideUpsertRequest>? = null,
     @field:Schema(description = "Candidate supported versions. Omitted = the saved supported versions.")

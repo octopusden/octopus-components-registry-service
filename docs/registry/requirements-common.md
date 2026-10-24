@@ -3778,7 +3778,8 @@ beans and the same shared containment helpers as resolution at read time
    `supported=false` with `paths: []`.
 2. **Per marker path** — one entry for every `distribution.*` marker family the
    resolver knows (today `distribution.maven`, `distribution.fileUrl`,
-   `distribution.docker`, `distribution.packages`), `BASE` entries included, in
+   `distribution.docker`, `distribution.packages`, `distribution.generic`),
+   `BASE` entries included, in
    the resolver's stable order. Candidate overrides on that attribute whose range
    contains the version: none → `BASE`; exactly one → `OVERRIDE`; more than one →
    `CONFLICT`. A candidate set has not been through write validation, so overlap
@@ -3823,28 +3824,28 @@ unevaluableRanges }] }`. Children are not echoed: the caller sent them.
    (whitespace included).
 
 **Test method:** `DistributionPreviewTest` (unit) —
-`` `SYS-099 no override gives BASE on every distribution family` ``,
-`` `SYS-099 one matching override gives OVERRIDE and paths are independent` ``,
-`` `SYS-099 several matching overrides give CONFLICT` ``,
-`` `SYS-099 empty child list is a normal OVERRIDE` ``,
-`` `SYS-099 non-distribution entries are ignored` `` (1);
-`` `SYS-099 version outside coverage is unsupported` ``,
-`` `SYS-099 no restriction supports every version` ``,
-`` `SYS-099 unparseable supported range counts as covering` ``,
-`` `SYS-099 bounded base bounds coverage` ``,
-`` `SYS-099 version in coverage gap is unsupported` `` (2);
-`` `SYS-099 unparseable override range is listed and never matches` `` (3);
-`` `SYS-099 qualified version lies in range` `` (4);
-`` `SYS-099 omitted fields use saved state` ``,
-`` `SYS-099 present fields replace saved state` `` (5);
-`` `SYS-099 non-numeric version is rejected` `` (6);
-`` `SYS-099 ranges are echoed byte-for-byte` `` (7);
-shared helpers `` `SYS-099 overrideRangeContains` ``, `` `SYS-099 coverageRangeContains` ``,
-`` `SYS-099 isInCoverage` ``, `` `SYS-099 normalizeVersionRange` ``.
+`` `SYS-105 no override gives BASE on every distribution family` ``,
+`` `SYS-105 one matching override gives OVERRIDE and paths are independent` ``,
+`` `SYS-105 several matching overrides give CONFLICT` ``,
+`` `SYS-105 empty child list is a normal OVERRIDE` ``,
+`` `SYS-105 non-distribution entries are ignored` `` (1);
+`` `SYS-105 version outside coverage is unsupported` ``,
+`` `SYS-105 no restriction supports every version` ``,
+`` `SYS-105 unparseable supported range counts as covering` ``,
+`` `SYS-105 bounded base bounds coverage` ``,
+`` `SYS-105 version in coverage gap is unsupported` `` (2);
+`` `SYS-105 unparseable override range is listed and never matches` `` (3);
+`` `SYS-105 qualified version lies in range` `` (4);
+`` `SYS-105 omitted fields use saved state` ``,
+`` `SYS-105 present fields replace saved state` `` (5);
+`` `SYS-105 non-numeric version is rejected` `` (6);
+`` `SYS-105 ranges are echoed byte-for-byte` `` (7);
+shared helpers `` `SYS-105 overrideRangeContains` ``, `` `SYS-105 coverageRangeContains` ``,
+`` `SYS-105 isInCoverage` ``, `` `SYS-105 normalizeVersionRange` ``.
 `DistributionPreviewApiTest` (integration) —
-`` `SYS-099 preview evaluates candidate overrides` `` (1, 3, 7),
-`` `SYS-099 saved state agrees with distribution endpoint` `` (5),
-`` `SYS-099 candidate coverage replaces saved coverage` `` (2, 5),
-`` `SYS-099 non-numeric version is 400` ``, `` `SYS-099 missing version is 400` ``,
-`` `SYS-099 unknown component is 404` ``,
-`` `SYS-099 unauthenticated is 401` ``, `` `SYS-099 read permission is required and sufficient` `` (6).
+`` `SYS-105 preview evaluates candidate overrides` `` (1, 3, 7),
+`` `SYS-105 saved state agrees with distribution endpoint` `` (5),
+`` `SYS-105 candidate coverage replaces saved coverage` `` (2, 5),
+`` `SYS-105 non-numeric version is 400` ``, `` `SYS-105 missing version is 400` ``,
+`` `SYS-105 unknown component is 404` ``,
+`` `SYS-105 unauthenticated is 401` ``, `` `SYS-105 read permission is required and sufficient` `` (6).

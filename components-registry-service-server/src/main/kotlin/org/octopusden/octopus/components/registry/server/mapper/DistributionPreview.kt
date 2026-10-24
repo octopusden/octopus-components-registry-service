@@ -12,7 +12,7 @@ import org.octopusden.releng.versions.VersionRangeFactory
 // ============================================================
 // Version-range containment as the resolver reads it. Shared by
 // toResolvedEscrowModuleConfig, ComponentCodeRenderer.renderResolved and the
-// SYS-099 distribution preview so the three can never disagree.
+// SYS-105 distribution preview so the three can never disagree.
 // ============================================================
 
 private val WHITESPACE = Regex("\\s+")
@@ -62,7 +62,7 @@ internal fun VersionRangeFactory.isInCoverage(
 }
 
 // ============================================================
-// SYS-099: distribution preview
+// SYS-105: distribution preview
 // ============================================================
 
 private class CandidateOverride(
