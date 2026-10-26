@@ -5,6 +5,8 @@ import org.octopusden.octopus.components.registry.server.config.ConditionalOnDat
 import org.octopusden.octopus.components.registry.server.entity.ComponentEntity
 import org.octopusden.octopus.components.registry.server.entity.TeamcityProjectEntity
 import org.octopusden.octopus.components.registry.server.entity.VersionLineEntity
+import org.octopusden.octopus.components.registry.server.event.AuditEvent
+import org.octopusden.octopus.components.registry.server.repository.AuditLogRepository
 import org.octopusden.octopus.components.registry.server.repository.ComponentRepository
 import org.octopusden.octopus.components.registry.server.repository.TeamcityProjectRepository
 import org.octopusden.octopus.components.registry.server.repository.VersionLineRepository
@@ -34,7 +36,11 @@ import java.util.UUID
  * Idempotent: only writes when the matched project set changes, traced via an INFO log
  * line. Deliberately does NOT write an `audit_log` row — TC sync is automated
  * reconciliation and a row per re-link was noise in the component history (SYS-051).
- * `changedBy` is `"system"` for the cron, or the admin's username for a triggered run.
+ *
+ * Auto release (SYS-104): when a kept project's release configuration has an enabled
+ * finish-build trigger, the component's `autoRelease` is turned on, with an audit row. Never off.
+ * `changedBy` is the admin who started the run, or `"system"` for the cron. The cron does this
+ * only with `teamcity.sync.auto-release-on-cron`.
  *
  * Error handling: a fetcher failure propagates out of [resync] (502/500 for the admin
  * endpoint; logged-and-swallowed by the scheduler). A per-write JPA failure rolls back
@@ -47,15 +53,11 @@ class TeamcitySyncService(
     private val versionLineRepository: VersionLineRepository,
     private val teamcityProjectRepository: TeamcityProjectRepository,
     private val tcProjectFetcher: TcProjectFetcher,
-    // Retained as the audit seam even though TeamCity sync is deliberately NOT
-    // audited (SYS-051): TeamcitySyncServiceTest injects a recording publisher
-    // and asserts no AuditEvent is published, guarding against an accidental
-    // re-introduction. Re-publish here if per-sync auditing is ever wanted.
-    @Suppress("UnusedPrivateProperty")
+    // Re-links are deliberately NOT audited (SYS-051); only turning `autoRelease` on is (SYS-104).
     private val applicationEventPublisher: ApplicationEventPublisher,
-    private val currentUserResolver: CurrentUserResolver,
     private val transactionTemplate: TransactionTemplate,
     private val teamcityProperties: TeamcityProperties,
+    private val auditLogRepository: AuditLogRepository,
 ) {
     private val log = KotlinLogging.logger {}
 
@@ -66,10 +68,11 @@ class TeamcitySyncService(
      * a slow/stalled TC server cannot hold a JDBC connection or extend a
      * transaction's lifetime. Per-component writes happen inside a single
      * [TransactionTemplate.execute] block so the bulk write is still atomic
-     * (either all changes commit, or none do on JPA failure). TC sync writes no
-     * audit rows — the re-link is logged at INFO instead (SYS-051).
+     * (either all changes commit, or none do on JPA failure). Re-links are logged at INFO,
+     * not audited (SYS-051). Turning `autoRelease` on runs after it, one short transaction
+     * per component, and is audited (SYS-104).
      */
-    fun resync(): TeamcitySyncResult {
+    fun resync(triggeredBy: String): TeamcitySyncResult {
         check(teamcityProperties.baseUrl.isNotBlank()) {
             "TC sync is not configured: teamcity.base-url is blank. " +
                 "Set teamcity.base-url in service-config (components-registry-service.yml)."
@@ -93,16 +96,20 @@ class TeamcitySyncService(
         // HTTP calls to TC happen here, deliberately OUTSIDE any DB tx.
         val matches = tcProjectFetcher.findByComponentNames(componentsByName)
 
-        // CurrentUserResolver returns "system" when there is no auth context
-        // (the scheduled cron path), or the JWT's preferred_username captured
-        // from the admin request that started the async resync job. Either way
-        // it never returns null.
-        val changedBy = currentUserResolver.currentUsername()
+        // Passed in by the job: the async run has no security context of its own.
+        val onCron = triggeredBy == TeamcitySyncScheduler.TRIGGERED_BY_SCHEDULER
+        val changedBy = if (onCron) CurrentUserResolver.SYSTEM_USER else triggeredBy
 
         // execute() returns the callback's value; applyMatches never returns
         // null, so the !! cannot trip in practice — Kotlin just sees the API's
         // declared T? signature.
-        return transactionTemplate.execute { _ -> applyMatches(components, matches, changedBy) }!!
+        val autoReleaseCandidates = mutableListOf<Pair<UUID, String>>()
+        val result = transactionTemplate.execute { _ -> applyMatches(components, matches, changedBy, autoReleaseCandidates) }!!
+        if (onCron && !teamcityProperties.sync.autoReleaseOnCron) {
+            log.info { "TC sync: autoRelease left alone on the cron (teamcity.sync.auto-release-on-cron=false)" }
+            return result
+        }
+        return enableAutoRelease(result, autoReleaseCandidates, changedBy)
     }
 
     @Suppress("TooGenericExceptionCaught", "LongMethod")
@@ -110,6 +117,7 @@ class TeamcitySyncService(
         components: List<ComponentEntity>,
         matches: Map<UUID, List<TcProject>>,
         changedBy: String,
+        autoReleaseCandidates: MutableList<Pair<UUID, String>>,
     ): TeamcitySyncResult {
         val scanned = components.size
         var updated = 0
@@ -147,6 +155,7 @@ class TeamcitySyncService(
                         // unresolved (ambiguous). The component-level skipped_* counters do NOT
                         // reflect this, so surface it separately.
                         droppedLines += ambiguousLineCount
+                        autoReleaseCandidates += listOfNotNull(autoReleaseCandidate(componentId, picks, ambiguousLineCount))
                     }
 
                     // No winner at all: ambiguous if a line was left unresolved, else no-match.
@@ -186,6 +195,65 @@ class TeamcitySyncService(
             droppedLines = droppedLines,
             errors = errors.toList(),
         )
+    }
+
+    /**
+     * SYS-104: a component qualifies only when every one of its release lines was resolved and releases
+     * automatically; older lines are what CVE fixes patch.
+     */
+    private fun autoReleaseCandidate(
+        componentId: UUID,
+        picks: List<Pick>,
+        unresolvedLines: Int,
+    ): Pair<UUID, String>? =
+        (componentId to picks.first().project.id).takeIf { unresolvedLines == 0 && picks.all { it.project.hasAutoReleaseTrigger } }
+
+    /**
+     * SYS-104: turns `autoRelease` on (never off) for each candidate, audited, one transaction each.
+     * Skipped once anyone has changed the flag, so a person's "off" stays off.
+     */
+    @Suppress("TooGenericExceptionCaught")
+    private fun enableAutoRelease(
+        result: TeamcitySyncResult,
+        candidates: List<Pair<UUID, String>>,
+        changedBy: String,
+    ): TeamcitySyncResult {
+        val errors = mutableListOf<String>()
+        val enabled = mutableListOf<String>()
+        for ((componentId, projectId) in candidates) {
+            try {
+                transactionTemplate.execute { _ -> turnOnAutoRelease(componentId, projectId, changedBy) }?.let { enabled += it }
+            } catch (e: Exception) {
+                val msg = "Failed to turn autoRelease on for component id=$componentId: ${e.message}"
+                log.error(e) { msg }
+                errors.add(msg)
+            }
+        }
+        log.info { "TC sync: autoRelease turned on for ${enabled.size} component(s): ${enabled.joinToString()}" }
+        return result.copy(autoReleaseEnabled = enabled.size, errors = result.errors + errors)
+    }
+
+    private fun turnOnAutoRelease(
+        componentId: UUID,
+        projectId: String,
+        changedBy: String,
+    ): String? {
+        // Re-read: the loop's entities were loaded outside this transaction.
+        val component = componentRepository.findById(componentId).orElse(null) ?: return null
+        if (component.autoRelease || auditLogRepository.existsAutoReleaseChange(componentId.toString())) return null
+        component.autoRelease = true
+        applicationEventPublisher.publishEvent(
+            AuditEvent(
+                entityType = "Component",
+                entityId = componentId.toString(),
+                action = "UPDATE",
+                changedBy = changedBy,
+                oldValue = mapOf("autoRelease" to false),
+                newValue = mapOf("autoRelease" to true),
+                changeComment = "TeamCity resync: release configuration in $projectId has a finish-build trigger",
+            ),
+        )
+        return component.componentKey
     }
 
     /** A resolved winner for one PROJECT_VERSION line, with whether a tie-break was needed. */

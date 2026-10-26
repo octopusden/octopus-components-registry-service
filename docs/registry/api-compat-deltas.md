@@ -43,10 +43,10 @@ The compat-test exercises **API contracts**:
   untouched. The legacy `$.name` and every write-back surface are excluded from the rule by design
   — see the ADR — so this delta does not spread beyond the Jira-facing payloads.
 
-- **VCS entry placement and Build Working Directory** (ONB-001 rev. 3, 2026-09) — VCS roots carry
+- **VCS entry checkout layout and Build Working Directory** (ONB-001 rev. 3, 2026-09) — VCS roots carry
   `sourcePath` and `checkoutDirectory`, and the VCS settings carry `buildWorkingDirectory`, all
   omitted when empty. `V8__` and the DSL import set `checkoutDirectory = name` after the first root
-  of multi-root rows; the placement import and the Portal may set either field on any root, `[0]`
+  of multi-root rows; the checkout layout import and the Portal may set either field on any root, `[0]`
   included, and a Build Working Directory on the row (`V9__`). A migrated candidate therefore adds
   these fields on `components/{c}/versions/{v}/vcs-settings`, `projects/{p}/versions/{v}/vcs-settings`,
   both `jira-component-version-ranges` endpoints and `components/{c}/versions/{v}` (the
@@ -58,8 +58,8 @@ The compat-test exercises **API contracts**:
   records, whose paths carry literal component keys (the V8 back-fill reaches production data, so
   replays hit it). Typed layer: a field comparator in `Comparators.buildAssertion`
   forgives exactly baseline-null → value on those fields; a changed or dropped value is still a
-  VALUE_DIFF. Regression tests: `GitVsDbValidationTest` VAL-003a and `VcsPlacementKnownDeltaTest`.
-  `known-deltas-git.json` stays empty: Git mode has no placement and no Build Working Directory.
+  VALUE_DIFF. Regression tests: `GitVsDbValidationTest` VAL-003a and `VcsCheckoutLayoutKnownDeltaTest`.
+  `known-deltas-git.json` stays empty: Git mode has no checkout layout and no Build Working Directory.
 
 - **`testComponent` flag** (SYS-099, 2026-10) — the v1/v2/v3 `Component` DTO (and its
   `VersionedComponent` / `DetailedComponent` subclasses) always serializes `testComponent`: for a

@@ -23,8 +23,8 @@ class BundledRoleMapTest {
     }
 
     @Test
-    @DisplayName("SYS-104: the bundled template creator role carries ACCESS_COMPONENTS, ACCESS_AUDIT and CREATE_FROM_TEMPLATE (Decision 1)")
-    fun `SYS-104 bundled template creator role`() {
+    @DisplayName("SYS-105: the bundled template creator role carries ACCESS_COMPONENTS, ACCESS_AUDIT and CREATE_FROM_TEMPLATE (Decision 1)")
+    fun `SYS-105 bundled template creator role`() {
         assertEquals(
             setOf("ACCESS_COMPONENTS", "ACCESS_AUDIT", "CREATE_FROM_TEMPLATE"),
             roles["ROLE_COMPONENTS_REGISTRY_TEMPLATE_CREATOR"],
@@ -32,8 +32,8 @@ class BundledRoleMapTest {
     }
 
     @Test
-    @DisplayName("SYS-104: the bundled editor role keeps its permissions, without CREATE_FROM_TEMPLATE (Decision 2)")
-    fun `SYS-104 bundled editor role unchanged`() {
+    @DisplayName("SYS-105: the bundled editor role keeps its permissions, without CREATE_FROM_TEMPLATE (Decision 2)")
+    fun `SYS-105 bundled editor role unchanged`() {
         assertEquals(
             setOf("ACCESS_COMPONENTS", "CREATE_COMPONENTS", "ACCESS_AUDIT"),
             roles["ROLE_COMPONENTS_REGISTRY_EDITOR"],
@@ -41,8 +41,8 @@ class BundledRoleMapTest {
     }
 
     @Test
-    @DisplayName("SYS-104: the bundled admin role keeps its permissions, without CREATE_FROM_TEMPLATE (Decision 2)")
-    fun `SYS-104 bundled admin role unchanged`() {
+    @DisplayName("SYS-105: the bundled admin role keeps its permissions, without CREATE_FROM_TEMPLATE (Decision 2)")
+    fun `SYS-105 bundled admin role unchanged`() {
         assertEquals(
             setOf(
                 "ACCESS_COMPONENTS",

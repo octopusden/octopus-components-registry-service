@@ -3,7 +3,7 @@
 - [x] 1.1 Characterization tests on what this change alters, green on the unchanged code:
   - [x] 1.1.1 A user with `ROLE_COMPONENTS_REGISTRY_EDITOR` gets every profile and template usable
         in the listing, and may override a template field — new
-        `` ComponentProfileControllerV4Test.`SYS-104 usable for editor` ``; the override is already pinned by
+        `` ComponentProfileControllerV4Test.`SYS-105 usable for editor` ``; the override is already pinned by
         `ComponentTemplateControllerV4Test.invalidOverride`, which runs as an editor
   - [x] 1.1.2 A user with `ROLE_COMPONENTS_REGISTRY_VIEWER` gets every entry unusable with "You do
         not have permission to create components", and 403 on a template dry run — already pinned
@@ -40,9 +40,9 @@
         pinned by `withCreatePermission` and `templateWithCreatePermission`
   - [x] 3.1.2 `CREATE_FROM_TEMPLATE` only: profile unusable with "You may create components
         from templates only", template usable, override refused — three slices, each red first:
-        `` `SYS-104 template for template only creator` ``, `` `SYS-104 profile for template only creator` ``,
-        `` `SYS-104 override for template only creator` ``
-  - [x] 3.1.3 Both: profile usable, template usable, override allowed — `` `SYS-104 both create permissions` ``,
+        `` `SYS-105 template for template only creator` ``, `` `SYS-105 profile for template only creator` ``,
+        `` `SYS-105 override for template only creator` ``
+  - [x] 3.1.3 Both: profile usable, template usable, override allowed — `` `SYS-105 both create permissions` ``,
         green on its first run, since `CREATE_COMPONENTS` already decided
   - [x] 3.1.4 Neither: profile and template unusable with "You do not have permission to create
         components", override refused — already pinned by `withoutCreatePermission` and
@@ -62,24 +62,24 @@
       first run; checked against the pre-change `PermissionProfileAvailability`, where 4.1.1–4.1.3
       fail):
   - [x] 4.1.1 Listing: templates usable, regular profiles unusable with the template-only reason —
-        `` ComponentProfileControllerV4Test.`SYS-104 template only creator` ``
+        `` ComponentProfileControllerV4Test.`SYS-105 template only creator` ``
   - [x] 4.1.2 Template dry run without overrides: 200 —
-        `` ComponentTemplateControllerV4Test.`SYS-104 template only creator dry run` ``
+        `` ComponentTemplateControllerV4Test.`SYS-105 template only creator dry run` ``
   - [x] 4.1.3 Template create without overrides: 201, component created —
-        `` `SYS-104 template only creator create` ``
+        `` `SYS-105 template only creator create` ``
   - [x] 4.1.4 Template dry run with an overridable override: 403, nothing created, on a dry run and
-        a create — `` `SYS-104 template only creator overridable override` ``
+        a create — `` `SYS-105 template only creator overridable override` ``
   - [x] 4.1.5 Template dry run with a non-overridable override: 403, not 400 (order 5 before 6) —
-        `` `SYS-104 template only creator not overridable override` ``
+        `` `SYS-105 template only creator not overridable override` ``
   - [x] 4.1.6 `POST /rest/api/4/components` without a profile: 403, nothing created —
-        `` ProfileOnCreateTest.`SYS-104 template only creator refused` ``
+        `` ProfileOnCreateTest.`SYS-105 template only creator refused` ``
   - [x] 4.1.7 `POST /rest/api/4/components` naming a regular profile: 403, nothing created — same
         test
   - [x] 4.1.8 `PATCH` of a component the user owns: allowed —
-        `` ComponentOwnershipEditSecurityTest.`SYS-104 template only creator owner allowed` ``
+        `` ComponentOwnershipEditSecurityTest.`SYS-105 template only creator owner allowed` ``
   - [x] 4.1.4a 4.1.4 and 4.1.5 also pass on the pre-change rule, which refuses the template itself
         (order 4) instead of the override (order 5). They pin the 403; the step is pinned by
-        `` PermissionProfileAvailabilityTest.`SYS-104 override for template only creator` `` (added on review)
+        `` PermissionProfileAvailabilityTest.`SYS-105 override for template only creator` `` (added on review)
 - [x] 4.2 Implement: no controller change was needed.
 - [x] 4.3 Confirm tests pass. `dbTest` (H2): `RoleMapTest` 3, `ComponentProfileControllerV4Test` 12,
       `ComponentTemplateControllerV4Test` 34, `ProfileOnCreateTest` 18,
@@ -97,10 +97,11 @@
 - [x] 5.3 `technical-design.md` §6.3 — the availability table; the create gate stays `CREATE_COMPONENTS`
 - [x] 5.4 `functional-spec.md` §7.4 and §7.5 — who may use a template, and that only
       `CREATE_COMPONENTS` may send overrides
-- [x] 5.5 `requirements-common.md` — SYS-104, summary row and section, with its tests; the new
-      tests' `@DisplayName`s start with `SYS-104:`
-- [x] 5.5a Renumbered to SYS-104 on merging main: SYS-102 was taken by the TeamCity placement
-      Diff/Sync requirement and SYS-103 by the client retry policy, both merged first (added on review)
+- [x] 5.5 `requirements-common.md` — SYS-105, summary row and section, with its tests; the new
+      tests' `@DisplayName`s start with `SYS-105:`
+- [x] 5.5a Renumbered to SYS-105 on merging main: SYS-102 was taken by the TeamCity placement
+      Diff/Sync requirement, SYS-103 by the client retry policy and SYS-104 by the `autoRelease`
+      flag, all merged first (added on review)
 - [x] 5.6 `api-changelog.md` — the new permission and role, the reason in the listing, 403 on
       overrides for template-only creators
 - [x] 5.7 `v4.json` — regenerated with `generateOpenApiDocs`; unchanged, since no schema changes

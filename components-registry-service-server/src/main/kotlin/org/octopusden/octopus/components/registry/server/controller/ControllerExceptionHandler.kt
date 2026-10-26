@@ -13,7 +13,7 @@ import org.octopusden.octopus.components.registry.server.config.PayloadTooLargeE
 import org.octopusden.octopus.components.registry.server.dto.v4.MigrationConflictResponse
 import org.octopusden.octopus.components.registry.server.service.MigrationConflictException
 import org.octopusden.octopus.components.registry.server.service.MigrationLifecycleGate
-import org.octopusden.octopus.components.registry.server.teamcity.placement.PlacementDiffStaleException
+import org.octopusden.octopus.components.registry.server.teamcity.checkoutlayout.CheckoutLayoutDiffStaleException
 import org.slf4j.Logger
 import org.slf4j.LoggerFactory
 import org.springframework.http.HttpEntity
@@ -132,17 +132,17 @@ class ControllerExceptionHandler {
     }
 
     /** A Sync named a replaced (or never-completed) Diff: 409 with a machine-readable code. */
-    @ExceptionHandler(PlacementDiffStaleException::class)
+    @ExceptionHandler(CheckoutLayoutDiffStaleException::class)
     @ResponseStatus(HttpStatus.CONFLICT)
-    fun placementDiffStaleExceptionHandler(e: PlacementDiffStaleException): HttpEntity<ErrorResponse> {
+    fun checkoutLayoutDiffStaleExceptionHandler(e: CheckoutLayoutDiffStaleException): HttpEntity<ErrorResponse> {
         log.warn(e.localizedMessage)
-        return HttpEntity(ErrorResponse(e.localizedMessage, PlacementDiffStaleException.ERROR_CODE))
+        return HttpEntity(ErrorResponse(e.localizedMessage, CheckoutLayoutDiffStaleException.ERROR_CODE))
     }
 
     /**
      * Cross-kind admin-job gate conflicts (`MigrationLifecycleGate`) — global so it covers every
      * controller whose jobs share the gate (components/history migration, TeamCity resync/
-     * validation, TeamCity placement Diff/Sync), not just the one that happened to throw. A
+     * validation, TeamCity checkout layout Diff/Sync), not just the one that happened to throw. A
      * same-kind conflict is NOT routed through an exception at all — `startAsync` returns
      * `isNewlyStarted=false` with the existing job state so the SPA can attach.
      */
@@ -154,8 +154,8 @@ class ControllerExceptionHandler {
                 MigrationLifecycleGate.JobKind.HISTORY -> "history-migration-running"
                 MigrationLifecycleGate.JobKind.TC_RESYNC -> "tc-resync-running"
                 MigrationLifecycleGate.JobKind.TC_VALIDATION -> "tc-validation-running"
-                MigrationLifecycleGate.JobKind.TC_PLACEMENT_DIFF -> "tc-placement-diff-running"
-                MigrationLifecycleGate.JobKind.TC_PLACEMENT_SYNC -> "tc-placement-sync-running"
+                MigrationLifecycleGate.JobKind.TC_CHECKOUT_LAYOUT_DIFF -> "tc-checkout-layout-diff-running"
+                MigrationLifecycleGate.JobKind.TC_CHECKOUT_LAYOUT_SYNC -> "tc-checkout-layout-sync-running"
             }
         log.warn(e.localizedMessage)
         return ResponseEntity.status(HttpStatus.CONFLICT).body(

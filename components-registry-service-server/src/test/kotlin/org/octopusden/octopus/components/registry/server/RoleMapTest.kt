@@ -50,8 +50,8 @@ class RoleMapTest {
     private fun me(jwt: RequestPostProcessor) = mvc.perform(get("/auth/me").with(jwt)).andExpect(status().isOk)
 
     @Test
-    @DisplayName("SYS-104: the template creator role carries ACCESS_COMPONENTS, ACCESS_AUDIT and CREATE_FROM_TEMPLATE (Decision 1)")
-    fun `SYS-104 template creator role`() {
+    @DisplayName("SYS-105: the template creator role carries ACCESS_COMPONENTS, ACCESS_AUDIT and CREATE_FROM_TEMPLATE (Decision 1)")
+    fun `SYS-105 template creator role`() {
         me(templateCreatorJwt())
             .andExpect(jsonPath("$.roles[0].name").value("ROLE_COMPONENTS_REGISTRY_TEMPLATE_CREATOR"))
             .andExpect(

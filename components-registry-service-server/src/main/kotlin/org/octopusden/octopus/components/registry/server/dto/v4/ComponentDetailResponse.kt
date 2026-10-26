@@ -28,6 +28,7 @@ data class ComponentDetailResponse(
     val clientCode: String?,
     val archived: Boolean,
     val testComponent: Boolean = false,
+    val autoRelease: Boolean = false,
     val solution: Boolean?,
     val parentComponentName: String?,
     val canBeParent: Boolean = false,

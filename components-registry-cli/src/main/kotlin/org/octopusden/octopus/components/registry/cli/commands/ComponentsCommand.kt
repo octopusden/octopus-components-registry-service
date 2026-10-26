@@ -67,6 +67,7 @@ class ComponentsListCommand :
     private val groupKey by option("--group-key", help = "Filter by group key (repeatable).").multiple()
     private val archived by option("--archived", help = "Filter archived components (true|false).").boolean()
     private val testComponent by option("--test-component", help = "Filter test components (true|false).").boolean()
+    private val autoRelease by option("--auto-release", help = "Filter auto-release components (true|false).").boolean()
     private val canBeParent by option("--can-be-parent", help = "Filter components that can be parents (true|false).").boolean()
     private val distributionExplicit by option(
         "--distribution-explicit",
@@ -118,6 +119,7 @@ class ComponentsListCommand :
             .addAll("groupKey", groupKey.ifEmpty { null })
             .add("archived", archived)
             .add("testComponent", testComponent)
+            .add("autoRelease", autoRelease)
             .add("canBeParent", canBeParent)
             .add("distributionExplicit", distributionExplicit)
             .add("distributionExternal", distributionExternal)

@@ -14,7 +14,7 @@ import java.util.UUID
 /**
  * ONB-001 rev. 3 — `V9__` adds a nullable `build_working_directory` to `component_configurations`
  * without touching data: from an empty database (V8 and V9 together) and from a database already on
- * V8 (as QA is), where every entry keeps its placement.
+ * V8 (as QA is), where every entry keeps its checkout layout.
  */
 @Timeout(120)
 @Tag("integration")
@@ -62,7 +62,7 @@ class V9BuildWorkingDirectoryMigrationTest {
     }
 
     @Test
-    @DisplayName("ONB-001 rev. 3: V9 on a V8 database keeps every entry's placement and sets no Build Working Directory")
+    @DisplayName("ONB-001 rev. 3: V9 on a V8 database keeps every entry's checkout layout and sets no Build Working Directory")
     fun `from a V8 database`() {
         flyway("8").migrate()
         val componentId = UUID.randomUUID()

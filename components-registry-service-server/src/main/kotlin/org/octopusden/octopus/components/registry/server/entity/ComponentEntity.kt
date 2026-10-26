@@ -119,6 +119,8 @@ class ComponentEntity(
     var archived: Boolean = false,
     @Column(name = "test_component", nullable = false)
     var testComponent: Boolean = false,
+    @Column(name = "auto_release", nullable = false)
+    var autoRelease: Boolean = false,
     @Column(name = "solution")
     var solution: Boolean? = null,
     // Batched via the class-level @BatchSize on the TARGET entities (ComponentEntity for

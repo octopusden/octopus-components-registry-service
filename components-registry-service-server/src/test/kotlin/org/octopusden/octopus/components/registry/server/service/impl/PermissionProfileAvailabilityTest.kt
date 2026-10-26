@@ -53,16 +53,16 @@ class PermissionProfileAvailabilityTest {
     }
 
     @Test
-    @DisplayName("SYS-104: with CREATE_FROM_TEMPLATE only, a template is usable (Decision 3)")
-    fun `SYS-104 template for template only creator`() {
+    @DisplayName("SYS-105: with CREATE_FROM_TEMPLATE only, a template is usable (Decision 3)")
+    fun `SYS-105 template for template only creator`() {
         val availability = PermissionProfileAvailability { it in setOf("ACCESS_COMPONENTS", "CREATE_FROM_TEMPLATE") }
 
         assertEquals(ProfileAvailability.Availability(usable = true, reason = null), availability.evaluate(template))
     }
 
     @Test
-    @DisplayName("SYS-104: with CREATE_FROM_TEMPLATE only, a regular profile is unusable, with the template-only reason (Decision 3)")
-    fun `SYS-104 profile for template only creator`() {
+    @DisplayName("SYS-105: with CREATE_FROM_TEMPLATE only, a regular profile is unusable, with the template-only reason (Decision 3)")
+    fun `SYS-105 profile for template only creator`() {
         val availability = PermissionProfileAvailability { it in setOf("ACCESS_COMPONENTS", "CREATE_FROM_TEMPLATE") }
 
         assertEquals(
@@ -72,16 +72,16 @@ class PermissionProfileAvailabilityTest {
     }
 
     @Test
-    @DisplayName("SYS-104: with CREATE_FROM_TEMPLATE only, a template may not be overridden (Decision 3)")
-    fun `SYS-104 override for template only creator`() {
+    @DisplayName("SYS-105: with CREATE_FROM_TEMPLATE only, a template may not be overridden (Decision 3)")
+    fun `SYS-105 override for template only creator`() {
         val availability = PermissionProfileAvailability { it in setOf("ACCESS_COMPONENTS", "CREATE_FROM_TEMPLATE") }
 
         assertEquals(false, availability.mayOverride(template))
     }
 
     @Test
-    @DisplayName("SYS-104: with both create permissions, CREATE_COMPONENTS decides (Decision 3)")
-    fun `SYS-104 both create permissions`() {
+    @DisplayName("SYS-105: with both create permissions, CREATE_COMPONENTS decides (Decision 3)")
+    fun `SYS-105 both create permissions`() {
         val availability =
             PermissionProfileAvailability { it in setOf("ACCESS_COMPONENTS", "CREATE_COMPONENTS", "CREATE_FROM_TEMPLATE") }
 

@@ -199,7 +199,7 @@ rule-text change from silently re-recording a fresh baseline.
 | Fitness Function | Where | How |
 |-----------------|-------|-----|
 | Flyway migrations are valid | CI | Testcontainers: fresh DB → apply all migrations → verify schema |
-| Flyway migrations are forward-only | CI | No deleted/modified migration files (checksum validation) |
+| Flyway migrations are append-only | CI (`migrations/append-only`, required by `gate/merge`) | A PR may only add `V*.sql` files under `db/migration/`; one that modifies, removes or renames an existing one fails (`scripts/ci/check-migrations-append-only.sh`). Production runs Flyway validate, which refuses to start on a changed checksum |
 | No schema drift | CI | Compare actual schema vs expected DDL (Flyway validate) |
 | Optimistic locking works | CI | Concurrent update test → one succeeds, one gets `OptimisticLockException` |
 | Foreign keys consistent | CI | Orphan record checks after import |
@@ -283,7 +283,7 @@ Rollback is per-component. There is no global "switch to Git" flag.
 | Level | Mechanism | Time to recover |
 |-------|-----------|----------------|
 | Single component (pre-edit) | Flip `component_source` to `git` | Seconds |
-| DB schema | Flyway rollback migration | Minutes |
+| DB schema | No undo migrations. Redeploy the previous release: an additive migration leaves it starting on the newer schema (Flyway accepts applied future migrations, `ddl-auto: validate` ignores extra columns). Where that release loses data the newer one wrote, a per-migration runbook in [`deployment/`](deployment/README.md) gives the snapshot and repair steps | Minutes |
 | Full system | Redeploy previous version (Git resolver still available during migration) | Minutes |
 
 ### 5.10 CI Pipeline Fitness Gates
