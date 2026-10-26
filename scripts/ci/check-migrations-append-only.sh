@@ -7,10 +7,11 @@
 # commit under test:
 #   - an existing V*.sql under db/migration/ (any depth: Flyway scans
 #     recursively) may not be modified, removed, renamed or moved out;
-#   - an added one must be named V<n>__<description>.sql, with an integer
-#     version of at most 18 digits and no leading zero;
-#   - its version must be above every version in the base, since production
-#     does not apply out-of-order migrations;
+#   - every V*.sql or v*.sql in the tree under test must be named
+#     V<n>__<lowercase_description>.sql, with an integer version of at most
+#     18 digits and no leading zero;
+#   - an added one's version must be above every version in the base, since
+#     production does not apply out-of-order migrations;
 #   - no version may appear twice in the tree under test.
 # Repeatable R__ and Java/Kotlin migrations are out of scope: there are none.
 #

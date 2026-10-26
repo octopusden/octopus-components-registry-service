@@ -118,8 +118,8 @@ jobs:
       # a migration can then both pass and both merge even when one version is
       # not above the other (the same version, or a lower one merged second),
       # and Flyway then refuses to start. Turning strict on for gate/merge
-      # closes that gap. pull_request.base.sha
-      # is not used: it can be older still.
+      # closes that gap. pull_request.base.sha is not used: it can be older
+      # still.
       - name: Check migrations are append-only and in order
         env:
           CHECKED: ${{ github.sha }}
