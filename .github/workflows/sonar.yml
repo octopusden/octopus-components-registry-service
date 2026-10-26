@@ -1,14 +1,22 @@
 name: Sonar
 
 on:
+  # main only: a PR branch is already analysed through pull_request, and a second analysis of the
+  # same SHA posts a second check run under the required context.
   push:
-    branches: [ '**' ]
+    branches: [ main ]
   pull_request:
     types: [opened, synchronize, reopened]
   workflow_dispatch:
 
 permissions:
   contents: read
+
+# A newer push to a PR supersedes its analysis. A running main analysis is never cancelled; a
+# superseded pending one may be dropped, and the newest main SHA is always analysed.
+concurrency:
+  group: sonar-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 jobs:
   sonar:
