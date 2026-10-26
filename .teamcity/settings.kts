@@ -1117,7 +1117,8 @@ object id17CompatLocalStandManual : BuildType({
     }
 
     failureConditions {
-        executionTimeoutMin = 70
+        // Scales with COMPAT_COMPONENTS_FILE and COMPAT_TRACE_LIMIT; revisit when either grows.
+        executionTimeoutMin = 85
     }
 
     features {
@@ -1391,6 +1392,7 @@ object id18CompatLocalStandGitModeAuto : BuildType({
     }
 
     failureConditions {
+        // Scales with COMPAT_COMPONENTS_FILE and COMPAT_TRACE_LIMIT; revisit when either grows.
         executionTimeoutMin = 50
     }
 

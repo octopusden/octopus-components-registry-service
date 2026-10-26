@@ -50,7 +50,7 @@ import kotlin.system.measureTimeMillis
  */
 @SpringBootTest(classes = [ComponentRegistryServiceApplication::class])
 @ActiveProfiles("common", "test-db")
-@Timeout(600)
+@Timeout(240)
 @Tag("performance")
 class GetComponentsListPerformanceTest {
     @MockBean
