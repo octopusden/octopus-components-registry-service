@@ -85,6 +85,13 @@ interface ComponentManagementService {
     ): RenderedComponentCode
 
     /**
+     * FULL as-code render of every component (archived included), sorted by component key —
+     * the corpus of the as-code text search (SYS-100). Same text as [renderComponentAsCode]
+     * minus the RMS section, which is RMS data rather than the component's own configuration.
+     */
+    fun renderAllComponentsAsCode(): List<RenderedComponentCode>
+
+    /**
      * The component's editors (componentOwner + ordered releaseManagers + securityChampions +
      * the owner's manager, SYS-063) for the Portal's read-only "who can edit" surface.
      * Informational only — see [ComponentEditorsResponse].
@@ -107,10 +114,19 @@ interface ComponentManagementService {
         dryRun: Boolean,
         manifestToken: String?,
     ): CompositeOverrideSplitResult
+
+    /** In-use release-manager usernames, sorted and distinct — the `/meta/release-managers` options. */
+    fun getDistinctReleaseManagers(): List<String>
+
+    /** In-use security-champion usernames, sorted and distinct — the `/meta/security-champions` options. */
+    fun getDistinctSecurityChampions(): List<String>
 }
 
 /** A rendered as-code document plus the canonical component key (for the filename). */
 data class RenderedComponentCode(
     val componentKey: String,
     val body: String,
+    val archived: Boolean = false,
+    /** The component's UUID; set by the bulk render (search hits link to the UUID-addressed editor). */
+    val id: UUID? = null,
 )

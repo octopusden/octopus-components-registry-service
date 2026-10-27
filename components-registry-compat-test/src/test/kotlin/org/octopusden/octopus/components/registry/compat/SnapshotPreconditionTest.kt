@@ -1,5 +1,6 @@
 package org.octopusden.octopus.components.registry.compat
 
+import com.fasterxml.jackson.annotation.JsonIgnoreProperties
 import com.fasterxml.jackson.databind.node.ArrayNode
 import com.fasterxml.jackson.module.kotlin.jacksonObjectMapper
 import org.junit.jupiter.api.Test
@@ -105,6 +106,7 @@ class SnapshotPreconditionTest : CompatibilityTestBase() {
  * Minimal local mirror of ServiceStatusDTO. Internal so jackson-module-kotlin
  * can instantiate it via reflection.
  */
+@JsonIgnoreProperties(ignoreUnknown = true)
 internal data class ServiceStatusSnapshot(
     val cacheUpdatedAt: String? = null,
     val serviceMode: String? = null,

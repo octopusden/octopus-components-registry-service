@@ -32,6 +32,12 @@ fun editorJwt(username: String): RequestPostProcessor =
         .jwt { it.claim("preferred_username", username) }
         .authorities(SimpleGrantedAuthority("ROLE_COMPONENTS_REGISTRY_EDITOR"))
 
+/** A user who may create components only from templates, without overrides. */
+fun templateCreatorJwt(username: String = "dave"): RequestPostProcessor =
+    jwt()
+        .jwt { it.claim("preferred_username", username) }
+        .authorities(SimpleGrantedAuthority("ROLE_COMPONENTS_REGISTRY_TEMPLATE_CREATOR"))
+
 fun viewerJwt(): RequestPostProcessor = viewerJwt("carol")
 
 fun viewerJwt(username: String): RequestPostProcessor =

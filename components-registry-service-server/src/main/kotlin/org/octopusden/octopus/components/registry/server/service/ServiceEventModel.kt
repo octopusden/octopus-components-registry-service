@@ -38,6 +38,15 @@ enum class ServiceEventType(
     /** TeamCity project-id/url resync run. */
     TEAMCITY_RESYNC(ServiceEventCategory.SYSTEM),
 
+    /** TeamCity project Java/Maven validation run. */
+    TEAMCITY_VALIDATION(ServiceEventCategory.SYSTEM),
+
+    /** ONB-002: read-only TeamCity -> CRS VCS checkout-layout Diff run. */
+    TEAMCITY_CHECKOUT_LAYOUT_DIFF(ServiceEventCategory.SYSTEM),
+
+    /** ONB-002: TeamCity -> CRS VCS checkout-layout Sync run (applies a prior Diff's resolved rows). */
+    TEAMCITY_CHECKOUT_LAYOUT_SYNC(ServiceEventCategory.SYSTEM),
+
     /** Portal-owned scheduled component-validation sweep run (source=portal). */
     VALIDATION_SWEEP(ServiceEventCategory.SYSTEM),
 

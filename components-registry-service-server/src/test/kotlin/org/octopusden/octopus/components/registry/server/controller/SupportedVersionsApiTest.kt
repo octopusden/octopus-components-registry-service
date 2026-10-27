@@ -61,7 +61,7 @@ class SupportedVersionsApiTest {
     @Test
     @DisplayName("a freshly-created component reports supported = ALL (no bounded coverage)")
     fun `fresh component is all-versions`() {
-        val id = createComponent("sv_all_${UUID.randomUUID().toString().take(8)}")
+        val id = createComponent("sv-all-${UUID.randomUUID().toString().take(8)}")
         val resp = getSupported(id)
         assertEquals(true, resp.path("all").asBoolean())
         assertEquals(0, resp.path("ranges").size())
@@ -70,7 +70,7 @@ class SupportedVersionsApiTest {
     @Test
     @DisplayName("PUT replaces coverage; contiguous ranges merge; GET reflects it; PUT {all:true} clears back to ALL")
     fun `put replaces and clears coverage`() {
-        val id = createComponent("sv_put_${UUID.randomUUID().toString().take(8)}")
+        val id = createComponent("sv-put-${UUID.randomUUID().toString().take(8)}")
 
         // Two contiguous ranges are stored MERGED — coverage is a clean maximal-contiguous union.
         putSupported(id, """{"ranges":["[1.0,2.0)","[2.0,)"]}""")
@@ -87,7 +87,7 @@ class SupportedVersionsApiTest {
     @Test
     @DisplayName("coverage is decoupled from overrides — PUT supported is NOT split by an existing override's edges")
     fun `put coverage is independent of overrides`() {
-        val id = createComponent("sv_align_${UUID.randomUUID().toString().take(8)}")
+        val id = createComponent("sv-align-${UUID.randomUUID().toString().take(8)}")
         // Override first (component is all-versions, so this is a free-standing override view).
         createFieldOverride(id, """{"overriddenAttribute":"build.javaVersion","versionRange":"[2.0,3.0)","value":"11"}""")
 
@@ -104,7 +104,7 @@ class SupportedVersionsApiTest {
     @Test
     @DisplayName("V1/V5: an override left outside the new supported set produces a non-blocking warning")
     fun `override outside supported warns`() {
-        val id = createComponent("sv_warn_${UUID.randomUUID().toString().take(8)}")
+        val id = createComponent("sv-warn-${UUID.randomUUID().toString().take(8)}")
         createFieldOverride(id, """{"overriddenAttribute":"build.javaVersion","versionRange":"[5.0,6.0)","value":"11"}""")
 
         val resp = putSupported(id, """{"ranges":["[1.0,2.0)"]}""")
@@ -124,7 +124,7 @@ class SupportedVersionsApiTest {
     @Test
     @DisplayName("idempotent re-PUT of the same coverage set is a no-op (no unique-index 500)")
     fun `idempotent re-put is safe`() {
-        val id = createComponent("sv_idem_${UUID.randomUUID().toString().take(8)}")
+        val id = createComponent("sv-idem-${UUID.randomUUID().toString().take(8)}")
         putSupported(id, """{"ranges":["[1.0,2.0)","[2.0,)"]}""")
         // Re-PUT the identical set — the delta replace must add/delete nothing, not violate the
         // partial unique index by re-inserting a row whose range already exists. The two contiguous
@@ -136,7 +136,7 @@ class SupportedVersionsApiTest {
     @Test
     @DisplayName("PUT of ranges that TILE all-versions collapses to supported = ALL (no spurious all-versions row)")
     fun `tiling ranges collapse to all`() {
-        val id = createComponent("sv_tile_${UUID.randomUUID().toString().take(8)}")
+        val id = createComponent("sv-tile-${UUID.randomUUID().toString().take(8)}")
         // An override that would be "outside" a bounded supported set but is INSIDE all-versions — used
         // to assert the tiling-collapse path treats supported as ALL (no spurious V1/V5 warning).
         createFieldOverride(id, """{"overriddenAttribute":"build.javaVersion","versionRange":"[5.0,6.0)","value":"11"}""")
@@ -158,7 +158,7 @@ class SupportedVersionsApiTest {
     @Test
     @DisplayName("PUT merges overlapping supported ranges into a clean union (no disjoint requirement)")
     fun `overlapping ranges merged`() {
-        val id = createComponent("sv_ovl_${UUID.randomUUID().toString().take(8)}")
+        val id = createComponent("sv-ovl-${UUID.randomUUID().toString().take(8)}")
         // Overlapping ranges are not rejected — coverage is stored as a maximal-contiguous union.
         val resp = putSupported(id, """{"ranges":["[1.0,3.0)","[2.0,4.0)"]}""")
         assertEquals(listOf("[1.0,4.0)"), resp.path("ranges").map { it.asText() })
@@ -167,7 +167,7 @@ class SupportedVersionsApiTest {
     @Test
     @DisplayName("PUT rejects an all-versions sentinel as a coverage range (use all:true instead)")
     fun `all versions sentinel rejected`() {
-        val id = createComponent("sv_sent_${UUID.randomUUID().toString().take(8)}")
+        val id = createComponent("sv-sent-${UUID.randomUUID().toString().take(8)}")
         putSupportedExpectingStatus(id, """{"ranges":["(,0),[0,)"]}""", status().isBadRequest)
         putSupportedExpectingStatus(id, """{"ranges":["(,)"]}""", status().isBadRequest)
     }

@@ -30,14 +30,26 @@ import org.octopusden.octopus.components.registry.core.dto.VersionNamesDTO
 import org.octopusden.octopus.components.registry.core.dto.VersionRequest
 import org.octopusden.octopus.components.registry.core.dto.VersionedComponent
 
+/**
+ * @param retryer retry policy for retryable failures (503, I/O errors). Feign clones it for every
+ * request, so a custom implementation must return a fresh instance from [Retryer.clone].
+ * The default, [defaultRetryer], gives up after about a second of backoff; a caller that has to
+ * ride out a longer outage of the service (a pod being rescheduled, say) passes its own budget.
+ */
 class ClassicComponentsRegistryServiceClient(
     apiUrlProvider: ClassicComponentsRegistryServiceClientUrlProvider,
     private val objectMapper: ObjectMapper,
+    private val retryer: Retryer,
 ) : ComponentsRegistryServiceClient {
     constructor(apiUrlProvider: ClassicComponentsRegistryServiceClientUrlProvider) : this(
         apiUrlProvider,
         defaultObjectMapper,
     )
+
+    constructor(
+        apiUrlProvider: ClassicComponentsRegistryServiceClientUrlProvider,
+        objectMapper: ObjectMapper,
+    ) : this(apiUrlProvider, objectMapper, defaultRetryer())
 
     private var client = createClient(apiUrlProvider.getApiUrl(), objectMapper)
 
@@ -151,13 +163,19 @@ class ClassicComponentsRegistryServiceClient(
             .errorDecoder(ComponentsRegistryServiceErrorDecoder(objectMapper))
             .encoder(JacksonEncoder())
             .decoder(JacksonDecoder())
-            .retryer(Retryer.Default(100, 1000, 5))
+            .retryer(retryer)
             .logger(Slf4jLogger(ComponentsRegistryServiceClient::class.java))
             .logLevel(Logger.Level.FULL)
             .target(ComponentsRegistryServiceClient::class.java, apiUrl)
 
     companion object {
         private val defaultObjectMapper: ObjectMapper = configureObjectMapper(ObjectMapper())
+
+        /**
+         * The retry policy used when none is passed: 5 attempts, backoff from 100 ms up to 1 s.
+         */
+        @JvmStatic
+        fun defaultRetryer(): Retryer = Retryer.Default(100, 1000, 5)
 
         /**
          * Configure given [objectMapper] and return it back.

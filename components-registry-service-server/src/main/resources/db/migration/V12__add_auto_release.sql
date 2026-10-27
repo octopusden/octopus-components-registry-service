@@ -1,0 +1,1 @@
+ALTER TABLE components ADD COLUMN auto_release BOOLEAN NOT NULL DEFAULT false;

@@ -1,5 +1,6 @@
 package org.octopusden.octopus.components.registry.server.controller
 
+import io.swagger.v3.oas.annotations.Operation
 import jakarta.validation.Valid
 import org.octopusden.octopus.components.registry.core.exceptions.NotFoundException
 import org.octopusden.octopus.components.registry.server.config.ConditionalOnDatabaseEnabled
@@ -47,6 +48,7 @@ class FeedbackAdminControllerV4(
 ) {
     /** Paginated submissions, newest first; optional exact `type`/`status` filters. */
     @GetMapping
+    @Operation(operationId = "listFeedback")
     fun list(
         @RequestParam(required = false) type: String?,
         @RequestParam(required = false) status: String?,

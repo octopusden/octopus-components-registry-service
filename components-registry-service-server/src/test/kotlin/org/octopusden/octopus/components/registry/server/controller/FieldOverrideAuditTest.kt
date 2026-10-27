@@ -66,7 +66,7 @@ class FieldOverrideAuditTest {
     @Test
     @DisplayName("SYS-050: create/update/delete field-override each writes a Component UPDATE audit row")
     fun `SYS-050 field-override writes are audited as Component UPDATE`() {
-        val id = createComponent("sys050_${UUID.randomUUID().toString().take(8)}")
+        val id = createComponent("sys050-${UUID.randomUUID().toString().take(8)}")
 
         // Baseline: component create wrote a CREATE row, no override UPDATEs yet.
         assertEquals(0, updateRowCount(id), "expected no UPDATE rows before any override edit, got ${historyActions(id)}")
@@ -95,7 +95,7 @@ class FieldOverrideAuditTest {
     @Test
     @DisplayName("SYS-050: a no-op field-override PATCH writes no audit row (SYS-048 guard holds)")
     fun `SYS-050 no-op override PATCH writes no audit row`() {
-        val id = createComponent("sys050noop_${UUID.randomUUID().toString().take(8)}")
+        val id = createComponent("sys050noop-${UUID.randomUUID().toString().take(8)}")
         val overrideId =
             createFieldOverride(
                 id,
@@ -116,7 +116,7 @@ class FieldOverrideAuditTest {
     @Test
     @DisplayName("SYS-054: field-override audit rows expose the resolved componentKey, not just the UUID entityId")
     fun `SYS-054 field-override audit rows expose the resolved componentKey, not just the UUID entityId`() {
-        val name = "sys050key_${UUID.randomUUID().toString().take(8)}"
+        val name = "sys050key-${UUID.randomUUID().toString().take(8)}"
         val id = createComponent(name)
         createFieldOverride(
             id,

@@ -65,7 +65,7 @@ class GhostComponentAfterRenameTest {
         // SUB is a DSL-migrated fixture component; auto-migrate put it into the DB
         // under name=SUB with component_source=(SUB, db).
         val oldName = "SUB"
-        val newName = "SUB_RENAMED_SYS029"
+        val newName = "sub-renamed-sys029"
 
         val initial =
             mvc

@@ -1,8 +1,8 @@
 package org.octopusden.octopus.components.registry.server.dto.v4
 
 import org.octopusden.octopus.components.registry.server.service.JobState
-import org.octopusden.octopus.components.registry.server.teamcity.TeamcitySyncJobState
-import org.octopusden.octopus.components.registry.server.teamcity.TeamcitySyncResult
+import org.octopusden.octopus.components.registry.server.teamcity.sync.TeamcitySyncJobState
+import org.octopusden.octopus.components.registry.server.teamcity.sync.TeamcitySyncResult
 import java.time.Instant
 
 /**

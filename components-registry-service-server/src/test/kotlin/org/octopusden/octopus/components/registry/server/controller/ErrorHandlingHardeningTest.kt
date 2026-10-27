@@ -72,8 +72,8 @@ class ErrorHandlingHardeningTest {
     @Test
     @DisplayName("sort=name,asc is translated to componentKey and returns 200")
     fun listComponents_sortByApiFieldName_translatesToComponentKey() {
-        val a = "errhard_a_${UUID.randomUUID().toString().take(8)}"
-        val b = "errhard_b_${UUID.randomUUID().toString().take(8)}"
+        val a = "errhard-a-${UUID.randomUUID().toString().take(8)}"
+        val b = "errhard-b-${UUID.randomUUID().toString().take(8)}"
         createComponent(b)
         createComponent(a)
 
@@ -92,7 +92,7 @@ class ErrorHandlingHardeningTest {
             objectMapper
                 .readTree(body)["content"]
                 .map { it["name"].asText() }
-                .filter { it.startsWith("errhard_") }
+                .filter { it.startsWith("errhard-") }
         assert(names.indexOf(a) < names.indexOf(b)) {
             "expected '$a' to come before '$b' under sort=name,asc, got $names"
         }

@@ -43,6 +43,19 @@ data class ComponentFilter(
      */
     val securityChampion: List<String>? = null,
     /**
+     * Multi-value "involvement" filter (SYS-101): a component matches when ANY listed username is
+     * its componentOwner OR among its release managers OR among its security champions — "every
+     * component I am involved in", which the AND-combined [owner] / [releaseManager] /
+     * [securityChampion] filters cannot express. `involvesRoles` narrows which roles count.
+     * Same controller normalisation as the other multi-value filters.
+     */
+    val involves: List<String>? = null,
+    /**
+     * Roles [involves] checks — any subset of `owner`, `releaseManager`, `securityChampion`
+     * (OR across the chosen roles). Null or empty = all three. Ignored without [involves].
+     */
+    val involvesRoles: List<String>? = null,
+    /**
      * Multi-value OR filter over the BASE configuration row's buildSystem
      * column. A component matches when its BASE buildSystem equals any of
      * the listed values. A component has exactly one BASE buildSystem at
@@ -55,14 +68,8 @@ data class ComponentFilter(
      */
     val buildSystem: List<String>? = null,
     /**
-     * Multi-value OR filter over the BASE configuration row's javaVersion
-     * column. A component matches when its BASE javaVersion equals any of the
-     * listed values. Same scalar-on-BASE-row shape as buildSystem (a component
-     * has exactly one BASE javaVersion at a time, so multi-select is OR, not
-     * AND). Null or empty means "no extra filter applied". The controller
-     * normalises raw query input (split-by-comma, trim, drop-empty, distinct,
-     * null-if-empty) before populating this field, so the Specification can rely
-     * on the list being non-empty and free of blank/whitespace/duplicate entries.
+     * Multi-value OR filter over the component's *effective* Java version — RMS's registered
+     * value when it has one, else the BASE configuration row's configured `javaVersion`.
      */
     val javaVersion: List<String>? = null,
     /**
@@ -132,4 +139,8 @@ data class ComponentFilter(
     /** Exact match on `components.distribution_external`. Like `solution`,
      *  `distributionExternal=false` excludes rows where the value IS NULL. */
     val distributionExternal: Boolean? = null,
+    /** Exact match on `components.test_component`. Null = test components are included. */
+    val testComponent: Boolean? = null,
+    /** Exact match on `components.auto_release`. Null = no filter. */
+    val autoRelease: Boolean? = null,
 )

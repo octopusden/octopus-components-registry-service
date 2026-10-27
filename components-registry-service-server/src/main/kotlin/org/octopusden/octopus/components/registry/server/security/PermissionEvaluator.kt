@@ -105,6 +105,13 @@ class PermissionEvaluator(
     fun canImport(): Boolean = hasPermission(IMPORT_DATA)
 
     /**
+     * ONB-002: the TeamCity checkout layout Diff's report (GET, read-only) is gated by plain component
+     * read access, not [IMPORT_DATA] — running the Diff (and Sync entirely) still requires
+     * [canImport]. Same permission [canEditComponent] itself requires before its own per-component check.
+     */
+    fun canViewComponents(): Boolean = hasPermission(ACCESS_COMPONENTS)
+
+    /**
      * CRS-B field-config `editable: adminOnly` gate. A caller may write a field marked
      * `adminOnly` only when they hold [EDIT_ANY_COMPONENT] — the same permission that
      * bypasses the per-component ownership check in [canEditComponent]. Read server-side
@@ -123,6 +130,12 @@ class PermissionEvaluator(
     companion object {
         const val ACCESS_COMPONENTS = "ACCESS_COMPONENTS"
         const val CREATE_COMPONENTS = "CREATE_COMPONENTS"
+
+        /**
+         * Create a component from a template, without overrides. [CREATE_COMPONENTS] includes it,
+         * so a holder of both has every right of [CREATE_COMPONENTS].
+         */
+        const val CREATE_FROM_TEMPLATE = "CREATE_FROM_TEMPLATE"
 
         /**
          * Bypass for the per-component ownership check in [canEditComponent]:

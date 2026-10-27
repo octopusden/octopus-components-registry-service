@@ -60,8 +60,11 @@ data class ComponentConfigurationResponse(
     val fileUrlArtifacts: List<FileUrlArtifactResponse> = emptyList(),
     val dockerImages: List<DockerImageResponse> = emptyList(),
     val packages: List<PackageResponse> = emptyList(),
+    val genericArtifacts: List<GenericArtifactResponse> = emptyList(),
     val requiredTools: List<String> = emptyList(),
     val buildToolBeans: List<BuildToolBeanResponse> = emptyList(),
+    // Base row or vcs.settings marker row: where the build runs, relative to the checkout root; null = the root.
+    val buildWorkingDirectory: String? = null,
 )
 
 enum class ConfigurationRowType {
@@ -133,6 +136,8 @@ data class VcsEntryResponse(
     val hotfixBranch: String? = null,
     val repositoryType: String? = null,
     val sortOrder: Int,
+    val sourcePath: String? = null,
+    val checkoutDirectory: String? = null,
 )
 
 data class MavenArtifactResponse(
@@ -166,6 +171,12 @@ data class PackageResponse(
     val sortOrder: Int,
 )
 
+data class GenericArtifactResponse(
+    val id: UUID,
+    val path: String,
+    val sortOrder: Int,
+)
+
 // ----------------------------------------------------------------------------
 // Write side — shared by ComponentCreate/UpdateRequest base-configuration body
 // and FieldOverrideCreate/UpdateRequest marker children payload.
@@ -188,8 +199,12 @@ data class BaseConfigurationRequest(
     val fileUrlArtifacts: List<FileUrlArtifactRequest>? = null,
     val dockerImages: List<DockerImageRequest>? = null,
     val packages: List<PackageRequest>? = null,
+    val genericArtifacts: List<GenericArtifactRequest>? = null,
     val requiredTools: List<String>? = null,
     val buildToolBeans: List<BuildToolBeanRequest>? = null,
+    // Where the build runs, relative to the checkout root (validated against vcsEntries).
+    @field:Schema(description = V4_SCALAR_CLEAR_SEMANTICS)
+    val buildWorkingDirectory: String? = null,
 )
 
 data class BuildAspectRequest(
@@ -264,12 +279,15 @@ data class JiraAspectRequest(
 )
 
 data class VcsEntryRequest(
+    // Ignored on write: the stored name is derived (secondary = checkoutDirectory, primary = previous primary's name).
     val name: String? = null,
     val vcsPath: String,
     val branch: String? = null,
     val tag: String? = null,
     val hotfixBranch: String? = null,
     val repositoryType: String? = null,
+    val sourcePath: String? = null,
+    val checkoutDirectory: String? = null,
 )
 
 data class MavenArtifactRequest(
@@ -293,6 +311,10 @@ data class DockerImageRequest(
 data class PackageRequest(
     val packageType: String,
     val packageName: String,
+)
+
+data class GenericArtifactRequest(
+    val path: String,
 )
 
 /**
@@ -407,6 +429,7 @@ data class TeamcityProjectResponse(
     val sortOrder: Int,
     @field:Schema(nullable = true)
     val projectVersion: String? = null,
+    val validations: List<ValidationResponse> = emptyList(),
 )
 
 data class TeamcityProjectRequest(

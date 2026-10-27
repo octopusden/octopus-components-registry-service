@@ -16,6 +16,7 @@ import org.octopusden.employee.client.common.dto.ManagerDTO
 import org.octopusden.octopus.components.registry.server.ComponentRegistryServiceApplication
 import org.octopusden.octopus.components.registry.server.support.adminJwt
 import org.octopusden.octopus.components.registry.server.support.editorJwt
+import org.octopusden.octopus.components.registry.server.support.templateCreatorJwt
 import org.octopusden.octopus.components.registry.server.support.viewerJwt
 import org.springframework.beans.factory.annotation.Autowired
 import org.springframework.boot.test.autoconfigure.web.servlet.AutoConfigureMockMvc
@@ -87,7 +88,7 @@ class ComponentOwnershipEditSecurityTest {
         whenMock(employeeServiceClient.getManager(anyString())).thenReturn(ManagerDTO(null))
     }
 
-    private fun uniqueName(prefix: String) = "${prefix}_${UUID.randomUUID().toString().take(8)}"
+    private fun uniqueName(prefix: String) = "${prefix.lowercase().replace('_', '-')}-${UUID.randomUUID().toString().take(8)}"
 
     /** Create a component (admin by default — create is gated on raw CREATE_COMPONENTS, not ownership). */
     private fun create(
@@ -221,6 +222,14 @@ class ComponentOwnershipEditSecurityTest {
         // edit gate depends on assignment, not on the coarse CREATE_COMPONENTS role.
         val c = create(uniqueName("viewerowner"), owner = "carol")
         performPatch(c.id(), c.version(), bumpDisplayName(), viewerJwt())
+            .andExpect(status().isOk)
+    }
+
+    @Test
+    @DisplayName("SYS-105: a template-only creator may PATCH a component they own")
+    fun `SYS-105 template only creator owner allowed`() {
+        val c = create(uniqueName("templateowner"), owner = "dave")
+        performPatch(c.id(), c.version(), bumpDisplayName(), templateCreatorJwt("dave"))
             .andExpect(status().isOk)
     }
 

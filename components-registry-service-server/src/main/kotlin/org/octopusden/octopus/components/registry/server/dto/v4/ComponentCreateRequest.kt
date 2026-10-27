@@ -49,6 +49,13 @@ data class ComponentCreateRequest(
     val canBeParent: Boolean = false,
     @field:Schema(requiredMode = Schema.RequiredMode.NOT_REQUIRED)
     val archived: Boolean = false,
+    // A synthetic component (e.g. a CVELAB stand component). A non-test component may not
+    // reference a test one as its parent or doc component — rejected by the service.
+    @field:Schema(requiredMode = Schema.RequiredMode.NOT_REQUIRED)
+    val testComponent: Boolean = false,
+    // Releases may be started by release automation once a candidate passes its gates.
+    @field:Schema(requiredMode = Schema.RequiredMode.NOT_REQUIRED)
+    val autoRelease: Boolean = false,
     // Ordered multi-value (first = primary); canonicalized server-side
     // (trim → drop blank → keep-first dedupe).
     @field:Schema(requiredMode = Schema.RequiredMode.NOT_REQUIRED)
@@ -67,6 +74,14 @@ data class ComponentCreateRequest(
     val skipCommitCheck: Boolean = false,
     val distributionExplicit: Boolean? = null,
     val distributionExternal: Boolean? = null,
+    @field:Schema(
+        requiredMode = Schema.RequiredMode.NOT_REQUIRED,
+        description =
+            "Id of the Create-component profile this component is created with (GET /rest/api/4/component-profiles). " +
+                "When given, the create is rejected unless the profile is live, the caller may use it, the stored " +
+                "classification matches it and every field rule of the profile holds. Blank is the same as absent.",
+    )
+    val profile: String? = null,
     // Accepted for backward compatibility but IGNORED: group membership is
     // migration-owned (DSL `components { }` aggregators), never assigned via the API.
     val group: ComponentGroupRequest? = null,

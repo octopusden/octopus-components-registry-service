@@ -2,65 +2,65 @@
 
 ## Summary Table
 
-| ID | Title | Priority | Layer | Status |
-|----|-------|----------|-------|--------|
-| SYS-001 | GET /components returns paginated list | High | integration-test | ❌ Not tested |
-| SYS-002 | GET /components/{id} returns full tree | High | integration-test | ❌ Not tested |
-| SYS-003 | PATCH updates scalar fields | High | integration-test | ❌ Not tested |
-| SYS-004 | PATCH with nested buildConfiguration | High | integration-test | ❌ Not tested |
-| SYS-005 | PATCH with nested vcsSettings (entries replace-all) | High | integration-test | ❌ Not tested |
-| SYS-006 | PATCH with nested distribution | High | integration-test | ❌ Not tested |
-| SYS-007 | PATCH with nested jiraComponentConfig | High | integration-test | ❌ Not tested |
-| SYS-008 | PATCH with nested escrowConfiguration | High | integration-test | ❌ Not tested |
-| SYS-009 | Optimistic locking — stale version rejected | High | integration-test | ❌ Not tested |
-| SYS-010 | @Version increments on child-only changes | High | integration-test | ❌ Not tested |
-| SYS-011 | PATCH response contains current version | High | integration-test | ❌ Not tested |
-| SYS-012 | Field overrides — POST creates override | Medium | integration-test | ❌ Not tested |
-| SYS-013 | Field overrides — GET list | Medium | integration-test | ❌ Not tested |
-| SYS-014 | Field overrides — PATCH updates range/value | Medium | integration-test | ❌ Not tested |
-| SYS-015 | Field overrides — DELETE (204) | Medium | integration-test | ❌ Not tested |
-| SYS-016 | Field override PATCH does not null value when updating only range | High | integration-test | ❌ Not tested |
-| SYS-017 | GET /meta/owners — unique owners | Medium | integration-test | ❌ Not tested |
-| SYS-018 | POST /admin/migrate-defaults — nested structure | Medium | integration-test | ❌ Not tested |
-| SYS-019 | Audit log on component UPDATE | Medium | integration-test | ❌ Not tested |
-| SYS-020 | Filtering by system, archived, search | Medium | integration-test | ❌ Not tested |
-| SYS-021 | UI: Component list without JS errors | High | e2e-test | ❌ Not tested |
-| SYS-022 | UI: Component detail with tabs | High | e2e-test | ❌ Not tested |
-| SYS-023 | UI: Navigation between pages | High | e2e-test | ❌ Not tested |
-| SYS-024 | UI: Editable tabs have Save button | Medium | e2e-test | ❌ Not tested |
-| SYS-025 | DatabaseComponentRegistryResolver applies field overrides | High | integration-test | ❌ Not tested |
-| SYS-026 | Flyway-managed PostgreSQL schema passes Hibernate validate | High | integration-test | ✅ Tested |
-| SYS-027 | ft-db profile supports writes against jsonb columns | High | integration-test | ✅ Tested |
-| SYS-028 | v4 API supports component rename | High | integration-test | ✅ Tested |
-| SYS-029 | Renamed-away name no longer resolvable via v1/v2/v3 under ft-db | High | integration-test | ✅ Tested |
-| SYS-030 | DistributionEntity round-trips groupId-only GAV without `:null` suffix | High | unit-test | ✅ Tested |
-| SYS-031 | DistributionEntity round-trips multi-image docker coordinates verbatim | High | unit-test | ✅ Tested |
-| SYS-032 | ComponentSourceRegistry reads reflect cross-pod DB changes on every call | High | integration-test | ✅ Tested |
-| SYS-033 | GET /rest/api/4/info returns build name and version, anonymous access | Medium | integration-test | ✅ Tested |
-| SYS-034 | GET /auth/me returns current user (username, roles, groups), authenticated | Medium | integration-test | ❌ Not tested |
-| SYS-035 | GET /components?owner=&lt;username&gt; filters by componentOwner exact match | High | integration-test | ✅ Tested |
-| SYS-036 | GET /audit/recent accepts entityType/entityId/changedBy/source/action/from/to filter params | High | integration-test | ✅ Tested |
-| SYS-037 | v4 CRUD API for dependency mappings (alias → componentName) | Medium | integration-test | ❌ Not implemented |
-| SYS-038 | Domain-named meta endpoints for free-form aspect option lists (buildSystem / repositoryType / generation) | Medium | integration-test | ✅ Tested |
-| SYS-040 | GET /components?labels=A,B filters by component_labels junction (AND across selected labels); GET /components/meta/labels returns sorted distinct codes in use | High | integration-test | ✅ Tested |
-| SYS-041 | GET /components?buildSystem=GRADLE,MAVEN accepts CSV multi-value with OR semantics across the BASE buildSystem column | High | integration-test | ✅ Tested |
-| SYS-042 | GET /components?system=A,B accepts CSV multi-value with OR semantics across the `component_systems` M:N junction (a component may belong to several systems); GET /components/meta/systems returns sorted distinct codes in use | High | integration-test | ✅ Tested |
-| SYS-043 | GET /components?owner=alice,bob accepts CSV multi-value with OR semantics over the scalar componentOwner column | High | integration-test | ✅ Tested |
-| SYS-044 | releaseManager / securityChampion are ordered multi-value (`string[]`) in v4 with keep-first dedupe; legacy v1/v2/v3 keep the comma-joined `String`; componentOwner stays single-value and is removed from the global component-defaults surface | High | unit + integration-test | ✅ Tested |
-| SYS-045 | GET /components?distributionExplicit= / ?distributionExternal= activate the two scalar distribution boolean filters (mirror `solution`; `=false` excludes NULL rows) | Medium | integration-test | ✅ Tested |
-| SYS-046 | clientCode / jiraProjectKey / parentComponentName / groupKey become multi-value exact-IN filters (CSV / repeatable); 4 companion in-use meta endpoints (/meta/client-codes, /meta/jira-project-keys, /meta/parent-component-names, /meta/group-keys) | High | integration-test | ✅ Tested |
-| SYS-047 | git-only no-DB boot mode: the `no-db` profile excludes the JDBC/JPA/Flyway auto-configs and gates every DB-coupled bean off (`@ConditionalOnDatabaseEnabled`), so the service boots with no database and serves v1/v2/v3 from the Git resolver — the compat git-mode stand (id18) needs no Postgres | High | unit / context-load test | ✅ Tested |
-| SYS-048 | A no-op write (component or field-override save whose old/new snapshots carry no field-level diff) writes no audit row; CREATE/DELETE keep theirs | High | unit-test | ✅ Tested |
-| SYS-049 | Git-history backfill records a component's first appearance with action `MIGRATED` (not `CREATE`); both audit read endpoints hide `MIGRATED` by default and opt back in via `includeMigrated=true`. `/audit/recent` additionally honours an explicit `action=MIGRATED` filter (the entity-history endpoint takes only `includeMigrated`) | High | unit + integration-test | ✅ Tested |
-| SYS-050 | Field-override (version-range) create/update/delete each publish a Component `UPDATE` audit event with an attribute-keyed diff | High | integration-test | ✅ Tested |
-| SYS-051 | TeamCity sync (automated `changedBy=system` reconciliation) does NOT write an audit row — the re-link is traced via an INFO log instead | Medium | unit-test | ✅ Tested |
-| SYS-052 | An `employee-service.url` whose placeholder does not resolve in the current environment is treated as "not configured": the client bean is not registered and context refresh succeeds (fail-open), instead of failing application boot | High | unit-test | ✅ Tested |
-| SYS-053 | Component audit snapshots include section fields (BASE-configuration build/escrow/jira scalars, versionRange, section + per-component child collections), so a section-only PATCH writes an UPDATE audit row with a field-level diff instead of being dropped by the SYS-048 no-op guard; collection snapshots are content-only (no row ids) so an identical re-save stays a no-op | High | integration-test | ✅ Tested |
-| SYS-054 | Audit read endpoints expose a server-resolved `componentKey` on each Component row: resolved from the `entityId` UUID to the component's current key, batched per page; falls back to the snapshot `name` (CRUD) / `moduleName` (MIGRATED) for components that no longer exist; `null` for non-Component rows or when unresolvable. Covers field-override rows whose value snapshot carries no name | High | integration-test | ✅ Tested |
-| SYS-055 | Anonymous `GET /rest/api/4/migration-status` reports whether a migration/resync job is RUNNING ({running, kind}) so a tokenless caller (the portal validation sweep) can skip while the legacy resolver may serve not-yet-migrated data | Medium | integration-test | ✅ Tested |
-| SYS-056 | `GET /components?releaseManager=<u>` / `?securityChampion=<u>` filter the list to components on which the user is a release manager / security champion (JOIN through the ordered child tables, OR across CSV / repeatable values, distinct); the list summary additionally emits `releaseManagers` / `securityChampions` username arrays (batched, emitted-empty-not-null) | High | integration-test | ✅ Tested |
-| SYS-057 | `GET /rest/api/4/health/statistics` returns registry-wide counts (`totalComponents`, `activeComponents`) and people-dimension breakdowns (`componentsByOwner`, `componentsByReleaseManager`, `componentsBySecurityChampion`) computed via SQL GROUP BY (never by loading all components into memory); ACCESS_COMPONENTS-gated; counts + people only (problem/validation aggregation is portal-owned) | High | integration-test | ✅ Tested |
-| SYS-058 | Artifact-ID ownership is modelled explicitly as a per-component LIST of `(group-list, mode ∈ {EXPLICIT, ALL_EXCEPT_CLAIMED, ALL}, version range)` mappings (`component_artifact_mappings` + `_tokens`), replacing the opaque regex `component_artifact_ids`. Cross-component uniqueness is decided deterministically from the stored modes (restores legacy validator #24/#25), enforced on v4 create/update (409); per-range overrides REPLACE the base for their range; v1–v3 wire renders the primary mapping; migration classifies DSL patterns into modes strictly (no escape hatch) | High | unit + integration-test | ✅ Tested |
+| ID      | Title                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                   | Priority | Layer | Status |
+|---------|-----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|----------|-------|--------|
+| SYS-001 | GET /components returns paginated list                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                  | High | integration-test | ❌ Not tested |
+| SYS-002 | GET /components/{id} returns full tree                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                  | High | integration-test | ❌ Not tested |
+| SYS-003 | PATCH updates scalar fields                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                             | High | integration-test | ❌ Not tested |
+| SYS-004 | PATCH with nested buildConfiguration                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                    | High | integration-test | ❌ Not tested |
+| SYS-005 | PATCH with nested vcsSettings (entries replace-all)                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                     | High | integration-test | ❌ Not tested |
+| SYS-006 | PATCH with nested distribution                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                          | High | integration-test | ❌ Not tested |
+| SYS-007 | PATCH with nested jiraComponentConfig                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                   | High | integration-test | ❌ Not tested |
+| SYS-008 | PATCH with nested escrowConfiguration                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                   | High | integration-test | ❌ Not tested |
+| SYS-009 | Optimistic locking — stale version rejected                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                             | High | integration-test | ❌ Not tested |
+| SYS-010 | @Version increments on child-only changes                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                               | High | integration-test | ❌ Not tested |
+| SYS-011 | PATCH response contains current version                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                 | High | integration-test | ❌ Not tested |
+| SYS-012 | Field overrides — POST creates override                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                 | Medium | integration-test | ❌ Not tested |
+| SYS-013 | Field overrides — GET list                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                              | Medium | integration-test | ❌ Not tested |
+| SYS-014 | Field overrides — PATCH updates range/value                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                             | Medium | integration-test | ❌ Not tested |
+| SYS-015 | Field overrides — DELETE (204)                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                          | Medium | integration-test | ❌ Not tested |
+| SYS-016 | Field override PATCH does not null value when updating only range                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                       | High | integration-test | ❌ Not tested |
+| SYS-017 | GET /meta/owners — unique owners                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                        | Medium | integration-test | ❌ Not tested |
+| SYS-018 | POST /admin/migrate-defaults — nested structure                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                         | Medium | integration-test | ❌ Not tested |
+| SYS-019 | Audit log on component UPDATE                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                           | Medium | integration-test | ❌ Not tested |
+| SYS-020 | Filtering by system, archived, search                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                   | Medium | integration-test | ❌ Not tested |
+| SYS-021 | UI: Component list without JS errors                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                    | High | e2e-test | ❌ Not tested |
+| SYS-022 | UI: Component detail with tabs                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                          | High | e2e-test | ❌ Not tested |
+| SYS-023 | UI: Navigation between pages                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                            | High | e2e-test | ❌ Not tested |
+| SYS-024 | UI: Editable tabs have Save button                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                      | Medium | e2e-test | ❌ Not tested |
+| SYS-025 | DatabaseComponentRegistryResolver applies field overrides                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                               | High | integration-test | ❌ Not tested |
+| SYS-026 | Flyway-managed PostgreSQL schema passes Hibernate validate                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                              | High | integration-test | ✅ Tested |
+| SYS-027 | ft-db profile supports writes against jsonb columns                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                     | High | integration-test | ✅ Tested |
+| SYS-028 | v4 API supports component rename                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                        | High | integration-test | ✅ Tested |
+| SYS-029 | Renamed-away name no longer resolvable via v1/v2/v3 under ft-db                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                         | High | integration-test | ✅ Tested |
+| SYS-030 | DistributionEntity round-trips groupId-only GAV without `:null` suffix                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                  | High | unit-test | ✅ Tested |
+| SYS-031 | DistributionEntity round-trips multi-image docker coordinates verbatim                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                  | High | unit-test | ✅ Tested |
+| SYS-032 | ComponentSourceRegistry reads reflect cross-pod DB changes on every call                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                | High | integration-test | ✅ Tested |
+| SYS-033 | GET /rest/api/4/info returns build name and version, anonymous access                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                   | Medium | integration-test | ✅ Tested |
+| SYS-034 | GET /auth/me returns current user (username, roles, groups), authenticated                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                              | Medium | integration-test | ❌ Not tested |
+| SYS-035 | GET /components?owner=&lt;username&gt; filters by componentOwner exact match                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                            | High | integration-test | ✅ Tested |
+| SYS-036 | GET /audit/recent accepts entityType/entityId/changedBy/source/action/from/to filter params                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                             | High | integration-test | ✅ Tested |
+| SYS-037 | v4 CRUD API for dependency mappings (alias → componentName)                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                             | Medium | integration-test | ❌ Not implemented |
+| SYS-038 | Domain-named meta endpoints for free-form aspect option lists (buildSystem / repositoryType / generation)                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                               | Medium | integration-test | ✅ Tested |
+| SYS-040 | GET /components?labels=A,B filters by component_labels junction (AND across selected labels); GET /components/meta/labels returns sorted distinct codes in use                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                          | High | integration-test | ✅ Tested |
+| SYS-041 | GET /components?buildSystem=GRADLE,MAVEN accepts CSV multi-value with OR semantics across the BASE buildSystem column                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                   | High | integration-test | ✅ Tested |
+| SYS-042 | GET /components?system=A,B accepts CSV multi-value with OR semantics across the `component_systems` M:N junction (a component may belong to several systems); GET /components/meta/systems returns sorted distinct codes in use                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                         | High | integration-test | ✅ Tested |
+| SYS-043 | GET /components?owner=alice,bob accepts CSV multi-value with OR semantics over the scalar componentOwner column                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                         | High | integration-test | ✅ Tested |
+| SYS-044 | releaseManager / securityChampion are ordered multi-value (`string[]`) in v4 with keep-first dedupe; legacy v1/v2/v3 keep the comma-joined `String`; componentOwner stays single-value and is removed from the global component-defaults surface                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                        | High | unit + integration-test | ✅ Tested |
+| SYS-045 | GET /components?distributionExplicit= / ?distributionExternal= activate the two scalar distribution boolean filters (mirror `solution`; `=false` excludes NULL rows)                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                    | Medium | integration-test | ✅ Tested |
+| SYS-046 | clientCode / jiraProjectKey / parentComponentName / groupKey become multi-value exact-IN filters (CSV / repeatable); 4 companion in-use meta endpoints (/meta/client-codes, /meta/jira-project-keys, /meta/parent-component-names, /meta/group-keys)                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                    | High | integration-test | ✅ Tested |
+| SYS-047 | git-only no-DB boot mode: the `no-db` profile excludes the JDBC/JPA/Flyway auto-configs and gates every DB-coupled bean off (`@ConditionalOnDatabaseEnabled`), so the service boots with no database and serves v1/v2/v3 from the Git resolver — the compat git-mode stand (id18) needs no Postgres                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                     | High | unit / context-load test | ✅ Tested |
+| SYS-048 | A no-op write (component or field-override save whose old/new snapshots carry no field-level diff) writes no audit row; CREATE/DELETE keep theirs                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                       | High | unit-test | ✅ Tested |
+| SYS-049 | Git-history backfill records a component's first appearance with action `MIGRATED` (not `CREATE`); both audit read endpoints hide `MIGRATED` by default and opt back in via `includeMigrated=true`. `/audit/recent` additionally honours an explicit `action=MIGRATED` filter (the entity-history endpoint takes only `includeMigrated`)                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                | High | unit + integration-test | ✅ Tested |
+| SYS-050 | Field-override (version-range) create/update/delete each publish a Component `UPDATE` audit event with an attribute-keyed diff                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                          | High | integration-test | ✅ Tested |
+| SYS-051 | TeamCity sync (automated `changedBy=system` reconciliation) does NOT write an audit row — the re-link is traced via an INFO log instead                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                 | Medium | unit-test | ✅ Tested |
+| SYS-052 | An `employee-service.url` whose placeholder does not resolve in the current environment is treated as "not configured": the client bean is not registered and context refresh succeeds (fail-open), instead of failing application boot                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                 | High | unit-test | ✅ Tested |
+| SYS-053 | Component audit snapshots include section fields (BASE-configuration build/escrow/jira scalars, versionRange, section + per-component child collections), so a section-only PATCH writes an UPDATE audit row with a field-level diff instead of being dropped by the SYS-048 no-op guard; collection snapshots are content-only (no row ids) so an identical re-save stays a no-op                                                                                                                                                                                                                                                                                                                                                                                                                                                      | High | integration-test | ✅ Tested |
+| SYS-054 | Audit read endpoints expose a server-resolved `componentKey` on each Component row: resolved from the `entityId` UUID to the component's current key, batched per page; falls back to the snapshot `name` (CRUD) / `moduleName` (MIGRATED) for components that no longer exist; `null` for non-Component rows or when unresolvable. Covers field-override rows whose value snapshot carries no name                                                                                                                                                                                                                                                                                                                                                                                                                                     | High | integration-test | ✅ Tested |
+| SYS-055 | Anonymous `GET /rest/api/4/migration-status` reports whether a migration/resync job is RUNNING ({running, kind}) so a tokenless caller (the portal validation sweep) can skip while the legacy resolver may serve not-yet-migrated data                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                 | Medium | integration-test | ✅ Tested |
+| SYS-056 | `GET /components?releaseManager=<u>` / `?securityChampion=<u>` filter the list to components on which the user is a release manager / security champion (JOIN through the ordered child tables, OR across CSV / repeatable values, distinct); the list summary additionally emits `releaseManagers` / `securityChampions` username arrays (batched, emitted-empty-not-null)                                                                                                                                                                                                                                                                                                                                                                                                                                                             | High | integration-test | ✅ Tested |
+| SYS-057 | `GET /rest/api/4/health/statistics` returns registry-wide counts (`totalComponents`, `activeComponents`) and people-dimension breakdowns (`componentsByOwner`, `componentsByReleaseManager`, `componentsBySecurityChampion`) computed via SQL GROUP BY (never by loading all components into memory); ACCESS_COMPONENTS-gated; counts + people only (problem/validation aggregation is portal-owned)                                                                                                                                                                                                                                                                                                                                                                                                                                    | High | integration-test | ✅ Tested |
+| SYS-058 | Artifact-ID ownership is modelled explicitly as a per-component LIST of `(group-list, mode ∈ {EXPLICIT, ALL_EXCEPT_CLAIMED, ALL}, version range)` mappings (`component_artifact_mappings` + `_tokens`), replacing the opaque regex `component_artifact_ids`. Cross-component uniqueness is decided deterministically from the stored modes (restores legacy validator #24/#25), enforced on v4 create/update (409); per-range overrides REPLACE the base for their range; v1–v3 wire renders the primary mapping; migration classifies DSL patterns into modes strictly (no escape hatch)                                                                                                                                                                                                                                               | High | unit + integration-test | ✅ Tested |
 | SYS-059 | `POST /rest/api/4/versions/preview` renders a `DetailedComponentVersion` from ad-hoc Jira formats (base + per-range overrides) and an input version, with no persistence and no component lookup — reusing the persisted-path render seam (including `normalizeVersion` canonicalization) so output matches `detailed-version` for the same effective config. Range is resolved server-side; `line`/`build` mirror `minor`/`release` and `minor`/`release` default to `$major`/`$major.$minor` when blank; hotfix coordinate gated on caller-supplied `hotfixEnabled` (VCS-derived), not format presence; custom `versionPrefix`/`versionFormat` render the wrapped `jiraVersion`; padding is template-driven (no `buildSystem`); blank/non-numeric version or malformed range → 400, a version matching no format → 404; authenticated-only | High | unit + integration-test | ✅ Tested |
 | SYS-060 | An append-only `service_event` journal persists operational events — CRS redeploys (STARTUP + build version), and every components-migration / history-migration / TeamCity-resync run (RUNNING→COMPLETED/FAILED, one row per run) — which previously lived only in an in-memory slot + logs and were lost on restart. **Any job failure (including executor-rejected submission) writes a FAILED row with the error**; a run whose pod dies mid-flight is reconciled to FAILED("interrupted by restart") on next startup (single-pod). Writes are best-effort (`REQUIRES_NEW` + swallow) so journaling never rolls back or crashes the observed job. `GET /rest/api/4/admin/service-events` returns the paginated journal (filter by type/source/status/time), IMPORT_DATA-gated; a scheduled daily prune enforces retention | High | unit + integration-test | ✅ Tested |
 | SYS-061 | `POST /rest/api/4/admin/service-events` ingests portal-sourced events (portal redeploys, validation-sweep runs) into the shared journal, so the Admin "Events" tab shows both services on one timeline. Authenticated by a shared-secret `X-Service-Event-Token` header (the portal BFF calls CRS tokenless), verified constant-time and **fail-closed** (blank/unset configured token rejects every call 403); method-scoped permitAll at the filter chain so the sibling GET read stays JWT+IMPORT_DATA gated; unknown eventType/status/source → 400 | High | integration-test | ✅ Tested |
@@ -68,6 +68,37 @@
 | SYS-065 | Desired-set field-override PATCH is echo-safe: re-submitting an UNCHANGED override row (same id, same normalized range) does not re-validate its range, so a component carrying a legacy composite range can still be saved; a CREATE or an actual range change is still validated (composite still rejected) | High | integration-test | ✅ Tested |
 | SYS-066 | One-off admin operation `POST /rest/api/4/admin/field-overrides/split-composites` splits legacy composite field-override rows into single-segment rows so their ranges become API-editable while resolved output is preserved. A SEPARATE `@ConditionalOnProperty(components-registry.composite-override-split.enabled, default OFF)` controller (bean absent → 404 → "our DB only"); IMPORT_DATA-gated. Fail-closed: a malformed range, a composite on any attribute other than `vcs.settings`, self-overlapping segments, or a sibling collision whose ordered vcs payload is not identical aborts the whole transaction. `dryRun` (default true) previews + returns a deterministic `manifestToken`; a write must echo the token, recomputed + compared in-transaction (stale/missing → 409). Bumps each affected component's version once; audits per composite row | High | unit + integration-test | ✅ Tested |
 | SYS-067 | When a component's `labels`, `systems`, or `build.requiredTools` is edited, the client sends the complete new list and the stored list is made to match it exactly: entries kept in the list stay, new entries are added, entries left out are removed, and re-sending the same list changes nothing. Applies to all three lists (`component_labels`, `component_systems`, `component_required_tools`) | High | integration-test | ✅ Tested |
+| SYS-075 | `component-validation` module: `ATTACHED_TO_BUILD_TEMPLATE` is OK when exactly one build configuration is attached to a build template, WARNING when more than one is (ambiguous), WARNING when none is (always applicable)                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                             | High | unit-test | ✅ Tested |
+| SYS-076 | `component-validation` module: `OVERRIDES_DEFAULT_BUILD_STEP` is NOT_APPLICABLE with no attached configuration, WARNING if any attached configuration's default build step is overridden, OK if all are inherited                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                       | High | unit-test | ✅ Tested |
+| SYS-077 | `component-validation` module: `HAS_CUSTOM_BUILD_STEP` is WARNING when any uninherited build step across every configuration (attached to a template or not) resolves any tool version at all — Java or Maven, whichever it uses; OK otherwise                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                          | High | unit-test | ✅ Tested |
+| SYS-078 | `component-validation` module: `USES_OLD_JAVA_VERSION` is WARNING if any resolved Java version is 1.8 (every uninherited step across every configuration, plus each attached configuration's default build step regardless of its own inherited flag), OK if versions resolved but none is 1.8, NOT_APPLICABLE if nothing Java was inspected; an unresolved version is ignored, not flagged                                                                                                                                                                                                                                                                                                                                                                                                                                             | High | unit-test | ✅ Tested |
+| SYS-079 | `component-validation` module: `ValidatorSuite.validate` isolates a throwing validator as a single `Status.ERROR` result instead of losing every other check's result                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                     | Medium | unit-test | ✅ Tested |
+| SYS-080 | `component-validation` module: `JavaVersion.isEight` is true only for the exact `"1.8"` / `"8"` spellings; `JavaVersionResolver` normalizes marker-bearing real-world values (`"env.JDK_ZULU_17_x64"`, `"/opt/java/openjdk-11"`, etc. — a value with no `jdk`/`java`/`jvm` marker never resolves) down to that major-version form before `isEight` is checked                                                                                                                                                                                                                                                                                                                                                                                                                                                                           | Medium | unit-test | ✅ Tested |
+| SYS-081 | `component-validation` module: `TeamCityValidators` (the suite) returns exactly the seven TeamCity results for a given project, each with the status the individual checks would produce in isolation                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                     | High | unit-test | ✅ Tested |
+| SYS-082 | `component-validation` module: `BuildStepToolVersionResolver` — given one `BuildStep`, dispatch by `StepType` (Maven/Gradle/command-line) to read the right parameter(s), recursively resolve `%param%` references via `ParameterReferenceResolver`, and derive `Set<ToolVersion>` via the per-tool `ValueVersionResolver`s (`JavaVersionResolver`, `MavenVersionResolver`)                                                                                                                                                                                                                                                                                                                                                                                                                                                             | High | unit-test | ✅ Tested |
+| SYS-083 | `component-validation` module: `MULTIPLE_JAVA_VERSIONS` is WARNING when more than one distinct Java version is found across the same inspected steps as `USES_OLD_JAVA_VERSION`, OK for zero or one distinct version, NOT_APPLICABLE if nothing was inspectable                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                         | High | unit-test | ✅ Tested |
+| SYS-084 | `component-validation` module: `MULTIPLE_MAVEN_VERSIONS` is WARNING when more than one distinct Maven version is found across the same inspected steps, OK for zero or one distinct version, NOT_APPLICABLE if nothing was inspectable                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                  | High | unit-test | ✅ Tested |
+| SYS-085 | TC validation persistence is latest-only per project: each run replaces that project's stored rows via a bulk `DELETE` + insert (not a derived load-then-remove), so a finding `type` that survives between two consecutive runs for the same project does not collide with a stale managed/removed instance                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                            | High | integration-test | ✅ Tested |
+| SYS-086 | TC validation scope (which projects to validate and to prune stale rows for) is derived from `version_line` — the projects currently linked to a component — not from the append-only `teamcity_project` table, which never removes a project once unlinked                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                             | High | unit-test | ✅ Tested |
+| SYS-087 | Stale-row pruning deletes `teamcity_validation` rows for any project no longer in scope, including every remaining row when the scope shrinks to empty (e.g. the last linked project is unlinked) — an empty scope is not treated as a failure that skips cleanup                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                       | High | integration-test | ✅ Tested |
+| SYS-088 | TC validation runs automatically after a successful TeamCity sync (`TeamcitySyncCompletedEvent` → `TeamcityValidationSyncListener`, async, best-effort — a validation failure never affects the sync), and on demand via `POST /admin/teamcity-validation`; the enriched-fetch cache is invalidated before the post-sync run so it cannot serve a pre-sync TeamCity snapshot                                                                                                                                                                                                                                                                                                                                                                                                                                                            | High | unit-test | ✅ Tested |
+| SYS-089 | TC sync and TC validation are mutually exclusive: both run through the shared single-pod `MigrationLifecycleGate` (`TC_VALIDATION` job kind alongside `COMPONENTS`/`HISTORY`), so a validation run cannot start while a sync (or vice versa) is in flight                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                               | High | unit-test | ✅ Tested |
+| SYS-090 | `POST /admin/teamcity-validation` returns 202 Accepted with the freshly-started job for a new run, 409 Conflict with the existing job's state when attaching to an already-RUNNING validation (same-kind), and 409 Conflict with a structured conflict envelope for a cross-kind gate conflict; `GET /admin/teamcity-validation/job` returns the latest known state or 404 if none; both endpoints are IMPORT_DATA-gated (401 anonymous, 403 non-IMPORT_DATA)                                                                                                                                                                                                                                                                                                                                                                           | High | integration-test | ✅ Tested |
+| SYS-091 | Component detail (`GET /rest/api/4/components/{id}`) embeds stored WARNING/ERROR findings per linked TeamCity project as `{type, status, message, updatedAt}`; a project with no stored findings is presented as clean (no entries), not as "not yet validated" vs "validated clean"                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                    | Medium | integration-test | ✅ Tested |
+| SYS-092 | The admin dashboard read APIs (`GET /admin/teamcity-validations` + `.../summary`) join stored findings back to their owning component(s) via `version_line`, de-duplicate a component reachable through more than one version line to the same project, and count DISTINCT components (not raw finding rows) per type/status; both endpoints are IMPORT_DATA-gated                                                                                                                                                                                                                                                                                                                                                                                                                                                                      | High | unit + integration-test | ✅ Tested |
+| SYS-093 | `component-validation` module: `JAVA_HOME_NOT_FROM_ENV` is WARNING when a build step resolves a Java version whose java-home (`target.jdk.home`, or a java-resolving command-line token) does not reference `%env.JAVA_HOME%` at any point in its recursive parameter-reference chain — i.e. it points at a specific JDK directly instead of the agent's configured default; OK when every resolved java-home goes through `%env.JAVA_HOME%`, NOT_APPLICABLE when nothing Java was inspectable                                                                                                                                                                                                                                                                                                                                            | High | unit-test | ✅ Tested |
+| SYS-094 | `GET /service/status` exposes `configRevision` — an opaque composite cache-actuality token `"[gitRevision].[maxId].[count]"` built from the VCS revision plus the max-id and row-count aggregates of the non-`git-history` `audit_log` rows, so a consumer can detect DB-side config changes while `versionControlRevision` is frozen; `null` without the database layer (no-db / Git-based installs) | Medium | integration-test + context-load test | ✅ Tested |
+| SYS-095 | Component-key format is enforced on **create and rename only**: `[a-z][a-z0-9-]*`, or the lowercased effective `clientCode` (its underscores included) as a **leading** prefix followed by end-of-key or `-` plus the same kebab tail; `_` is legal nowhere else, and a component whose effective `clientCode` is absent/blank may carry none. Existing keys are never re-validated (legacy uppercase / dotted / underscored keys keep saving) and the DSL import path is unaffected | High | unit-test | ✅ Tested |
+| SYS-096 | `GET /components/{idOrName}/archive-readiness` — read-only pre-flight for the archive/delete flow, gated by the same authorization as `deleteComponent` (`ACCESS_COMPONENTS` + `canDeleteComponent`); resolves by id or name identically to `getComponent`; returns one entry per external target (VCS repository, TeamCity project, Jira open issues, Jira project) with outcome `COMPLETED`/`NOT_COMPLETED`/`UNKNOWN`, a reason for the latter two, and a `reasonKind` classifying what an `UNKNOWN` entry needs; `ready` is false iff any entry is `NOT_COMPLETED` or `UNKNOWN` | High | unit + integration-test | ✅ Tested |
+| SYS-097 | The explicit+external "≥1 distribution coordinate" rule is not applied when the component's **BASE** build system is `WHISKEY` (case-insensitive; per-range build-system overrides are ignored). Applies on create, component PATCH and the `/field-overrides` endpoints; non-WHISKEY explicit+external components still require a coordinate, including after being switched off WHISKEY | High | integration-test | ✅ Tested |
+| SYS-098 | A component configuration may declare one or more **generic HTTP-URL artifacts** under `distribution.generic`; each artifact is a path string stored verbatim in DB (V10 migration, table `distribution_generic_artifacts`). The path must match `GENERIC_ENTRY` regex (no dots-only segments, no commas, no traversal sequences); the only allowed `${…}` placeholders are `${version}`, `${major}`, `${minor}`, `${service}`, `${fix}`, and `${build}` — any other placeholder (including SpEL expressions such as `T(…).method()`) is rejected with 400. The `generic` field of `DistributionDTO` is the comma-joined CSV of paths sorted by `sort_order`; it is `null` when no artifacts are set (`@JsonInclude(NON_NULL)`) and silently ignored by older clients (`@JsonIgnoreProperties(ignoreUnknown = true)`) | High | unit + integration-test | ✅ Tested |
+| SYS-099 | A component carries a component-level boolean `testComponent` (default false; V11 sets it on components labelled `test-component`). v4 create/update/detail/summary expose it and the list accepts `?testComponent=`; without it test components are listed. v1/v2/v3 always carry it (read from the DB); released clients ignore the new key (their concrete DTOs ignore unknown properties). Setting it needs a key matching `components-registry.test-components.name-patterns` (default `^test-`, `^cvelab-`; served by `GET /meta/test-component-name-patterns`), also on rename of a flagged component (400). A non-test component may not reference a test component as parent or doc component (400 naming both); the `test-component` label stays for compatibility and a label without the flag only yields a write warning; health statistics and the TeamCity validation views exclude test components. The legacy Groovy DSL does not carry it | High | unit + integration-test | ✅ Tested |
+| SYS-100 | `GET /components/as-code/search` — global case-insensitive substring (or `regex=true`) search over every component's FULL as-code view, grouped by component with line number, line text and enclosing block path; `archived` / `limit` / `maxMatchesPerComponent` params; in-memory index rebuilt when the DB change stamp moves or after 5 minutes; `crsctl search` client command | High | unit + integration-test | ✅ Tested |
+| SYS-101 | `GET /components?involves=<u>[&involvesRoles=…]` — components where any listed user is the owner OR a release manager OR a security champion (OR across the chosen roles; all three by default); combines with every other filter via AND; one row per component; unknown role → 400. `crsctl components list --involves/--involves-role` | High | integration-test | ✅ Tested |
+| SYS-102 | TeamCity checkout layout Diff/Sync (`/admin/teamcity-checkout-layout`): Diff is a read-only report over the BASE rows of non-archived components; Sync writes only the `RESOLVED` rows of the last completed Diff (named by `diffId`, else 409 `checkout-layout-diff-stale`) through the normal v4 write path, tagged `sync from TeamCity (job <id>)`, a prefix user writes cannot set; single-root `CONFLICT`/`UNEXPRESSIBLE` rows are always reported; VCS roots that the component's own compile configurations attach but the registry lacks yield `ROOTS_MISMATCH` and the `VCS_ROOTS_DIFFER_FROM_REGISTRY` validation warning | High | unit + integration-test | ✅ Tested |
+| SYS-103 | `ClassicComponentsRegistryServiceClient` takes the retry policy for retryable failures (503, I/O errors) from its caller (`Retryer` constructor parameter); without one it keeps the default of 5 attempts, backoff 100 ms – 1 s (`defaultRetryer()`); the policy is per request, so one call exhausting it does not shorten the next | Medium | unit-test | ✅ Tested |
+| SYS-104 | Component flag `autoRelease` (default false), DB and v4 only: create/update requests, summary/detail responses, `?autoRelease=` list filter, field-config visibility/editability; an admin-started TeamCity resync turns it on (never off) when every linked release line has a finish-build trigger and nobody has changed the flag; the weekly cron only with `teamcity.sync.auto-release-on-cron` | Medium | unit + integration-test | ✅ Tested |
+| SYS-105 | Template-only creators: the permission `CREATE_FROM_TEMPLATE` (role `ROLE_COMPONENTS_REGISTRY_TEMPLATE_CREATOR`, with `ACCESS_COMPONENTS` and `ACCESS_AUDIT`) lets a caller without `CREATE_COMPONENTS` create components from templates only: templates usable, regular profiles unusable with "You may create components from templates only", any template override `403`, the regular create `403`. `CREATE_COMPONENTS` keeps every right and wins over it; editing by ownership is unchanged | High | unit + integration-test | ✅ Tested |
 
 ---
 
@@ -1520,6 +1551,7 @@ Mirrors SYS-040 (labels) / SYS-042 (system): a filter change plus a companion in
    - `GET /rest/api/4/components/meta/jira-project-keys` → `ComponentRepository.findDistinctJiraProjectKeys()` (distinct `jira_project_key` over BASE configuration rows).
    - `GET /rest/api/4/components/meta/parent-component-names` → `ComponentRepository.findDistinctParentComponentNames()` (distinct `component_key` of components actually referenced as someone's parent — NOT the can-be-parent candidate set, which the editor parent picker uses via `?canBeParent=true`).
    - `GET /rest/api/4/components/meta/group-keys` → `ComponentGroupRepository.findDistinctGroupKeys()` (distinct `group_key` of groups that own ≥1 component, so no dead options).
+   - `GET /rest/api/4/components/meta/release-managers` / `GET /rest/api/4/components/meta/security-champions` → `ComponentManagementService.getDistinctReleaseManagers()` / `getDistinctSecurityChampions()` (distinct trimmed usernames over the ordered `releaseManagers` / `securityChampions` child collections). They back the existing `?releaseManager=` / `?securityChampion=` filters (SYS-056) and stay two lists: a merged one would advertise dead options in both pickers.
 
 **Preconditions:**
 - Caller has `ACCESS_COMPONENTS`.
@@ -1533,8 +1565,9 @@ Mirrors SYS-040 (labels) / SYS-042 (system): a filter change plus a companion in
 6. Blank / interleaved-blank / dedupe / whitespace-trim normalisation matches the other multi-value filters (`?clientCode=`, `?clientCode=,,`, `?clientCode=A,A`).
 7. `GET /meta/client-codes` / `/meta/jira-project-keys` / `/meta/parent-component-names` / `/meta/group-keys` each return 200 + a sorted, duplicate-free JSON array of in-use values, never 404, regardless of DB state.
 8. `/meta/parent-component-names` lists only component keys actually referenced as a parent; `/meta/group-keys` lists only group keys with ≥1 member.
+9. `GET /meta/release-managers` / `/meta/security-champions` each return 200 + a sorted, duplicate-free array of in-use usernames; a user who is only a release manager never appears in `/meta/security-champions`, and vice versa; a username held only by a hidden fake self-linked aggregator stub appears in neither.
 
-**Test method:** `ListComponentsExtendedFiltersTest` (the `clientCode` / `jiraProjectKey` / `parentComponentName` / `groupKey` cases updated to exact-IN + a multi-value case) and `MetaInUseOptionsEndpointsTest` (the four endpoints).
+**Test method:** `ListComponentsExtendedFiltersTest` (the `clientCode` / `jiraProjectKey` / `parentComponentName` / `groupKey` cases updated to exact-IN + a multi-value case) and `MetaInUseOptionsEndpointsTest` (the six endpoints).
 
 **Out of scope:**
 - Converting the remaining extended scalars (`vcsPath`, `productionBranch`) to multi-value — they stay single-value `LIKE` (free-text search, not dropdown-backed).
@@ -1588,8 +1621,9 @@ Postgres for nothing (follow-up from #308 / #309, issue #310).
 2. The `@Primary` `ComponentRoutingResolver` and all DB-coupled beans (v4 CRUD,
    TeamCity sync, …) are absent; the sole `ComponentRegistryResolver` is the
    pure-Git `ComponentRegistryResolverImpl`.
-3. `GET /rest/api/2/components-registry/service/status` reports `defaultSource=git`
-   and `dbComponentCount=0`.
+3. `GET /rest/api/2/components-registry/service/status` reports `defaultSource=git`,
+   `dbComponentCount=0`, and a **null** `configRevision` — no `AuditLogRepository` is
+   wired, so the audit-derived half of the token has no source (see SYS-094).
 4. db-mode (no `no-db` profile) is unchanged — every gated bean is `matchIfMissing=true`.
 
 **Test method:** `NoDbModeContextTest` — four methods, each carrying `SYS-047` in
@@ -1597,7 +1631,8 @@ its name + a `@DisplayName("SYS-047: …")` (test-to-requirement traceability):
 `SYS-047 no DataSource bean exists in no-db mode`,
 `SYS-047 git resolver is the sole resolver in no-db mode`,
 `SYS-047 db-only beans absent and git read path present in no-db mode`,
-`SYS-047 status reports defaultSource git and zero db components in no-db mode`.
+`SYS-047 status reports defaultSource git and zero db components in no-db mode`
+(the last one also asserts the null `configRevision` — SYS-094).
 
 ### SYS-048: no-op save writes no audit row
 
@@ -2060,7 +2095,8 @@ downloading the whole list; CRS owns the data and can aggregate in SQL.
 `GET /rest/api/4/health/statistics` (new `HealthControllerV4`, same package and
 `@ConditionalOnDatabaseEnabled` level as `ComponentControllerV4`) returns:
 
-- `totalComponents: Long` — all non-FAKE-aggregator component rows.
+- `totalComponents: Long` — all non-FAKE-aggregator, non-test (SYS-099) component rows. Every
+  figure below excludes test components as well.
 - `activeComponents: Long` — the non-archived subset.
 - `componentsByOwner: Map<String, Long>` — count of ACTIVE (non-archived)
   components per `component_owner` (scalar column GROUP BY; null/blank owners excluded).
@@ -2346,7 +2382,8 @@ Persistence is the transitional `version_line` → `teamcity_project` model: one
 row per kept line (`version` is sync-owned, nullable, a reconciliation discriminator — see
 `VersionLineEntity`), pointing at a deduplicated `teamcity_project`. Reconciliation is
 idempotent (writes only when the (projectId, version) set changes). Counters are reported per
-component (`updated`/`unchanged`/`skipped_no_match`/`skipped_ambiguous`/`ambiguous_auto_resolved`);
+component (`updated`/`unchanged`/`skipped_no_match`/`skipped_ambiguous`/`ambiguous_auto_resolved`,
+`auto_release_enabled` — SYS-104);
 `dropped_lines` separately surfaces lines dropped from otherwise-linked components. A v4 PATCH
 preserves the sync-owned `version` for project ids it retains.
 
@@ -2363,6 +2400,259 @@ preserves the sync-owned `version` for project ids it retains.
 cases) and `ExternalTcProjectFetcherTest` (reference resolution, version-format, deterministic
 build-type fallback, archived/all-paused exclusion); v4 PATCH preservation in
 `ComponentManagementServiceImpl` write-path tests.
+
+### SYS-075: component-validation — ATTACHED_TO_BUILD_TEMPLATE
+
+New pure-Kotlin module `component-validation` validates
+TeamCity projects: input in (`TeamcityProject`), `List<ValidationResult>` out — no Spring, no
+DB, no TeamCity-client dependency, no IO. `ATTACHED_TO_BUILD_TEMPLATE` is the first of its seven
+checks: is any build configuration attached to a build template (`CDGradleBuild` /
+`CDJavaMavenBuild` in the real deployment; the module itself takes a `TemplateCatalog` and knows
+no concrete ids)?
+
+**Description:**
+`AttachedToBuildTemplateValidator` reports `OK` when exactly one configuration is attached
+(`BuildConfigurationResolver.attachedToBuildTemplate(project).size == 1`), `WARNING` when more
+than one is attached (ambiguous — which one is authoritative?), `WARNING` when none is — a
+finding about the project's own configuration, not a failure of validation itself, so it stays at
+the same severity as every other content check (`ERROR` is reserved for the validation process
+itself failing to run, see decision D6). Always applicable (never `NOT_APPLICABLE`).
+
+**Acceptance criteria:**
+1. A project with exactly one configuration attached to a build template → `OK`.
+2. A project with more than one configuration attached to a build template → `WARNING`.
+3. A project with configurations, none attached to a build template → `WARNING`.
+4. A project with no build configurations at all → `WARNING`.
+
+**Test method:** `AttachedToBuildTemplateValidatorTest` —
+`SYS-075 OK for a single attached config`, `SYS-075 WARNING for multiple attached configs`,
+`SYS-075 WARNING when nothing attached`, `SYS-075 WARNING for empty project`.
+
+### SYS-076: component-validation — OVERRIDES_DEFAULT_BUILD_STEP
+
+**Description:**
+`OverridesDefaultBuildStepValidator` reports `NOT_APPLICABLE` when no configuration is attached
+to a build template. Otherwise, for each attached configuration's default build step
+(`BuildStepSelector.defaultBuildStep`, id `X` per `TemplateCatalog.defaultBuildStepId`): any
+`OVERRIDDEN` → `WARNING` (message names the configuration(s)); all `INHERITED` → `OK`.
+
+**Acceptance criteria:**
+1. No attached configuration → `NOT_APPLICABLE`.
+2. Attached configuration, default step `INHERITED` → `OK`.
+3. Attached configuration, default step `OVERRIDDEN` → `WARNING`.
+
+**Test method:** `OverridesDefaultBuildStepValidatorTest` —
+`SYS-076 NOT_APPLICABLE when nothing attached`, `SYS-076 OK when default step inherited`,
+`SYS-076 WARNING when default step overridden`.
+
+### SYS-077: component-validation — HAS_CUSTOM_BUILD_STEP
+
+**Description:**
+`CustomBuildStepValidator` answers a single question: "is there any overriding custom build step
+at all" — it doesn't matter whether that step uses Java or Maven, so `HAS_CUSTOM_JAVA_BUILD_STEP`
+and `HAS_CUSTOM_MAVEN_BUILD_STEP` were merged into one `HAS_CUSTOM_BUILD_STEP` (see decision log
+§5 decision 24). It gathers every uninherited build step across every build configuration —
+attached to a build template or not — resolves each one's tool versions via
+`BuildStepToolVersionResolver`, and reports `WARNING` if any uninherited step resolves any tool
+version at all (Java or Maven), `OK` otherwise. Always applicable.
+
+**Acceptance criteria:**
+1. No uninherited step at all → `OK`.
+2. An uninherited step exists but resolves no tool version → `OK`.
+3. A non-template configuration has an uninherited step resolving a Java version → `WARNING`.
+4. A non-template configuration has an uninherited step resolving a Maven version → `WARNING`
+   (both tools count — the question is "is there a custom step", not "which tool").
+5. An attached configuration's overridden default step resolves a version → `WARNING`.
+
+**Test method:** `CustomBuildStepValidatorTest` —
+`SYS-077 OK when nothing custom`, `SYS-077 OK when custom step resolves nothing`,
+`SYS-077 WARNING for non-template custom step with a java version`,
+`SYS-077 WARNING for non-template custom step with a maven version`,
+`SYS-077 WARNING for overridden default step`.
+
+### SYS-078: component-validation — USES_OLD_JAVA_VERSION
+
+**Description:**
+`OldJavaVersionValidator` is a single pass owning "where do I read the version" per step, so
+nothing is double-counted or missed. It delegates to `BuildStepToolVersionResolver` (see
+SYS-082) uniformly for every step — every uninherited (`OVERRIDDEN`) build step across every
+build configuration (attached to a template or not) plus each attached configuration's default
+build step regardless of its own `inherited` flag — since the resolver reads each step's own
+parameters directly, there is no separate "inherited reads config-level, overridden reads
+step-level" branch anymore. `WARNING` if any resolved `JavaVersion.isEight` — this is a finding
+about the project's configuration, not a failure of validation itself, so it stays a warning
+rather than `ERROR` (which is reserved for when the validation process itself couldn't run
+cleanly, e.g. a validator throwing — see decision D6); `OK` if versions resolved but none is 1.8;
+`NOT_APPLICABLE` if nothing Java-relevant was inspected (tracked via
+`BuildStepToolVersionResolver.supports(type)`, not a fixed runner-type set owned by the
+validator). Resolved decision **D7**: an unresolved (`null`) version is ignored, not flagged.
+
+**Acceptance criteria:**
+1. Nothing Java to inspect → `NOT_APPLICABLE`.
+2. Inherited default step resolving to Java 1.8 → `WARNING`.
+3. Inherited default step resolving to a modern Java version → `OK`.
+4. Overridden default step resolving to Java 1.8 → `WARNING`.
+5. Custom (uninherited) step on any configuration resolving to Java 1.8 → `WARNING`.
+6. A parameter present but not parseable as a version → ignored, not flagged (`OK`, not
+   `WARNING`), since a default step was still inspected.
+
+**Test method:** `OldJavaVersionValidatorTest` — `SYS-078 NOT_APPLICABLE when nothing to inspect`,
+`SYS-078 WARNING for inherited default step on Java 8`,
+`SYS-078 OK for inherited default step on Java 21`,
+`SYS-078 WARNING for overridden default step on Java 8`,
+`SYS-078 WARNING for custom step on Java 8`,
+`SYS-078 OK when version cannot be resolved`.
+
+### SYS-079: component-validation — ValidatorSuite error isolation (D6)
+
+**Description:**
+Resolved decision **D6** (implementer's discretion per the implementation brief): a validator
+that throws must not sink the whole suite. `ValidatorSuite.validate` catches a `RuntimeException`
+from an individual validator and turns it into a `Status.ERROR` result (type = the failing
+validator's type, message = the exception detail) instead of propagating, so the remaining
+validators' results are still returned.
+
+**Acceptance criteria:**
+1. One throwing validator among several → its slot becomes `Status.ERROR`; every other
+   validator's result is unaffected.
+2. No throwing validator → every result passes through unchanged.
+
+**Test method:** `ValidatorSuiteTest` — `SYS-079 throwing validator is isolated as an ERROR result`,
+`SYS-079 all-ok suite returns every result as-is`.
+
+### SYS-080: component-validation — JavaVersion.isEight and version normalization
+
+**Description:**
+`JavaVersion.isEight` is a literal test: `raw.trim() == "1.8" || raw.trim() == "8"` (per the
+implementation brief — no fuzzy matching at that layer). The burden of normalizing real-world
+values to that exact major-version form falls on `JavaVersionResolver` (decision **D1**), which
+requires a `jdk` / `java` / `jvm` marker token (case-insensitive) to be present in the value at
+all — a bare, unmarked value never resolves, by design, so an unrelated bare number (e.g. a Maven
+artifact version) isn't misread as a Java version. Given that marker, it extracts the major
+(or `1.<major>`) version from env-var-style names (`"env.JDK_ORACLE_17_x64"` → `"17"`,
+`"env.JDK_1_8_x64"` → `"1.8"`) and already-resolved directory paths (`"/usr/lib/jvm/java-21-openjdk-21.0.11.0.10-2.el9.x86_64"`
+→ `"21"`, `"C:\JDK\Oracle\1.8"` → `"1.8"`), picking the *earliest* known version token when
+several digit runs are present so a trailing build/update number isn't mistaken for the major
+version. A marker-bearing value with no recognizable version token, or a value with no marker at
+all, resolves to `null`.
+
+**Acceptance criteria:**
+1. `JavaVersion("1.8").isEight` and `JavaVersion("8").isEight` are `true`.
+2. `JavaVersion("11")`, `("17")`, `("21")`, `("1.7")`, `("80")`, and a full build string
+   `("1.8.0_392")` all have `isEight == false` (normalization is the resolver's job, not
+   `isEight`'s).
+3. `JavaVersionResolver.resolve(...)` correctly extracts the major version from every
+   marker-bearing real-world shape listed above, returns `null` for a value with no `jdk`/`java`/`jvm`
+   marker at all (e.g. a bare `"11.0.2"` or a build-system env var that happens to contain a
+   number), and returns `null` for a marker-bearing value with no recognizable version token or a
+   blank value.
+
+**Test method:** `JavaVersionTest` — `SYS-080 isEight true for 1_8 and 8`,
+`SYS-080 isEight false for other versions`; `JavaVersionResolverTest` (supporting, no SYS id) —
+`resolves from the marker name alone` (parameterized), `resolves from the resolved linux path`,
+`resolves from the resolved windows path`, `resolve returns null without a known marker`,
+`resolve returns null for an unknown version under a known marker`.
+
+### SYS-081: component-validation — TeamCityValidators suite, end to end
+
+**Description:**
+`TeamCityValidators` wires the seven validators together over one shared `BuildConfigurationResolver`
+/ `BuildStepResolver` pair and returns exactly seven `ValidationResult`s per `validate(project)`
+call, matching what each validator would independently produce.
+
+**Acceptance criteria:**
+1. A well-behaved project (attached, inherited default step, modern Java resolved via
+   `%env.JAVA_HOME%`, no custom steps) → all seven checks `OK`.
+2. An unattached project with an old-Java custom command-line step → `ATTACHED_TO_BUILD_TEMPLATE`
+   `WARNING`, `OVERRIDES_DEFAULT_BUILD_STEP` `NOT_APPLICABLE`, `HAS_CUSTOM_BUILD_STEP` `WARNING`,
+   `USES_OLD_JAVA_VERSION` `WARNING`, both `MULTIPLE_*_VERSIONS` `OK` (only one distinct version
+   of either tool resolves), `JAVA_HOME_NOT_FROM_ENV` `WARNING` (the java token is a literal
+   `env.JDK_1_8`, not a `%env.JAVA_HOME%` reference).
+
+**Test method:** `TeamCityValidatorsTest` — `SYS-081 well-behaved project resolves all seven checks`,
+`SYS-081 unattached project with custom java 8 step`.
+
+### SYS-082: component-validation — BuildStepToolVersionResolver (per-step-type tool-version dispatch)
+
+**Description:**
+A step-scoped abstraction: given a single `BuildStep`, `BuildStepToolVersionResolver.resolve(step)`
+returns the `Set<ToolVersion>` (Java and/or Maven, for now) that step uses. Dispatch is by
+`StepType` (`DefaultBuildStepToolVersionResolver`): `MAVEN` → reads `maven.path` (Maven version)
+and `target.jdk.home` (Java version); `GRADLE` → reads only `target.jdk.home`; `COMMAND_LINE` →
+reads `script.content`, splits it on whitespace, and tries *both* the Maven and the Java
+value-resolver on each (reference-resolved) token, since a bare command line gives no other
+signal about which tool a token belongs to. There is no separate in-container step type — an
+earlier `IN_CONTAINER` `StepType` was an unconfirmed assumption (TeamCity's actual raw runner
+`type` string for a containerized step was never confirmed against a live instance) and has been
+removed; only `gradle-runner` / `Maven2` / `simpleRunner` map to a recognized `StepType`, anything
+else is `OTHER`.
+Every parameter read first goes through `ParameterReferenceResolver`, which recursively
+substitutes TeamCity `%paramName%` references within the same `Parameters` bag until no
+reference remains. A reference to a **missing** parameter is left as the literal `%paramName%`
+text and scanning continues (mirroring real TeamCity `%param%` semantics); a reference **cycle**
+fails the whole value (`null`) rather than looping. The "value → version" step is a separate, per-tool abstraction
+(`ValueVersionResolver<V>`): `JavaVersionResolver` and `MavenVersionResolver` each derive their
+tool's version from an already reference-resolved raw string.
+
+**Acceptance criteria:**
+1. A Maven step with both `maven.path` and `target.jdk.home` set → both a `MavenVersion` and a
+   `JavaVersion` are resolved.
+2. A Gradle step → only a `JavaVersion` is ever resolved, never a `MavenVersion`.
+3. A command-line step's `script.content` → split into tokens; each token is tried against both
+   resolvers; a token that is itself a `%param%` reference is resolved first.
+4. An unsupported `StepType` (e.g. `OTHER`) → `resolve` returns an empty set; `supports` returns
+   `false`.
+5. `ParameterReferenceResolver` follows single- and multi-hop `%param%` chains, resolves multiple
+   distinct (or repeated) references within one value, leaves a reference to a missing parameter
+   as literal `%paramName%` text (matching real TeamCity behavior — not `null`), and returns
+   `null` for a direct/indirect cycle — without false-flagging a legitimately repeated reference
+   as a cycle.
+
+**Test method:** `BuildStepToolVersionResolverTest` (Maven/Gradle/command-line/dispatcher cases),
+`ParameterReferenceResolverTest` (single-hop, multi-hop, missing, direct cycle, indirect cycle,
+repeated-reference, embedded-value cases), `JavaVersionResolverTest`, `MavenVersionResolverTest`.
+
+### SYS-083: component-validation — MULTIPLE_JAVA_VERSIONS
+
+**Description:**
+`MultipleJavaVersionValidator` reuses the same step-gathering logic as `OldJavaVersionValidator`
+(every uninherited build step across every build configuration, plus each attached
+configuration's default build step regardless of its own `inherited` flag) and resolves a Java
+version per step via `BuildStepToolVersionResolver`. `WARNING` if more than one distinct
+`JavaVersion` is found across those steps; `OK` if zero or one distinct version is found;
+`NOT_APPLICABLE` if nothing was inspectable.
+
+**Acceptance criteria:**
+1. Nothing Java to inspect → `NOT_APPLICABLE`.
+2. Exactly one distinct Java version found (whether from one step or repeated across several
+   steps) → `OK`.
+3. No Java version resolved from any inspected step → `OK`.
+4. More than one distinct Java version found across the inspected steps → `WARNING`.
+
+**Test method:** `MultipleJavaVersionValidatorTest` —
+`SYS-083 NOT_APPLICABLE when nothing to inspect`, `SYS-083 OK for a single distinct Java version`,
+`SYS-083 OK when no Java version resolves`, `SYS-083 WARNING for multiple distinct Java versions`.
+
+### SYS-084: component-validation — MULTIPLE_MAVEN_VERSIONS
+
+**Description:**
+`MultipleMavenVersionValidator` mirrors `MultipleJavaVersionValidator`, using the same
+step-gathering logic (every uninherited build step across every build configuration, plus each
+attached configuration's default build step regardless of its own `inherited` flag) and resolving
+a Maven version per step via `BuildStepToolVersionResolver`. `WARNING` if more than one distinct
+`MavenVersion` is found across those steps; `OK` if zero or one distinct version is found;
+`NOT_APPLICABLE` if nothing was inspectable.
+
+**Acceptance criteria:**
+1. Nothing Maven to inspect → `NOT_APPLICABLE`.
+2. Exactly one distinct Maven version found (whether from one step or repeated across several
+   steps) → `OK`.
+3. No Maven version resolved from any inspected step → `OK`.
+4. More than one distinct Maven version found across the inspected steps → `WARNING`.
+
+**Test method:** `MultipleMavenVersionValidatorTest` —
+`SYS-084 NOT_APPLICABLE when nothing to inspect`, `SYS-084 OK for a single distinct Maven version`,
+`SYS-084 OK when no Maven version resolves`, `SYS-084 WARNING for multiple distinct Maven versions`.
 
 ### SYS-064: Component owner's manager may edit the component
 
@@ -2510,8 +2800,6 @@ three behave identically.
 `Sys067LabelSyncPostgresTest` (Testcontainers PostgreSQL) —
 `SYS-067 adding a label preserves the existing labels on PostgreSQL`.
 
----
-
 ### SYS-066: One-off composite field-override split
 
 **Priority:** High
@@ -2577,3 +2865,991 @@ covers the dry-run→write gap, quiescence covers the write itself.
 `CompositeOverrideSplitDisabledTest` — `SYS-066 endpoint absent when flag off`;
 `VersionRangePartitionTest` — `SYS-066 strict split decomposes composites`,
 `SYS-066 strict split does not check disjointness`, `SYS-066 strict split throws on malformed input`.
+
+### SYS-085: TC validation — repeated-run persistence
+
+**Priority:** High
+**Test layer:** integration-test
+**Status:** ✅ Tested
+
+**Description:**
+`TeamcityValidationService.replaceFindings` deletes then re-inserts a project's rows in one
+transaction on every run. `TeamcityValidationRepository.deleteByProjectId`/`deleteByProjectIdIn`
+are bulk `@Modifying` `DELETE` queries (`clearAutomatically`/`flushAutomatically`) rather than
+Spring Data's default derived delete (load each matching entity, then `EntityManager.remove` —
+which leaves a managed/removed instance in the persistence context until flush). Without the bulk
+delete, a same-transaction `saveAll` for a finding `type` that survives between runs could collide
+with that stale instance (`ObjectDeletedException` or insert-before-delete PK ordering), silently
+retaining old findings for that type.
+
+**Acceptance criteria:**
+1. Two consecutive `replaceFindings` calls for the same project with an overlapping finding
+   `type` complete without throwing.
+2. After the second run, exactly the second run's rows are present — the first run's rows that
+   didn't survive are gone, survivors are present once (not duplicated).
+
+**Test method:** `TeamcityValidationRepeatedRunIntegrationTest` —
+`SYS_085_repeated_replace_with_surviving_type_does_not_collide`.
+
+### SYS-086: TC validation — scope derived from currently-linked projects
+
+**Priority:** High
+**Test layer:** integration-test
+**Status:** ✅ Tested
+
+**Description:**
+`teamcity_project` is effectively append-only: sync replaces `version_line` rows but never
+removes an orphaned `teamcity_project` row, so `TeamcityProjectRepository.findDistinctProjectIds`
+returns every project ever seen. `TeamcityValidationService.validate()` instead derives its scope
+from `VersionLineRepository.findDistinctLinkedProjectIds()` — distinct TeamCity project ids
+currently referenced by at least one `version_line` row, i.e. actually linked to a component right
+now. This is what makes SYS-087 pruning effective: a project unlinked from every component drops
+out of scope and its stored findings become eligible for removal.
+
+**Acceptance criteria:**
+1. A project referenced by at least one current `version_line` row is included in scope.
+2. A project present in `teamcity_project` but with no current `version_line` row is excluded
+   from scope, even though it would appear in `teamcity_project`'s own distinct-id list.
+
+**Test method:** `VersionLineRepositoryLinkedProjectScopeIntegrationTest` —
+`SYS_086_findDistinctLinkedProjectIds_scopes_to_currently_linked_projects_only`,
+`SYS_086_findDistinctLinkedProjectIds_deduplicates_multiple_version_lines_to_same_project`.
+
+### SYS-087: TC validation — stale-project pruning, including down to empty scope
+
+**Priority:** High
+**Test layer:** integration-test
+**Status:** ✅ Tested
+
+**Description:**
+`TeamcityValidationService.removeStaleProjects` deletes `teamcity_validation` rows for any
+project in `findDistinctStoredProjectIds()` that is absent from the current scope (SYS-086). An
+empty scope (e.g. the last linked TeamCity project was unlinked from every component) is a
+legitimate state, not a signal that the scope query failed — the guard that used to skip cleanup
+entirely on an empty scope was removed, since there's no separate signal here to distinguish
+"legitimately empty" from "failed to load".
+
+**Acceptance criteria:**
+1. A project absent from the current scope has its stored rows removed.
+2. When the scope is empty, every stored row across every previously-known project is removed —
+   nothing is retained just because the known-project set happened to be empty.
+
+**Test method:** `TeamcityValidationRepeatedRunIntegrationTest` —
+`SYS_087_validate_with_empty_scope_removes_the_last_project`, which drives the real
+`TeamcityValidationService.validate()` end to end (seeds stored findings for two projects, leaves
+them unlinked from any `version_line`, then asserts the service itself — not a reimplementation of
+its pruning query — removes both).
+
+### SYS-088: TC validation — automatic post-sync trigger + cache invalidation
+
+**Priority:** High
+**Test layer:** unit-test
+**Status:** ✅ Tested
+
+**Description:**
+`TeamcityValidationSyncListener` runs a validation job after every successful TeamCity sync
+(`TeamcitySyncCompletedEvent`), async and best-effort — a validation failure is logged and never
+propagates back to affect the sync. Before triggering, it calls
+`EnrichedTcProjectFetcher.invalidateAll()` to drop the enriched-fetch cache: without this, a
+manual validation run earlier in the cache TTL window (default 30 minutes) could let the
+automatic post-sync run read enriched project data computed from the pre-sync TeamCity snapshot.
+
+**Acceptance criteria:**
+1. A `TeamcitySyncCompletedEvent` triggers `TeamcityValidationJobService.startAsync` exactly once.
+2. `EnrichedTcProjectFetcher.invalidateAll()` is called before `startAsync`, on every event,
+   regardless of whether the resulting job newly starts or attaches to one already running.
+3. An exception from `startAsync` is caught and logged; it does not propagate to the sync's own
+   completion path.
+
+**Test method:** `TeamcityValidationSyncListenerTest` —
+`SYS_088_syncCompleted_invalidatesCacheThenTriggersStartAsyncOnce`,
+`SYS_088_startAsyncException_isCaughtAndDoesNotPropagate`,
+`SYS_088_invalidateAllException_isCaughtAndStartAsyncNeverCalled`.
+`CachingEnrichedTcProjectFetcher` itself (the cache TTL/invalidation mechanics, as opposed to the
+listener's call to `invalidateAll()`) still has no dedicated unit test — flagged as a narrower
+follow-up.
+
+### SYS-089: TC validation — mutual exclusion with sync/migration via the lifecycle gate
+
+**Priority:** High
+**Test layer:** unit-test
+**Status:** ✅ Tested
+
+**Description:**
+TC validation runs through the same shared single-pod `MigrationLifecycleGate` as the
+components/history migrations and the TC resync (`TC_VALIDATION` job kind alongside `COMPONENTS`
+/ `HISTORY`). A same-kind attempt while a validation job is RUNNING attaches to it rather than
+starting a duplicate (SYS-090); a cross-kind attempt (e.g. starting a TC resync while validation
+is RUNNING, or vice versa) is rejected with `MigrationConflictException`.
+
+**Acceptance criteria:**
+1. Starting TC validation while a TC validation job is already RUNNING attaches to the existing
+   job (`isNewlyStarted = false`) rather than starting a second one.
+2. Starting TC validation while a COMPONENTS or HISTORY migration is RUNNING is rejected via
+   `MigrationConflictException`.
+3. Starting a COMPONENTS or HISTORY migration (or a TC resync) while TC validation is RUNNING is
+   likewise rejected.
+
+**Test method:** `MigrationLifecycleGateTest` —
+`SYS-089 same-kind TC_VALIDATION second tryClaim attaches to the existing owner`,
+`SYS-089 starting TC_VALIDATION while COMPONENTS is RUNNING reports the COMPONENTS owner`,
+`SYS-089 starting COMPONENTS or TC_RESYNC while TC_VALIDATION is RUNNING is also rejected`,
+exercising the gate's own `TC_VALIDATION`-kind matching directly, at the gate level (not just
+through the controller-level 409 envelope covered by SYS-090).
+
+### SYS-090: TC validation — admin trigger/poll endpoint contract
+
+**Priority:** High
+**Test layer:** integration-test
+**Status:** ✅ Tested
+
+**Description:**
+`POST /admin/teamcity-validation` returns 202 Accepted with a `TeamcityValidationJobResponse` for
+a newly-started job, or 409 Conflict with the same shape for a same-kind attach; a cross-kind
+lifecycle-gate conflict is mapped to 409 with a `MigrationConflictResponse` envelope by the shared
+`@ExceptionHandler`. `GET /admin/teamcity-validation/job` returns the latest known job state
+(200), or 404 if no validation has run since the pod came up. Both endpoints carry
+`AdminControllerV4`'s class-level `@PreAuthorize("@permissionEvaluator.canImport()")`
+(IMPORT_DATA-gated): 401 for anonymous callers, 403 for authenticated callers without
+IMPORT_DATA.
+
+**Acceptance criteria:**
+1. Anonymous POST/GET → 401; the underlying job service is never invoked.
+2. Authenticated, non-IMPORT_DATA POST/GET → 403; the underlying job service is never invoked.
+3. IMPORT_DATA POST, newly-started → 202 with the job body (`kind = "job"`).
+4. IMPORT_DATA POST, same-kind RUNNING → 409 with the existing job's body (attach).
+5. IMPORT_DATA POST, cross-kind conflict → 409 with the conflict envelope (`kind = "conflict"`).
+6. IMPORT_DATA GET, idle (no job since startup) → 404.
+7. IMPORT_DATA GET, COMPLETED → 200 with the result counts.
+
+**Test method:** `TeamcityValidationTriggerControllerTest` —
+`SYS_090_postAnonymousReturns401`, `SYS_090_postEditorReturns403`, `SYS_090_postAdminFreshReturns202`,
+`SYS_090_postAdminSameKindAttachReturns409`, `SYS_090_postAdminCrossKindComponentsReturns409Conflict`,
+`SYS_090_getJobAnonymousReturns401`, `SYS_090_getJobEditorReturns403`, `SYS_090_getJobIdleReturns404`,
+`SYS_090_getJobCompletedReturns200WithResult`.
+
+### SYS-091: TC validation — component-detail embedding
+
+**Priority:** Medium
+**Test layer:** integration-test
+**Status:** ✅ Tested
+
+**Description:**
+`ComponentManagementServiceImpl.attachTeamcityValidations` attaches stored WARNING/ERROR findings
+onto each linked TeamCity project in a component-detail response, as
+`ValidationResponse{type, status, message, updatedAt}`. A project with no stored findings is
+presented as clean (an empty `validations` list) — this is only a meaningful "clean" signal once a
+validation run has actually completed for that project; it is not distinguished in this DTO from
+"never validated".
+
+**Acceptance criteria:**
+1. A linked project with stored findings has those findings' `type`/`status`/`message`/`updatedAt`
+   embedded in `teamcityProjects[].validations`.
+2. A linked project with no stored findings has an empty `validations` list.
+3. A component with no linked TeamCity projects is unaffected (no findings query is issued).
+
+**Test method:** `ComponentTeamcityValidationEmbeddingIntegrationTest` —
+`SYS_091_getComponent_embeds_findings_per_linked_project` (criteria 1–2),
+`SYS_091_getComponent_with_no_linked_projects_has_empty_teamcityProjects` (criterion 3, at the
+DTO-shape level — this asserts the resulting `teamcityProjects` list is empty rather than spying on
+whether the findings query itself was skipped, since `attachTeamcityValidations` already
+short-circuits on an empty `teamcityProjects` list before querying).
+
+### SYS-092: TC validation — admin dashboard read APIs
+
+**Priority:** High
+**Test layer:** unit + integration-test
+**Status:** ✅ Tested
+
+**Description:**
+`GET /admin/teamcity-validations` (optional `type`/`status`/`component` filters) and
+`.../summary` are component-centric: `TeamcityValidationQueryService` joins stored findings back
+to their owning component(s) via `version_line`, de-duplicating a component reachable through more
+than one version line to the same project (distinct by `(projectId, componentId)`), and `summary`
+counts DISTINCT components per type/status rather than raw finding rows. Both endpoints carry
+`TeamcityValidationControllerV4`'s class-level `@PreAuthorize("@permissionEvaluator.canImport()")`
+(IMPORT_DATA-gated).
+
+**Acceptance criteria:**
+1. A finding on a project shared by multiple components fans out to one row per component.
+2. A component reachable through more than one version line to the same project is counted once
+   for that project, not once per version line.
+3. `type`/`status`/`component` filters narrow the result set as expected.
+4. `summary` reports DISTINCT-component counts, both overall and per type/status.
+5. Anonymous/non-IMPORT_DATA callers get 401/403 on both endpoints; an IMPORT_DATA caller gets
+   200.
+
+**Test method:** `TeamcityValidationQueryServiceTest` —
+`SYS-092 list fans out shared project to each component`,
+`SYS-092 list dedupes component reached via multiple version lines to same project`,
+`SYS-092 list filters by type`, `SYS-092 list filters by multiple types`,
+`SYS-092 list filters by status`, `SYS-092 list filters by component`,
+`SYS-092 summary distinct component counts`;
+`TeamcityValidationControllerV4SecurityTest` —
+`SYS_092_listAnonymousReturns401`, `SYS_092_listEditorReturns403`, `SYS_092_listAdminReturns200`,
+`SYS_092_summaryAnonymousReturns401`, `SYS_092_summaryEditorReturns403`, `SYS_092_summaryAdminReturns200`.
+
+### SYS-093: component-validation — java-home must resolve from %env.JAVA_HOME%
+
+**Priority:** High
+**Test layer:** unit-test
+**Status:** ✅ Tested
+
+**Description:**
+`EnvJavaHomeValidator` (`JAVA_HOME_NOT_FROM_ENV`) inspects every `relevantBuildSteps` step that
+resolves a Java version and asks whether that step's java-home reached its value through the
+standard `%env.JAVA_HOME%` reference. The java-home source is step-type specific — `target.jdk.home`
+for `GRADLE`/`MAVEN` runner steps, and each java-resolving `script.content` token for
+`COMMAND_LINE` steps. `JavaHomeReferenceResolver` collects the full set of `%paramName%` references
+traversed while (recursively) expanding that source — via
+`ParameterReferenceResolver.collectReferencedParameters` — **including references to parameters not
+present in the bag** (`%env.JAVA_HOME%` is typically an agent env var, not a build-config
+parameter, so it appears as an unresolved-but-referenced name). A step whose java-home resolves a
+version but never references `%env.JAVA_HOME%` is pointing at a specific JDK directly (e.g.
+`target.jdk.home = %env.JDK_17%`), bypassing the agent's configured default — a `WARNING`.
+
+**Acceptance criteria:**
+1. A step whose java-home reference chain includes `%env.JAVA_HOME%` (directly or through an
+   intermediate parameter) is `OK`.
+2. A step that resolves a Java version from a java-home that never references `%env.JAVA_HOME%`
+   (e.g. `%env.JDK_17%` or a literal path) is `WARNING`.
+3. A reference to `%env.JAVA_HOME%` counts even when that parameter is absent from the bag (agent
+   env var).
+4. Steps that resolve no Java version are not evaluated (no spurious `WARNING`); when nothing Java
+   is inspectable the result is `NOT_APPLICABLE`.
+
+**Test method:** `EnvJavaHomeValidatorTest` —
+`WARNING when java home is a direct jdk reference`, `OK when java home is env JAVA_HOME`,
+`OK when java home reaches env JAVA_HOME indirectly`, `WARNING for command line java token not from env`,
+`OK ignores steps with no resolvable java`, `NOT_APPLICABLE when nothing to inspect`;
+`JavaHomeReferenceResolverTest` (reference tracing);
+`ParameterReferenceResolverTest` — `collect records the whole reference chain`,
+`collect records missing reference`, `collect is cycle safe`.
+(These support tests carry no SYS id, matching the convention for the other resolver-level tests.)
+
+### SYS-094: `configRevision` cache-actuality token on `/service/status`
+
+**Priority:** Medium
+**Test layer:** integration-test + context-load test
+**Status:** ✅ Tested
+
+**Motivation:**
+Consumers that cache registry data (build tooling, the Portal, downstream services)
+need a cheap "has anything changed?" probe. `versionControlRevision` only answers that
+for the Git-sourced half of the registry: it moves when the config repo picks up a new
+tag, and stays **frozen** across every DB-side edit made through the v4 CRUD / import /
+field-override paths. A consumer polling it alone silently serves stale data after any
+Portal save. Component counts are no better — an edit that changes a field without
+adding or removing a component leaves them identical.
+
+**Description:**
+- `ServiceStatusDTO` gains `configRevision: String?` (`@JsonProperty("configRevision")`,
+  defaulted to `null` — additive and backward-compatible, like `defaultSource` /
+  `dbComponentCount`).
+- The value is the composite `"[gitRevision].[maxId].[count]"`, where `gitRevision` is
+  `serviceStatus.versionControlRevision` (rendered as an **empty segment** when there is
+  no VCS revision — FS / VCS-disabled mode — never the literal `null`), and `maxId` /
+  `count` come from `AuditLogRepository.changeStats()`:
+  `SELECT COALESCE(MAX(a.id), 0), COUNT(a) FROM AuditLogEntity a WHERE a.source <> 'git-history'`.
+- **Why both aggregates.** Neither is sufficient alone, and the pair covers every
+  audit-visible mutation:
+  - `maxId` alone misses a **pure delete** — removing rows leaves the max id untouched.
+  - `count` alone misses a **delete-then-reinsert** — the row count returns to its
+    previous value while the config has in fact changed.
+  Together, any insert moves `maxId`, any delete moves `count`, and a delete plus a
+  reinsert moves `maxId` while `count` holds. Pairing them with `gitRevision` covers the
+  Git-sourced half, so one token tracks both sources.
+- **Why `git-history` rows are excluded.** They are the backfill baseline imported from
+  Git commit history (`GitHistoryImportService`, `action = MIGRATED`), wiped and
+  re-imported wholesale by the backfill job. Counting them would churn the token on a
+  history re-import that changed no configuration — the same reason SYS-049 hides them
+  from the audit feed by default.
+- **Opaque to consumers.** The format is a compare-for-equality token, not a parseable
+  structure: consumers store the previous value and refresh when it differs. Nothing in
+  it is ordered or monotonic across restarts, and the segment layout may change.
+- `AuditLogRepository` is injected as a Kotlin-nullable (optional) dependency into
+  `ComponentsRegistryServiceImpl`, alongside the three DB-layer dependencies already
+  handled that way — so in no-db mode the whole token is `null` rather than a
+  half-populated string (see SYS-047).
+- The compat-test's local `ServiceStatusSnapshot` projection is annotated
+  `@JsonIgnoreProperties(ignoreUnknown = true)` so an additive `/service/status` field
+  does not break the precondition probe against an older baseline. `/service/status`
+  stays outside the compat surface (`docs/registry/api-compat-deltas.md`), and this is a
+  v2 operational endpoint, so the v4 `api-changelog.md` does not apply.
+
+**Acceptance criteria:**
+1. With the database layer wired, `GET /rest/api/2/components-registry/service/status`
+   returns `configRevision` as `"[gitRevision].[maxId].[count]"`; with no VCS revision the
+   leading segment is empty (`".12.34"`), never the string `null`.
+2. `changeStats()` on an empty `audit_log` is `maxId = 0` (COALESCE, not null) and
+   `count = 0`.
+3. Rows with `source = 'git-history'` are excluded from **both** aggregates.
+4. Every non-`git-history` row is counted, regardless of id ordering or interleaving with
+   excluded rows.
+5. A delete-then-reinsert advances `maxId` while `count` holds — the token changes even
+   though the row count did not.
+6. Without the database layer (no-db profile / Git-based installs) `configRevision` is
+   `null` — see SYS-047 criterion 3.
+
+**Test method:** `AuditLogRepositoryChangeStatsTest` (Testcontainers Postgres,
+`@Tag("integration")`) — `changeStats on an empty table is zero-zero`,
+`changeStats excludes git-history rows from both fields`,
+`changeStats counts every non-git-history row regardless of id ordering`,
+`changeStats advances maxId on delete-then-reinsert while count holds`;
+plus `NoDbModeContextTest.SYS-047 status reports defaultSource git and zero db components in no-db mode`
+for the null case (criterion 6).
+
+### SYS-095: Component-key format — `_` only inside the client-code prefix
+
+**Priority:** High
+**Test layer:** unit-test
+**Status:** ✅ Tested
+
+**Motivation:**
+New components follow a strict lowercase-kebab key convention, but client-specific
+components are conventionally keyed by their client code, and a `clientCode` matches
+`[A-Z_0-9]+` — so it may legitimately contain `_`. Of the 42 existing components that
+have both an underscore in the key and a `clientCode`, **all 42** are shaped
+`lower(clientCode) + "-" + tail`, with no underscore anywhere after that prefix. The
+convention already exists in the data; what was missing is a rule that permits exactly
+it and nothing more.
+
+CRS never validated key characters at all (only `clientCode` had a format rule), so the
+strict convention lived solely in the Portal's create form and any API client could
+write any key. This requirement puts the rule on the server, where it belongs.
+
+**Description:**
+- A key is valid when either:
+  1. it matches `^[a-z][a-z0-9-]*$` (plain kebab, no underscore); or
+  2. the component's **effective** `clientCode` is non-blank, the key starts with a
+     lowercase letter, and the key is `lower(clientCode)` followed by either end-of-key
+     or `-` plus `[a-z0-9-]*`.
+- The prefix relaxes the **charset**, never the letter start. A `clientCode` matches
+  `[A-Z_0-9]+`, so it may begin with a digit or an underscore; a key may not, and
+  `123abc-payments` (clientCode `123ABC`) or a bare `_` is rejected on both counts.
+- Consequences of (2) being prefix-anchored: `_` may appear only inside that leading
+  prefix. A `clientCode` with no `_` therefore grants no `_` anywhere — it only permits
+  a key that starts with the code. Uppercase in the key stays rejected in both cases:
+  the comparison lowercases the `clientCode`, it does not accept an uppercase key.
+- **Effective** `clientCode` means the value that is (or stays) persisted on the
+  component, not the value on the wire:
+  - on **create**, the post-`stripIfHidden` value — a `clientCode` supplied while
+    `component.clientCode` is hidden by field-config is dropped, so it grants nothing;
+  - on **rename**, the `clientCode` the same PATCH supplies when that field is editable,
+    and the stored one when it is hidden — a hidden-but-populated value still grants the
+    underscore, because it is really there.
+  So **at the moment a key is chosen, an underscore in it is always backed by a
+  `clientCode` the component will carry.** The guarantee is deliberately scoped to that
+  moment: a later `clientCode` change is not re-checked (see below), so the backing can
+  lapse afterwards.
+- **Enforcement surface is create + rename only.** The check runs on
+  `createComponent` (the new key) and on the update path when `isRename` is true (the
+  new key). On both paths it runs **after** the field-config editability gate — not for
+  `name` itself (renames are authorized by the controller's `canRenameComponent`
+  `@PreAuthorize`, a 403 before the service is entered, and `name` carries no
+  field-config editability), but for the rest of the same request: a PATCH that renames
+  and also touches a non-editable field must see that 422 rather than a value-400 about
+  the key's shape. An existing key is never re-validated: 214 of 997 production components
+  (160 with uppercase, 54 with a dot) do not satisfy the rule and must keep saving.
+- The DSL import path writes through `componentRepository.save(...)` and does not go
+  through `createComponent`, so imported legacy keys are unaffected by design.
+- Changing or clearing a `clientCode` after the fact is explicitly **out of scope** — it
+  does not re-validate the key and cannot fail. Tracked separately as the
+  "change client code" feature.
+
+**Acceptance:**
+1. `POST /components` with key `ab_cd-payments` and `clientCode` `AB_CD` → 201.
+2. `POST /components` with key `ab_cd-payments` and no `clientCode` → 400.
+3. `POST /components` with key `ab_cd-payments` and `clientCode` `ABCD` (no `_`) → 400.
+4. `POST /components` with key `payments-ab_cd` and `clientCode` `AB_CD` → 400 (the
+   prefix must lead).
+5. `POST /components` with key `ab_cd` and `clientCode` `AB_CD` → 201 (bare prefix).
+6. `POST /components` with key `AB_CD-payments` and `clientCode` `AB_CD` → 400
+   (uppercase key).
+7. `POST /components` with key `plain-component` and no `clientCode` → 201.
+7a. `POST /components` with key `123abc-payments` and `clientCode` `123ABC` → 400 (a key
+    must start with a lowercase letter even when the prefix matches).
+7b. `POST /components` with key `_` and `clientCode` `_` → 400 (same reason).
+8. `POST /components` with key `ab_cd-payments` + `clientCode` `AB_CD` while
+   `component.clientCode` is hidden by field-config → 400 (the code would not persist).
+9. `PATCH /components/{id}` renaming to `ab_cd-payments` on a component whose stored
+   `clientCode` is `AB_CD` → 200, including when the field is hidden.
+10. `PATCH /components/{id}` renaming to `ab_cd-payments` on a component with no stored
+    `clientCode` → 400.
+11. `PATCH /components/{id}` that does **not** change the key on a component whose
+    existing key is `Legacy.Key_1` → 200 (no re-validation).
+
+**Test method:** `CheapFieldFormatValidationTest` — the create *and* rename cases live
+there (15 cases covering the acceptance list above). Both checks are pure `require(...)`
+guards that run before any repository write, so the existing mocked-repository unit
+harness reaches them; no `dbTest` integration test is needed. Fixtures use synthetic
+client codes only.
+
+### SYS-096: `GET /components/{idOrName}/archive-readiness` — archive/delete pre-flight check
+
+**Priority:** High
+**Test layer:** unit + integration-test
+**Status:** ✅ Tested
+
+**Motivation:**
+Archiving or deleting a component while it still has open Jira issues, a non-archived
+repository, a non-archived TeamCity project, or a Jira project outside the retired
+categories silently orphans that work. Callers need a single read-only check that
+answers "is this component actually done with everything it touches?" before they act,
+rather than each caller re-deriving the answer per external system.
+
+**Description:**
+- `GET /rest/api/4/components/{idOrName}/archive-readiness` resolves `idOrName` exactly
+  like `getComponent` (UUID or component key), and is gated by the same authorization as
+  `deleteComponent` (`ACCESS_COMPONENTS` + `canDeleteComponent`) since it exists solely to
+  gate that action.
+- The response is `{ready: Boolean, entries: [...]}`. One entry exists per external
+  target the component uses: its VCS repository, its TeamCity project(s), and — per
+  effective Jira `(project key, version prefix)` pair — one `JIRA_ISSUES` entry (open
+  issues in scope) and one `JIRA_PROJECT` entry (retired-category check). A target the
+  registry does not record for the component produces no entry, and an unconfigured
+  external system contributes no entries at all — neither ever blocks `ready`.
+- Each entry carries `outcome` (`COMPLETED` / `NOT_COMPLETED` / `UNKNOWN`), a `reason`
+  (populated for `NOT_COMPLETED` and `UNKNOWN`, `null` on `COMPLETED`), a `reasonKind`
+  classifying what an `UNKNOWN` entry needs (`SYSTEM_UNAVAILABLE` / `REGISTRY_DATA` /
+  `NOT_CONFIGURED`), `sharedWith` (other live components still using the same target),
+  and `openIssues` (`JIRA_ISSUES` only).
+- `ready` is CRS's own verdict — `false` iff at least one entry is `NOT_COMPLETED` or
+  `UNKNOWN` — so callers gate on `ready` rather than deriving one from `entries`
+  themselves; an outcome value a caller does not recognise can never unblock archiving.
+- A TeamCity project the system reports absent (deleted rather than archived) is
+  `COMPLETED` once TeamCity's own connection is proved live. A VCS repository reported
+  absent (`NotFoundException`) is deliberately `UNKNOWN`, not `COMPLETED`, even when VCS
+  is proved live: some hosting platforms return 404 for a private/inaccessible repository
+  the same way they do for one that no longer exists, and this check cannot confirm which
+  one it is.
+- Every external connection (VCS, TeamCity, Jira issue-search, Jira project-read) is
+  probed for liveness once per call, not once per target; a failed probe makes every
+  target of that system `UNKNOWN` under one shared reason instead of one failure per
+  target.
+
+**Acceptance criteria:**
+1. A component with no external targets at all returns `ready = true` and an empty
+   `entries` list.
+2. `idOrName` resolves by UUID and by component key identically to `getComponent`; an
+   unresolvable identifier returns 404.
+3. A caller without `ACCESS_COMPONENTS` + `canDeleteComponent` is rejected (403).
+4. `ready` is `false` iff at least one entry is `NOT_COMPLETED` or `UNKNOWN`; all-`COMPLETED`
+   entries (or no entries) is `ready = true`.
+5. A `NOT_COMPLETED` or `UNKNOWN` entry always carries a non-null `reason`; `COMPLETED`
+   never does.
+6. An absent VCS repository is `UNKNOWN`; an absent TeamCity project is `COMPLETED`
+   (given its own connection is proved live either way).
+7. The endpoint never writes to the registry or to any external system — repeated calls,
+   and calls interleaved with the actual archive/delete/update operations, never change
+   their outcome.
+
+**Test method:** `ArchiveReadinessControllerTest` (endpoint resolution, authorization,
+response shape), `ArchiveReadinessNoRegressionTest` (read-only — no write side effects),
+`ArchiveReadinessAssemblerTest` (entry assembly and verdict), `RepositoryCheckerTest`,
+`TeamcityCheckerTest`, `JiraIssuesCheckerTest`, `JiraProjectCheckerTest`, `LivenessProbeTest`,
+`SharingHelperTest`.
+
+### SYS-097: WHISKEY components are exempt from the explicit+external ≥1-coordinate rule
+
+**Priority:** High
+**Test layer:** integration-test
+**Status:** ✅ Tested
+
+**Motivation:**
+Bug: legacy explicit+external WHISKEY components define no maven GAV,
+docker image or package coordinate. Every PATCH carrying `baseConfiguration` (e.g. a Java
+version change) and every field-override write re-ran the ≥1-coordinate rule against that
+untouched data and failed with `400 distribution: an explicit+external component must define
+at least one distribution coordinate`, so these components could not be edited at all.
+
+**Description:**
+- The ≥1-coordinate rule (explicit+external → at least one maven artifact, docker image or
+  package on some configuration row) is **not applied** when the component's effective BASE
+  build system is `WHISKEY`.
+- "BASE build system" is the `build_system` of the component's `BASE` configuration row,
+  compared case-insensitively — the same resolution as the `skipCommitCheck` / WHISKEY rule.
+  Per-range `build.buildSystem` overrides (e.g. `ESCROW_NOT_SUPPORTED` on a legacy range) do
+  not affect the exemption.
+- The exemption lives in the shared malformed-input check, so it covers `POST /components`,
+  `PATCH /components/{id}` and `POST` / `PATCH /components/{id}/field-overrides` alike.
+- Non-WHISKEY explicit+external components are unchanged: they still require a coordinate.
+  Switching a coordinate-less explicit+external component off WHISKEY is rejected.
+- The archived ≠ explicit+external rule and all other checks are unchanged.
+
+**Acceptance:**
+1. `POST /components` explicit+external, BASE `buildSystem` `WHISKEY`, no coordinate → 2xx.
+2. `PATCH /components/{id}` changing a base-config scalar on such a component → 2xx.
+3. `POST /components/{id}/field-overrides` on such a component → 2xx.
+4. `PATCH /components/{id}` switching such a component's BASE `buildSystem` to `MAVEN` →
+   400 (`distribution coordinate`).
+5. `POST /components` explicit+external, BASE `buildSystem` `MAVEN`, no coordinate → 400
+   (unchanged).
+
+**Test method:** `CrossComponentValidationTest` —
+`` `SYS-097 create explicit-external WHISKEY without coordinate is accepted` `` (1),
+`` `SYS-097 base-config patch on explicit-external WHISKEY without coordinate is accepted` `` (2),
+`` `SYS-097 field-override create on explicit-external WHISKEY without coordinate is accepted` `` (3),
+`` `SYS-097 switching explicit-external without coordinate off WHISKEY is rejected` `` (4),
+`create_explicitExternal_noCoordinate_badRequest` (5, pre-existing).
+
+### SYS-099: First-class `testComponent` flag
+
+**Priority:** High
+**Test layer:** unit + integration-test
+**Status:** ✅ Tested
+
+**Motivation:**
+A "test component" (synthetic stand data such as the CVELAB components) was only the free-text
+label `test-component`: unvalidated, easy to mistype, and every consumer had to string-match it.
+Test components then leaked into data that must reflect real products (vulnerability scope,
+reports, portal lists, health statistics).
+
+**Description:**
+- `components.test_component BOOLEAN NOT NULL DEFAULT false` (`V11__`). The migration sets it on
+  every component that carries the `test-component` label; the label is kept.
+- v4: `ComponentCreateRequest.testComponent` (default false), `ComponentUpdateRequest.testComponent`
+  (null = unchanged; the plain component edit permission is enough — the flag is independent of
+  `archived`), `ComponentSummaryResponse.testComponent` and `ComponentDetailResponse.testComponent`.
+  `GET /components?testComponent=true|false` filters; without the parameter test components are
+  included (hiding them is a Portal default, not an API one).
+- v1/v2/v3: the `Component` DTO always carries `testComponent` (true or false), on every
+  component-returning endpoint including find-by-artifact. One response-body advice
+  (`TestComponentFlagAdvice`, scoped to the v1–v3 component controllers) sets it on every
+  `Component` in the body, so a new endpoint cannot miss it. The value follows the component's
+  source, like the routing resolver:
+  - DB-sourced: the stored flag — membership in a cached set of flagged keys (Caffeine, 30 s TTL,
+    evicted after a v4 write that changes the flag or renames a flagged component, and after an
+    import that flags one). A change made through another pod is visible here within 30 s.
+  - Git-sourced, and every component in no-db mode: `true` when the resolved DSL model carries the
+    `test-component` label. No DB read is made for the flag; the legacy model is not changed.
+  Released clients ignore the new key: their concrete DTOs (`ComponentV1`/`V2`/`V3`,
+  `VersionedComponent`, `DetailedComponent`) already carry `@JsonIgnoreProperties(ignoreUnknown = true)`,
+  so a plain deploy is the rollout.
+- The flag is stored only in the DB and set through the v4 API; the legacy Groovy DSL and the as-code
+  view do not carry it. Importing from the DSL (`migrate-component(s)`, import) sets
+  `test_component = true` exactly for components with the `test-component` label — the `V11__` rule —
+  so fresh installs and re-migrations match migrated data.
+- Key rule: `testComponent = true` is allowed only when the component key matches one of the
+  regexes in `components-registry.test-components.name-patterns` (find semantics; default
+  `^test-`, `^cvelab-` in `application.yml`; service-config replaces the list per installation;
+  empty ⇒ no component can be flagged). The list is bound at startup: changing it needs a restart
+  (`/admin/reload-config` does not rebind it). Create with the flag, a PATCH that turns it on
+  (false → true), and a rename of a flagged component to a non-matching key fail with 400
+  (`testComponent: …` / `name: …`) naming the key and the patterns. Echoing an unchanged `true`
+  (the Portal sends the whole General slice on Save) and unflagging are always allowed. The flag is
+  never derived from the key. The active patterns are served read-only by
+  `GET /rest/api/4/components/meta/test-component-name-patterns` (`List<String>`, `ACCESS_COMPONENTS`).
+  `V11__` flags by label, not by key. A flagged component whose key matches no pattern (after a
+  pattern change) keeps its flag and stays editable; only flagging it again or renaming it is checked.
+- A non-test component may not reference a test component as its parent or doc component, and a
+  component that non-test components reference that way cannot become a test component: 400,
+  naming both components. Checked on create; on update the check is change-based like the other
+  cross-component rules, so an unchanged echo is grandfathered:
+  - a test component against its non-test referrers when it becomes one (`testComponent: …`) or is
+    renamed (`name: …` — renaming it onto a key that a real component's soft doc link still names
+    re-binds that link);
+  - a real component against every target when it stops being a test component (`testComponent: …`),
+    otherwise only against what changed: a new parent (`parentComponentName: …`) and newly added doc
+    keys (`docs: …`). An untouched grandfathered parent or doc link is not re-checked.
+  Concurrent "flag A" and "reference A" writes serialize on A's row lock, so the second to commit
+  fails; two writes that lock each other's rows can deadlock, and the losing one answers 409
+  `LOCK_CONFLICT` with nothing changed (technical-design §6.8).
+- Pre-rollout check (prod, before V11): 14 components carry the `test-component` label, all of
+  their keys match `^test-`, and no real component references one of them as parent or doc
+  component — so V11 leaves no flagged component outside the default patterns and creates no
+  reference violation. The queries are in [the upgrade note](deployment/test-component-upgrade-note.md).
+  Why `V11__` does not apply the name patterns or the reference rule itself: a Flyway migration
+  cannot read the service configuration (the patterns are per installation), and refusing or
+  rewriting data inside a schema migration would block startup on data an operator has to fix
+  anyway. Instead the rules bind on change: grandfathered data stays readable and editable, and
+  only a write that flags, renames or re-references is checked. The pre-rollout queries surface
+  any such data before the migration runs.
+- Totals vs the list: `GET /health/statistics` (and the TeamCity validation views) exclude test
+  components, while the bare v4 list includes them unless `?testComponent=false` is passed — so a
+  drill-down from a dashboard figure must add `testComponent=false` to match the total. CRS and
+  `crsctl` build no such links; the Portal does.
+- The flag is the source of truth. The `test-component` label is kept for compatibility — the
+  Sonar automation and other consumers read it — and is not removed by this requirement. A
+  label/flag mismatch is a warning, never an error: a create/update response carries a `warnings`
+  entry when the component has the label but `testComponent` is false. Removing the label is a
+  separate decision, to be taken only after its consumers read the flag.
+- `GET /health/statistics` excludes test components from every figure (SYS-057), and the TeamCity
+  validation list and summary (`GET /admin/teamcity-validations`, `.../summary`, SYS-092) leave out
+  findings that belong to test components.
+
+**Acceptance:**
+1. A component created with `testComponent = true` returns `true` from v4 detail and summary, and
+   `"testComponent": true` from v2 `GET /components/{name}` and v3 `GET /components`; a component
+   without the flag returns `false` on v4, v2 and v3.
+2. `?testComponent=false` excludes test components, `?testComponent=true` returns only them, and
+   no parameter returns both.
+3. A non-test component with a test parent or test doc component is rejected with 400 naming both;
+   flagging a component a non-test child references is rejected with 400 naming both; a test
+   component may sit under a test parent.
+4. The `test-component` label without the flag yields a warning, which disappears once the flag is set.
+5. Health statistics and the TeamCity validation list/summary do not count test components.
+6. `V11__` flags exactly the components labelled `test-component` and keeps every label.
+7. The component's own editor (plain edit permission, no `ARCHIVE_COMPONENTS`) can set the flag.
+8. The client's default mapper reads a v1/v2 component carrying `testComponent` and an unknown field.
+9. Flagging a non-matching key (create or PATCH) and renaming a flagged component to one are 400; unflagging
+   is allowed; `/meta/test-component-name-patterns` returns the configured list; a configured list replaces the defaults.
+10. PATCH checks are change-based: echoing an unchanged `testComponent: true` on a key outside the
+    patterns, or `testComponent: false` with the same parent on a real child of a test parent, is
+    accepted; unflagging a test child of a test parent is rejected with `testComponent: …`.
+11. A write that loses a row-lock race (deadlock) answers 409 `LOCK_CONFLICT`, not 500.
+
+**Test method:** `TestComponentFlagV4Test` —
+`` `SYS-099 testComponent is returned by v4 v2 and v3` ``, `` `SYS-099 find-by-artifact carries testComponent` `` (1),
+`` `SYS-099 list filter on testComponent` `` (2),
+`` `SYS-099 real component referencing test parent is rejected` ``,
+`` `SYS-099 real component referencing test doc component is rejected` ``,
+`` `SYS-099 flagging a referenced component is rejected` ``,
+`` `SYS-099 rename of a test component onto a dangling doc link is rejected` ``, `TestComponentReferenceRaceTest` (3),
+`` `SYS-099 label without flag warns` `` (4),
+`` `SYS-099 health statistics exclude test components` `` (5);
+`TeamcityValidationQueryServiceTest.SYS-099 test components are excluded` (5);
+`V11TestComponentMigrationIntegrationTest` (6);
+`` `SYS-099 editor without archive permission can flag` `` (7);
+`ComponentUnknownPropertyTest` (8);
+`` `SYS-099 flag requires a matching key` ``, `` `SYS-099 rename of a flagged component must keep a matching key` ``,
+`` `SYS-099 meta endpoint lists name patterns` ``, `TestComponentNamePatternPropertyTest` (9);
+`` `SYS-099 unchanged flag echo on a non-matching key is accepted` ``,
+`` `SYS-099 unchanged echo on a grandfathered real child is accepted` ``,
+`` `SYS-099 unflagging a child of a test parent is rejected on testComponent` ``,
+`` `SYS-099 forward check covers only the changed reference` `` (10); `LockConflictHandlerTest` (11);
+`` `SYS-099 every v1-v3 component endpoint is covered by the flag advice` ``, `TestComponentFlagsTest`,
+`TestComponentLabelImportIntegrationTest` (v1–v3 source, cache, import).
+
+### SYS-100: Global text search over the components' as-code view
+
+**Priority:** High
+**Test layer:** unit + integration-test
+**Status:** ✅ Tested
+
+**Motivation:**
+While the registry lived in Groovy DSL files, a plain text search over the files answered most
+"where is X?" questions in one step — which component owns an artifact or group pattern, who uses
+a VCS URL, which components pin a Java/Maven version, where a Jira key or docker image is declared,
+which version ranges override something. After the move to PostgreSQL that capability is gone: the
+v4 list filters each cover one field, and `?search=` only matches name / displayName. The as-code
+view (`GET /components/{id}/as-code`, `ComponentCodeRenderer.renderFull`) already renders each
+component in the old Groovy shape, so searching that text restores the old workflow and covers every
+field the view shows without per-field query code.
+
+**Description:**
+- `GET /rest/api/4/components/as-code/search`, `ACCESS_COMPONENTS` (same gate as `/as-code`). Two
+  path segments so the literal never shadows `GET /components/{id}` for a component named `search`.
+- Params: `q` (required; trimmed; 2–200 characters), `regex` (default `false`), `archived`
+  (omitted = both), `limit` (1–1000, default 100), `maxMatchesPerComponent` (1–1000, default 20).
+- Matching is line-based over each component's FULL as-code text: case-insensitive substring, or
+  with `regex=true` a case-insensitive regular expression in RE2 syntax (no lookarounds or
+  backreferences; repetition counts up to 1000), which guarantees matching in time linear in the
+  input. Archived components are included unless `archived` narrows them out.
+- Response `AsCodeSearchResponse {query, regex, totalComponents, truncated, results}`. `results`
+  are `AsCodeSearchHit {id, componentKey, archived, matchCount, matches}` sorted by component key (`id` is the
+  component UUID, the id the v4 write endpoints are addressed by), cut at
+  `limit`; `totalComponents` counts every matching component and `truncated` says whether the cut
+  happened. `matches` holds the first `maxMatchesPerComponent` lines as
+  `AsCodeSearchLine {line, text, path, ranges}`: `line` is the 1-based line number in the as-code
+  view, `text` the line without indentation, `path` the enclosing block headers outermost first
+  (e.g. `["comp", "\"[1.5,)\"", "jira"]`), so a match inside a version-range block is
+  identifiable, and `ranges` the matched spans of `text` (`{start, end}`, end exclusive) as found
+  by the server's own matcher — so a client highlights regex hits exactly instead of re-running
+  the pattern in a different regex engine. Empty matches are omitted; at most 50 spans per line.
+- Errors (`400`): `q` too short / too long, `limit` or `maxMatchesPerComponent` out of range, an
+  invalid regex (including constructs outside RE2), a regex that compiles to more than 2000 RE2
+  instructions (an upper bound is estimated from the pattern text before compiling, and a pattern
+  whose estimate exceeds 20,000 is rejected without being built; the estimate is conservative,
+  e.g. a long single-character alternation is counted as written although RE2 folds it into a class), or a regex whose evaluation exceeds a 2 s time budget for the
+  request. The budget is one per request: it is checked before every line and every few thousand
+  character reads within a line. RE2 does at most program-size work per character read, so no
+  single match can run on without reading input, and neither many cheap lines nor one long line
+  can outrun the budget.
+- The RMS section that `/as-code` appends is **not** searched: it is RMS data, not the
+  component's configuration, and it changes on the RMS sweep.
+- **Index.** The rendered lines are held in memory per pod and rebuilt lazily. Each search first
+  reads a change stamp from the shared DB — `COUNT`, `MAX(updatedAt)` and `SUM(version)` over
+  `components` plus the SYS-094 `audit_log.changeStats()` — and rebuilds when it differs from the
+  stamp the index was built at, so an edit on any pod is visible to the next search on every pod.
+  The stamp is read before rendering, so a write during a rebuild triggers another rebuild on the
+  next search. An index older than 5 minutes is rebuilt regardless, covering writes that bypass
+  both the component rows and the audit log (TeamCity version-line sync, SYS-051).
+- The bulk render loads the registry-wide artifact-ownership rows once for all components (the
+  ALL_EXCEPT_CLAIMED export pattern), instead of once per component as the single-component
+  `/as-code` path does.
+- `crsctl search <query> [--regex] [--archived true|false] [--limit N] [--max-matches N]` calls the
+  endpoint. Table output is grep-shaped (`<component>:<line>: <text>`, plus `[block > block]` for
+  nested matches and `<component>: ... N more` when lines were capped); `-o json` prints the
+  `results` array. A truncated result warns on STDERR.
+
+**Acceptance criteria:**
+1. A value present in a component's as-code view is found; the hit's `line` points at the same line
+   of `GET /components/{id}/as-code` and `text` equals that line trimmed.
+2. Matching is case-insensitive; without `regex=true` regex metacharacters are literal.
+3. A match inside a version-range block carries the range header in `path`.
+4. `archived=true|false` narrows to archived / active components.
+5. `limit` cuts `results`, `totalComponents` still counts all matches and `truncated` is `true`;
+   `maxMatchesPerComponent` caps `matches` while `matchCount` counts every matching line.
+6. After an edit through the v4 API the next search reflects the new value and no longer finds the
+   old one.
+7. The index is not rebuilt while the stamp is unchanged, is rebuilt when any stamp component moves,
+   and is rebuilt once it is older than 5 minutes.
+8. Too-short `q`, out-of-range `limit` and an invalid regex return `400`; a regex that backtracks
+   catastrophically in the JDK engine runs in linear time (RE2); constructs outside RE2
+   (lookarounds, backreferences) and oversized programs fail with `400`; the time budget stops a
+   search made of many cheap per-line matches and a long line of empty matches.
+9. `crsctl search` maps its options to the query params, prints grep-shaped lines, emits the
+   `results` array with `-o json`, and warns on STDERR when truncated.
+10. Each match carries `ranges` pointing at the matched text within `text` (indentation
+    accounted for), for substring and regex searches alike; a regex matching only empty strings
+    still matches the line, with no ranges.
+
+**Test method:** `ComponentCodeSearchServiceTest` —
+`` `SYS-100 substring match is case-insensitive with line numbers and block path` `` (1, 2),
+`` `SYS-100 regex metacharacters are literal by default` `` (2),
+`` `SYS-100 regex mode matches a case-insensitive regular expression` `` (2),
+`` `SYS-100 hit inside a version-range block reports the range in its path` `` (3),
+`` `SYS-100 archived narrows to archived or active components` `` (4),
+`` `SYS-100 limit cuts the component list and flags truncation` `` (5),
+`` `SYS-100 maxMatchesPerComponent caps lines while matchCount counts all` `` (5),
+`` `SYS-100 index is reused while the stamp holds and rebuilt when it moves` `` (7),
+`` `SYS-100 index older than MAX_INDEX_AGE is rebuilt` `` (7),
+`` `SYS-100 invalid input is rejected` `` (8),
+`` `SYS-100 backtracking-prone regex runs in linear time` `` (8),
+`` `SYS-100 regex budget is enforced between lines` `` (8),
+`` `SYS-100 regex budget is enforced across empty matches` `` (8),
+`` `SYS-100 regex constructs outside RE2 are rejected` `` (8),
+`` `SYS-100 oversized regex program is rejected` `` (8),
+`` `SYS-100 estimateProgramSize` `` (8),
+`` `SYS-100 estimateProgramSize bounds the compiled program` `` (8),
+`` `SYS-100 estimateProgramSize bounds random patterns` `` (8),
+`` `SYS-100 estimateProgramSize bounds random nested patterns` `` (8),
+`` `SYS-100 regex within the program cap is accepted` `` (8),
+`` `SYS-100 indexLines keeps blank lines so positions equal line numbers` `` (1),
+`` `SYS-100 substring match reports ranges relative to the trimmed text` `` (10),
+`` `SYS-100 regex match reports the matched spans` `` (10),
+`` `SYS-100 empty regex matches yield no ranges` `` (10),
+`` `SYS-100 empty regex matches do not hide a later real span` `` (10),
+`` `SYS-100 substringSpans finds every occurrence` `` (10);
+`ComponentAsCodeSearchIntegrationTest` (H2 `ft-db`) —
+`` `SYS-100 a value from the as-code view is found at its as-code line` `` (1, 10),
+`` `SYS-100 an edit is visible to the next search` `` (6),
+`` `SYS-100 too-short query and invalid regex are 400` `` (8);
+`CommandsTest` (CLI) — `` `SYS-100 search maps options to query params and prints grep-shaped lines` ``,
+`` `SYS-100 search without --regex omits the regex param` ``,
+`` `SYS-100 search -o json emits the top-level array of matching components` `` (9).
+
+### SYS-101: `involves` — every component a user is involved in
+
+**Priority:** High
+**Test layer:** integration-test
+**Status:** ✅ Tested
+
+**Motivation:**
+"Show me everything I am involved in" is the most common list question, but the `owner`,
+`releaseManager` and `securityChampion` filters combine with AND — selecting two of them returns
+only components where the user holds both roles. The Portal's "Mine" filter needs OR across roles.
+
+**Description:**
+- `GET /rest/api/4/components` gains `involves` (multi-value, CSV or repeatable, normalised like the
+  other multi-value filters) and `involvesRoles` (any subset of `owner`, `releaseManager`,
+  `securityChampion`; empty = all three).
+- A component matches when any listed username is its `componentOwner` (if `owner` is among the
+  roles) OR among its release managers (if `releaseManager`) OR among its security champions (if
+  `securityChampion`). Role memberships are `EXISTS` subqueries, so a component where the user holds
+  several roles is returned once.
+- `involves` combines with every other filter via AND. An unknown `involvesRoles` value is `400`.
+- `crsctl components list --involves <u> [--involves-role <role>]…`.
+
+**Acceptance criteria:**
+1. `involves=<u>` returns components where `<u>` is owner, release manager or security champion,
+   and none where `<u>` holds no role.
+2. A component where `<u>` holds all three roles appears once.
+3. `involvesRoles` narrows to the chosen roles, OR across them.
+4. `involves` combines with `archived` via AND.
+5. An unknown `involvesRoles` value returns `400`.
+6. Several `involves` users are ORed; paging through the result returns each component once and
+   `totalElements` counts each component once.
+
+**Test method:** `ListComponentsInvolvesFilterTest` (H2 `ft-db`) —
+`` `SYS-101 involves matches any role` `` (1), `` `SYS-101 no duplicate rows` `` (2),
+`` `SYS-101 involvesRoles narrows` `` (3), `` `SYS-101 combines with archived` `` (4),
+`` `SYS-101 unknown role is 400` `` (5), `` `SYS-101 several users paginate without duplicates` `` (6); `CommandsTest` — `` `SYS-101 components list maps --involves and --involves-role` ``.
+
+### SYS-102: TeamCity checkout layout Diff/Sync
+
+**Priority:** High
+**Test layer:** unit + integration-test
+**Status:** ✅ Tested
+
+**Motivation:**
+A component's VCS checkout layout (Checkout Directory, Source Path, Build Working Directory; ADR-022)
+is already encoded in the TeamCity compile configurations of its linked project(s). Operators need
+a read-only report of where the registry differs from TeamCity, and a safe way to apply the
+unambiguous differences without overwriting manual edits or acting on a report that has since
+been replaced.
+
+**Description:**
+- `POST /rest/api/4/admin/teamcity-checkout-layout/diff` starts a read-only Diff job; its report is
+  readable by anyone who can view components. `POST .../sync` applies selected rows and requires
+  `IMPORT_DATA`.
+- Sync re-derives each selected row and writes through `ComponentManagementService`, so it passes
+  the same validation as a human PATCH.
+
+**Acceptance criteria:**
+1. Diff scope: only the BASE configuration row of a non-archived component is diffed; archived
+   components and version-range (`vcs.settings` marker) rows are left out of the report.
+2. Provenance: a checkout layout field is `MANUAL_EDIT` (never overwritten) when the last audited change
+   to that field is a user write not tagged `sync from TeamCity`; it is overwritable when no audit
+   row ever changed it or the last change was a Sync write. Checkout Directory and Source Path are
+   judged independently.
+3. The `sync from TeamCity` change-comment prefix is reserved: `POST /components`,
+   `PATCH /components/{id}` and `PUT /components/{id}/supported-versions` answer 400 for a
+   user-supplied `changeComment` starting with it (case-insensitive, after trim). The check stays
+   in the controller, because Sync calls the service directly.
+4. Sync is bound to the last completed Diff: the request's `diffId` must equal that Diff's id,
+   otherwise nothing is written and the answer is 409 `ErrorResponse` with `errorCode`
+   `checkout-layout-diff-stale` (also when no Diff has completed). The three 409 shapes are decided in
+   this order: a running Sync (the running job, `kind: "job"`), then another admin job holding the
+   cross-kind gate (a running Diff included; `MigrationConflictResponse`), then the stale `diffId`.
+   The `diffId` is read under the gate.
+5. The report is that of the last completed Diff: it stays readable while a newer Diff runs and
+   after a newer Diff fails, and a Sync naming it is still accepted.
+6. A single-root row whose derivation is `CONFLICT` or `UNEXPRESSIBLE`, or whose TeamCity read
+   failed (`TC_ERROR`), is always reported, even when the scope filter would drop a single-root row
+   with no checkout layout on either side.
+7. `ROOTS_MISMATCH`: a row whose compile configurations attach VCS roots the registry does not
+   list is reported as `ROOTS_MISMATCH` and never synced; the TeamCity Validation type
+   `VCS_ROOTS_DIFFER_FROM_REGISTRY` reports the same comparison as a WARNING. Only configurations
+   that attach at least one of the component's own repositories are judged.
+8. Sync writes only rows that are still `RESOLVED` after its own re-derivation: `INVALID`,
+   `MANUAL_EDIT` and every other status is skipped even when selected. Every written field is
+   recorded in the rollback trace (`fieldChanges`: component, row, root, field, before, after) and
+   the write carries the Sync job's id in `changeComment`.
+
+**Test method:**
+`ComponentControllerV4ReservedCommentTest` — `` `SYS-102 PATCH with the reserved sync comment is a 400` `` and the other reserved-comment tests (3);
+`TeamcityCheckoutLayoutControllerV4ContractTest` — `` `SYS-102 a stale diffId on an idle gate answers the checkout-layout-diff-stale code` ``,
+`` `SYS-102 a Sync while a Sync runs answers the running job (kind job)` ``,
+`` `SYS-102 a Sync while another admin job runs answers the gate's conflict` `` (4),
+`` `SYS-102 the report stays readable while a new Diff runs` ``,
+`` `SYS-102 a failed Diff keeps the previous report` `` (5);
+`TeamcityCheckoutLayoutDiffServiceTest` — `` `SYS-102 an archived component is left out of the Diff entirely` ``,
+`` `SYS-102 a version-range override (vcs_settings marker) row is left out of the Diff` `` (1),
+`` `SYS-102 a manually re-saved value is reported as manual edit, not overwritten` `` (2),
+`` `SYS-102 a single-root row TeamCity places where CRS cannot express it is reported, not dropped` `` (6),
+`` `SYS-102 a compile configuration attaching an extra tooling root is a roots mismatch, not invalid` `` (7);
+`CheckoutLayoutEditHistoryTest` — `` `SYS-102 a user edit after a sync is manual again` `` (2);
+`CheckoutLayoutRulesTest` — `` `SYS-102 only derived statuses are scope-filtered, any other status is always reported` `` (6);
+`VcsRootsComparisonTest` and `VcsRootsValidationTest` — `SYS-102 ...` tests (7);
+`TeamcityCheckoutLayoutSyncServiceTest` — `` `SYS-102 an invalid row is skipped even if selected` ``,
+`` `SYS-102 an applied row's before and after values are recorded per field` `` (8).
+
+### SYS-103: Configurable retry policy in `ClassicComponentsRegistryServiceClient`
+
+**Priority:** Medium
+**Test layer:** unit-test
+**Status:** ✅ Tested
+
+**Motivation:**
+The client retries a 503 or an I/O error a few times within about a second. That covers a
+momentary blip but not a longer outage of the service, such as its pod being rescheduled, when
+the route answers 503 for minutes. A caller that has to survive such an outage could only wrap
+the whole client in its own retry loop.
+
+**Description:**
+1. `ClassicComponentsRegistryServiceClient(apiUrlProvider, objectMapper, retryer)` uses the given
+   `feign.Retryer` for every request. The constructors without it keep the default policy,
+   `ClassicComponentsRegistryServiceClient.defaultRetryer()`: 5 attempts, backoff from 100 ms up to
+   1 s.
+2. The policy is per request: Feign clones the retryer for each call, so one call exhausting its
+   attempts does not shorten the next. A custom `Retryer` must return a fresh instance from
+   `clone()`.
+
+**Test method:**
+`RetryOn503Test` — `` `SYS-103 caller-supplied retryer outlasts the default` `` (1),
+`` `SYS-103 retryer state is not shared between requests` `` (2).
+
+### SYS-104: Component flag `autoRelease`
+
+**Priority:** Medium
+**Test layer:** unit + integration-test
+**Status:** ✅ Tested
+
+**Motivation:**
+Release automation (for example the CVE remediation service) needs to know whether a component's
+releases may be started without a person.
+
+**Description:**
+- `components.auto_release BOOLEAN NOT NULL DEFAULT false` (`V12__`). Meaning: releases of the
+  component may be started automatically by release automation once a release candidate passes its
+  gates; `false`: a person starts every release.
+- v4: `ComponentCreateRequest.autoRelease` (default false), `ComponentUpdateRequest.autoRelease`
+  (null = unchanged), `ComponentSummaryResponse.autoRelease`, `ComponentDetailResponse.autoRelease`;
+  `GET /components?autoRelease=true|false` filters (absent = both).
+- Field-config path `component.autoRelease` (`visibility`, `editable`). A create request without the
+  field stores `false`.
+- The flag is not part of the Groovy DSL and is not exposed on v1-v3.
+- A TeamCity resync started by an admin turns the flag on when the release configuration of every linked release
+  line (based on `teamcity.sync.cd-release-template-id`, not paused) has an enabled finish-build
+  trigger, unless the flag has ever been changed (an `UPDATE` or `RENAME` audit row on it): a person's "off"
+  stays off. One audit row per change, counted in `auto_release_enabled`. Never turns it off,
+  never changes TeamCity, and ignores the field-config visibility. The weekly cron does this only
+  with `teamcity.sync.auto-release-on-cron=true` (default `false`). The names of the components it
+  turned on are logged. A release line the resync leaves unresolved (several candidates, none a
+  release build) keeps the flag off. An admin who starts a resync while the cron run is going gets
+  that run, so the cron rule applies to it.
+
+**Test method:**
+`V12AutoReleaseMigrationIntegrationTest`, `AutoReleaseFlagV4Test`; `ExternalTcProjectFetcherTest`
+(`SYS-104 finish-build trigger means auto release`, `SYS-104 no auto release otherwise`),
+`TeamcitySyncServiceTest` (`SYS-104 resync turns autoRelease on`, `SYS-104 resync never turns autoRelease off`,
+`SYS-104 the weekly cron leaves autoRelease alone by default`), `AuditLogRepositoryAutoReleaseChangeTest`.
+
+### SYS-105: Template-only creators
+
+**Priority:** High
+**Test layer:** unit + integration-test
+**Status:** ✅ Tested
+
+**Motivation:**
+Some users should create components only from a template, and change nothing the template fills
+in. With one create permission, `CREATE_COMPONENTS`, the registry could not tell them apart from
+users who may create any component.
+
+**Description:**
+- New permission `CREATE_FROM_TEMPLATE`, carried by the bundled role
+  `ROLE_COMPONENTS_REGISTRY_TEMPLATE_CREATOR` with `ACCESS_COMPONENTS` and `ACCESS_AUDIT`. Which
+  users hold the role is realm configuration; the registry reads no AD groups.
+- `ProfileAvailability` decides from the two create permissions, `CREATE_COMPONENTS` first:
+  everything with `CREATE_COMPONENTS`; templates without overrides with `CREATE_FROM_TEMPLATE`
+  alone; nothing with neither.
+- `POST /rest/api/4/components` keeps its `CREATE_COMPONENTS` guard. `ROLE_COMPONENTS_REGISTRY_EDITOR`
+  and `ROLE_ADMIN` are unchanged.
+
+**Acceptance criteria:**
+1. `GET /auth/me` lists `ACCESS_COMPONENTS`, `ACCESS_AUDIT` and `CREATE_FROM_TEMPLATE` for the
+   template creator role; the editor and admin roles keep their permissions.
+2. For a caller with `CREATE_FROM_TEMPLATE` only, the listing marks templates usable and regular
+   profiles unusable with "You may create components from templates only".
+3. Such a caller's dry run and create from a template without overrides succeed (`200`, `201`).
+4. Such a caller's request with any override answers `403`, before the override paths are checked,
+   and creates nothing.
+5. Such a caller's `POST /rest/api/4/components` answers `403`, with or without a profile, and
+   creates nothing.
+6. A caller with both create permissions has every right of `CREATE_COMPONENTS`.
+7. Such a caller may edit a component they own.
+
+**Test method:** `RoleMapTest` (H2 `ft-db`) — `` `SYS-105 template creator role` ``;
+`BundledRoleMapTest` — `` `SYS-105 bundled template creator role` ``,
+`` `SYS-105 bundled editor role unchanged` ``, `` `SYS-105 bundled admin role unchanged` `` (1);
+`PermissionProfileAvailabilityTest` — `` `SYS-105 template for template only creator` ``,
+`` `SYS-105 profile for template only creator` ``, `` `SYS-105 override for template only creator` `` (2, 4),
+`` `SYS-105 both create permissions` `` (6); `ComponentProfileControllerV4Test` —
+`` `SYS-105 template only creator` ``, `` `SYS-105 usable for editor` `` (2);
+`ComponentTemplateControllerV4Test` — `` `SYS-105 template only creator dry run` ``,
+`` `SYS-105 template only creator create` `` (3), `` `SYS-105 template only creator overridable override` ``,
+`` `SYS-105 template only creator not overridable override` `` (4); `ProfileOnCreateTest` —
+`` `SYS-105 template only creator refused` `` (5); `ComponentOwnershipEditSecurityTest` —
+`` `SYS-105 template only creator owner allowed` `` (7).

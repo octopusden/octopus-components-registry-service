@@ -6,6 +6,9 @@ import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.Assertions.assertTrue
 import org.junit.jupiter.api.DisplayName
 import org.junit.jupiter.api.Test
+import org.octopusden.octopus.components.registry.server.teamcity.sync.PROJECT_FIELDS
+import org.octopusden.octopus.components.registry.server.teamcity.sync.TcProject
+import org.octopusden.octopus.components.registry.server.teamcity.sync.mapTcProjectsToComponentMatches
 import java.util.UUID
 import org.octopusden.octopus.infrastructure.teamcity.client.dto.TeamcityBuildType as ExternalTeamcityBuildType
 import org.octopusden.octopus.infrastructure.teamcity.client.dto.TeamcityBuildTypes as ExternalTeamcityBuildTypes
@@ -13,10 +16,12 @@ import org.octopusden.octopus.infrastructure.teamcity.client.dto.TeamcityProject
 import org.octopusden.octopus.infrastructure.teamcity.client.dto.TeamcityProjects as ExternalTeamcityProjects
 import org.octopusden.octopus.infrastructure.teamcity.client.dto.TeamcityProperties as ExternalTeamcityProperties
 import org.octopusden.octopus.infrastructure.teamcity.client.dto.TeamcityProperty as ExternalTeamcityProperty
+import org.octopusden.octopus.infrastructure.teamcity.client.dto.TeamcityTrigger as ExternalTeamcityTrigger
+import org.octopusden.octopus.infrastructure.teamcity.client.dto.TeamcityTriggers as ExternalTeamcityTriggers
 
 /**
- * Unit tests for the pure mapper inside [ExternalTcProjectFetcher]. The HTTP side
- * is exercised separately by `teamcity-client/TeamcityClassicClientTest` against a
+ * Unit tests for the pure mapper inside [org.octopusden.octopus.components.registry.server.teamcity.sync.ExternalTcProjectFetcher].
+ * The HTTP side is exercised separately by `teamcity-client/TeamcityClassicClientTest` against a
  * real TC; here we cover only the mapping rules CRS layers on top.
  */
 class ExternalTcProjectFetcherTest {
@@ -237,7 +242,8 @@ class ExternalTcProjectFetcherTest {
                 buildTypes = listOf(buildType(id = "Build1", legacyTemplateId = "CustomReleaseTpl")),
             ),
         )
-        val result = mapTcProjectsToComponentMatches(projects, mapOf("foo" to fooUuid), cdReleaseTemplateId = "CustomReleaseTpl")
+        val result =
+            mapTcProjectsToComponentMatches(projects, mapOf("foo" to fooUuid), cdReleaseTemplateId = "CustomReleaseTpl")
         assertEquals(true, result[fooUuid]!!.single().hasCdReleaseBuild)
     }
 
@@ -279,6 +285,15 @@ class ExternalTcProjectFetcherTest {
                         "projectId": "Tc_Foo",
                         "projectName": "Foo",
                         "href": "/app/rest/buildTypes/id:Tc_Foo_Build",
+                        "triggers": {
+                          "trigger": [
+                            {
+                              "type": "buildDependencyTrigger",
+                              "disabled": false,
+                              "properties": {"count": 1}
+                            }
+                          ]
+                        },
                         "template": {
                           "id": "CDRelease",
                           "name": "CDRelease",
@@ -314,6 +329,7 @@ class ExternalTcProjectFetcherTest {
         val tcProject = result[fooUuid]?.single() ?: error("expected exactly one match for foo")
         assertEquals("Tc_Foo", tcProject.id)
         assertEquals(true, tcProject.hasCdReleaseBuild)
+        assertEquals(true, tcProject.hasAutoReleaseTrigger)
     }
 
     @Test
@@ -587,12 +603,52 @@ class ExternalTcProjectFetcherTest {
         },
     )
 
+    /** The unfiltered response (~180 MB) exhausted the pod heap; only *VERSION* parameters and the trigger-property count are fetched. */
+    @Test
+    fun `resync fetch keeps the TeamCity response small`() {
+        assertTrue("parameters(\$locator(name:(value:VERSION,matchType:contains)),property(name,value))" in PROJECT_FIELDS)
+        assertTrue("triggers(trigger(type,disabled,properties(count)))" in PROJECT_FIELDS)
+    }
+
+    private fun finishBuildTrigger(disabled: Boolean = false) =
+        ExternalTeamcityTrigger("buildDependencyTrigger", disabled, ExternalTeamcityProperties())
+
+    private fun autoReleaseOf(vararg buildTypes: ExternalTeamcityBuildType): Boolean {
+        val project = tcProject(id = "Tc_Rel", webUrl = "http://tc/rel", componentName = "foo", buildTypes = buildTypes.toList())
+        return mapTcProjectsToComponentMatches(listOf(project), mapOf("foo" to fooUuid), cdReleaseTemplateId)[fooUuid]!!
+            .single()
+            .hasAutoReleaseTrigger
+    }
+
+    private fun release(
+        vararg triggers: ExternalTeamcityTrigger,
+        paused: Boolean? = null,
+    ) = buildType("Release", legacyTemplateId = "CDRelease", paused = paused, triggers = triggers.toList())
+
+    @Test
+    fun `SYS-104 finish-build trigger means auto release`() {
+        assertEquals(true, autoReleaseOf(release(finishBuildTrigger())))
+        val viaTemplates = buildType("Release", pluralTemplateIds = listOf("CDRelease"), triggers = listOf(finishBuildTrigger()))
+        assertEquals(true, autoReleaseOf(viaTemplates))
+    }
+
+    @Test
+    fun `SYS-104 no auto release otherwise`() {
+        assertEquals(false, autoReleaseOf(release()))
+        assertEquals(false, autoReleaseOf(release(finishBuildTrigger(disabled = true))))
+        assertEquals(false, autoReleaseOf(release(finishBuildTrigger(), paused = true), buildType("Compile")))
+        assertEquals(false, autoReleaseOf(release(ExternalTeamcityTrigger("schedulingTrigger", false, ExternalTeamcityProperties()))))
+        val compile = buildType("Compile", legacyTemplateId = "CDGradleBuild", triggers = listOf(finishBuildTrigger()))
+        assertEquals(false, autoReleaseOf(compile))
+    }
+
     private fun buildType(
         id: String,
         legacyTemplateId: String? = null,
         pluralTemplateIds: List<String>? = null,
         paused: Boolean? = null,
         projectVersion: String? = null,
+        triggers: List<ExternalTeamcityTrigger>? = null,
     ): ExternalTeamcityBuildType =
         ExternalTeamcityBuildType(
             id = id,
@@ -601,6 +657,7 @@ class ExternalTcProjectFetcherTest {
             projectName = "P",
             href = "/$id",
             paused = paused,
+            triggers = triggers?.let { ExternalTeamcityTriggers(it) },
             parameters = projectVersion?.let {
                 ExternalTeamcityProperties(
                     properties = mutableListOf(ExternalTeamcityProperty(name = "PROJECT_VERSION", value = it)),

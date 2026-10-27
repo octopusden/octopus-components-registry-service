@@ -6,7 +6,11 @@ import groovy.transform.EqualsAndHashCode
 import groovy.transform.TypeChecked
 
 @TypeChecked
-@EqualsAndHashCode
+// Every field here is private, and @EqualsAndHashCode compares PROPERTIES — a private field is not
+// one. Without includeFields the generated methods read no field at all and any two distributions
+// compare equal (TD-023). `metaClass` must then be excluded by hand: includeFields also picks up
+// that synthetic Groovy field, which is per-instance, so identical objects would never be equal.
+@EqualsAndHashCode(includeFields = true, excludes = ['metaClass'])
 @JsonInclude(JsonInclude.Include.NON_NULL)
 class Distribution {
     @JsonProperty
@@ -28,15 +32,19 @@ class Distribution {
     private final String docker
 
     @JsonProperty
+    private final String generic
+
+    @JsonProperty
     private SecurityGroups securityGroups
 
-    Distribution(boolean explicit, boolean external, String GAV, String DEB, String RPM, String docker, SecurityGroups securityGroups) {
+    Distribution(boolean explicit, boolean external, String GAV, String DEB, String RPM, String docker, String generic, SecurityGroups securityGroups) {
         this.explicit = explicit
         this.external = external
         this.GAV = GAV
         this.DEB = DEB
         this.RPM = RPM
         this.docker = docker
+        this.generic = generic
         this.securityGroups = securityGroups
     }
 
@@ -64,6 +72,10 @@ class Distribution {
         return RPM
     }
 
+    String generic() {
+        return generic
+    }
+
     SecurityGroups getSecurityGroups() {
         return securityGroups
     }
@@ -77,6 +89,7 @@ class Distribution {
                 ", DEB='" + (DEB ?: "N/A") + '\'' +
                 ", RPM='" + (RPM ?: "N/A") + '\'' +
                 ", docker='" + (docker ?: "N/A") + '\'' +
+                ", generic='" + (generic ?: "N/A") + '\'' +
                 ", securityGroups='" + securityGroups + '\'' +
                 '}'
     }

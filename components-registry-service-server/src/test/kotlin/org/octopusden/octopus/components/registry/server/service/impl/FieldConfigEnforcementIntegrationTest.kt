@@ -229,7 +229,7 @@ class FieldConfigEnforcementIntegrationTest {
     ): JsonNode {
         val registryFragment = vcsExternalRegistry?.let { """"vcsExternalRegistry":"$it",""" } ?: ""
         val body =
-            """{"name":"crsB_${UUID.randomUUID().toString().take(8)}","componentOwner":"bob",""" +
+            """{"name":"crsb-${UUID.randomUUID().toString().take(8)}","componentOwner":"bob",""" +
                 registryFragment +
                 """"group":{"groupKey":"org.example.test","isFake":false},""" +
                 """"baseConfiguration":{"build":{"buildSystem":"MAVEN"},""" +
@@ -378,7 +378,7 @@ class FieldConfigEnforcementIntegrationTest {
     fun create_nonAdminSuppliesAdminOnly_forbidden() {
         withFieldConfig(mapOf("jira" to mapOf("technical" to mapOf("editable" to "adminOnly")))) {
             val body =
-                """{"name":"crsB_create_${UUID.randomUUID().toString().take(8)}","componentOwner":"bob",""" +
+                """{"name":"crsb-create-${UUID.randomUUID().toString().take(8)}","componentOwner":"bob",""" +
                     """"group":{"groupKey":"org.example.test","isFake":false},""" +
                     """"baseConfiguration":{"build":{"buildSystem":"MAVEN"},""" +
                     """"jira":{"projectKey":"${uniqueProjectKey()}","technical":true}}}"""
@@ -397,7 +397,7 @@ class FieldConfigEnforcementIntegrationTest {
     fun create_nonAdminOmitsAdminOnly_ok() {
         withFieldConfig(mapOf("jira" to mapOf("technical" to mapOf("editable" to "adminOnly")))) {
             val body =
-                """{"name":"crsB_create_${UUID.randomUUID().toString().take(8)}","componentOwner":"bob",""" +
+                """{"name":"crsb-create-${UUID.randomUUID().toString().take(8)}","componentOwner":"bob",""" +
                     """"group":{"groupKey":"org.example.test","isFake":false},""" +
                     """"baseConfiguration":{"build":{"buildSystem":"MAVEN"},""" +
                     """"jira":{"projectKey":"${uniqueProjectKey()}"}}}"""
@@ -558,7 +558,7 @@ class FieldConfigEnforcementIntegrationTest {
     /** POST a bob-owned component with a caller-supplied baseConfiguration (as admin). */
     private fun createBobRaw(baseConfig: String = """{"build":{"buildSystem":"MAVEN"}}"""): JsonNode {
         val body =
-            """{"name":"crsB_${UUID.randomUUID().toString().take(8)}","componentOwner":"bob",""" +
+            """{"name":"crsb-${UUID.randomUUID().toString().take(8)}","componentOwner":"bob",""" +
                 """"group":{"groupKey":"org.example.test","isFake":false},"baseConfiguration":$baseConfig}"""
         return objectMapper.readTree(
             mvc
@@ -698,12 +698,12 @@ class FieldConfigEnforcementIntegrationTest {
     fun create_people_gated() {
         withFieldConfig(mapOf("component" to mapOf("releaseManager" to mapOf("editable" to "adminOnly")))) {
             editorPost(
-                """{"name":"crsB_ppl_${UUID.randomUUID().toString().take(8)}","componentOwner":"bob","releaseManager":["bob"],""" +
+                """{"name":"crsb-ppl-${UUID.randomUUID().toString().take(8)}","componentOwner":"bob","releaseManager":["bob"],""" +
                     """"group":{"groupKey":"org.example.test","isFake":false},"baseConfiguration":{"build":{"buildSystem":"MAVEN"}}}""",
             ).andExpect(status().isForbidden)
 
             editorPost(
-                """{"name":"crsB_ppl_${UUID.randomUUID().toString().take(8)}","componentOwner":"bob",""" +
+                """{"name":"crsb-ppl-${UUID.randomUUID().toString().take(8)}","componentOwner":"bob",""" +
                     """"group":{"groupKey":"org.example.test","isFake":false},"baseConfiguration":{"build":{"buildSystem":"MAVEN"}}}""",
             ).andExpect(status().isCreated)
         }
@@ -727,7 +727,7 @@ class FieldConfigEnforcementIntegrationTest {
     @Test
     @DisplayName("adminOnly parentComponentName: non-admin setting a parent → 403")
     fun adminOnlyParentComponentName_reject() {
-        val parentKey = "crsB_parent_${UUID.randomUUID().toString().take(8)}"
+        val parentKey = "crsb-parent-${UUID.randomUUID().toString().take(8)}"
         adminPost(
             """{"name":"$parentKey","componentOwner":"owner1","canBeParent":true,""" +
                 """"group":{"groupKey":"org.example.test","isFake":false},"baseConfiguration":{"build":{"buildSystem":"MAVEN"}}}""",
@@ -752,7 +752,7 @@ class FieldConfigEnforcementIntegrationTest {
             val created =
                 objectMapper.readTree(
                     adminPost(
-                        """{"name":"crsB_cbp_${UUID.randomUUID().toString().take(8)}","componentOwner":"owner1","canBeParent":true,""" +
+                        """{"name":"crsb-cbp-${UUID.randomUUID().toString().take(8)}","componentOwner":"owner1","canBeParent":true,""" +
                             """"group":{"groupKey":"org.example.test","isFake":false},"baseConfiguration":{"build":{"buildSystem":"MAVEN"}}}""",
                     ).andExpect(status().isCreated).andReturn().response.contentAsString,
                 )
@@ -767,7 +767,7 @@ class FieldConfigEnforcementIntegrationTest {
             val created =
                 objectMapper.readTree(
                     adminPost(
-                        """{"name":"crsB_rm_${UUID.randomUUID().toString().take(
+                        """{"name":"crsb-rm-${UUID.randomUUID().toString().take(
                             8,
                         )}","componentOwner":"owner1","releaseManager":["bob"],""" +
                             """"group":{"groupKey":"org.example.test","isFake":false},"baseConfiguration":{"build":{"buildSystem":"MAVEN"}}}""",
@@ -784,7 +784,7 @@ class FieldConfigEnforcementIntegrationTest {
             val g = "org.example.test.${UUID.randomUUID().toString().take(8)}"
             val resp =
                 adminPost(
-                    """{"name":"crsB_ee_${UUID.randomUUID().toString().take(8)}","componentOwner":"owner1",""" +
+                    """{"name":"crsb-ee-${UUID.randomUUID().toString().take(8)}","componentOwner":"owner1",""" +
                         """"releaseManager":["rm1"],"securityChampion":["sc1"],""" +
                         """"displayName":"Should Be Stripped","distributionExplicit":true,"distributionExternal":true,""" +
                         """"group":{"groupKey":"org.example.test","isFake":false},""" +
@@ -839,7 +839,7 @@ class FieldConfigEnforcementIntegrationTest {
             // "NOT_A_TYPE" is not a valid productType — validateProductType would 400 if it ran
             // first. The editability gate must win: a non-admin may not supply this field at all.
             val body =
-                """{"name":"crsB_create_${UUID.randomUUID().toString().take(8)}","componentOwner":"bob","productType":"NOT_A_TYPE",""" +
+                """{"name":"crsb-create-${UUID.randomUUID().toString().take(8)}","componentOwner":"bob","productType":"NOT_A_TYPE",""" +
                     """"group":{"groupKey":"org.example.test","isFake":false},""" +
                     """"baseConfiguration":{"build":{"buildSystem":"MAVEN"},"jira":{"projectKey":"${uniqueProjectKey()}"}}}"""
             editorPost(body).andExpect(status().isForbidden)

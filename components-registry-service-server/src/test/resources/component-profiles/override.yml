@@ -1,0 +1,10 @@
+components-registry:
+  component-profiles:
+    solution:
+      title: Solution (QA)
+    regular-internal:
+      kind: regular
+      title: Regular internal component
+      description: An ordinary component for internal use only.
+      order: 20
+      classification: { external: false, explicit: ask }

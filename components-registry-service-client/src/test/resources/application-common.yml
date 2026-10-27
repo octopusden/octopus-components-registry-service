@@ -4,6 +4,13 @@ server:
 components-registry:
   vcs:
     enabled: false
+  component-profiles:
+    regular-internal:
+      kind: regular
+      title: Regular internal component
+      description: An ordinary component for internal use only, not delivered to the client.
+      order: 20
+      classification: { external: false, explicit: ask }
   work-dir: ${COMPONENTS_REGISTRY_SERVICE_TEST_DATA_DIR}/components-registry/common
   copyright-path: ${components-registry.work-dir}/copyrights
   main-groovy-file: Aggregator.groovy
@@ -56,3 +63,12 @@ octopus-security:
       - IMPORT_DATA
       - ACCESS_AUDIT
       - EDIT_METADATA
+
+teamcity:
+  validation:
+    gradle-build-template-id: FIXTURE_GRADLE_TEMPLATE
+    maven-build-template-id: FIXTURE_MAVEN_TEMPLATE
+    release-family-template-ids:
+      - FIXTURE_RELEASE_TEMPLATE
+    gradle-default-build-step-id: FIXTURE_GRADLE_STEP
+    maven-default-build-step-id: FIXTURE_MAVEN_STEP

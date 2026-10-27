@@ -1,6 +1,171 @@
 {
   "components" : {
     "schemas" : {
+      "ActualDisagreement" : {
+        "properties" : {
+          "actualValue" : {
+            "type" : "string"
+          },
+          "subRange" : {
+            "type" : "string"
+          }
+        },
+        "required" : [
+          "actualValue",
+          "subRange"
+        ],
+        "type" : "object"
+      },
+      "ActualRange" : {
+        "properties" : {
+          "value" : {
+            "type" : "string"
+          },
+          "versionRange" : {
+            "type" : "string"
+          }
+        },
+        "required" : [
+          "value",
+          "versionRange"
+        ],
+        "type" : "object"
+      },
+      "AdminComponentProfileEntry" : {
+        "properties" : {
+          "configuration" : {
+            "description" : "The entry's configuration as read, in YAML.",
+            "type" : "string"
+          },
+          "id" : {
+            "type" : "string"
+          },
+          "kind" : {
+            "type" : "string"
+          },
+          "problems" : {
+            "items" : {
+              "type" : "string"
+            },
+            "type" : "array"
+          },
+          "profile" : {
+            "$ref" : "#/components/schemas/ComponentProfileResponse"
+          },
+          "status" : {
+            "enum" : [
+              "live",
+              "failed"
+            ],
+            "type" : "string"
+          },
+          "template" : {
+            "$ref" : "#/components/schemas/ComponentTemplateResponse"
+          }
+        },
+        "required" : [
+          "configuration",
+          "id",
+          "problems",
+          "status"
+        ],
+        "type" : "object"
+      },
+      "AdminComponentProfilesResponse" : {
+        "properties" : {
+          "configVersion" : {
+            "description" : "The configuration version the config server reported; absent when not served by one.",
+            "type" : "string"
+          },
+          "entries" : {
+            "items" : {
+              "$ref" : "#/components/schemas/AdminComponentProfileEntry"
+            },
+            "type" : "array"
+          },
+          "lastLoad" : {
+            "$ref" : "#/components/schemas/ComponentProfilesReloadResponse"
+          }
+        },
+        "required" : [
+          "entries",
+          "lastLoad"
+        ],
+        "type" : "object"
+      },
+      "ArchiveReadinessEntry" : {
+        "properties" : {
+          "openIssues" : {
+            "items" : {
+              "$ref" : "#/components/schemas/JiraIssueRef"
+            },
+            "type" : "array"
+          },
+          "outcome" : {
+            "enum" : [
+              "COMPLETED",
+              "NOT_COMPLETED",
+              "UNKNOWN"
+            ],
+            "type" : "string"
+          },
+          "reason" : {
+            "type" : "string"
+          },
+          "reasonKind" : {
+            "enum" : [
+              "SYSTEM_UNAVAILABLE",
+              "REGISTRY_DATA",
+              "NOT_CONFIGURED"
+            ],
+            "type" : "string"
+          },
+          "sharedWith" : {
+            "items" : {
+              "type" : "string"
+            },
+            "type" : "array"
+          },
+          "targetId" : {
+            "type" : "string"
+          },
+          "targetKind" : {
+            "enum" : [
+              "JIRA_ISSUES",
+              "JIRA_PROJECT",
+              "TEAMCITY_PROJECT",
+              "REPOSITORY"
+            ],
+            "type" : "string"
+          }
+        },
+        "required" : [
+          "openIssues",
+          "outcome",
+          "sharedWith",
+          "targetId",
+          "targetKind"
+        ],
+        "type" : "object"
+      },
+      "ArchiveReadinessResponse" : {
+        "properties" : {
+          "entries" : {
+            "items" : {
+              "$ref" : "#/components/schemas/ArchiveReadinessEntry"
+            },
+            "type" : "array"
+          },
+          "ready" : {
+            "type" : "boolean"
+          }
+        },
+        "required" : [
+          "entries",
+          "ready"
+        ],
+        "type" : "object"
+      },
       "ArtifactIdRequest" : {
         "properties" : {
           "artifactTokens" : {
@@ -55,6 +220,116 @@
           "groupPattern",
           "id",
           "mode"
+        ],
+        "type" : "object"
+      },
+      "AsCodeMatchRange" : {
+        "properties" : {
+          "end" : {
+            "format" : "int32",
+            "type" : "integer"
+          },
+          "start" : {
+            "format" : "int32",
+            "type" : "integer"
+          }
+        },
+        "required" : [
+          "end",
+          "start"
+        ],
+        "type" : "object"
+      },
+      "AsCodeSearchHit" : {
+        "properties" : {
+          "archived" : {
+            "type" : "boolean"
+          },
+          "componentKey" : {
+            "type" : "string"
+          },
+          "id" : {
+            "format" : "uuid",
+            "type" : "string"
+          },
+          "matchCount" : {
+            "format" : "int32",
+            "type" : "integer"
+          },
+          "matches" : {
+            "items" : {
+              "$ref" : "#/components/schemas/AsCodeSearchLine"
+            },
+            "type" : "array"
+          }
+        },
+        "required" : [
+          "archived",
+          "componentKey",
+          "id",
+          "matchCount",
+          "matches"
+        ],
+        "type" : "object"
+      },
+      "AsCodeSearchLine" : {
+        "properties" : {
+          "line" : {
+            "format" : "int32",
+            "type" : "integer"
+          },
+          "path" : {
+            "items" : {
+              "type" : "string"
+            },
+            "type" : "array"
+          },
+          "ranges" : {
+            "items" : {
+              "$ref" : "#/components/schemas/AsCodeMatchRange"
+            },
+            "type" : "array"
+          },
+          "text" : {
+            "type" : "string"
+          }
+        },
+        "required" : [
+          "line",
+          "path",
+          "ranges",
+          "text"
+        ],
+        "type" : "object"
+      },
+      "AsCodeSearchResponse" : {
+        "properties" : {
+          "query" : {
+            "type" : "string"
+          },
+          "regex" : {
+            "type" : "boolean"
+          },
+          "results" : {
+            "items" : {
+              "$ref" : "#/components/schemas/AsCodeSearchHit"
+            },
+            "type" : "array"
+          },
+          "totalComponents" : {
+            "format" : "int32",
+            "type" : "integer"
+          },
+          "truncated" : {
+            "type" : "boolean"
+          }
+        },
+        "required" : [
+          "query",
+          "regex",
+          "results",
+          "totalComponents",
+          "truncated"
         ],
         "type" : "object"
       },
@@ -135,6 +410,10 @@
             },
             "type" : "array"
           },
+          "buildWorkingDirectory" : {
+            "description" : "Write tri-state: omit or null = leave unchanged; \"\" (or blank) = clear to null; non-blank = set verbatim. On create, \"\" is treated as null.",
+            "type" : "string"
+          },
           "dockerImages" : {
             "items" : {
               "$ref" : "#/components/schemas/DockerImageRequest"
@@ -147,6 +426,12 @@
           "fileUrlArtifacts" : {
             "items" : {
               "$ref" : "#/components/schemas/FileUrlArtifactRequest"
+            },
+            "type" : "array"
+          },
+          "genericArtifacts" : {
+            "items" : {
+              "$ref" : "#/components/schemas/GenericArtifactRequest"
             },
             "type" : "array"
           },
@@ -350,6 +635,282 @@
         ],
         "type" : "object"
       },
+      "CheckoutLayoutComponentSyncOutcome" : {
+        "properties" : {
+          "componentId" : {
+            "format" : "uuid",
+            "type" : "string"
+          },
+          "componentKey" : {
+            "type" : "string"
+          },
+          "rows" : {
+            "items" : {
+              "$ref" : "#/components/schemas/CheckoutLayoutRowSyncOutcome"
+            },
+            "type" : "array"
+          }
+        },
+        "required" : [
+          "componentId",
+          "componentKey",
+          "rows"
+        ],
+        "type" : "object"
+      },
+      "CheckoutLayoutDiffResult" : {
+        "properties" : {
+          "diffId" : {
+            "type" : "string"
+          },
+          "generatedAt" : {
+            "format" : "date-time",
+            "type" : "string"
+          },
+          "rows" : {
+            "items" : {
+              "$ref" : "#/components/schemas/CheckoutLayoutRowDiff"
+            },
+            "type" : "array"
+          }
+        },
+        "required" : [
+          "generatedAt",
+          "rows"
+        ],
+        "type" : "object"
+      },
+      "CheckoutLayoutEntryDiff" : {
+        "properties" : {
+          "branch" : {
+            "type" : "string"
+          },
+          "currentCheckoutDirectory" : {
+            "type" : "string"
+          },
+          "currentSourcePath" : {
+            "type" : "string"
+          },
+          "derivedCheckoutDirectory" : {
+            "type" : "string"
+          },
+          "derivedSourcePath" : {
+            "type" : "string"
+          },
+          "hotfixBranch" : {
+            "type" : "string"
+          },
+          "name" : {
+            "type" : "string"
+          },
+          "repositoryType" : {
+            "type" : "string"
+          },
+          "tag" : {
+            "type" : "string"
+          },
+          "vcsPath" : {
+            "type" : "string"
+          }
+        },
+        "required" : [
+          "name",
+          "vcsPath"
+        ],
+        "type" : "object"
+      },
+      "CheckoutLayoutFieldChange" : {
+        "properties" : {
+          "after" : {
+            "type" : "string"
+          },
+          "before" : {
+            "type" : "string"
+          },
+          "componentKey" : {
+            "type" : "string"
+          },
+          "field" : {
+            "type" : "string"
+          },
+          "root" : {
+            "type" : "string"
+          },
+          "rowLabel" : {
+            "type" : "string"
+          }
+        },
+        "required" : [
+          "componentKey",
+          "field",
+          "root",
+          "rowLabel"
+        ],
+        "type" : "object"
+      },
+      "CheckoutLayoutRowDiff" : {
+        "properties" : {
+          "componentId" : {
+            "format" : "uuid",
+            "type" : "string"
+          },
+          "componentKey" : {
+            "type" : "string"
+          },
+          "configurationRowId" : {
+            "format" : "uuid",
+            "type" : "string"
+          },
+          "currentBuildWorkingDirectory" : {
+            "type" : "string"
+          },
+          "derivedBuildWorkingDirectory" : {
+            "type" : "string"
+          },
+          "entries" : {
+            "items" : {
+              "$ref" : "#/components/schemas/CheckoutLayoutEntryDiff"
+            },
+            "type" : "array"
+          },
+          "notes" : {
+            "items" : {
+              "type" : "string"
+            },
+            "type" : "array"
+          },
+          "rowLabel" : {
+            "type" : "string"
+          },
+          "sourceBuildTypeIds" : {
+            "items" : {
+              "type" : "string"
+            },
+            "type" : "array"
+          },
+          "status" : {
+            "enum" : [
+              "RESOLVED",
+              "CONFLICT",
+              "UNEXPRESSIBLE",
+              "NO_CHAIN",
+              "OUTSIDE_TEMPLATES",
+              "COMPILE_PAUSED",
+              "MANUAL_EDIT",
+              "IN_SYNC",
+              "INVALID",
+              "TC_ERROR",
+              "ROOTS_MISMATCH"
+            ],
+            "type" : "string"
+          },
+          "versionRange" : {
+            "type" : "string"
+          }
+        },
+        "required" : [
+          "componentId",
+          "componentKey",
+          "configurationRowId",
+          "entries",
+          "notes",
+          "rowLabel",
+          "sourceBuildTypeIds",
+          "status",
+          "versionRange"
+        ],
+        "type" : "object"
+      },
+      "CheckoutLayoutRowSyncOutcome" : {
+        "properties" : {
+          "configurationRowId" : {
+            "format" : "uuid",
+            "type" : "string"
+          },
+          "outcome" : {
+            "type" : "string"
+          },
+          "rowLabel" : {
+            "type" : "string"
+          }
+        },
+        "required" : [
+          "configurationRowId",
+          "outcome",
+          "rowLabel"
+        ],
+        "type" : "object"
+      },
+      "CheckoutLayoutSyncResult" : {
+        "properties" : {
+          "applied" : {
+            "format" : "int32",
+            "type" : "integer"
+          },
+          "components" : {
+            "items" : {
+              "$ref" : "#/components/schemas/CheckoutLayoutComponentSyncOutcome"
+            },
+            "type" : "array"
+          },
+          "failed" : {
+            "format" : "int32",
+            "type" : "integer"
+          },
+          "fieldChanges" : {
+            "items" : {
+              "$ref" : "#/components/schemas/CheckoutLayoutFieldChange"
+            },
+            "type" : "array"
+          },
+          "requested" : {
+            "format" : "int32",
+            "type" : "integer"
+          },
+          "skipped" : {
+            "format" : "int32",
+            "type" : "integer"
+          },
+          "triggeredBy" : {
+            "type" : "string"
+          }
+        },
+        "required" : [
+          "applied",
+          "components",
+          "failed",
+          "fieldChanges",
+          "requested",
+          "skipped",
+          "triggeredBy"
+        ],
+        "type" : "object"
+      },
+      "Classification" : {
+        "properties" : {
+          "explicit" : {
+            "description" : "Never `ask` for a template.",
+            "enum" : [
+              "true",
+              "false",
+              "ask"
+            ],
+            "type" : "string"
+          },
+          "external" : {
+            "type" : "boolean"
+          },
+          "solution" : {
+            "type" : "boolean"
+          }
+        },
+        "required" : [
+          "explicit",
+          "external",
+          "solution"
+        ],
+        "type" : "object"
+      },
       "ComponentConfigurationResponse" : {
         "properties" : {
           "build" : {
@@ -360,6 +921,9 @@
               "$ref" : "#/components/schemas/BuildToolBeanResponse"
             },
             "type" : "array"
+          },
+          "buildWorkingDirectory" : {
+            "type" : "string"
           },
           "dockerImages" : {
             "items" : {
@@ -373,6 +937,12 @@
           "fileUrlArtifacts" : {
             "items" : {
               "$ref" : "#/components/schemas/FileUrlArtifactResponse"
+            },
+            "type" : "array"
+          },
+          "genericArtifacts" : {
+            "items" : {
+              "$ref" : "#/components/schemas/GenericArtifactResponse"
             },
             "type" : "array"
           },
@@ -430,6 +1000,7 @@
           "buildToolBeans",
           "dockerImages",
           "fileUrlArtifacts",
+          "genericArtifacts",
           "id",
           "isSyntheticBase",
           "mavenArtifacts",
@@ -442,6 +1013,7 @@
         "type" : "object"
       },
       "ComponentCreateRequest" : {
+        "description" : "The create request the template rendered.",
         "properties" : {
           "archived" : {
             "type" : "boolean"
@@ -451,6 +1023,9 @@
               "$ref" : "#/components/schemas/ArtifactIdRequest"
             },
             "type" : "array"
+          },
+          "autoRelease" : {
+            "type" : "boolean"
           },
           "baseConfiguration" : {
             "$ref" : "#/components/schemas/BaseConfigurationRequest"
@@ -516,6 +1091,10 @@
           "productType" : {
             "type" : "string"
           },
+          "profile" : {
+            "description" : "Id of the Create-component profile this component is created with (GET /rest/api/4/component-profiles). When given, the create is rejected unless the profile is live, the caller may use it, the stored classification matches it and every field rule of the profile holds. Blank is the same as absent.",
+            "type" : "string"
+          },
           "releaseManager" : {
             "items" : {
               "type" : "string"
@@ -557,6 +1136,9 @@
             },
             "type" : "array"
           },
+          "testComponent" : {
+            "type" : "boolean"
+          },
           "vcsExternalRegistry" : {
             "description" : "Write tri-state: omit or null = leave unchanged; \"\" (or blank) = clear to null; non-blank = set verbatim. On create, \"\" is treated as null.",
             "type" : "string"
@@ -578,6 +1160,9 @@
               "$ref" : "#/components/schemas/ArtifactIdResponse"
             },
             "type" : "array"
+          },
+          "autoRelease" : {
+            "type" : "boolean"
           },
           "canBeParent" : {
             "type" : "boolean"
@@ -648,6 +1233,9 @@
           "productType" : {
             "type" : "string"
           },
+          "registeredBuildParameters" : {
+            "$ref" : "#/components/schemas/RegisteredBuildParametersDetail"
+          },
           "releaseManager" : {
             "items" : {
               "type" : "string"
@@ -688,6 +1276,9 @@
             },
             "type" : "array"
           },
+          "testComponent" : {
+            "type" : "boolean"
+          },
           "updatedAt" : {
             "format" : "date-time",
             "type" : "string"
@@ -698,11 +1289,18 @@
           "version" : {
             "format" : "int64",
             "type" : "integer"
+          },
+          "warnings" : {
+            "items" : {
+              "type" : "string"
+            },
+            "type" : "array"
           }
         },
         "required" : [
           "archived",
           "artifactIds",
+          "autoRelease",
           "canBeParent",
           "configurations",
           "docs",
@@ -715,7 +1313,9 @@
           "skipCommitCheck",
           "systems",
           "teamcityProjects",
-          "version"
+          "testComponent",
+          "version",
+          "warnings"
         ],
         "type" : "object"
       },
@@ -783,6 +1383,97 @@
         ],
         "type" : "object"
       },
+      "ComponentProfileResponse" : {
+        "properties" : {
+          "classification" : {
+            "$ref" : "#/components/schemas/Classification"
+          },
+          "description" : {
+            "type" : "string"
+          },
+          "id" : {
+            "type" : "string"
+          },
+          "kind" : {
+            "enum" : [
+              "regular",
+              "template"
+            ],
+            "type" : "string"
+          },
+          "rules" : {
+            "description" : "Rules a create naming this profile is checked against; empty when the profile has none.",
+            "items" : {
+              "$ref" : "#/components/schemas/FieldRule"
+            },
+            "type" : "array"
+          },
+          "title" : {
+            "type" : "string"
+          },
+          "unusableReason" : {
+            "description" : "Why the current user may not use the profile; absent when usable.",
+            "type" : "string"
+          },
+          "usable" : {
+            "type" : "boolean"
+          },
+          "version" : {
+            "description" : "A template's version, raised by the administrator on every change; absent for a regular profile.",
+            "format" : "int32",
+            "type" : "integer"
+          }
+        },
+        "required" : [
+          "classification",
+          "description",
+          "id",
+          "kind",
+          "rules",
+          "title",
+          "usable"
+        ],
+        "type" : "object"
+      },
+      "ComponentProfilesReloadResponse" : {
+        "properties" : {
+          "entries" : {
+            "items" : {
+              "$ref" : "#/components/schemas/Entry"
+            },
+            "type" : "array"
+          },
+          "problems" : {
+            "items" : {
+              "type" : "string"
+            },
+            "type" : "array"
+          },
+          "status" : {
+            "type" : "string"
+          }
+        },
+        "required" : [
+          "entries",
+          "problems",
+          "status"
+        ],
+        "type" : "object"
+      },
+      "ComponentProfilesResponse" : {
+        "properties" : {
+          "profiles" : {
+            "items" : {
+              "$ref" : "#/components/schemas/ComponentProfileResponse"
+            },
+            "type" : "array"
+          }
+        },
+        "required" : [
+          "profiles"
+        ],
+        "type" : "object"
+      },
       "ComponentRegistryVersion" : {
         "properties" : {
           "jiraVersion" : {
@@ -813,6 +1504,9 @@
       "ComponentSummaryResponse" : {
         "properties" : {
           "archived" : {
+            "type" : "boolean"
+          },
+          "autoRelease" : {
             "type" : "boolean"
           },
           "buildSystem" : {
@@ -874,6 +1568,9 @@
           "teamcityProjectUrl" : {
             "type" : "string"
           },
+          "testComponent" : {
+            "type" : "boolean"
+          },
           "updatedAt" : {
             "format" : "date-time",
             "type" : "string"
@@ -884,13 +1581,179 @@
         },
         "required" : [
           "archived",
+          "autoRelease",
           "canBeParent",
           "id",
           "labels",
           "name",
           "releaseManagers",
           "securityChampions",
-          "systems"
+          "systems",
+          "testComponent"
+        ],
+        "type" : "object"
+      },
+      "ComponentTeamcityValidationRow" : {
+        "properties" : {
+          "componentId" : {
+            "format" : "uuid",
+            "type" : "string"
+          },
+          "componentName" : {
+            "type" : "string"
+          },
+          "message" : {
+            "type" : "string"
+          },
+          "projectId" : {
+            "type" : "string"
+          },
+          "projectUrl" : {
+            "type" : "string"
+          },
+          "status" : {
+            "type" : "string"
+          },
+          "type" : {
+            "type" : "string"
+          },
+          "updatedAt" : {
+            "format" : "date-time",
+            "type" : "string"
+          }
+        },
+        "required" : [
+          "componentId",
+          "componentName",
+          "projectId",
+          "status",
+          "type",
+          "updatedAt"
+        ],
+        "type" : "object"
+      },
+      "ComponentTemplateParameter" : {
+        "properties" : {
+          "default" : {
+            "description" : "The default values; a person parameter's `current-user` is returned as the caller.",
+            "items" : {
+              "description" : "The default values; a person parameter's `current-user` is returned as the caller.",
+              "type" : "string"
+            },
+            "type" : "array"
+          },
+          "hint" : {
+            "type" : "string"
+          },
+          "label" : {
+            "type" : "string"
+          },
+          "list" : {
+            "enum" : [
+              "build-systems",
+              "escrow-generation",
+              "labels"
+            ],
+            "type" : "string"
+          },
+          "maxLength" : {
+            "format" : "int32",
+            "type" : "integer"
+          },
+          "maxSelection" : {
+            "format" : "int32",
+            "type" : "integer"
+          },
+          "message" : {
+            "type" : "string"
+          },
+          "multiple" : {
+            "type" : "boolean"
+          },
+          "name" : {
+            "type" : "string"
+          },
+          "options" : {
+            "items" : {
+              "type" : "string"
+            },
+            "type" : "array"
+          },
+          "pattern" : {
+            "type" : "string"
+          },
+          "required" : {
+            "type" : "boolean"
+          },
+          "type" : {
+            "enum" : [
+              "text",
+              "select",
+              "crs-list",
+              "person"
+            ],
+            "type" : "string"
+          },
+          "values" : {
+            "description" : "A crs-list parameter's list, as it is at the time of the call.",
+            "items" : {
+              "description" : "A crs-list parameter's list, as it is at the time of the call.",
+              "type" : "string"
+            },
+            "type" : "array"
+          }
+        },
+        "required" : [
+          "default",
+          "label",
+          "multiple",
+          "name",
+          "required",
+          "type"
+        ],
+        "type" : "object"
+      },
+      "ComponentTemplateResponse" : {
+        "properties" : {
+          "classification" : {
+            "$ref" : "#/components/schemas/Classification"
+          },
+          "description" : {
+            "type" : "string"
+          },
+          "id" : {
+            "type" : "string"
+          },
+          "overridable" : {
+            "description" : "Create-request paths a creator may override.",
+            "items" : {
+              "description" : "Create-request paths a creator may override.",
+              "type" : "string"
+            },
+            "type" : "array"
+          },
+          "parameters" : {
+            "items" : {
+              "$ref" : "#/components/schemas/ComponentTemplateParameter"
+            },
+            "type" : "array"
+          },
+          "title" : {
+            "type" : "string"
+          },
+          "version" : {
+            "format" : "int32",
+            "type" : "integer"
+          }
+        },
+        "required" : [
+          "classification",
+          "description",
+          "id",
+          "overridable",
+          "parameters",
+          "title",
+          "version"
         ],
         "type" : "object"
       },
@@ -904,6 +1767,9 @@
               "$ref" : "#/components/schemas/ArtifactIdRequest"
             },
             "type" : "array"
+          },
+          "autoRelease" : {
+            "type" : "boolean"
           },
           "baseConfiguration" : {
             "$ref" : "#/components/schemas/BaseConfigurationRequest"
@@ -1021,6 +1887,9 @@
               "$ref" : "#/components/schemas/TeamcityProjectRequest"
             },
             "type" : "array"
+          },
+          "testComponent" : {
+            "type" : "boolean"
           },
           "vcsExternalRegistry" : {
             "description" : "Write tri-state: omit or null = leave unchanged; \"\" (or blank) = clear to null; non-blank = set verbatim. On create, \"\" is treated as null.",
@@ -1174,6 +2043,31 @@
         "required" : [
           "active",
           "username"
+        ],
+        "type" : "object"
+      },
+      "Entry" : {
+        "properties" : {
+          "id" : {
+            "type" : "string"
+          },
+          "kind" : {
+            "type" : "string"
+          },
+          "problems" : {
+            "items" : {
+              "type" : "string"
+            },
+            "type" : "array"
+          },
+          "status" : {
+            "type" : "string"
+          }
+        },
+        "required" : [
+          "id",
+          "problems",
+          "status"
         ],
         "type" : "object"
       },
@@ -1537,6 +2431,28 @@
         ],
         "type" : "object"
       },
+      "FieldRule" : {
+        "description" : "Rules a create naming this profile is checked against; empty when the profile has none.",
+        "properties" : {
+          "message" : {
+            "type" : "string"
+          },
+          "path" : {
+            "description" : "Create-request path, e.g. `name` or `baseConfiguration.jira.projectKey`.",
+            "type" : "string"
+          },
+          "pattern" : {
+            "description" : "Regular expression the whole value must match, in syntax both Java (the registry) and JavaScript accept. A client that cannot compile it skips its own check; the create decides.",
+            "type" : "string"
+          }
+        },
+        "required" : [
+          "message",
+          "path",
+          "pattern"
+        ],
+        "type" : "object"
+      },
       "FileUrlArtifactRequest" : {
         "properties" : {
           "artifactId" : {
@@ -1596,6 +2512,38 @@
         "required" : [
           "components",
           "defaults"
+        ],
+        "type" : "object"
+      },
+      "GenericArtifactRequest" : {
+        "properties" : {
+          "path" : {
+            "type" : "string"
+          }
+        },
+        "required" : [
+          "path"
+        ],
+        "type" : "object"
+      },
+      "GenericArtifactResponse" : {
+        "properties" : {
+          "id" : {
+            "format" : "uuid",
+            "type" : "string"
+          },
+          "path" : {
+            "type" : "string"
+          },
+          "sortOrder" : {
+            "format" : "int32",
+            "type" : "integer"
+          }
+        },
+        "required" : [
+          "id",
+          "path",
+          "sortOrder"
         ],
         "type" : "object"
       },
@@ -1846,6 +2794,21 @@
         },
         "type" : "object"
       },
+      "JiraIssueRef" : {
+        "properties" : {
+          "key" : {
+            "type" : "string"
+          },
+          "summary" : {
+            "type" : "string"
+          }
+        },
+        "required" : [
+          "key",
+          "summary"
+        ],
+        "type" : "object"
+      },
       "MarkerChildrenPayload" : {
         "properties" : {
           "buildToolBeans" : {
@@ -1853,6 +2816,9 @@
               "$ref" : "#/components/schemas/BuildToolBeanRequest"
             },
             "type" : "array"
+          },
+          "buildWorkingDirectory" : {
+            "type" : "string"
           },
           "dockerImages" : {
             "items" : {
@@ -1863,6 +2829,12 @@
           "fileUrlArtifacts" : {
             "items" : {
               "$ref" : "#/components/schemas/FileUrlArtifactRequest"
+            },
+            "type" : "array"
+          },
+          "genericArtifacts" : {
+            "items" : {
+              "$ref" : "#/components/schemas/GenericArtifactRequest"
             },
             "type" : "array"
           },
@@ -1942,6 +2914,32 @@
           "groupPattern",
           "id",
           "sortOrder"
+        ],
+        "type" : "object"
+      },
+      "MigrationConflictResponse" : {
+        "properties" : {
+          "activeJobId" : {
+            "type" : "string"
+          },
+          "activeKind" : {
+            "type" : "string"
+          },
+          "code" : {
+            "type" : "string"
+          },
+          "kind" : {
+            "type" : "string"
+          },
+          "message" : {
+            "type" : "string"
+          }
+        },
+        "required" : [
+          "activeKind",
+          "code",
+          "kind",
+          "message"
         ],
         "type" : "object"
       },
@@ -2347,6 +3345,123 @@
         },
         "type" : "object"
       },
+      "RMSSweepStatusResponse" : {
+        "properties" : {
+          "componentsWithData" : {
+            "format" : "int32",
+            "type" : "integer"
+          },
+          "enabled" : {
+            "type" : "boolean"
+          },
+          "generatedAt" : {
+            "format" : "date-time",
+            "type" : "string"
+          },
+          "lastAttemptAt" : {
+            "format" : "date-time",
+            "type" : "string"
+          },
+          "lastSweepDurationMillis" : {
+            "format" : "int64",
+            "type" : "integer"
+          },
+          "refreshError" : {
+            "type" : "string"
+          },
+          "unavailableComponents" : {
+            "items" : {
+              "type" : "string"
+            },
+            "type" : "array"
+          }
+        },
+        "required" : [
+          "componentsWithData",
+          "enabled",
+          "unavailableComponents"
+        ],
+        "type" : "object"
+      },
+      "RegisteredBuildParametersDetail" : {
+        "properties" : {
+          "actualDataUnavailable" : {
+            "type" : "boolean"
+          },
+          "javaActualRanges" : {
+            "items" : {
+              "$ref" : "#/components/schemas/ActualRange"
+            },
+            "type" : "array"
+          },
+          "javaWarnings" : {
+            "items" : {
+              "$ref" : "#/components/schemas/ActualDisagreement"
+            },
+            "type" : "array"
+          },
+          "mavenActualRanges" : {
+            "items" : {
+              "$ref" : "#/components/schemas/ActualRange"
+            },
+            "type" : "array"
+          },
+          "mavenWarnings" : {
+            "items" : {
+              "$ref" : "#/components/schemas/ActualDisagreement"
+            },
+            "type" : "array"
+          }
+        },
+        "required" : [
+          "actualDataUnavailable",
+          "javaActualRanges",
+          "javaWarnings",
+          "mavenActualRanges",
+          "mavenWarnings"
+        ],
+        "type" : "object"
+      },
+      "ReloadConfigFailureResponse" : {
+        "properties" : {
+          "componentProfiles" : {
+            "$ref" : "#/components/schemas/ComponentProfilesReloadResponse"
+          },
+          "error" : {
+            "type" : "string"
+          },
+          "message" : {
+            "type" : "string"
+          }
+        },
+        "required" : [
+          "error",
+          "message"
+        ],
+        "type" : "object"
+      },
+      "ReloadConfigResponse" : {
+        "properties" : {
+          "changedKeys" : {
+            "items" : {
+              "type" : "string"
+            },
+            "type" : "array"
+          },
+          "componentProfiles" : {
+            "$ref" : "#/components/schemas/ComponentProfilesReloadResponse"
+          },
+          "status" : {
+            "type" : "string"
+          }
+        },
+        "required" : [
+          "changedKeys",
+          "componentProfiles",
+          "status"
+        ],
+        "type" : "object"
+      },
       "Role" : {
         "properties" : {
           "name" : {
@@ -2563,6 +3678,104 @@
         ],
         "type" : "object"
       },
+      "TeamcityCheckoutLayoutDiffJobResponse" : {
+        "properties" : {
+          "errorMessage" : {
+            "type" : "string"
+          },
+          "finishedAt" : {
+            "format" : "date-time",
+            "type" : "string"
+          },
+          "id" : {
+            "type" : "string"
+          },
+          "kind" : {
+            "type" : "string"
+          },
+          "rowCount" : {
+            "format" : "int32",
+            "type" : "integer"
+          },
+          "startedAt" : {
+            "format" : "date-time",
+            "type" : "string"
+          },
+          "state" : {
+            "enum" : [
+              "RUNNING",
+              "COMPLETED",
+              "FAILED"
+            ],
+            "type" : "string"
+          }
+        },
+        "required" : [
+          "id",
+          "kind",
+          "startedAt",
+          "state"
+        ],
+        "type" : "object"
+      },
+      "TeamcityCheckoutLayoutSyncJobResponse" : {
+        "properties" : {
+          "errorMessage" : {
+            "type" : "string"
+          },
+          "finishedAt" : {
+            "format" : "date-time",
+            "type" : "string"
+          },
+          "id" : {
+            "type" : "string"
+          },
+          "kind" : {
+            "type" : "string"
+          },
+          "result" : {
+            "$ref" : "#/components/schemas/CheckoutLayoutSyncResult"
+          },
+          "startedAt" : {
+            "format" : "date-time",
+            "type" : "string"
+          },
+          "state" : {
+            "enum" : [
+              "RUNNING",
+              "COMPLETED",
+              "FAILED"
+            ],
+            "type" : "string"
+          }
+        },
+        "required" : [
+          "id",
+          "kind",
+          "startedAt",
+          "state"
+        ],
+        "type" : "object"
+      },
+      "TeamcityCheckoutLayoutSyncRequest" : {
+        "properties" : {
+          "componentIds" : {
+            "items" : {
+              "format" : "uuid",
+              "type" : "string"
+            },
+            "type" : "array"
+          },
+          "diffId" : {
+            "type" : "string"
+          }
+        },
+        "required" : [
+          "componentIds",
+          "diffId"
+        ],
+        "type" : "object"
+      },
       "TeamcityProjectRequest" : {
         "properties" : {
           "projectId" : {
@@ -2594,12 +3807,19 @@
           "sortOrder" : {
             "format" : "int32",
             "type" : "integer"
+          },
+          "validations" : {
+            "items" : {
+              "$ref" : "#/components/schemas/ValidationResponse"
+            },
+            "type" : "array"
           }
         },
         "required" : [
           "id",
           "projectId",
-          "sortOrder"
+          "sortOrder",
+          "validations"
         ],
         "type" : "object"
       },
@@ -2648,6 +3868,10 @@
             "format" : "int32",
             "type" : "integer"
           },
+          "auto_release_enabled" : {
+            "format" : "int32",
+            "type" : "integer"
+          },
           "dropped_lines" : {
             "format" : "int32",
             "type" : "integer"
@@ -2681,6 +3905,7 @@
         },
         "required" : [
           "ambiguous_auto_resolved",
+          "auto_release_enabled",
           "dropped_lines",
           "errors",
           "scanned",
@@ -2688,6 +3913,261 @@
           "skipped_no_match",
           "unchanged",
           "updated"
+        ],
+        "type" : "object"
+      },
+      "TeamcityValidationJobResponse" : {
+        "properties" : {
+          "errorMessage" : {
+            "type" : "string"
+          },
+          "finishedAt" : {
+            "format" : "date-time",
+            "type" : "string"
+          },
+          "id" : {
+            "type" : "string"
+          },
+          "kind" : {
+            "type" : "string"
+          },
+          "result" : {
+            "$ref" : "#/components/schemas/TeamcityValidationResult"
+          },
+          "startedAt" : {
+            "format" : "date-time",
+            "type" : "string"
+          },
+          "state" : {
+            "enum" : [
+              "RUNNING",
+              "COMPLETED",
+              "FAILED"
+            ],
+            "type" : "string"
+          }
+        },
+        "required" : [
+          "id",
+          "kind",
+          "startedAt",
+          "state"
+        ],
+        "type" : "object"
+      },
+      "TeamcityValidationResult" : {
+        "properties" : {
+          "errors" : {
+            "items" : {
+              "type" : "string"
+            },
+            "type" : "array"
+          },
+          "failed" : {
+            "format" : "int32",
+            "type" : "integer"
+          },
+          "projectsWithIssues" : {
+            "format" : "int32",
+            "type" : "integer"
+          },
+          "removed" : {
+            "format" : "int32",
+            "type" : "integer"
+          },
+          "scanned" : {
+            "format" : "int32",
+            "type" : "integer"
+          },
+          "succeeded" : {
+            "format" : "int32",
+            "type" : "integer"
+          }
+        },
+        "required" : [
+          "errors",
+          "failed",
+          "projectsWithIssues",
+          "removed",
+          "scanned",
+          "succeeded"
+        ],
+        "type" : "object"
+      },
+      "TeamcityValidationSummaryResponse" : {
+        "properties" : {
+          "byStatus" : {
+            "additionalProperties" : {
+              "format" : "int32",
+              "type" : "integer"
+            },
+            "type" : "object"
+          },
+          "byType" : {
+            "additionalProperties" : {
+              "format" : "int32",
+              "type" : "integer"
+            },
+            "type" : "object"
+          },
+          "componentsWithIssues" : {
+            "format" : "int32",
+            "type" : "integer"
+          },
+          "findings" : {
+            "format" : "int32",
+            "type" : "integer"
+          }
+        },
+        "required" : [
+          "byStatus",
+          "byType",
+          "componentsWithIssues",
+          "findings"
+        ],
+        "type" : "object"
+      },
+      "TemplateComponentRequest" : {
+        "properties" : {
+          "changeComment" : {
+            "description" : "Optional comment, as on any create; recorded on the audit row.",
+            "type" : "string"
+          },
+          "jiraTaskKey" : {
+            "description" : "Optional Jira task key, as on any create; recorded on the audit row.",
+            "pattern" : "^\\s*$|^[A-Z][A-Z0-9]+-\\d+$",
+            "type" : "string"
+          },
+          "overrides" : {
+            "additionalProperties" : {
+              "description" : "Values by create-request path; only the template's overridable paths are accepted.",
+              "items" : {
+                "description" : "Values by create-request path; only the template's overridable paths are accepted.",
+                "type" : "string"
+              },
+              "type" : "array"
+            },
+            "description" : "Values by create-request path; only the template's overridable paths are accepted.",
+            "type" : "object"
+          },
+          "parameters" : {
+            "additionalProperties" : {
+              "description" : "Values by parameter name; an absent parameter takes its default.",
+              "items" : {
+                "description" : "Values by parameter name; an absent parameter takes its default.",
+                "type" : "string"
+              },
+              "type" : "array"
+            },
+            "description" : "Values by parameter name; an absent parameter takes its default.",
+            "type" : "object"
+          }
+        },
+        "required" : [
+          "overrides",
+          "parameters"
+        ],
+        "type" : "object"
+      },
+      "TemplateParameterProblem" : {
+        "properties" : {
+          "check" : {
+            "description" : "The check that failed, P1 to P9.",
+            "type" : "string"
+          },
+          "message" : {
+            "type" : "string"
+          },
+          "parameter" : {
+            "type" : "string"
+          }
+        },
+        "required" : [
+          "check",
+          "message",
+          "parameter"
+        ],
+        "type" : "object"
+      },
+      "TemplateProblem" : {
+        "properties" : {
+          "fields" : {
+            "description" : "The create-request paths the problem concerns; empty when it names none.",
+            "items" : {
+              "description" : "The create-request paths the problem concerns; empty when it names none.",
+              "type" : "string"
+            },
+            "type" : "array"
+          },
+          "message" : {
+            "type" : "string"
+          },
+          "parameters" : {
+            "description" : "The parameters to change to fix it.",
+            "items" : {
+              "description" : "The parameters to change to fix it.",
+              "type" : "string"
+            },
+            "type" : "array"
+          },
+          "templateProblem" : {
+            "description" : "True when only the template's author can fix it.",
+            "type" : "boolean"
+          }
+        },
+        "required" : [
+          "fields",
+          "message",
+          "parameters",
+          "templateProblem"
+        ],
+        "type" : "object"
+      },
+      "TemplateRunResponse" : {
+        "properties" : {
+          "component" : {
+            "$ref" : "#/components/schemas/ComponentCreateRequest"
+          },
+          "overridden" : {
+            "description" : "The create-request paths an override set; their sources are empty.",
+            "items" : {
+              "description" : "The create-request paths an override set; their sources are empty.",
+              "type" : "string"
+            },
+            "type" : "array"
+          },
+          "parameterProblems" : {
+            "items" : {
+              "$ref" : "#/components/schemas/TemplateParameterProblem"
+            },
+            "type" : "array"
+          },
+          "problems" : {
+            "items" : {
+              "$ref" : "#/components/schemas/TemplateProblem"
+            },
+            "type" : "array"
+          },
+          "sources" : {
+            "additionalProperties" : {
+              "description" : "For each set create-request path, the parameters its value came from; empty for a fixed or defaulted value.",
+              "items" : {
+                "description" : "For each set create-request path, the parameters its value came from; empty for a fixed or defaulted value.",
+                "type" : "string"
+              },
+              "type" : "array"
+            },
+            "description" : "For each set create-request path, the parameters its value came from; empty for a fixed or defaulted value.",
+            "type" : "object"
+          },
+          "valid" : {
+            "type" : "boolean"
+          }
+        },
+        "required" : [
+          "parameterProblems",
+          "problems",
+          "valid"
         ],
         "type" : "object"
       },
@@ -2713,6 +4193,28 @@
           "groups",
           "roles",
           "username"
+        ],
+        "type" : "object"
+      },
+      "ValidationResponse" : {
+        "properties" : {
+          "message" : {
+            "type" : "string"
+          },
+          "status" : {
+            "type" : "string"
+          },
+          "type" : {
+            "type" : "string"
+          },
+          "updatedAt" : {
+            "format" : "date-time",
+            "type" : "string"
+          }
+        },
+        "required" : [
+          "status",
+          "type"
         ],
         "type" : "object"
       },
@@ -2743,6 +4245,9 @@
           "branch" : {
             "type" : "string"
           },
+          "checkoutDirectory" : {
+            "type" : "string"
+          },
           "hotfixBranch" : {
             "type" : "string"
           },
@@ -2750,6 +4255,9 @@
             "type" : "string"
           },
           "repositoryType" : {
+            "type" : "string"
+          },
+          "sourcePath" : {
             "type" : "string"
           },
           "tag" : {
@@ -2769,6 +4277,9 @@
           "branch" : {
             "type" : "string"
           },
+          "checkoutDirectory" : {
+            "type" : "string"
+          },
           "hotfixBranch" : {
             "type" : "string"
           },
@@ -2785,6 +4296,9 @@
           "sortOrder" : {
             "format" : "int32",
             "type" : "integer"
+          },
+          "sourcePath" : {
+            "type" : "string"
           },
           "tag" : {
             "type" : "string"
@@ -3005,10 +4519,130 @@
               }
             },
             "description" : "Bad Gateway"
+          },
+          "503" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description" : "Service Unavailable"
           }
         },
         "tags" : [
           "auth-controller"
+        ]
+      }
+    },
+    "/rest/api/4/admin/component-profiles" : {
+      "get" : {
+        "operationId" : "componentProfiles",
+        "responses" : {
+          "200" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/AdminComponentProfilesResponse"
+                }
+              }
+            },
+            "description" : "OK"
+          },
+          "400" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description" : "Bad Request"
+          },
+          "404" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description" : "Not Found"
+          },
+          "409" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description" : "Conflict"
+          },
+          "413" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description" : "Payload Too Large"
+          },
+          "425" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description" : "Too Early"
+          },
+          "500" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description" : "Internal Server Error"
+          },
+          "501" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description" : "Not Implemented"
+          },
+          "502" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description" : "Bad Gateway"
+          },
+          "503" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description" : "Service Unavailable"
+          }
+        },
+        "tags" : [
+          "admin-controller-v-4"
         ]
       }
     },
@@ -3121,6 +4755,16 @@
               }
             },
             "description" : "Bad Gateway"
+          },
+          "503" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description" : "Service Unavailable"
           }
         },
         "tags" : [
@@ -3237,6 +4881,16 @@
               }
             },
             "description" : "Bad Gateway"
+          },
+          "503" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description" : "Service Unavailable"
           }
         },
         "tags" : [
@@ -3340,6 +4994,16 @@
               }
             },
             "description" : "Bad Gateway"
+          },
+          "503" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description" : "Service Unavailable"
           }
         },
         "tags" : [
@@ -3349,7 +5013,7 @@
     },
     "/rest/api/4/admin/feedback" : {
       "get" : {
-        "operationId" : "list_1",
+        "operationId" : "listFeedback",
         "parameters" : [
           {
             "in" : "query",
@@ -3466,6 +5130,16 @@
               }
             },
             "description" : "Bad Gateway"
+          },
+          "503" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description" : "Service Unavailable"
           }
         },
         "tags" : [
@@ -3566,6 +5240,16 @@
               }
             },
             "description" : "Bad Gateway"
+          },
+          "503" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description" : "Service Unavailable"
           }
         },
         "tags" : [
@@ -3677,6 +5361,16 @@
               }
             },
             "description" : "Bad Gateway"
+          },
+          "503" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description" : "Service Unavailable"
           }
         },
         "tags" : [
@@ -3798,6 +5492,16 @@
               }
             },
             "description" : "Bad Gateway"
+          },
+          "503" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description" : "Service Unavailable"
           }
         },
         "tags" : [
@@ -3919,6 +5623,16 @@
               }
             },
             "description" : "Bad Gateway"
+          },
+          "503" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description" : "Service Unavailable"
           }
         },
         "tags" : [
@@ -4019,6 +5733,16 @@
               }
             },
             "description" : "Bad Gateway"
+          },
+          "503" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description" : "Service Unavailable"
           }
         },
         "tags" : [
@@ -4119,6 +5843,16 @@
               }
             },
             "description" : "Bad Gateway"
+          },
+          "503" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description" : "Service Unavailable"
           }
         },
         "tags" : [
@@ -4238,6 +5972,16 @@
               }
             },
             "description" : "Bad Gateway"
+          },
+          "503" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description" : "Service Unavailable"
           }
         },
         "tags" : [
@@ -4338,6 +6082,16 @@
               }
             },
             "description" : "Bad Gateway"
+          },
+          "503" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description" : "Service Unavailable"
           }
         },
         "tags" : [
@@ -4441,6 +6195,16 @@
               }
             },
             "description" : "Bad Gateway"
+          },
+          "503" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description" : "Service Unavailable"
           }
         },
         "tags" : [
@@ -4560,6 +6324,16 @@
               }
             },
             "description" : "Bad Gateway"
+          },
+          "503" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description" : "Service Unavailable"
           }
         },
         "tags" : [
@@ -4671,6 +6445,16 @@
               }
             },
             "description" : "Bad Gateway"
+          },
+          "503" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description" : "Service Unavailable"
           }
         },
         "tags" : [
@@ -4771,6 +6555,16 @@
               }
             },
             "description" : "Bad Gateway"
+          },
+          "503" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description" : "Service Unavailable"
           }
         },
         "tags" : [
@@ -4871,6 +6665,16 @@
               }
             },
             "description" : "Bad Gateway"
+          },
+          "503" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description" : "Service Unavailable"
           }
         },
         "tags" : [
@@ -4971,6 +6775,16 @@
               }
             },
             "description" : "Bad Gateway"
+          },
+          "503" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description" : "Service Unavailable"
           }
         },
         "tags" : [
@@ -4986,10 +6800,127 @@
             "content" : {
               "*/*" : {
                 "schema" : {
-                  "additionalProperties" : {
-                    "type" : "object"
-                  },
-                  "type" : "object"
+                  "$ref" : "#/components/schemas/ReloadConfigResponse"
+                }
+              }
+            },
+            "description" : "Configuration refreshed and component profiles applied"
+          },
+          "400" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description" : "Bad Request"
+          },
+          "404" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description" : "Not Found"
+          },
+          "409" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description" : "Conflict"
+          },
+          "413" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description" : "Payload Too Large"
+          },
+          "422" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ReloadConfigFailureResponse"
+                }
+              }
+            },
+            "description" : "`config-validation`: a service-config value is invalid. `component-profiles`: the component profiles are not usable and the profiles in use are kept."
+          },
+          "425" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description" : "Too Early"
+          },
+          "500" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ReloadConfigFailureResponse"
+                }
+              }
+            },
+            "description" : "`config-refresh`: the refresh failed for another reason; the component profiles were reloaded all the same."
+          },
+          "501" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description" : "Not Implemented"
+          },
+          "502" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description" : "Bad Gateway"
+          },
+          "503" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description" : "Service Unavailable"
+          }
+        },
+        "tags" : [
+          "admin-controller-v-4"
+        ]
+      }
+    },
+    "/rest/api/4/admin/rms-sweep" : {
+      "get" : {
+        "operationId" : "getRmsSweepStatus",
+        "responses" : {
+          "200" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/RMSSweepStatusResponse"
                 }
               }
             },
@@ -5074,16 +7005,26 @@
               }
             },
             "description" : "Bad Gateway"
+          },
+          "503" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description" : "Service Unavailable"
           }
         },
         "tags" : [
-          "admin-controller-v-4"
+          "rms-sweep-controller-v-4"
         ]
       }
     },
     "/rest/api/4/admin/service-events" : {
       "get" : {
-        "operationId" : "list",
+        "operationId" : "listServiceEvents",
         "parameters" : [
           {
             "in" : "query",
@@ -5234,6 +7175,16 @@
               }
             },
             "description" : "Bad Gateway"
+          },
+          "503" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description" : "Service Unavailable"
           }
         },
         "tags" : [
@@ -5362,6 +7313,16 @@
               }
             },
             "description" : "Bad Gateway"
+          },
+          "503" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description" : "Service Unavailable"
           }
         },
         "tags" : [
@@ -5369,15 +7330,132 @@
         ]
       }
     },
-    "/rest/api/4/admin/teamcity-project-ids/sync" : {
+    "/rest/api/4/admin/teamcity-checkout-layout/diff" : {
       "post" : {
-        "operationId" : "startTeamcitySync",
+        "operationId" : "startDiff",
+        "responses" : {
+          "202" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/TeamcityCheckoutLayoutDiffJobResponse"
+                }
+              }
+            },
+            "description" : "A new Diff job was started"
+          },
+          "400" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description" : "Bad Request"
+          },
+          "404" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description" : "Not Found"
+          },
+          "409" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "oneOf" : [
+                    {
+                      "$ref" : "#/components/schemas/MigrationConflictResponse"
+                    },
+                    {
+                      "$ref" : "#/components/schemas/TeamcityCheckoutLayoutDiffJobResponse"
+                    }
+                  ]
+                }
+              }
+            },
+            "description" : "Two body shapes. (1) A Diff is already running: the in-flight TeamcityCheckoutLayoutDiffJobResponse. (2) Another admin job holds the gate: MigrationConflictResponse {code, message, activeKind, activeJobId}."
+          },
+          "413" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description" : "Payload Too Large"
+          },
+          "425" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description" : "Too Early"
+          },
+          "500" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description" : "Internal Server Error"
+          },
+          "501" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description" : "Not Implemented"
+          },
+          "502" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description" : "Bad Gateway"
+          },
+          "503" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description" : "Service Unavailable"
+          }
+        },
+        "tags" : [
+          "teamcity-checkout-layout-controller-v-4"
+        ]
+      }
+    },
+    "/rest/api/4/admin/teamcity-checkout-layout/diff/job" : {
+      "get" : {
+        "operationId" : "getDiffJob",
         "responses" : {
           "200" : {
             "content" : {
               "*/*" : {
                 "schema" : {
-                  "$ref" : "#/components/schemas/TeamcitySyncJobResponse"
+                  "$ref" : "#/components/schemas/TeamcityCheckoutLayoutDiffJobResponse"
                 }
               }
             },
@@ -5462,6 +7540,1736 @@
               }
             },
             "description" : "Bad Gateway"
+          },
+          "503" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description" : "Service Unavailable"
+          }
+        },
+        "tags" : [
+          "teamcity-checkout-layout-controller-v-4"
+        ]
+      }
+    },
+    "/rest/api/4/admin/teamcity-checkout-layout/diff/report.csv" : {
+      "get" : {
+        "operationId" : "getReportCsv",
+        "responses" : {
+          "200" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "type" : "string"
+                }
+              }
+            },
+            "description" : "OK"
+          },
+          "400" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description" : "Bad Request"
+          },
+          "404" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description" : "Not Found"
+          },
+          "409" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description" : "Conflict"
+          },
+          "413" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description" : "Payload Too Large"
+          },
+          "425" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description" : "Too Early"
+          },
+          "500" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description" : "Internal Server Error"
+          },
+          "501" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description" : "Not Implemented"
+          },
+          "502" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description" : "Bad Gateway"
+          },
+          "503" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description" : "Service Unavailable"
+          }
+        },
+        "tags" : [
+          "teamcity-checkout-layout-controller-v-4"
+        ]
+      }
+    },
+    "/rest/api/4/admin/teamcity-checkout-layout/diff/report.html" : {
+      "get" : {
+        "operationId" : "getReportHtml",
+        "responses" : {
+          "200" : {
+            "content" : {
+              "text/html" : {
+                "schema" : {
+                  "type" : "string"
+                }
+              }
+            },
+            "description" : "OK"
+          },
+          "400" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description" : "Bad Request"
+          },
+          "404" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description" : "Not Found"
+          },
+          "409" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description" : "Conflict"
+          },
+          "413" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description" : "Payload Too Large"
+          },
+          "425" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description" : "Too Early"
+          },
+          "500" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description" : "Internal Server Error"
+          },
+          "501" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description" : "Not Implemented"
+          },
+          "502" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description" : "Bad Gateway"
+          },
+          "503" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description" : "Service Unavailable"
+          }
+        },
+        "tags" : [
+          "teamcity-checkout-layout-controller-v-4"
+        ]
+      }
+    },
+    "/rest/api/4/admin/teamcity-checkout-layout/diff/report.json" : {
+      "get" : {
+        "operationId" : "getReportJson",
+        "responses" : {
+          "200" : {
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/CheckoutLayoutDiffResult"
+                }
+              }
+            },
+            "description" : "OK"
+          },
+          "400" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description" : "Bad Request"
+          },
+          "404" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description" : "Not Found"
+          },
+          "409" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description" : "Conflict"
+          },
+          "413" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description" : "Payload Too Large"
+          },
+          "425" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description" : "Too Early"
+          },
+          "500" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description" : "Internal Server Error"
+          },
+          "501" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description" : "Not Implemented"
+          },
+          "502" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description" : "Bad Gateway"
+          },
+          "503" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description" : "Service Unavailable"
+          }
+        },
+        "tags" : [
+          "teamcity-checkout-layout-controller-v-4"
+        ]
+      }
+    },
+    "/rest/api/4/admin/teamcity-checkout-layout/sync" : {
+      "post" : {
+        "operationId" : "startSync",
+        "requestBody" : {
+          "content" : {
+            "application/json" : {
+              "schema" : {
+                "$ref" : "#/components/schemas/TeamcityCheckoutLayoutSyncRequest"
+              }
+            }
+          },
+          "required" : true
+        },
+        "responses" : {
+          "202" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/TeamcityCheckoutLayoutSyncJobResponse"
+                }
+              }
+            },
+            "description" : "A new Sync job was started"
+          },
+          "400" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description" : "Bad Request"
+          },
+          "404" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description" : "Not Found"
+          },
+          "409" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "oneOf" : [
+                    {
+                      "$ref" : "#/components/schemas/MigrationConflictResponse"
+                    },
+                    {
+                      "$ref" : "#/components/schemas/TeamcityCheckoutLayoutSyncJobResponse"
+                    },
+                    {
+                      "$ref" : "#/components/schemas/ErrorResponse"
+                    }
+                  ]
+                }
+              }
+            },
+            "description" : "Three body shapes, checked in this order. (1) A Sync is already running: the in-flight TeamcityCheckoutLayoutSyncJobResponse (kind \"job\"). (2) Another admin job holds the gate, a running Diff included: MigrationConflictResponse {code, message, activeKind, activeJobId}. (3) diffId is not the last completed Diff, or none has completed: ErrorResponse {errorMessage: \"diff replaced, re-run Diff\", errorCode: \"checkout-layout-diff-stale\"}, nothing written; Diff keeps only that one result (ADR-023 decision 1)."
+          },
+          "413" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description" : "Payload Too Large"
+          },
+          "425" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description" : "Too Early"
+          },
+          "500" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description" : "Internal Server Error"
+          },
+          "501" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description" : "Not Implemented"
+          },
+          "502" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description" : "Bad Gateway"
+          },
+          "503" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description" : "Service Unavailable"
+          }
+        },
+        "tags" : [
+          "teamcity-checkout-layout-controller-v-4"
+        ]
+      }
+    },
+    "/rest/api/4/admin/teamcity-checkout-layout/sync/job" : {
+      "get" : {
+        "operationId" : "getSyncJob",
+        "responses" : {
+          "200" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/TeamcityCheckoutLayoutSyncJobResponse"
+                }
+              }
+            },
+            "description" : "OK"
+          },
+          "400" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description" : "Bad Request"
+          },
+          "404" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description" : "Not Found"
+          },
+          "409" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description" : "Conflict"
+          },
+          "413" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description" : "Payload Too Large"
+          },
+          "425" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description" : "Too Early"
+          },
+          "500" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description" : "Internal Server Error"
+          },
+          "501" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description" : "Not Implemented"
+          },
+          "502" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description" : "Bad Gateway"
+          },
+          "503" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description" : "Service Unavailable"
+          }
+        },
+        "tags" : [
+          "teamcity-checkout-layout-controller-v-4"
+        ]
+      }
+    },
+    "/rest/api/4/admin/teamcity-checkout-layout/sync/report.csv" : {
+      "get" : {
+        "operationId" : "getSyncReportCsv",
+        "responses" : {
+          "200" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "type" : "string"
+                }
+              }
+            },
+            "description" : "OK"
+          },
+          "400" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description" : "Bad Request"
+          },
+          "404" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description" : "Not Found"
+          },
+          "409" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description" : "Conflict"
+          },
+          "413" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description" : "Payload Too Large"
+          },
+          "425" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description" : "Too Early"
+          },
+          "500" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description" : "Internal Server Error"
+          },
+          "501" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description" : "Not Implemented"
+          },
+          "502" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description" : "Bad Gateway"
+          },
+          "503" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description" : "Service Unavailable"
+          }
+        },
+        "tags" : [
+          "teamcity-checkout-layout-controller-v-4"
+        ]
+      }
+    },
+    "/rest/api/4/admin/teamcity-placement/diff" : {
+      "post" : {
+        "deprecated" : true,
+        "operationId" : "startDiffLegacy",
+        "responses" : {
+          "202" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/TeamcityCheckoutLayoutDiffJobResponse"
+                }
+              }
+            },
+            "description" : "A new Diff job was started"
+          },
+          "400" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description" : "Bad Request"
+          },
+          "404" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description" : "Not Found"
+          },
+          "409" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "oneOf" : [
+                    {
+                      "$ref" : "#/components/schemas/MigrationConflictResponse"
+                    },
+                    {
+                      "$ref" : "#/components/schemas/TeamcityCheckoutLayoutDiffJobResponse"
+                    }
+                  ]
+                }
+              }
+            },
+            "description" : "Two body shapes. (1) A Diff is already running: the in-flight TeamcityCheckoutLayoutDiffJobResponse. (2) Another admin job holds the gate: MigrationConflictResponse {code, message, activeKind, activeJobId}."
+          },
+          "413" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description" : "Payload Too Large"
+          },
+          "425" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description" : "Too Early"
+          },
+          "500" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description" : "Internal Server Error"
+          },
+          "501" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description" : "Not Implemented"
+          },
+          "502" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description" : "Bad Gateway"
+          },
+          "503" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description" : "Service Unavailable"
+          }
+        },
+        "summary" : "Deprecated: use the same path under /rest/api/4/admin/teamcity-checkout-layout",
+        "tags" : [
+          "teamcity-placement-legacy-controller-v-4"
+        ]
+      }
+    },
+    "/rest/api/4/admin/teamcity-placement/diff/job" : {
+      "get" : {
+        "deprecated" : true,
+        "operationId" : "getDiffJobLegacy",
+        "responses" : {
+          "200" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/TeamcityCheckoutLayoutDiffJobResponse"
+                }
+              }
+            },
+            "description" : "OK"
+          },
+          "400" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description" : "Bad Request"
+          },
+          "404" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description" : "Not Found"
+          },
+          "409" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description" : "Conflict"
+          },
+          "413" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description" : "Payload Too Large"
+          },
+          "425" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description" : "Too Early"
+          },
+          "500" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description" : "Internal Server Error"
+          },
+          "501" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description" : "Not Implemented"
+          },
+          "502" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description" : "Bad Gateway"
+          },
+          "503" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description" : "Service Unavailable"
+          }
+        },
+        "summary" : "Deprecated: use the same path under /rest/api/4/admin/teamcity-checkout-layout",
+        "tags" : [
+          "teamcity-placement-legacy-controller-v-4"
+        ]
+      }
+    },
+    "/rest/api/4/admin/teamcity-placement/diff/report.csv" : {
+      "get" : {
+        "deprecated" : true,
+        "operationId" : "getReportCsvLegacy",
+        "responses" : {
+          "200" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "type" : "string"
+                }
+              }
+            },
+            "description" : "OK"
+          },
+          "400" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description" : "Bad Request"
+          },
+          "404" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description" : "Not Found"
+          },
+          "409" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description" : "Conflict"
+          },
+          "413" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description" : "Payload Too Large"
+          },
+          "425" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description" : "Too Early"
+          },
+          "500" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description" : "Internal Server Error"
+          },
+          "501" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description" : "Not Implemented"
+          },
+          "502" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description" : "Bad Gateway"
+          },
+          "503" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description" : "Service Unavailable"
+          }
+        },
+        "summary" : "Deprecated: use the same path under /rest/api/4/admin/teamcity-checkout-layout",
+        "tags" : [
+          "teamcity-placement-legacy-controller-v-4"
+        ]
+      }
+    },
+    "/rest/api/4/admin/teamcity-placement/diff/report.html" : {
+      "get" : {
+        "deprecated" : true,
+        "operationId" : "getReportHtmlLegacy",
+        "responses" : {
+          "200" : {
+            "content" : {
+              "text/html" : {
+                "schema" : {
+                  "type" : "string"
+                }
+              }
+            },
+            "description" : "OK"
+          },
+          "400" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description" : "Bad Request"
+          },
+          "404" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description" : "Not Found"
+          },
+          "409" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description" : "Conflict"
+          },
+          "413" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description" : "Payload Too Large"
+          },
+          "425" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description" : "Too Early"
+          },
+          "500" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description" : "Internal Server Error"
+          },
+          "501" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description" : "Not Implemented"
+          },
+          "502" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description" : "Bad Gateway"
+          },
+          "503" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description" : "Service Unavailable"
+          }
+        },
+        "summary" : "Deprecated: use the same path under /rest/api/4/admin/teamcity-checkout-layout",
+        "tags" : [
+          "teamcity-placement-legacy-controller-v-4"
+        ]
+      }
+    },
+    "/rest/api/4/admin/teamcity-placement/diff/report.json" : {
+      "get" : {
+        "deprecated" : true,
+        "operationId" : "getReportJsonLegacy",
+        "responses" : {
+          "200" : {
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/CheckoutLayoutDiffResult"
+                }
+              }
+            },
+            "description" : "OK"
+          },
+          "400" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description" : "Bad Request"
+          },
+          "404" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description" : "Not Found"
+          },
+          "409" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description" : "Conflict"
+          },
+          "413" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description" : "Payload Too Large"
+          },
+          "425" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description" : "Too Early"
+          },
+          "500" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description" : "Internal Server Error"
+          },
+          "501" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description" : "Not Implemented"
+          },
+          "502" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description" : "Bad Gateway"
+          },
+          "503" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description" : "Service Unavailable"
+          }
+        },
+        "summary" : "Deprecated: use the same path under /rest/api/4/admin/teamcity-checkout-layout",
+        "tags" : [
+          "teamcity-placement-legacy-controller-v-4"
+        ]
+      }
+    },
+    "/rest/api/4/admin/teamcity-placement/sync" : {
+      "post" : {
+        "deprecated" : true,
+        "operationId" : "startSyncLegacy",
+        "requestBody" : {
+          "content" : {
+            "application/json" : {
+              "schema" : {
+                "$ref" : "#/components/schemas/TeamcityCheckoutLayoutSyncRequest"
+              }
+            }
+          },
+          "required" : true
+        },
+        "responses" : {
+          "202" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/TeamcityCheckoutLayoutSyncJobResponse"
+                }
+              }
+            },
+            "description" : "A new Sync job was started"
+          },
+          "400" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description" : "Bad Request"
+          },
+          "404" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description" : "Not Found"
+          },
+          "409" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "oneOf" : [
+                    {
+                      "$ref" : "#/components/schemas/MigrationConflictResponse"
+                    },
+                    {
+                      "$ref" : "#/components/schemas/TeamcityCheckoutLayoutSyncJobResponse"
+                    },
+                    {
+                      "$ref" : "#/components/schemas/ErrorResponse"
+                    }
+                  ]
+                }
+              }
+            },
+            "description" : "Three body shapes, checked in this order. (1) A Sync is already running: the in-flight TeamcityCheckoutLayoutSyncJobResponse (kind \"job\"). (2) Another admin job holds the gate, a running Diff included: MigrationConflictResponse {code, message, activeKind, activeJobId}. (3) diffId is not the last completed Diff, or none has completed: ErrorResponse {errorMessage: \"diff replaced, re-run Diff\", errorCode: \"checkout-layout-diff-stale\"}, nothing written; Diff keeps only that one result (ADR-023 decision 1)."
+          },
+          "413" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description" : "Payload Too Large"
+          },
+          "425" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description" : "Too Early"
+          },
+          "500" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description" : "Internal Server Error"
+          },
+          "501" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description" : "Not Implemented"
+          },
+          "502" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description" : "Bad Gateway"
+          },
+          "503" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description" : "Service Unavailable"
+          }
+        },
+        "summary" : "Deprecated: use the same path under /rest/api/4/admin/teamcity-checkout-layout",
+        "tags" : [
+          "teamcity-placement-legacy-controller-v-4"
+        ]
+      }
+    },
+    "/rest/api/4/admin/teamcity-placement/sync/job" : {
+      "get" : {
+        "deprecated" : true,
+        "operationId" : "getSyncJobLegacy",
+        "responses" : {
+          "200" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/TeamcityCheckoutLayoutSyncJobResponse"
+                }
+              }
+            },
+            "description" : "OK"
+          },
+          "400" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description" : "Bad Request"
+          },
+          "404" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description" : "Not Found"
+          },
+          "409" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description" : "Conflict"
+          },
+          "413" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description" : "Payload Too Large"
+          },
+          "425" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description" : "Too Early"
+          },
+          "500" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description" : "Internal Server Error"
+          },
+          "501" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description" : "Not Implemented"
+          },
+          "502" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description" : "Bad Gateway"
+          },
+          "503" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description" : "Service Unavailable"
+          }
+        },
+        "summary" : "Deprecated: use the same path under /rest/api/4/admin/teamcity-checkout-layout",
+        "tags" : [
+          "teamcity-placement-legacy-controller-v-4"
+        ]
+      }
+    },
+    "/rest/api/4/admin/teamcity-placement/sync/report.csv" : {
+      "get" : {
+        "deprecated" : true,
+        "operationId" : "getSyncReportCsvLegacy",
+        "responses" : {
+          "200" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "type" : "string"
+                }
+              }
+            },
+            "description" : "OK"
+          },
+          "400" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description" : "Bad Request"
+          },
+          "404" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description" : "Not Found"
+          },
+          "409" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description" : "Conflict"
+          },
+          "413" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description" : "Payload Too Large"
+          },
+          "425" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description" : "Too Early"
+          },
+          "500" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description" : "Internal Server Error"
+          },
+          "501" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description" : "Not Implemented"
+          },
+          "502" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description" : "Bad Gateway"
+          },
+          "503" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description" : "Service Unavailable"
+          }
+        },
+        "summary" : "Deprecated: use the same path under /rest/api/4/admin/teamcity-checkout-layout",
+        "tags" : [
+          "teamcity-placement-legacy-controller-v-4"
+        ]
+      }
+    },
+    "/rest/api/4/admin/teamcity-project-ids/sync" : {
+      "post" : {
+        "operationId" : "startTeamcitySync",
+        "responses" : {
+          "202" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/TeamcitySyncJobResponse"
+                }
+              }
+            },
+            "description" : "A new TC resync job was started"
+          },
+          "400" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description" : "Bad Request"
+          },
+          "404" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description" : "Not Found"
+          },
+          "409" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "oneOf" : [
+                    {
+                      "$ref" : "#/components/schemas/TeamcitySyncJobResponse"
+                    },
+                    {
+                      "$ref" : "#/components/schemas/MigrationConflictResponse"
+                    }
+                  ]
+                }
+              }
+            },
+            "description" : "Same-kind attach: a TC resync is already running, body is the in-flight TeamcitySyncJobResponse. Cross-kind conflict: another migration kind (components migration, history migration, or TC validation) is running, body is a MigrationConflictResponse describing which one."
+          },
+          "413" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description" : "Payload Too Large"
+          },
+          "425" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description" : "Too Early"
+          },
+          "500" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description" : "Internal Server Error"
+          },
+          "501" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description" : "Not Implemented"
+          },
+          "502" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description" : "Bad Gateway"
+          },
+          "503" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description" : "Service Unavailable"
           }
         },
         "tags" : [
@@ -5562,10 +9370,499 @@
               }
             },
             "description" : "Bad Gateway"
+          },
+          "503" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description" : "Service Unavailable"
           }
         },
         "tags" : [
           "admin-controller-v-4"
+        ]
+      }
+    },
+    "/rest/api/4/admin/teamcity-validation" : {
+      "post" : {
+        "operationId" : "startTeamcityValidation",
+        "responses" : {
+          "202" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/TeamcityValidationJobResponse"
+                }
+              }
+            },
+            "description" : "A new TC validation job was started"
+          },
+          "400" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description" : "Bad Request"
+          },
+          "404" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description" : "Not Found"
+          },
+          "409" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "oneOf" : [
+                    {
+                      "$ref" : "#/components/schemas/TeamcityValidationJobResponse"
+                    },
+                    {
+                      "$ref" : "#/components/schemas/MigrationConflictResponse"
+                    }
+                  ]
+                }
+              }
+            },
+            "description" : "Same-kind attach: a TC validation is already running, body is the in-flight TeamcityValidationJobResponse. Cross-kind conflict: another migration kind (components migration, history migration, or TC resync) is running, body is a MigrationConflictResponse describing which one."
+          },
+          "413" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description" : "Payload Too Large"
+          },
+          "425" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description" : "Too Early"
+          },
+          "500" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description" : "Internal Server Error"
+          },
+          "501" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description" : "Not Implemented"
+          },
+          "502" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description" : "Bad Gateway"
+          },
+          "503" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description" : "Service Unavailable"
+          }
+        },
+        "tags" : [
+          "admin-controller-v-4"
+        ]
+      }
+    },
+    "/rest/api/4/admin/teamcity-validation/job" : {
+      "get" : {
+        "operationId" : "getTeamcityValidationJob",
+        "responses" : {
+          "200" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/TeamcityValidationJobResponse"
+                }
+              }
+            },
+            "description" : "OK"
+          },
+          "400" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description" : "Bad Request"
+          },
+          "404" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description" : "Not Found"
+          },
+          "409" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description" : "Conflict"
+          },
+          "413" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description" : "Payload Too Large"
+          },
+          "425" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description" : "Too Early"
+          },
+          "500" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description" : "Internal Server Error"
+          },
+          "501" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description" : "Not Implemented"
+          },
+          "502" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description" : "Bad Gateway"
+          },
+          "503" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description" : "Service Unavailable"
+          }
+        },
+        "tags" : [
+          "admin-controller-v-4"
+        ]
+      }
+    },
+    "/rest/api/4/admin/teamcity-validations" : {
+      "get" : {
+        "operationId" : "listTeamcityValidations",
+        "parameters" : [
+          {
+            "in" : "query",
+            "name" : "type",
+            "required" : false,
+            "schema" : {
+              "items" : {
+                "type" : "string"
+              },
+              "type" : "array"
+            }
+          },
+          {
+            "in" : "query",
+            "name" : "status",
+            "required" : false,
+            "schema" : {
+              "type" : "string"
+            }
+          },
+          {
+            "in" : "query",
+            "name" : "component",
+            "required" : false,
+            "schema" : {
+              "type" : "string"
+            }
+          }
+        ],
+        "responses" : {
+          "200" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "items" : {
+                    "$ref" : "#/components/schemas/ComponentTeamcityValidationRow"
+                  },
+                  "type" : "array"
+                }
+              }
+            },
+            "description" : "OK"
+          },
+          "400" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description" : "Bad Request"
+          },
+          "404" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description" : "Not Found"
+          },
+          "409" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description" : "Conflict"
+          },
+          "413" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description" : "Payload Too Large"
+          },
+          "425" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description" : "Too Early"
+          },
+          "500" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description" : "Internal Server Error"
+          },
+          "501" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description" : "Not Implemented"
+          },
+          "502" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description" : "Bad Gateway"
+          },
+          "503" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description" : "Service Unavailable"
+          }
+        },
+        "tags" : [
+          "teamcity-validation-controller-v-4"
+        ]
+      }
+    },
+    "/rest/api/4/admin/teamcity-validations/summary" : {
+      "get" : {
+        "operationId" : "getTeamcityValidationsSummary",
+        "responses" : {
+          "200" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/TeamcityValidationSummaryResponse"
+                }
+              }
+            },
+            "description" : "OK"
+          },
+          "400" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description" : "Bad Request"
+          },
+          "404" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description" : "Not Found"
+          },
+          "409" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description" : "Conflict"
+          },
+          "413" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description" : "Payload Too Large"
+          },
+          "425" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description" : "Too Early"
+          },
+          "500" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description" : "Internal Server Error"
+          },
+          "501" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description" : "Not Implemented"
+          },
+          "502" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description" : "Bad Gateway"
+          },
+          "503" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description" : "Service Unavailable"
+          }
+        },
+        "tags" : [
+          "teamcity-validation-controller-v-4"
         ]
       }
     },
@@ -5672,6 +9969,16 @@
               }
             },
             "description" : "Bad Gateway"
+          },
+          "503" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description" : "Service Unavailable"
           }
         },
         "tags" : [
@@ -5865,6 +10172,16 @@
               }
             },
             "description" : "Bad Gateway"
+          },
+          "503" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description" : "Service Unavailable"
           }
         },
         "tags" : [
@@ -6000,10 +10317,419 @@
               }
             },
             "description" : "Bad Gateway"
+          },
+          "503" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description" : "Service Unavailable"
           }
         },
         "tags" : [
           "audit-controller-v-4"
+        ]
+      }
+    },
+    "/rest/api/4/component-profiles" : {
+      "get" : {
+        "operationId" : "listProfiles",
+        "responses" : {
+          "200" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ComponentProfilesResponse"
+                }
+              }
+            },
+            "description" : "OK"
+          },
+          "400" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description" : "Bad Request"
+          },
+          "404" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description" : "Not Found"
+          },
+          "409" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description" : "Conflict"
+          },
+          "413" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description" : "Payload Too Large"
+          },
+          "425" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description" : "Too Early"
+          },
+          "500" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description" : "Internal Server Error"
+          },
+          "501" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description" : "Not Implemented"
+          },
+          "502" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description" : "Bad Gateway"
+          },
+          "503" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description" : "Service Unavailable"
+          }
+        },
+        "tags" : [
+          "component-profile-controller-v-4"
+        ]
+      }
+    },
+    "/rest/api/4/component-templates/{id}" : {
+      "get" : {
+        "operationId" : "describe",
+        "parameters" : [
+          {
+            "in" : "path",
+            "name" : "id",
+            "required" : true,
+            "schema" : {
+              "type" : "string"
+            }
+          }
+        ],
+        "responses" : {
+          "200" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ComponentTemplateResponse"
+                }
+              }
+            },
+            "description" : "OK"
+          },
+          "400" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description" : "Bad Request"
+          },
+          "404" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description" : "Not Found"
+          },
+          "409" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description" : "Conflict"
+          },
+          "413" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description" : "Payload Too Large"
+          },
+          "425" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description" : "Too Early"
+          },
+          "500" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description" : "Internal Server Error"
+          },
+          "501" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description" : "Not Implemented"
+          },
+          "502" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description" : "Bad Gateway"
+          },
+          "503" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description" : "Service Unavailable"
+          }
+        },
+        "tags" : [
+          "component-template-controller-v-4"
+        ]
+      }
+    },
+    "/rest/api/4/component-templates/{id}/components" : {
+      "post" : {
+        "operationId" : "components",
+        "parameters" : [
+          {
+            "in" : "path",
+            "name" : "id",
+            "required" : true,
+            "schema" : {
+              "type" : "string"
+            }
+          },
+          {
+            "in" : "query",
+            "name" : "dryRun",
+            "required" : false,
+            "schema" : {
+              "default" : true,
+              "type" : "boolean"
+            }
+          }
+        ],
+        "requestBody" : {
+          "content" : {
+            "application/json" : {
+              "schema" : {
+                "$ref" : "#/components/schemas/TemplateComponentRequest"
+              }
+            }
+          },
+          "required" : true
+        },
+        "responses" : {
+          "200" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/TemplateRunResponse"
+                }
+              }
+            },
+            "description" : "A dry run (`dryRun` absent or `true`), valid or not; nothing is created."
+          },
+          "201" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ComponentDetailResponse"
+                }
+              }
+            },
+            "description" : "`dryRun=false` and every check passed: the created component."
+          },
+          "400" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description" : "A malformed Jira task key, or an override on a path the template does not list."
+          },
+          "403" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "type" : "object"
+                }
+              }
+            },
+            "description" : "The caller may not use the template, or may not override its fields."
+          },
+          "404" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description" : "The template is unknown, failed or removed."
+          },
+          "409" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description" : "Conflict"
+          },
+          "413" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description" : "Payload Too Large"
+          },
+          "422" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/TemplateRunResponse"
+                }
+              }
+            },
+            "description" : "`dryRun=false` and a check failed: the dry run's body; nothing is created."
+          },
+          "425" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description" : "Too Early"
+          },
+          "500" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description" : "Internal Server Error"
+          },
+          "501" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description" : "Not Implemented"
+          },
+          "502" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description" : "Bad Gateway"
+          },
+          "503" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description" : "Service Unavailable"
+          }
+        },
+        "tags" : [
+          "component-template-controller-v-4"
         ]
       }
     },
@@ -6033,6 +10759,22 @@
           {
             "in" : "query",
             "name" : "archived",
+            "required" : false,
+            "schema" : {
+              "type" : "boolean"
+            }
+          },
+          {
+            "in" : "query",
+            "name" : "testComponent",
+            "required" : false,
+            "schema" : {
+              "type" : "boolean"
+            }
+          },
+          {
+            "in" : "query",
+            "name" : "autoRelease",
             "required" : false,
             "schema" : {
               "type" : "boolean"
@@ -6071,6 +10813,28 @@
           {
             "in" : "query",
             "name" : "securityChampion",
+            "required" : false,
+            "schema" : {
+              "items" : {
+                "type" : "string"
+              },
+              "type" : "array"
+            }
+          },
+          {
+            "in" : "query",
+            "name" : "involves",
+            "required" : false,
+            "schema" : {
+              "items" : {
+                "type" : "string"
+              },
+              "type" : "array"
+            }
+          },
+          {
+            "in" : "query",
+            "name" : "involvesRoles",
             "required" : false,
             "schema" : {
               "items" : {
@@ -6311,6 +11075,16 @@
               }
             },
             "description" : "Bad Gateway"
+          },
+          "503" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description" : "Service Unavailable"
           }
         },
         "tags" : [
@@ -6419,6 +11193,173 @@
               }
             },
             "description" : "Bad Gateway"
+          },
+          "503" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description" : "Service Unavailable"
+          }
+        },
+        "tags" : [
+          "component-controller-v-4"
+        ]
+      }
+    },
+    "/rest/api/4/components/as-code/search" : {
+      "get" : {
+        "operationId" : "searchAsCode",
+        "parameters" : [
+          {
+            "in" : "query",
+            "name" : "q",
+            "required" : true,
+            "schema" : {
+              "type" : "string"
+            }
+          },
+          {
+            "in" : "query",
+            "name" : "regex",
+            "required" : false,
+            "schema" : {
+              "default" : false,
+              "type" : "boolean"
+            }
+          },
+          {
+            "in" : "query",
+            "name" : "archived",
+            "required" : false,
+            "schema" : {
+              "type" : "boolean"
+            }
+          },
+          {
+            "in" : "query",
+            "name" : "limit",
+            "required" : false,
+            "schema" : {
+              "default" : 100,
+              "format" : "int32",
+              "type" : "integer"
+            }
+          },
+          {
+            "in" : "query",
+            "name" : "maxMatchesPerComponent",
+            "required" : false,
+            "schema" : {
+              "default" : 20,
+              "format" : "int32",
+              "type" : "integer"
+            }
+          }
+        ],
+        "responses" : {
+          "200" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/AsCodeSearchResponse"
+                }
+              }
+            },
+            "description" : "OK"
+          },
+          "400" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description" : "Bad Request"
+          },
+          "404" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description" : "Not Found"
+          },
+          "409" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description" : "Conflict"
+          },
+          "413" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description" : "Payload Too Large"
+          },
+          "425" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description" : "Too Early"
+          },
+          "500" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description" : "Internal Server Error"
+          },
+          "501" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description" : "Not Implemented"
+          },
+          "502" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description" : "Bad Gateway"
+          },
+          "503" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description" : "Service Unavailable"
           }
         },
         "tags" : [
@@ -6522,6 +11463,16 @@
               }
             },
             "description" : "Bad Gateway"
+          },
+          "503" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description" : "Service Unavailable"
           }
         },
         "tags" : [
@@ -6625,6 +11576,16 @@
               }
             },
             "description" : "Bad Gateway"
+          },
+          "503" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description" : "Service Unavailable"
           }
         },
         "tags" : [
@@ -6738,6 +11699,16 @@
               }
             },
             "description" : "Bad Gateway"
+          },
+          "503" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description" : "Service Unavailable"
           }
         },
         "tags" : [
@@ -6838,6 +11809,16 @@
               }
             },
             "description" : "Bad Gateway"
+          },
+          "503" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description" : "Service Unavailable"
           }
         },
         "tags" : [
@@ -6954,6 +11935,16 @@
               }
             },
             "description" : "Bad Gateway"
+          },
+          "503" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description" : "Service Unavailable"
           }
         },
         "tags" : [
@@ -7057,6 +12048,16 @@
               }
             },
             "description" : "Bad Gateway"
+          },
+          "503" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description" : "Service Unavailable"
           }
         },
         "tags" : [
@@ -7160,6 +12161,16 @@
               }
             },
             "description" : "Bad Gateway"
+          },
+          "503" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description" : "Service Unavailable"
           }
         },
         "tags" : [
@@ -7263,6 +12274,16 @@
               }
             },
             "description" : "Bad Gateway"
+          },
+          "503" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description" : "Service Unavailable"
           }
         },
         "tags" : [
@@ -7366,6 +12387,16 @@
               }
             },
             "description" : "Bad Gateway"
+          },
+          "503" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description" : "Service Unavailable"
           }
         },
         "tags" : [
@@ -7469,6 +12500,16 @@
               }
             },
             "description" : "Bad Gateway"
+          },
+          "503" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description" : "Service Unavailable"
           }
         },
         "tags" : [
@@ -7572,6 +12613,16 @@
               }
             },
             "description" : "Bad Gateway"
+          },
+          "503" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description" : "Service Unavailable"
           }
         },
         "tags" : [
@@ -7675,6 +12726,16 @@
               }
             },
             "description" : "Bad Gateway"
+          },
+          "503" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description" : "Service Unavailable"
           }
         },
         "tags" : [
@@ -7778,6 +12839,16 @@
               }
             },
             "description" : "Bad Gateway"
+          },
+          "503" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description" : "Service Unavailable"
           }
         },
         "tags" : [
@@ -7881,6 +12952,129 @@
               }
             },
             "description" : "Bad Gateway"
+          },
+          "503" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description" : "Service Unavailable"
+          }
+        },
+        "tags" : [
+          "component-controller-v-4"
+        ]
+      }
+    },
+    "/rest/api/4/components/meta/release-managers" : {
+      "get" : {
+        "operationId" : "getDistinctReleaseManagers",
+        "responses" : {
+          "200" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "items" : {
+                    "type" : "string"
+                  },
+                  "type" : "array"
+                }
+              }
+            },
+            "description" : "OK"
+          },
+          "400" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description" : "Bad Request"
+          },
+          "404" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description" : "Not Found"
+          },
+          "409" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description" : "Conflict"
+          },
+          "413" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description" : "Payload Too Large"
+          },
+          "425" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description" : "Too Early"
+          },
+          "500" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description" : "Internal Server Error"
+          },
+          "501" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description" : "Not Implemented"
+          },
+          "502" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description" : "Bad Gateway"
+          },
+          "503" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description" : "Service Unavailable"
           }
         },
         "tags" : [
@@ -7984,6 +13178,129 @@
               }
             },
             "description" : "Bad Gateway"
+          },
+          "503" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description" : "Service Unavailable"
+          }
+        },
+        "tags" : [
+          "component-controller-v-4"
+        ]
+      }
+    },
+    "/rest/api/4/components/meta/security-champions" : {
+      "get" : {
+        "operationId" : "getDistinctSecurityChampions",
+        "responses" : {
+          "200" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "items" : {
+                    "type" : "string"
+                  },
+                  "type" : "array"
+                }
+              }
+            },
+            "description" : "OK"
+          },
+          "400" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description" : "Bad Request"
+          },
+          "404" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description" : "Not Found"
+          },
+          "409" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description" : "Conflict"
+          },
+          "413" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description" : "Payload Too Large"
+          },
+          "425" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description" : "Too Early"
+          },
+          "500" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description" : "Internal Server Error"
+          },
+          "501" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description" : "Not Implemented"
+          },
+          "502" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description" : "Bad Gateway"
+          },
+          "503" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description" : "Service Unavailable"
           }
         },
         "tags" : [
@@ -8087,6 +13404,16 @@
               }
             },
             "description" : "Bad Gateway"
+          },
+          "503" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description" : "Service Unavailable"
           }
         },
         "tags" : [
@@ -8190,6 +13517,129 @@
               }
             },
             "description" : "Bad Gateway"
+          },
+          "503" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description" : "Service Unavailable"
+          }
+        },
+        "tags" : [
+          "component-controller-v-4"
+        ]
+      }
+    },
+    "/rest/api/4/components/meta/test-component-name-patterns" : {
+      "get" : {
+        "operationId" : "getTestComponentNamePatterns",
+        "responses" : {
+          "200" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "items" : {
+                    "type" : "string"
+                  },
+                  "type" : "array"
+                }
+              }
+            },
+            "description" : "OK"
+          },
+          "400" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description" : "Bad Request"
+          },
+          "404" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description" : "Not Found"
+          },
+          "409" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description" : "Conflict"
+          },
+          "413" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description" : "Payload Too Large"
+          },
+          "425" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description" : "Too Early"
+          },
+          "500" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description" : "Internal Server Error"
+          },
+          "501" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description" : "Not Implemented"
+          },
+          "502" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description" : "Bad Gateway"
+          },
+          "503" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description" : "Service Unavailable"
           }
         },
         "tags" : [
@@ -8300,6 +13750,16 @@
               }
             },
             "description" : "Bad Gateway"
+          },
+          "503" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description" : "Service Unavailable"
           }
         },
         "tags" : [
@@ -8404,6 +13864,16 @@
               }
             },
             "description" : "Bad Gateway"
+          },
+          "503" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description" : "Service Unavailable"
           }
         },
         "tags" : [
@@ -8512,6 +13982,16 @@
               }
             },
             "description" : "Bad Gateway"
+          },
+          "503" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description" : "Service Unavailable"
           }
         },
         "tags" : [
@@ -8631,6 +14111,136 @@
               }
             },
             "description" : "Bad Gateway"
+          },
+          "503" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description" : "Service Unavailable"
+          }
+        },
+        "tags" : [
+          "component-controller-v-4"
+        ]
+      }
+    },
+    "/rest/api/4/components/{id}/archive-readiness" : {
+      "get" : {
+        "operationId" : "getArchiveReadiness",
+        "parameters" : [
+          {
+            "in" : "path",
+            "name" : "id",
+            "required" : true,
+            "schema" : {
+              "type" : "string"
+            }
+          }
+        ],
+        "responses" : {
+          "200" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ArchiveReadinessResponse"
+                }
+              }
+            },
+            "description" : "OK"
+          },
+          "400" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description" : "Bad Request"
+          },
+          "404" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description" : "Not Found"
+          },
+          "409" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description" : "Conflict"
+          },
+          "413" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description" : "Payload Too Large"
+          },
+          "425" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description" : "Too Early"
+          },
+          "500" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description" : "Internal Server Error"
+          },
+          "501" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description" : "Not Implemented"
+          },
+          "502" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description" : "Bad Gateway"
+          },
+          "503" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description" : "Service Unavailable"
           }
         },
         "tags" : [
@@ -8749,6 +14359,16 @@
               }
             },
             "description" : "Bad Gateway"
+          },
+          "503" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description" : "Service Unavailable"
           }
         },
         "tags" : [
@@ -8863,6 +14483,16 @@
               }
             },
             "description" : "Bad Gateway"
+          },
+          "503" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description" : "Service Unavailable"
           }
         },
         "tags" : [
@@ -8982,6 +14612,16 @@
               }
             },
             "description" : "Bad Gateway"
+          },
+          "503" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description" : "Service Unavailable"
           }
         },
         "tags" : [
@@ -9095,6 +14735,16 @@
               }
             },
             "description" : "Bad Gateway"
+          },
+          "503" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description" : "Service Unavailable"
           }
         },
         "tags" : [
@@ -9223,6 +14873,16 @@
               }
             },
             "description" : "Bad Gateway"
+          },
+          "503" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description" : "Service Unavailable"
           }
         },
         "tags" : [
@@ -9334,6 +14994,16 @@
               }
             },
             "description" : "Bad Gateway"
+          },
+          "503" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description" : "Service Unavailable"
           }
         },
         "tags" : [
@@ -9453,6 +15123,16 @@
               }
             },
             "description" : "Bad Gateway"
+          },
+          "503" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description" : "Service Unavailable"
           }
         },
         "tags" : [
@@ -9556,6 +15236,16 @@
               }
             },
             "description" : "Bad Gateway"
+          },
+          "503" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description" : "Service Unavailable"
           }
         },
         "tags" : [
@@ -9659,6 +15349,16 @@
               }
             },
             "description" : "Bad Gateway"
+          },
+          "503" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description" : "Service Unavailable"
           }
         },
         "tags" : [
@@ -9789,6 +15489,16 @@
               }
             },
             "description" : "Bad Gateway"
+          },
+          "503" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description" : "Service Unavailable"
           }
         },
         "tags" : [
@@ -9889,6 +15599,16 @@
               }
             },
             "description" : "Bad Gateway"
+          },
+          "503" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description" : "Service Unavailable"
           }
         },
         "tags" : [
@@ -9989,6 +15709,16 @@
               }
             },
             "description" : "Bad Gateway"
+          },
+          "503" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description" : "Service Unavailable"
           }
         },
         "tags" : [
@@ -10089,6 +15819,16 @@
               }
             },
             "description" : "Bad Gateway"
+          },
+          "503" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description" : "Service Unavailable"
           }
         },
         "tags" : [
@@ -10200,6 +15940,16 @@
               }
             },
             "description" : "Bad Gateway"
+          },
+          "503" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description" : "Service Unavailable"
           }
         },
         "summary" : "Preview version coordinates from ad-hoc formats",
