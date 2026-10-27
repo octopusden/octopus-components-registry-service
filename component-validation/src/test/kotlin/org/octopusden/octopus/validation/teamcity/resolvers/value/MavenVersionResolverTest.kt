@@ -56,6 +56,20 @@ class MavenVersionResolverTest {
         assertEquals(listOf("3.6", "3.6.3", "3.9", "3.10"), versions)
     }
 
+    @ParameterizedTest(name = "\"{0}\" -> \"{1}\"")
+    @CsvSource(
+        "/opt/apache-MAVEN/3.10/bin/mvn, 3",
+        "/opt/NOT_MAVEN/3.10, 3",
+        "/opt/MyMAVEN/3.6.3, 3.6.3",
+    )
+    @DisplayName("SYS-106: MAVEN that is only part of a path element is not a version segment")
+    fun `SYS-106 MAVEN inside a longer path element falls back to known tokens`(
+        raw: String,
+        expected: String,
+    ) {
+        assertEquals(expected, resolver.resolve(raw)?.raw)
+    }
+
     @Test
     @DisplayName("resolve() returns null without a maven marker")
     fun `resolve returns null without the marker`() {
