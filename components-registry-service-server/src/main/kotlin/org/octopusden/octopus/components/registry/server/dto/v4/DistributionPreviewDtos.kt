@@ -4,7 +4,7 @@ import io.swagger.v3.oas.annotations.media.ArraySchema
 import io.swagger.v3.oas.annotations.media.Schema
 
 /**
- * SYS-105: request/response DTOs for the distribution preview
+ * SYS-106: request/response DTOs for the distribution preview
  * (`POST /rest/api/4/components/{idOrName}/distribution/preview`).
  *
  * The Portal's Distribution tab posts the unsaved override set and supported

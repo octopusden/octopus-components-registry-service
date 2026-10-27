@@ -97,7 +97,8 @@
 | SYS-102 | TeamCity checkout layout Diff/Sync (`/admin/teamcity-checkout-layout`): Diff is a read-only report over the BASE rows of non-archived components; Sync writes only the `RESOLVED` rows of the last completed Diff (named by `diffId`, else 409 `checkout-layout-diff-stale`) through the normal v4 write path, tagged `sync from TeamCity (job <id>)`, a prefix user writes cannot set; single-root `CONFLICT`/`UNEXPRESSIBLE` rows are always reported; VCS roots that the component's own compile configurations attach but the registry lacks yield `ROOTS_MISMATCH` and the `VCS_ROOTS_DIFFER_FROM_REGISTRY` validation warning | High | unit + integration-test | ✅ Tested |
 | SYS-103 | `ClassicComponentsRegistryServiceClient` takes the retry policy for retryable failures (503, I/O errors) from its caller (`Retryer` constructor parameter); without one it keeps the default of 5 attempts, backoff 100 ms – 1 s (`defaultRetryer()`); the policy is per request, so one call exhausting it does not shorten the next | Medium | unit-test | ✅ Tested |
 | SYS-104 | Component flag `autoRelease` (default false), DB and v4 only: create/update requests, summary/detail responses, `?autoRelease=` list filter, field-config visibility/editability; an admin-started TeamCity resync turns it on (never off) when every linked release line has a finish-build trigger and nobody has changed the flag; the weekly cron only with `teamcity.sync.auto-release-on-cron` | Medium | unit + integration-test | ✅ Tested |
-| SYS-105 | `POST /rest/api/4/components/{idOrName}/distribution/preview` resolves, for a concrete version, which source each `distribution.*` marker path takes — `BASE`, `OVERRIDE` (one matching range) or `CONFLICT` (several) — over a **candidate** override set (when present it replaces the saved set entirely) and candidate supported versions sent by the caller (omitted = saved state), with the resolver's own containment, ordering and coverage-gate semantics; one path entry per family, ranges echoed exactly as sent; a version outside coverage answers `supported=false` with no paths, not 404; unparseable override ranges never match and are listed per path; only a missing, blank or non-numeric `version` is 400; read-only, `ACCESS_COMPONENTS` | High | unit + integration-test | ✅ Tested |
+| SYS-105 | Template-only creators: the permission `CREATE_FROM_TEMPLATE` (role `ROLE_COMPONENTS_REGISTRY_TEMPLATE_CREATOR`, with `ACCESS_COMPONENTS` and `ACCESS_AUDIT`) lets a caller without `CREATE_COMPONENTS` create components from templates only: templates usable, regular profiles unusable with "You may create components from templates only", any template override `403`, the regular create `403`. `CREATE_COMPONENTS` keeps every right and wins over it; editing by ownership is unchanged | High | unit + integration-test | ✅ Tested |
+| SYS-106 | `POST /rest/api/4/components/{idOrName}/distribution/preview` resolves, for a concrete version, which source each `distribution.*` marker path takes — `BASE`, `OVERRIDE` (one matching range) or `CONFLICT` (several) — over a **candidate** override set (when present it replaces the saved set entirely) and candidate supported versions sent by the caller (omitted = saved state), with the resolver's own containment, ordering and coverage-gate semantics; one path entry per family, ranges echoed exactly as sent; a version outside coverage answers `supported=false` with no paths, not 404; unparseable override ranges never match and are listed per path; only a missing, blank or non-numeric `version` is 400; read-only, `ACCESS_COMPONENTS` | High | unit + integration-test | ✅ Tested |
 
 ---
 
@@ -3740,7 +3741,54 @@ releases may be started without a person.
 `TeamcitySyncServiceTest` (`SYS-104 resync turns autoRelease on`, `SYS-104 resync never turns autoRelease off`,
 `SYS-104 the weekly cron leaves autoRelease alone by default`), `AuditLogRepositoryAutoReleaseChangeTest`.
 
-### SYS-105: Distribution preview over a candidate override set
+### SYS-105: Template-only creators
+
+**Priority:** High
+**Test layer:** unit + integration-test
+**Status:** ✅ Tested
+
+**Motivation:**
+Some users should create components only from a template, and change nothing the template fills
+in. With one create permission, `CREATE_COMPONENTS`, the registry could not tell them apart from
+users who may create any component.
+
+**Description:**
+- New permission `CREATE_FROM_TEMPLATE`, carried by the bundled role
+  `ROLE_COMPONENTS_REGISTRY_TEMPLATE_CREATOR` with `ACCESS_COMPONENTS` and `ACCESS_AUDIT`. Which
+  users hold the role is realm configuration; the registry reads no AD groups.
+- `ProfileAvailability` decides from the two create permissions, `CREATE_COMPONENTS` first:
+  everything with `CREATE_COMPONENTS`; templates without overrides with `CREATE_FROM_TEMPLATE`
+  alone; nothing with neither.
+- `POST /rest/api/4/components` keeps its `CREATE_COMPONENTS` guard. `ROLE_COMPONENTS_REGISTRY_EDITOR`
+  and `ROLE_ADMIN` are unchanged.
+
+**Acceptance criteria:**
+1. `GET /auth/me` lists `ACCESS_COMPONENTS`, `ACCESS_AUDIT` and `CREATE_FROM_TEMPLATE` for the
+   template creator role; the editor and admin roles keep their permissions.
+2. For a caller with `CREATE_FROM_TEMPLATE` only, the listing marks templates usable and regular
+   profiles unusable with "You may create components from templates only".
+3. Such a caller's dry run and create from a template without overrides succeed (`200`, `201`).
+4. Such a caller's request with any override answers `403`, before the override paths are checked,
+   and creates nothing.
+5. Such a caller's `POST /rest/api/4/components` answers `403`, with or without a profile, and
+   creates nothing.
+6. A caller with both create permissions has every right of `CREATE_COMPONENTS`.
+7. Such a caller may edit a component they own.
+
+**Test method:** `RoleMapTest` (H2 `ft-db`) — `` `SYS-105 template creator role` ``;
+`BundledRoleMapTest` — `` `SYS-105 bundled template creator role` ``,
+`` `SYS-105 bundled editor role unchanged` ``, `` `SYS-105 bundled admin role unchanged` `` (1);
+`PermissionProfileAvailabilityTest` — `` `SYS-105 template for template only creator` ``,
+`` `SYS-105 profile for template only creator` ``, `` `SYS-105 override for template only creator` `` (2, 4),
+`` `SYS-105 both create permissions` `` (6); `ComponentProfileControllerV4Test` —
+`` `SYS-105 template only creator` ``, `` `SYS-105 usable for editor` `` (2);
+`ComponentTemplateControllerV4Test` — `` `SYS-105 template only creator dry run` ``,
+`` `SYS-105 template only creator create` `` (3), `` `SYS-105 template only creator overridable override` ``,
+`` `SYS-105 template only creator not overridable override` `` (4); `ProfileOnCreateTest` —
+`` `SYS-105 template only creator refused` `` (5); `ComponentOwnershipEditSecurityTest` —
+`` `SYS-105 template only creator owner allowed` `` (7).
+
+### SYS-106: Distribution preview over a candidate override set
 
 **Priority:** High
 **Test layer:** unit + integration-test
@@ -3824,28 +3872,28 @@ unevaluableRanges }] }`. Children are not echoed: the caller sent them.
    (whitespace included).
 
 **Test method:** `DistributionPreviewTest` (unit) —
-`` `SYS-105 no override gives BASE on every distribution family` ``,
-`` `SYS-105 one matching override gives OVERRIDE and paths are independent` ``,
-`` `SYS-105 several matching overrides give CONFLICT` ``,
-`` `SYS-105 empty child list is a normal OVERRIDE` ``,
-`` `SYS-105 non-distribution entries are ignored` `` (1);
-`` `SYS-105 version outside coverage is unsupported` ``,
-`` `SYS-105 no restriction supports every version` ``,
-`` `SYS-105 unparseable supported range counts as covering` ``,
-`` `SYS-105 bounded base bounds coverage` ``,
-`` `SYS-105 version in coverage gap is unsupported` `` (2);
-`` `SYS-105 unparseable override range is listed and never matches` `` (3);
-`` `SYS-105 qualified version lies in range` `` (4);
-`` `SYS-105 omitted fields use saved state` ``,
-`` `SYS-105 present fields replace saved state` `` (5);
-`` `SYS-105 non-numeric version is rejected` `` (6);
-`` `SYS-105 ranges are echoed byte-for-byte` `` (7);
-shared helpers `` `SYS-105 overrideRangeContains` ``, `` `SYS-105 coverageRangeContains` ``,
-`` `SYS-105 isInCoverage` ``, `` `SYS-105 normalizeVersionRange` ``.
+`` `SYS-106 no override gives BASE on every distribution family` ``,
+`` `SYS-106 one matching override gives OVERRIDE and paths are independent` ``,
+`` `SYS-106 several matching overrides give CONFLICT` ``,
+`` `SYS-106 empty child list is a normal OVERRIDE` ``,
+`` `SYS-106 non-distribution entries are ignored` `` (1);
+`` `SYS-106 version outside coverage is unsupported` ``,
+`` `SYS-106 no restriction supports every version` ``,
+`` `SYS-106 unparseable supported range counts as covering` ``,
+`` `SYS-106 bounded base bounds coverage` ``,
+`` `SYS-106 version in coverage gap is unsupported` `` (2);
+`` `SYS-106 unparseable override range is listed and never matches` `` (3);
+`` `SYS-106 qualified version lies in range` `` (4);
+`` `SYS-106 omitted fields use saved state` ``,
+`` `SYS-106 present fields replace saved state` `` (5);
+`` `SYS-106 non-numeric version is rejected` `` (6);
+`` `SYS-106 ranges are echoed byte-for-byte` `` (7);
+shared helpers `` `SYS-106 overrideRangeContains` ``, `` `SYS-106 coverageRangeContains` ``,
+`` `SYS-106 isInCoverage` ``, `` `SYS-106 normalizeVersionRange` ``.
 `DistributionPreviewApiTest` (integration) —
-`` `SYS-105 preview evaluates candidate overrides` `` (1, 3, 7),
-`` `SYS-105 saved state agrees with distribution endpoint` `` (5),
-`` `SYS-105 candidate coverage replaces saved coverage` `` (2, 5),
-`` `SYS-105 non-numeric version is 400` ``, `` `SYS-105 missing version is 400` ``,
-`` `SYS-105 unknown component is 404` ``,
-`` `SYS-105 unauthenticated is 401` ``, `` `SYS-105 read permission is required and sufficient` `` (6).
+`` `SYS-106 preview evaluates candidate overrides` `` (1, 3, 7),
+`` `SYS-106 saved state agrees with distribution endpoint` `` (5),
+`` `SYS-106 candidate coverage replaces saved coverage` `` (2, 5),
+`` `SYS-106 non-numeric version is 400` ``, `` `SYS-106 missing version is 400` ``,
+`` `SYS-106 unknown component is 404` ``,
+`` `SYS-106 unauthenticated is 401` ``, `` `SYS-106 read permission is required and sufficient` `` (6).

@@ -132,6 +132,12 @@ class PermissionEvaluator(
         const val CREATE_COMPONENTS = "CREATE_COMPONENTS"
 
         /**
+         * Create a component from a template, without overrides. [CREATE_COMPONENTS] includes it,
+         * so a holder of both has every right of [CREATE_COMPONENTS].
+         */
+        const val CREATE_FROM_TEMPLATE = "CREATE_FROM_TEMPLATE"
+
+        /**
          * Bypass for the per-component ownership check in [canEditComponent]:
          * together with ACCESS_COMPONENTS, a holder may edit ANY component regardless
          * of owner/RM/SC. Mapped to ROLE_ADMIN in octopus-security.roles (so admins can

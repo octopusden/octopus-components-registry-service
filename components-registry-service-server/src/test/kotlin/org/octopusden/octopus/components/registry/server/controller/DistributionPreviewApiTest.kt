@@ -32,7 +32,7 @@ import java.nio.file.Paths
 import java.util.UUID
 
 /**
- * SYS-105: `POST /rest/api/4/components/{idOrName}/distribution/preview` end-to-end (ft-db), including
+ * SYS-106: `POST /rest/api/4/components/{idOrName}/distribution/preview` end-to-end (ft-db), including
  * parity of the saved-state verdict with `GET /rest/api/2/components/{c}/versions/{v}/distribution`.
  */
 @AutoConfigureMockMvc
@@ -62,8 +62,8 @@ class DistributionPreviewApiTest {
     }
 
     @Test
-    @DisplayName("SYS-105: 200 - candidate override set is evaluated per path (OVERRIDE / BASE / unevaluable)")
-    fun `SYS-105 preview evaluates candidate overrides`() {
+    @DisplayName("SYS-106: 200 - candidate override set is evaluated per path (OVERRIDE / BASE / unevaluable)")
+    fun `SYS-106 preview evaluates candidate overrides`() {
         val c = seed()
         val resp =
             preview(
@@ -83,8 +83,8 @@ class DistributionPreviewApiTest {
     }
 
     @Test
-    @DisplayName("SYS-105: omitted fields use the saved state and agree with GET .../versions/{v}/distribution")
-    fun `SYS-105 saved state agrees with distribution endpoint`() {
+    @DisplayName("SYS-106: omitted fields use the saved state and agree with GET .../versions/{v}/distribution")
+    fun `SYS-106 saved state agrees with distribution endpoint`() {
         val c = seed()
         // 1.5: inside coverage, inside the saved [1.0,2.0) maven override.
         val inOverride = preview(c.name, """{"version":"1.5"}""")
@@ -106,8 +106,8 @@ class DistributionPreviewApiTest {
     }
 
     @Test
-    @DisplayName("SYS-105: candidate supportedVersions replace the saved coverage; an unparseable range counts as covering")
-    fun `SYS-105 candidate coverage replaces saved coverage`() {
+    @DisplayName("SYS-106: candidate supportedVersions replace the saved coverage; an unparseable range counts as covering")
+    fun `SYS-106 candidate coverage replaces saved coverage`() {
         val c = seed()
         assertEquals(true, preview(c.id, """{"version":"4.0","supportedVersions":{"all":true}}""")["supported"].asBoolean())
         assertEquals(
@@ -121,8 +121,8 @@ class DistributionPreviewApiTest {
     }
 
     @Test
-    @DisplayName("SYS-105: 400 for a non-numeric version, naming version")
-    fun `SYS-105 non-numeric version is 400`() {
+    @DisplayName("SYS-106: 400 for a non-numeric version, naming version")
+    fun `SYS-106 non-numeric version is 400`() {
         val c = seed()
         val body =
             perform(c.id, """{"version":"abc"}""", adminJwt(), status().isBadRequest)
@@ -131,23 +131,23 @@ class DistributionPreviewApiTest {
     }
 
     @Test
-    @DisplayName("SYS-105: 400 for a body without version (malformed request body)")
-    fun `SYS-105 missing version is 400`() {
+    @DisplayName("SYS-106: 400 for a body without version (malformed request body)")
+    fun `SYS-106 missing version is 400`() {
         val c = seed()
         val body = perform(c.id, """{"supportedVersions":{"all":true}}""", adminJwt(), status().isBadRequest)
         assertEquals("Malformed request body", objectMapper.readTree(body)["errorMessage"].asText(), body)
     }
 
     @Test
-    @DisplayName("SYS-105: 404 for an unknown component")
-    fun `SYS-105 unknown component is 404`() {
+    @DisplayName("SYS-106: 404 for an unknown component")
+    fun `SYS-106 unknown component is 404`() {
         perform("no-such-component-${UUID.randomUUID()}", """{"version":"1.0"}""", adminJwt(), status().isNotFound)
         perform(UUID.randomUUID().toString(), """{"version":"1.0"}""", adminJwt(), status().isNotFound)
     }
 
     @Test
-    @DisplayName("SYS-105: 401 when unauthenticated")
-    fun `SYS-105 unauthenticated is 401`() {
+    @DisplayName("SYS-106: 401 when unauthenticated")
+    fun `SYS-106 unauthenticated is 401`() {
         val c = seed()
         mvc
             .perform(
@@ -158,8 +158,8 @@ class DistributionPreviewApiTest {
     }
 
     @Test
-    @DisplayName("SYS-105: a caller with ACCESS_COMPONENTS but no edit rights may preview; without it - 403")
-    fun `SYS-105 read permission is required and sufficient`() {
+    @DisplayName("SYS-106: a caller with ACCESS_COMPONENTS but no edit rights may preview; without it - 403")
+    fun `SYS-106 read permission is required and sufficient`() {
         val c = seed()
         perform(c.name, """{"version":"1.5"}""", viewerJwt(), status().isOk)
         val noPermissions =

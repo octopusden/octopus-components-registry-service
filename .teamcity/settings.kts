@@ -213,7 +213,7 @@ object id10CompileUtAuto : BuildType({
     }
 
     failureConditions {
-        executionTimeoutMin = 240
+        executionTimeoutMin = 35
     }
 
     features {
@@ -360,7 +360,7 @@ object id12IntegrationDbTestsAuto : BuildType({
     }
 
     failureConditions {
-        executionTimeoutMin = 240
+        executionTimeoutMin = 45
     }
 
     features {
@@ -1117,11 +1117,8 @@ object id17CompatLocalStandManual : BuildType({
     }
 
     failureConditions {
-        // Full sweep budget. With `components/all.txt` (~475 IDs) and
-        // COMPAT_FULL=true the per-test-class matrix is ~30-50 min after
-        // cold-pull + postgres + auto-migrate (~5-7 min upfront). Headroom
-        // for slow agents or congested registry → cap at 120 min.
-        executionTimeoutMin = 120
+        // Scales with COMPAT_COMPONENTS_FILE and COMPAT_TRACE_LIMIT; revisit when either grows.
+        executionTimeoutMin = 85
     }
 
     features {
@@ -1395,9 +1392,8 @@ object id18CompatLocalStandGitModeAuto : BuildType({
     }
 
     failureConditions {
-        // Git-mode skips auto-migrate AND Postgres, so the candidate comes up faster
-        // than id17; keep a generous cap for cold image pulls + two stand boots.
-        executionTimeoutMin = 120
+        // Scales with COMPAT_COMPONENTS_FILE and COMPAT_TRACE_LIMIT; revisit when either grows.
+        executionTimeoutMin = 50
     }
 
     features {
@@ -1582,6 +1578,10 @@ object id30Step2AggregateAuto : BuildType({
             reuseBuilds = ReuseBuilds.SUCCESSFUL
             onDependencyFailure = FailureAction.ADD_PROBLEM
         }
+    }
+
+    failureConditions {
+        executionTimeoutMin = 10
     }
 })
 
