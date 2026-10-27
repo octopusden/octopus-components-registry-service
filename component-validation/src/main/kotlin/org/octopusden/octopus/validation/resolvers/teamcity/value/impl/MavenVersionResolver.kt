@@ -26,8 +26,9 @@ class MavenVersionResolver : ValueVersionResolver<MavenVersion> {
     private companion object {
         val MARKER = Regex("maven", RegexOption.IGNORE_CASE)
 
-        // The version must be the whole directory name: "MAVEN/3.6.3-foo" or "MAVEN/3_9" is not a version segment.
-        val PATH_SEGMENT = Regex("""(?<![A-Za-z0-9_])MAVEN[/\\](LATEST|\d+(?:\.\d+)*)(?=$|[/\\\s"';])""")
+        // MAVEN and the version must both be whole path elements: "apache-MAVEN/3.10" or "MAVEN/3.6.3-foo" is not a
+        // version segment. MAVEN may follow only the start, a path separator, "=" (VAR=/path), whitespace or a quote.
+        val PATH_SEGMENT = Regex("""(?<![^/\\=\s"'])MAVEN[/\\](LATEST|\d+(?:\.\d+)*)(?=$|[/\\\s"';])""")
 
         // Longest/most-specific first: "3" would otherwise match inside "3.3.9"/"3.6.0"/"3.6.3".
         val TOKENS = listOf("3.6.3", "3.6.0", "3.3.9", "LATEST", "3")

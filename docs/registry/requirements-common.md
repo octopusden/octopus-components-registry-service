@@ -3802,8 +3802,9 @@ so `MULTIPLE_MAVEN_VERSIONS` (SYS-084) did not see steps on `3.6` and `3.9` as d
 
 **Description:**
 `MavenVersionResolver` first looks for a `MAVEN/<version>` path segment (separator `/` or `\`):
-`MAVEN` as a whole path element, followed by a directory name that is either `LATEST` or a dotted
-number, ending the value or followed by a separator, whitespace or a quote. If found, that whole
+`MAVEN` as a whole path element (at the start of the value or after `/`, `\`, `=`, whitespace or
+a quote), followed by a directory name that is either `LATEST` or a dotted number, ending the value
+or followed by a separator, whitespace or a quote. If found, that whole
 directory name is the Maven version. Otherwise the known-token rule applies unchanged.
 
 **Acceptance criteria:**
@@ -3812,9 +3813,13 @@ directory name is the Maven version. Otherwise the known-token rule applies unch
 2. The segment is found inside longer values: `M2_HOME=/opt/BUILD_ENV/MAVEN/3.9`,
    `/opt/BUILD_ENV/MAVEN/3.10/bin/mvn`, and the Windows form `%%BUILD_ENV%%\MAVEN\3.6\bin\mvn`.
 3. `3.6`, `3.6.3`, `3.9` and `3.10` resolve to four different versions.
-4. Values without the segment resolve as before (known tokens; `null` without a `maven` marker or a
+4. `MAVEN` inside a longer path element (`/opt/apache-MAVEN/3.10`) is not a segment; such values
+   resolve by the known-token rule.
+5. Values without the segment resolve as before (known tokens; `null` without a `maven` marker or a
    known token).
 
 **Test method:** `MavenVersionResolverTest` —
 `` `SYS-106 resolve takes the version from the MAVEN path segment` `` (1, 2),
-`` `SYS-106 different Maven lines are told apart` `` (3); the existing cases of the same class (4).
+`` `SYS-106 different Maven lines are told apart` `` (3),
+`` `SYS-106 MAVEN inside a longer path element falls back to known tokens` `` (4); the existing cases of the same
+class (5).
