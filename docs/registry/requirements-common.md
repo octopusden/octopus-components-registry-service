@@ -98,6 +98,7 @@
 | SYS-103 | `ClassicComponentsRegistryServiceClient` takes the retry policy for retryable failures (503, I/O errors) from its caller (`Retryer` constructor parameter); without one it keeps the default of 5 attempts, backoff 100 ms – 1 s (`defaultRetryer()`); the policy is per request, so one call exhausting it does not shorten the next | Medium | unit-test | ✅ Tested |
 | SYS-104 | Component flag `autoRelease` (default false), DB and v4 only: create/update requests, summary/detail responses, `?autoRelease=` list filter, field-config visibility/editability; an admin-started TeamCity resync turns it on (never off) when every linked release line has a finish-build trigger and nobody has changed the flag; the weekly cron only with `teamcity.sync.auto-release-on-cron` | Medium | unit + integration-test | ✅ Tested |
 | SYS-105 | Template-only creators: the permission `CREATE_FROM_TEMPLATE` (role `ROLE_COMPONENTS_REGISTRY_TEMPLATE_CREATOR`, with `ACCESS_COMPONENTS` and `ACCESS_AUDIT`) lets a caller without `CREATE_COMPONENTS` create components from templates only: templates usable, regular profiles unusable with "You may create components from templates only", any template override `403`, the regular create `403`. `CREATE_COMPONENTS` keeps every right and wins over it; editing by ownership is unchanged | High | unit + integration-test | ✅ Tested |
+| SYS-106 | `component-validation` module: `MavenVersionResolver` takes the whole version from a `MAVEN/<version>` path segment (`/` or `\`, e.g. `BUILD_ENV/MAVEN/3.10`), so `3.6`, `3.9` and `3.10` stay distinct versions instead of resolving to `3`; `LATEST` and the known-token fallback for values without such a segment are unchanged | High | unit-test | ✅ Tested |
 
 ---
 
@@ -3786,3 +3787,39 @@ users who may create any component.
 `` `SYS-105 template only creator not overridable override` `` (4); `ProfileOnCreateTest` —
 `` `SYS-105 template only creator refused` `` (5); `ComponentOwnershipEditSecurityTest` —
 `` `SYS-105 template only creator owner allowed` `` (7).
+
+### SYS-106: component-validation — Maven version from the MAVEN/<version> path segment
+
+**Priority:** High
+**Test layer:** unit-test
+**Status:** ✅ Tested
+
+**Motivation:**
+Maven installations are laid out as `BUILD_ENV/MAVEN/<version>`, and installations name those
+directories by line (`3.6`, `3.9`, `3.10`) as well as by full version (`3.6.3`). Matching only
+known tokens resolved every directory other than `3.6.3`/`3.6.0`/`3.3.9`/`LATEST` to the bare `3`,
+so `MULTIPLE_MAVEN_VERSIONS` (SYS-084) did not see steps on `3.6` and `3.9` as different versions.
+
+**Description:**
+`MavenVersionResolver` first looks for a `MAVEN/<version>` path segment (separator `/` or `\`):
+`MAVEN` as a whole path element (at the start of the value or after `/`, `\`, `=`, whitespace or
+a quote), followed by a directory name that is either `LATEST` or a dotted number, ending the value
+or followed by a separator, whitespace or a quote. If found, that whole
+directory name is the Maven version. Otherwise the known-token rule applies unchanged.
+
+**Acceptance criteria:**
+1. `%env.BUILD_ENV%/MAVEN/3.6`, `.../MAVEN/3.9`, `.../MAVEN/3.10`, `.../MAVEN/3.6.3` and
+   `.../MAVEN/LATEST` resolve to `3.6`, `3.9`, `3.10`, `3.6.3` and `LATEST`.
+2. The segment is found inside longer values: `M2_HOME=/opt/BUILD_ENV/MAVEN/3.9`,
+   `/opt/BUILD_ENV/MAVEN/3.10/bin/mvn`, and the Windows form `%%BUILD_ENV%%\MAVEN\3.6\bin\mvn`.
+3. `3.6`, `3.6.3`, `3.9` and `3.10` resolve to four different versions.
+4. `MAVEN` inside a longer path element (`/opt/apache-MAVEN/3.10`) is not a segment; such values
+   resolve by the known-token rule.
+5. Values without the segment resolve as before (known tokens; `null` without a `maven` marker or a
+   known token).
+
+**Test method:** `MavenVersionResolverTest` —
+`` `SYS-106 resolve takes the version from the MAVEN path segment` `` (1, 2),
+`` `SYS-106 different Maven lines are told apart` `` (3),
+`` `SYS-106 MAVEN inside a longer path element falls back to known tokens` `` (4); the existing cases of the same
+class (5).
