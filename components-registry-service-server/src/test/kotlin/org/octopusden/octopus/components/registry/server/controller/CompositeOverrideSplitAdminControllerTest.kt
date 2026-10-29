@@ -253,6 +253,22 @@ class CompositeOverrideSplitAdminControllerTest {
     }
 
     @Test
+    @DisplayName("SYS-066: payloads that differ only in field boundaries get different manifest tokens")
+    fun `SYS-066 manifest token distinguishes field boundaries`() {
+        val id = newComponent()
+        val range = "[1.0,2.0-1),(2.0-1,3.0)"
+        // Payload A: one vcsPath holding the field separator. Payload B: the same bytes split across
+        // name and vcsPath. A raw, unescaped separator makes both preimages identical, so a token dry-run
+        // on A would validate a write that was never reviewed for B.
+        seedRawMarker(id, range, vcsPath = "x\u0000y")
+        val tokenA = split(dryRun = true).andExpect(status().isOk).body()["manifestToken"].asText()
+        configurationRepository.deleteAll(configurationRepository.findAll().filter { it.rowType == "MARKER" })
+        seedRawMarker(id, range, vcsPath = "y", name = "main\u0000x")
+        val tokenB = split(dryRun = true).andExpect(status().isOk).body()["manifestToken"].asText()
+        assertFalse(tokenA == tokenB, "the two payloads must not share a manifest token")
+    }
+
+    @Test
     @DisplayName("SYS-066: a multi-entry vcs payload is deep-copied field-for-field onto every segment")
     fun `SYS-066 multi-entry payload preserved on split`() {
         val id = newComponent()
@@ -363,6 +379,7 @@ class CompositeOverrideSplitAdminControllerTest {
         componentId: String,
         range: String,
         vcsPath: String = "ssh://vcs/legacy",
+        name: String = "main",
     ): String {
         val component = componentRepository.findById(UUID.fromString(componentId)).orElseThrow()
         val row = ComponentConfigurationEntity(
@@ -372,7 +389,7 @@ class CompositeOverrideSplitAdminControllerTest {
             rowType = "MARKER",
         )
         row.vcsEntries.add(
-            VcsSettingsEntryEntity(componentConfiguration = row, name = "main", vcsPath = vcsPath, repositoryType = "GIT"),
+            VcsSettingsEntryEntity(componentConfiguration = row, name = name, vcsPath = vcsPath, repositoryType = "GIT"),
         )
         return configurationRepository.save(row).id!!.toString()
     }
