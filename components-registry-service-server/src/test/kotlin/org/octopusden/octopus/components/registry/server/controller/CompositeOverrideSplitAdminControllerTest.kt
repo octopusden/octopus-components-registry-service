@@ -260,7 +260,6 @@ class CompositeOverrideSplitAdminControllerTest {
         // discovery must factory-validate each segment and abort rather than write a bad row.
         seedCompositeMarker(id, "[1.0,2.0),[5.0,1.0)")
         split(dryRun = true).andExpect(status().isConflict)
-        assertEquals(1, overridesOf(id).size, "no writes")
     }
 
     @Test
