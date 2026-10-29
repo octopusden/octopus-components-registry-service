@@ -2820,8 +2820,9 @@ auth, `@ConditionalOnDatabaseEnabled`) gated by
 `@ConditionalOnProperty("components-registry.composite-override-split.enabled", default false)` — the
 bean is not registered unless enabled (path → 404), enforcing "our DB only" structurally without
 touching other admin endpoints. `POST /field-overrides/split-composites?dryRun={true}&manifestToken=`:
-1. Scans all field-override rows; a row is composite iff `splitCompositeStrict` (which aborts on any
-   malformed/unaccounted input) yields > 1 segment.
+1. Scans all field-override rows. Each row is decomposed with `splitCompositeStrict` (which aborts on any
+   malformed/unaccounted input), and every resulting segment is validated through the production
+   `VersionRangeFactory`, including single-segment rows. A row is split only when it yields > 1 segment.
 2. Fail-closed scope guard: any composite that is not a `vcs.settings` MARKER aborts (409).
 3. Intra-composite disjointness: a composite whose own segments overlap aborts.
 4. Sibling collision preflight (semantic `isIntersect`, decided by mutual containment): a segment
@@ -2838,7 +2839,7 @@ Robustness (review-hardened): the collision preflight inspects EVERY intersectin
 skipped only when byte-identical + identical ordered payload, and any other intersecting sibling still
 aborts); every produced segment is validated through the production `VersionRangeFactory` (a
 regex-accepted but factory-invalid segment aborts); the manifest token is a control-delimited,
-null-marked, sorted encoding (injective). Configuration rows have no optimistic-lock version, so the
+length-prefixed, null-marked, sorted encoding (each field `<length>:<value>`, injective). Configuration rows have no optimistic-lock version, so the
 operation MUST run in a maintenance window with the registry quiesced (no concurrent edits) — the token
 covers the dry-run→write gap, quiescence covers the write itself.
 
@@ -2861,7 +2862,8 @@ covers the dry-run→write gap, quiescence covers the write itself.
 `SYS-066 sibling collision different payload aborts`, `SYS-066 sibling collision identical payload skips`,
 `SYS-066 write without token aborts`, `SYS-066 stale token aborts`, `SYS-066 malformed range aborts`,
 `SYS-066 all intersecting siblings are inspected`, `SYS-066 composite with invalid segment aborts`,
-`SYS-066 multi-entry payload preserved on split`;
+`SYS-066 multi-entry payload preserved on split`, `SYS-066 malformed single segment aborts`,
+`SYS-066 manifest token distinguishes field boundaries`, `SYS-066 whitespace in composite is normalized on split`;
 `CompositeOverrideSplitDisabledTest` — `SYS-066 endpoint absent when flag off`;
 `VersionRangePartitionTest` — `SYS-066 strict split decomposes composites`,
 `SYS-066 strict split does not check disjointness`, `SYS-066 strict split throws on malformed input`.
