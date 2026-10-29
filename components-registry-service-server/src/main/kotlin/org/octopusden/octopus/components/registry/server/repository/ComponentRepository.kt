@@ -50,6 +50,54 @@ interface ComponentRepository :
     fun findDistinctOwners(): List<String>
 
     /**
+     * Distinct release-manager usernames currently assigned to at least one
+     * component. Source for the `/meta/release-managers` dropdown — parity with
+     * [findDistinctOwners], but joined through the ordered
+     * `component_release_managers` child collection rather than a scalar column,
+     * since a component may carry several release managers.
+     *
+     * Joins from `ComponentEntity` (rather than living on a child-entity
+     * repository) to mirror [findDistinctJiraProjectKeys]; the child entities are
+     * parent-owned and have no repository of their own.
+     *
+     * `username` is a NOT NULL column, so only the non-blank guard is needed —
+     * defence-in-depth against migration drift or a direct DB write leaving a
+     * whitespace-only row, which would otherwise surface as an unselectable
+     * blank chip in the picker. Values are projected and ordered trimmed for the
+     * same reason, so a padded row cannot surface as a near-duplicate option.
+     *
+     * The fake-self-link predicate mirrors the always-on exclusion in
+     * `ComponentManagementServiceImpl.buildSpecification`: the v4 list never shows
+     * such a stub, so a username held only by one would be a dead option.
+     */
+    @Query(
+        "SELECT DISTINCT TRIM(rm.username) FROM ComponentEntity c JOIN c.releaseManagers rm " +
+            "LEFT JOIN c.componentGroup g " +
+            "WHERE TRIM(rm.username) <> '' " +
+            "AND (g IS NULL OR NOT (g.isFake = true AND g.groupKey = c.componentKey)) " +
+            "ORDER BY TRIM(rm.username)",
+    )
+    fun findDistinctReleaseManagers(): List<String>
+
+    /**
+     * Distinct security-champion usernames currently assigned to at least one
+     * component. Source for the `/meta/security-champions` dropdown; identical
+     * shape and rationale to [findDistinctReleaseManagers], against the
+     * `component_security_champions` child collection. Kept a separate query (not
+     * a shared one over both collections) because `?releaseManager=` and
+     * `?securityChampion=` are separate filters — a merged list would advertise
+     * dead options in both pickers.
+     */
+    @Query(
+        "SELECT DISTINCT TRIM(sc.username) FROM ComponentEntity c JOIN c.securityChampions sc " +
+            "LEFT JOIN c.componentGroup g " +
+            "WHERE TRIM(sc.username) <> '' " +
+            "AND (g IS NULL OR NOT (g.isFake = true AND g.groupKey = c.componentKey)) " +
+            "ORDER BY TRIM(sc.username)",
+    )
+    fun findDistinctSecurityChampions(): List<String>
+
+    /**
      * Distinct client codes currently in use on at least one component. Source for
      * the `/meta/client-codes` dropdown (SYS-046). Scalar `components.client_code`
      * column; same IS NOT NULL + non-blank defence as [findDistinctOwners].
@@ -98,6 +146,39 @@ interface ComponentRepository :
     )
     fun existsByParentComponentId(parentId: UUID): Boolean
 
+    /** Keys of every component flagged `testComponent` (a handful; read per v1–v3 request). */
+    @Query("SELECT c.componentKey FROM ComponentEntity c WHERE c.testComponent = true")
+    fun findTestComponentKeys(): List<String>
+
+    /**
+     * Row-locks (`FOR UPDATE`, key order) the components with these keys until the transaction ends.
+     * Serializes the SYS-099 test-component reference check against a concurrent flag/reference write
+     * on the same component; read the flags with a fresh query afterwards.
+     */
+    @Query(
+        value = "SELECT component_key FROM components WHERE component_key IN (:keys) ORDER BY component_key FOR UPDATE",
+        nativeQuery = true,
+    )
+    fun lockByComponentKeys(keys: Collection<String>): List<String>
+
+    /** The subset of [keys] that are test components (fresh read, not the persistence-context copy). */
+    @Query("SELECT c.componentKey FROM ComponentEntity c WHERE c.componentKey IN :keys AND c.testComponent = true")
+    fun findTestComponentKeysIn(keys: Collection<String>): List<String>
+
+    /** Keys of the non-test components whose parent is [parentId] (a real product may not sit under a test component). */
+    @Query("SELECT c.componentKey FROM ComponentEntity c WHERE c.parentComponent.id = :parentId AND c.testComponent = false")
+    fun findNonTestChildKeys(parentId: UUID): List<String>
+
+    /** Keys of the non-test components, other than [excludeComponentId], with a doc link to [docComponentKey]. */
+    @Query(
+        "SELECT DISTINCT c.componentKey FROM ComponentEntity c JOIN c.docLinks d " +
+            "WHERE d.docComponentKey = :docComponentKey AND c.testComponent = false AND c.id <> :excludeComponentId",
+    )
+    fun findNonTestDocReferrerKeys(
+        docComponentKey: String,
+        excludeComponentId: UUID,
+    ): List<String>
+
     /**
      * All components whose `componentGroup` is [groupId]. Used by migration cleanup
      * (§6.3) to unlink the members of a group that is no longer a true aggregator
@@ -143,7 +224,8 @@ interface ComponentRepository :
     // 685+ components are never loaded into memory. All exclude the FAKE-aggregator stub rows
     // (componentGroup is fake AND its groupKey == the row's own componentKey), matching the
     // always-on exclusion in `ComponentManagementServiceImpl.buildSpecification`, so the totals
-    // line up with the v4 component list.
+    // line up with the v4 component list. Test components are excluded too (synthetic stand data
+    // would distort the figures), so the totals line up with the list filtered `testComponent=false`.
     //
     // The group condition uses an explicit LEFT JOIN: referencing `c.componentGroup.isFake`
     // inline would force an INNER join and silently drop every group-less component (the common
@@ -151,10 +233,10 @@ interface ComponentRepository :
     // group-less components and real-aggregator members; only the self-linked fake aggregator
     // stub is excluded.
 
-    /** Count of regular (non-FAKE-aggregator) components. */
+    /** Count of regular (non-FAKE-aggregator, non-test) components. */
     @Query(
         "SELECT COUNT(c) FROM ComponentEntity c LEFT JOIN c.componentGroup g " +
-            "WHERE (g IS NULL OR NOT (g.isFake = true AND g.groupKey = c.componentKey))",
+            "WHERE c.testComponent = false AND (g IS NULL OR NOT (g.isFake = true AND g.groupKey = c.componentKey))",
     )
     fun countRegularComponents(): Long
 
@@ -162,7 +244,7 @@ interface ComponentRepository :
     @Query(
         "SELECT COUNT(c) FROM ComponentEntity c LEFT JOIN c.componentGroup g " +
             "WHERE c.archived = :archived " +
-            "AND (g IS NULL OR NOT (g.isFake = true AND g.groupKey = c.componentKey))",
+            "AND c.testComponent = false AND (g IS NULL OR NOT (g.isFake = true AND g.groupKey = c.componentKey))",
     )
     fun countRegularComponentsByArchived(archived: Boolean): Long
 
@@ -176,7 +258,7 @@ interface ComponentRepository :
         "SELECT c.componentOwner AS name, COUNT(c) AS count FROM ComponentEntity c LEFT JOIN c.componentGroup g " +
             "WHERE c.archived = false " +
             "AND c.componentOwner IS NOT NULL AND TRIM(c.componentOwner) <> '' " +
-            "AND (g IS NULL OR NOT (g.isFake = true AND g.groupKey = c.componentKey)) " +
+            "AND c.testComponent = false AND (g IS NULL OR NOT (g.isFake = true AND g.groupKey = c.componentKey)) " +
             "GROUP BY c.componentOwner",
     )
     fun countComponentsByOwner(): List<NameCountRow>
@@ -191,7 +273,7 @@ interface ComponentRepository :
         "SELECT rm.username AS name, COUNT(c) AS count FROM ComponentEntity c " +
             "JOIN c.releaseManagers rm LEFT JOIN c.componentGroup g " +
             "WHERE c.archived = false " +
-            "AND (g IS NULL OR NOT (g.isFake = true AND g.groupKey = c.componentKey)) " +
+            "AND c.testComponent = false AND (g IS NULL OR NOT (g.isFake = true AND g.groupKey = c.componentKey)) " +
             "GROUP BY rm.username",
     )
     fun countComponentsByReleaseManager(): List<NameCountRow>
@@ -201,10 +283,29 @@ interface ComponentRepository :
         "SELECT sc.username AS name, COUNT(c) AS count FROM ComponentEntity c " +
             "JOIN c.securityChampions sc LEFT JOIN c.componentGroup g " +
             "WHERE c.archived = false " +
-            "AND (g IS NULL OR NOT (g.isFake = true AND g.groupKey = c.componentKey)) " +
+            "AND c.testComponent = false AND (g IS NULL OR NOT (g.isFake = true AND g.groupKey = c.componentKey)) " +
             "GROUP BY sc.username",
     )
     fun countComponentsBySecurityChampion(): List<NameCountRow>
+
+    /**
+     * Cheap change-detection stamp for the as-code search index (SYS-100). Every v4 write bumps
+     * the owning component's `updatedAt` / `version` (see `bumpParentVersion`), create/import adds
+     * a row and delete removes one, so any component edit changes at least one of these three
+     * aggregates — on every pod, since the stamp is read from the shared DB.
+     */
+    @Query(
+        "SELECT COUNT(c) AS componentCount, MAX(c.updatedAt) AS maxUpdatedAt, " +
+            "COALESCE(SUM(c.version), 0) AS versionSum FROM ComponentEntity c",
+    )
+    fun findChangeStamp(): ComponentChangeStampRow
+}
+
+/** Projection for [ComponentRepository.findChangeStamp]. */
+interface ComponentChangeStampRow {
+    val componentCount: Long
+    val maxUpdatedAt: java.time.Instant?
+    val versionSum: Long
 }
 
 /** Projection for the health-statistics GROUP BY queries: a name (owner / RM / SC username) and its count. */

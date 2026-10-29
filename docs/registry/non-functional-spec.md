@@ -199,7 +199,7 @@ rule-text change from silently re-recording a fresh baseline.
 | Fitness Function | Where | How |
 |-----------------|-------|-----|
 | Flyway migrations are valid | CI | Testcontainers: fresh DB → apply all migrations → verify schema |
-| Flyway migrations are forward-only | CI | No deleted/modified migration files (checksum validation) |
+| Flyway migrations are append-only and ordered | CI (`migrations/append-only`, required by `gate/merge`) | `scripts/ci/check-migrations-append-only.sh` compares the PR merge commit with main, the merge commit's first parent, over every `V*.sql` (and lowercase `v*.sql`, which Flyway would skip); every one in the merged tree must have a supported name under `db/migration/` at any depth. An existing migration may not be modified, removed or renamed. An added one must be named `V<n>__<lowercase_description>.sql` with no leading zero, and its version must be above every version on main. No version may appear twice. Production runs Flyway validate, which refuses to start on a changed checksum or a missing applied version. The merge commit is a snapshot taken when the PR event fired, and the event does not re-fire when main moves. The `policy/checks-common` ruleset requires `gate/merge` without strict, so a branch need not be up to date with main to merge. Two PRs that each add a migration can then both pass and both merge even when one version is not above the other (the same version, or a lower one merged second), and Flyway then refuses to start. Turning strict on for `gate/merge` closes that gap. Repeatable `R__` and Java/Kotlin migrations are out of scope; none exist |
 | No schema drift | CI | Compare actual schema vs expected DDL (Flyway validate) |
 | Optimistic locking works | CI | Concurrent update test → one succeeds, one gets `OptimisticLockException` |
 | Foreign keys consistent | CI | Orphan record checks after import |
@@ -283,7 +283,7 @@ Rollback is per-component. There is no global "switch to Git" flag.
 | Level | Mechanism | Time to recover |
 |-------|-----------|----------------|
 | Single component (pre-edit) | Flip `component_source` to `git` | Seconds |
-| DB schema | Flyway rollback migration | Minutes |
+| DB schema | No undo migrations. Redeploy the previous release: an additive migration leaves it starting on the newer schema (Flyway accepts applied future migrations, `ddl-auto: validate` ignores extra columns). Where that release loses data the newer one wrote, a per-migration runbook in [`deployment/`](deployment/README.md) gives the snapshot and repair steps | Minutes |
 | Full system | Redeploy previous version (Git resolver still available during migration) | Minutes |
 
 ### 5.10 CI Pipeline Fitness Gates

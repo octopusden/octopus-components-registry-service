@@ -34,7 +34,7 @@ class TeamcitySyncScheduler(
 ) {
     private val log = KotlinLogging.logger {}
 
-    private companion object {
+    companion object {
         // Actor stamped on the SYS-060 service-event journal row for cron-fired runs
         // (vs a username for admin-triggered ones).
         const val TRIGGERED_BY_SCHEDULER = "scheduler"

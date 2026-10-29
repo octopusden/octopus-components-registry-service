@@ -25,7 +25,7 @@ import java.util.concurrent.atomic.AtomicReference
  */
 @Component
 class MigrationLifecycleGate {
-    enum class JobKind { COMPONENTS, HISTORY, TC_RESYNC, TC_VALIDATION }
+    enum class JobKind { COMPONENTS, HISTORY, TC_RESYNC, TC_VALIDATION, TC_CHECKOUT_LAYOUT_DIFF, TC_CHECKOUT_LAYOUT_SYNC }
 
     data class ActiveJob(
         val kind: JobKind,

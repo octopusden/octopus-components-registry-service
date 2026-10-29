@@ -10,7 +10,7 @@ permissions:
 
 jobs:
   build:
-    uses: octopusden/octopus-base/.github/workflows/common-java-gradle-build.yml@v3.1.0
+    uses: octopusden/octopus-base/.github/workflows/common-java-gradle-build.yml@v3.2.0
     with:
       java-version: '21'
       flow-type: hybrid
@@ -18,13 +18,13 @@ jobs:
     secrets: inherit
 
   quality:
-    uses: octopusden/octopus-base/.github/workflows/common-java-gradle-quality-gates.yml@v3.1.0
+    uses: octopusden/octopus-base/.github/workflows/common-java-gradle-quality-gates.yml@v3.2.0
     with:
       java-version: '21'
     secrets: inherit
 
   security:
-    uses: octopusden/octopus-base/.github/workflows/common-java-gradle-security-reports.yml@v3.1.0
+    uses: octopusden/octopus-base/.github/workflows/common-java-gradle-security-reports.yml@v3.2.0
     with:
       java-version: '21'
       enable-codeql: true
@@ -92,13 +92,46 @@ jobs:
           echo "::error::$SURFACE changed but $CHANGELOG did not."
           exit 1
 
+  # Applied Flyway migrations are immutable: production runs Flyway validate,
+  # so an edited, removed or renamed V<n>__ file stops the service from
+  # starting. Compares main with the merge commit under test, so a branch
+  # behind main does not look like it deletes main's newer migrations.
+  # The rule lives in the script so it can be run locally on any two commits.
+  migrations-append-only:
+    name: migrations/append-only
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      contents: read
+    steps:
+      # Depth 2: the merge commit and its parents, which is all the check reads.
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 2
+          persist-credentials: false
+      - name: Self-test the check
+        run: scripts/ci/test-check-migrations-append-only.sh
+      # The base is the merge commit's first parent: main as it was when the
+      # event fired. pull_request does not re-fire when main moves, and the
+      # policy/checks-common ruleset requires gate/merge without strict, so a
+      # branch need not be up to date with main to merge. Two PRs that each add
+      # a migration can then both pass and both merge even when one version is
+      # not above the other (the same version, or a lower one merged second),
+      # and Flyway then refuses to start. Turning strict on for gate/merge
+      # closes that gap. pull_request.base.sha is not used: it can be older
+      # still.
+      - name: Check migrations are append-only and in order
+        env:
+          CHECKED: ${{ github.sha }}
+        run: scripts/ci/check-migrations-append-only.sh "$CHECKED^1" "$CHECKED"
+
   gate-merge:
     name: gate/merge
-    needs: [ build, quality, security, api-changelog ]
+    needs: [ build, quality, security, api-changelog, migrations-append-only ]
     if: always()
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - uses: octopusden/octopus-base/.github/actions/merge-gate@v3.1.0
+      - uses: octopusden/octopus-base/.github/actions/merge-gate@v3.2.0
         with:
           needs: ${{ toJson(needs) }}

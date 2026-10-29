@@ -4,8 +4,8 @@
 // and withJavadocJar/withSourcesJar are all applied by the root `configure(subprojects)`
 // block, so they are intentionally NOT re-declared here.
 plugins {
-    id 'com.github.johnrengelman.shadow'
-    id 'org.jetbrains.kotlin.plugin.serialization' version '1.9.25'
+    id 'com.gradleup.shadow'
+    id 'org.jetbrains.kotlin.plugin.serialization'
 }
 
 dependencies {

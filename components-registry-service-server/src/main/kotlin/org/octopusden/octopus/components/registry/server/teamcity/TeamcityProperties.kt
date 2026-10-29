@@ -43,5 +43,7 @@ class TeamcityProperties(
          * carries a different id.
          */
         val cdReleaseTemplateId: String = "CDRelease",
+        /** Whether the weekly cron may turn `autoRelease` on (SYS-104). A run an admin starts always may. */
+        val autoReleaseOnCron: Boolean = false,
     )
 }

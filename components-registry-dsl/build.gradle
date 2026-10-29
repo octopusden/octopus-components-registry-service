@@ -3,8 +3,8 @@ plugins {
     id 'org.jetbrains.kotlin.jvm'
 }
 
-sourceCompatibility = 1.8
-targetCompatibility = 1.8
+java.sourceCompatibility = 1.8
+java.targetCompatibility = 1.8
 
 compileKotlin {
     kotlinOptions.jvmTarget = "1.8"
@@ -35,14 +35,20 @@ dependencies {
     testImplementation "org.assertj:assertj-core:${project['assertj.version']}"
 }
 
+// The `api` dependencies, resolvable. `api` itself is declare-only, and Gradle does not allow copying
+// or resolving a configuration that is not resolvable.
+configurations {
+    dslLibraryClasspath {
+        canBeResolved = true
+        canBeConsumed = false
+        extendsFrom api
+    }
+}
+
 task storeDslLibraryDependencies {
     doLast {
-        def copiedConfiguration = project.configurations.api.copyRecursive()
-        copiedConfiguration.canBeResolved = true
-        copiedConfiguration.canBeConsumed = true
-
         def artifacts = ["${project.name}-${project.version}.jar"]
-        copiedConfiguration.resolvedConfiguration.resolvedArtifacts.forEach { artifacts.add(it.file.name) }
+        configurations.dslLibraryClasspath.resolvedConfiguration.resolvedArtifacts.forEach { artifacts.add(it.file.name) }
         artifacts
         def file = file("${getLayout().getBuildDirectory().get().asFile}/resources/main/${project.name}.txt")
         file.getParentFile().mkdirs()

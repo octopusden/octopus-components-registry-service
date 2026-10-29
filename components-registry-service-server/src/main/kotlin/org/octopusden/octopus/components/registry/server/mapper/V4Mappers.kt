@@ -20,6 +20,8 @@ import org.octopusden.octopus.components.registry.server.dto.v4.EscrowAspectResp
 import org.octopusden.octopus.components.registry.server.dto.v4.FieldOverrideResponse
 import org.octopusden.octopus.components.registry.server.dto.v4.FileUrlArtifactRequest
 import org.octopusden.octopus.components.registry.server.dto.v4.FileUrlArtifactResponse
+import org.octopusden.octopus.components.registry.server.dto.v4.GenericArtifactRequest
+import org.octopusden.octopus.components.registry.server.dto.v4.GenericArtifactResponse
 import org.octopusden.octopus.components.registry.server.dto.v4.JiraAspectResponse
 import org.octopusden.octopus.components.registry.server.dto.v4.MarkerChildrenPayload
 import org.octopusden.octopus.components.registry.server.dto.v4.MavenArtifactRequest
@@ -35,6 +37,8 @@ import org.octopusden.octopus.components.registry.server.entity.ComponentArtifac
 import org.octopusden.octopus.components.registry.server.entity.ComponentBuildToolBeanEntity
 import org.octopusden.octopus.components.registry.server.entity.ComponentConfigurationEntity
 import org.octopusden.octopus.components.registry.server.entity.ComponentEntity
+import org.octopusden.octopus.components.registry.server.entity.DistributionFileUrlArtifactEntity
+import org.octopusden.octopus.components.registry.server.entity.DistributionGenericArtifactEntity
 import org.octopusden.octopus.components.registry.server.service.rms.ComponentBuildRanges
 import org.octopusden.octopus.components.registry.server.service.rms.RegisteredBuildParametersMapper
 
@@ -56,6 +60,8 @@ fun ComponentEntity.toDetailResponse(teamcityBaseUrl: String? = null): Component
         systems = this.systemJunctions.map { it.systemCode }.toSet(),
         clientCode = this.clientCode,
         archived = this.archived,
+        testComponent = this.testComponent,
+        autoRelease = this.autoRelease,
         solution = this.solution,
         parentComponentName = this.parentComponent?.componentKey,
         canBeParent = this.canBeParent,
@@ -117,6 +123,8 @@ fun ComponentEntity.toSummaryResponse(
         systems = this.systemJunctions.map { it.systemCode }.toSet(),
         productType = this.productType,
         archived = this.archived,
+        testComponent = this.testComponent,
+        autoRelease = this.autoRelease,
         canBeParent = this.canBeParent,
         updatedAt = this.updatedAt,
         labels = this.labelJunctions.map { it.labelCode },
@@ -165,6 +173,9 @@ fun ComponentConfigurationEntity.toConfigurationResponse(): ComponentConfigurati
     val packages = pickChildRows(rowType, MarkerAttributes.DISTRIBUTION_PACKAGES) {
         this.packages.sortedBy { it.sortOrder }.map { it.toResponse() }
     }
+    val generic = pickChildRows(rowType, MarkerAttributes.DISTRIBUTION_GENERIC) {
+        genericArtifacts.sortedBy { it.sortOrder }.map { it.toResponse() }
+    }
     val tools = pickChildRows(rowType, MarkerAttributes.BUILD_REQUIRED_TOOLS) { requiredToolJunctions.map { it.toolName } }
     val buildBeans = pickChildRows(rowType, MarkerAttributes.BUILD_TOOLS) {
         buildToolBeans.sortedBy { it.sortOrder }.map { it.toBuildToolBeanResponse() }
@@ -184,8 +195,10 @@ fun ComponentConfigurationEntity.toConfigurationResponse(): ComponentConfigurati
         fileUrlArtifacts = fileUrl,
         dockerImages = docker,
         packages = packages,
+        genericArtifacts = generic,
         requiredTools = tools,
         buildToolBeans = buildBeans,
+        buildWorkingDirectory = this.buildWorkingDirectory,
     )
 }
 
@@ -317,8 +330,11 @@ private fun ComponentConfigurationEntity.toMarkerChildrenPayload(): MarkerChildr
                             tag = e.tag,
                             hotfixBranch = e.hotfixBranch,
                             repositoryType = e.repositoryType,
+                            sourcePath = e.sourcePath,
+                            checkoutDirectory = e.checkoutDirectory,
                         )
                     },
+                buildWorkingDirectory = buildWorkingDirectory,
             )
 
         MarkerAttributes.DISTRIBUTION_MAVEN,
@@ -375,6 +391,14 @@ private fun ComponentConfigurationEntity.toMarkerChildrenPayload(): MarkerChildr
                     },
             )
 
+        MarkerAttributes.DISTRIBUTION_GENERIC ->
+            MarkerChildrenPayload(
+                genericArtifacts =
+                    genericArtifacts.sortedBy { it.sortOrder }.map { e ->
+                        GenericArtifactRequest(path = e.path)
+                    },
+            )
+
         MarkerAttributes.BUILD_REQUIRED_TOOLS ->
             MarkerChildrenPayload(requiredTools = requiredToolJunctions.map { it.toolName })
 
@@ -401,6 +425,8 @@ private fun org.octopusden.octopus.components.registry.server.entity.VcsSettings
         hotfixBranch = this.hotfixBranch,
         repositoryType = this.repositoryType,
         sortOrder = this.sortOrder,
+        sourcePath = this.sourcePath,
+        checkoutDirectory = this.checkoutDirectory,
     )
 
 private fun org.octopusden.octopus.components.registry.server.entity.DistributionMavenArtifactEntity.toResponse(): MavenArtifactResponse =
@@ -413,7 +439,7 @@ private fun org.octopusden.octopus.components.registry.server.entity.Distributio
         sortOrder = this.sortOrder,
     )
 
-private fun org.octopusden.octopus.components.registry.server.entity.DistributionFileUrlArtifactEntity.toResponse(): FileUrlArtifactResponse =
+private fun DistributionFileUrlArtifactEntity.toResponse(): FileUrlArtifactResponse =
     FileUrlArtifactResponse(
         id = this.id!!,
         url = this.url,
@@ -427,6 +453,13 @@ private fun org.octopusden.octopus.components.registry.server.entity.Distributio
         id = this.id!!,
         imageName = this.imageName,
         flavor = this.flavor,
+        sortOrder = this.sortOrder,
+    )
+
+private fun DistributionGenericArtifactEntity.toResponse(): GenericArtifactResponse =
+    GenericArtifactResponse(
+        id = this.id!!,
+        path = this.path,
         sortOrder = this.sortOrder,
     )
 

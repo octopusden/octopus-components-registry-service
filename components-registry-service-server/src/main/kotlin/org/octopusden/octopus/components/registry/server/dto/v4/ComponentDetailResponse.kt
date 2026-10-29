@@ -27,6 +27,8 @@ data class ComponentDetailResponse(
     val systems: Set<String>,
     val clientCode: String?,
     val archived: Boolean,
+    val testComponent: Boolean = false,
+    val autoRelease: Boolean = false,
     val solution: Boolean?,
     val parentComponentName: String?,
     val canBeParent: Boolean = false,
@@ -67,4 +69,6 @@ data class ComponentDetailResponse(
     val canEdit: Boolean? = null,
     /** RMS-registered build parameters — null for a non-Maven/Gradle component. */
     val registeredBuildParameters: RegisteredBuildParametersDetail? = null,
+    // Advisory messages about a successful write (e.g. the TeamCity build chain no longer matches); empty otherwise.
+    val warnings: List<String> = emptyList(),
 )

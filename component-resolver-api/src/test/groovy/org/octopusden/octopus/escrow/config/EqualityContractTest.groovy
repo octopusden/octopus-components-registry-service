@@ -30,7 +30,7 @@ class EqualityContractTest extends GroovyTestCase {
     }
 
     private static Distribution distribution(String gav) {
-        new Distribution(true, true, gav, null, null, null, new SecurityGroups(null))
+        new Distribution(true, true, gav, null, null, null, null, new SecurityGroups(null))
     }
 
     private static JiraComponentVersionRange range(String componentName, String gav, String displayName = null) {

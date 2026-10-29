@@ -13,6 +13,10 @@ local developer setup with a working database. (The web UI lives in
   Flyway/validate → `POST /admin/migrate` → verify → flip `default-source` to `db`,
   with the partial-failure recovery and rollback paths (the reusable, generic
   form for QA/prod and another organization)
+- `vcs-checkout-layout-rollback.md` — snapshot and restore steps when rolling back across the `V8__`/`V9__` VCS
+  checkout layout migrations (checkout layout is dropped by the previous release's VCS writes)
+- `test-component-upgrade-note.md` — read-only pre-rollout checks for `V11__` (the labelled set, keys
+  outside the test-component name patterns, real components referencing labelled ones)
 - `qa-db-refresh.md` — the `[8.0] Recreate QA DB from PROD` TeamCity button: what it copies, why
   production stays read-only, the one-time role/Vault setup, and how to undo a run
 - `qa-db-refresh-dba-request.md` — the request to the database administrators for that button: the

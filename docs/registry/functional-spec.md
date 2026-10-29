@@ -9,10 +9,10 @@
 
 ### 1.1 List Components
 - **Input**: Optional filters, ANDed when combined.
-  - **Main:** `search` (case-insensitive LIKE on name/displayName), `system` (multi-value, OR), `owner` (multi-value, OR on `componentOwner`, `SYS-035`), `buildSystem` (multi-value, OR on the BASE row), `labels` (multi-value, AND), `archived`, `productType`.
+  - **Main:** `search` (case-insensitive LIKE on name/displayName), `system` (multi-value, OR), `owner` (multi-value, OR on `componentOwner`, `SYS-035`), `involves` + `involvesRoles` (owner OR release manager OR security champion for any listed user, `SYS-101`), `buildSystem` (multi-value, OR on the BASE row), `labels` (multi-value, AND), `archived`, `testComponent` (SYS-099; without it test components are included), `productType`.
   - **Extended — multi-value (OR, exact `IN`; back the Portal "extended search" multi-select dropdowns, `SYS-046`):** `clientCode`, `jiraProjectKey` (BASE row), `parentComponentName` (the parent's component key — children of any listed parent), `groupKey` (the owning group), `javaVersion` (BASE row — same scalar-on-BASE-row shape as `buildSystem`). CSV or repeatable params, normalised like the Main multi-value filters; the BASE-row join uses `distinct`. (The first four were substring/exact single-value before `SYS-046`.)
-  - **Extended — single-value:** `solution`, `jiraTechnical`, `distributionExplicit`, `distributionExternal` (booleans; `=false` matches only rows explicitly set false — rows where the column is NULL are excluded — `SYS-045`), `vcsPath` (LIKE on a BASE VCS entry), `productionBranch` (LIKE on a BASE VCS entry's `branch`), `canBeParent`. The VCS-entry joins use `distinct` so a multi-entry component is counted once.
-  - **Meta option lists** (populate the filter-bar pickers; each returns sorted distinct values **in use**, gated by `ACCESS_COMPONENTS`): `/meta/owners`, `/meta/labels`, `/meta/systems`, `/meta/client-codes`, `/meta/jira-project-keys`, `/meta/parent-component-names` (only keys actually referenced as a parent), `/meta/group-keys` (only groups with ≥1 member). The full master-dictionary variants `/meta/labels/dictionary` and `/meta/systems/dictionary` back the editor multi-selects.
+  - **Extended — single-value:** `solution`, `autoRelease` (SYS-104), `jiraTechnical`, `distributionExplicit`, `distributionExternal` (booleans; `=false` matches only rows explicitly set false — rows where the column is NULL are excluded — `SYS-045`), `vcsPath` (LIKE on a BASE VCS entry), `productionBranch` (LIKE on a BASE VCS entry's `branch`), `canBeParent`. The VCS-entry joins use `distinct` so a multi-entry component is counted once.
+  - **Meta option lists** (populate the filter-bar pickers; each returns sorted distinct values **in use**, gated by `ACCESS_COMPONENTS`): `/meta/owners`, `/meta/labels`, `/meta/systems`, `/meta/client-codes`, `/meta/jira-project-keys`, `/meta/parent-component-names` (only keys actually referenced as a parent), `/meta/group-keys` (only groups with ≥1 member), `/meta/release-managers`, `/meta/security-champions` (separate lists for the `releaseManager` / `securityChampion` filters). The full master-dictionary variants `/meta/labels/dictionary` and `/meta/systems/dictionary` back the editor multi-selects.
   - **Domain option lists** (populate editor dropdowns, gated by `ACCESS_COMPONENTS`): `/meta/build-systems`, `/meta/repository-types`, `/meta/escrow-generations` (enum-sourced), plus `/meta/java-versions` and `/meta/maven-versions` — the allowed build-tool versions sourced from `components-registry.build-tool-versions.{java,maven}` (application.yml default, per-installation override via service-config), returned numeric-sorted.
   - **Editors** (read-only "who can edit" projection, gated by `ACCESS_COMPONENTS`): `GET /rest/api/4/components/{idOrName}/editors` → `{ componentOwner, releaseManagers[], securityChampions[], manager }` — `manager` (`SYS-063`) is the owner's manager per employee-service, null when unresolvable. Informational only — administrators (`EDIT_ANY_COMPONENT`) may also edit any component but are, unlike the manager, not enumerated (an open-ended realm-role, not per-component data).
 - **Output**: Paginated list of components with summary info
@@ -47,7 +47,10 @@ Base URLs for links are configurable per deployment via `registry_config` (same 
 - **Required fields**: `name` (unique, alphanumeric + hyphens + underscores, max 255 chars), `componentOwner`
 - **Conditionally required**: `releaseManager`, `securityChampion`, `displayName` — required when `distribution.explicit && distribution.external`; `copyright` — required under the same gate only when `components-registry.copyright-path` is configured
 - **Optional + unique**: `displayName` — nullable (stored verbatim from the DSL; NOT backfilled to the component key, preserving the legacy v1/v2/v3 `$.name` wire). When set it must be unique across components (400 keyed `displayName` on a duplicate)
-- **Optional fields**: productType, system, clientCode, solution, groupId, labels, doc
+- **Optional fields**: productType, system, clientCode, solution, groupId, labels, doc, profile
+
+**Profile (optional, see 7.4).** `profile` names the Create-component profile the component is created with; blank is absent. When given, the create is rejected unless the profile is live (**400** `profile: …`), the caller may use it (**403** with the reason), the classification the create stores matches the profile's (**400** `profile: …` naming `solution`, `external` or `explicit`; `explicit: ask` takes either value; a flag hidden in the field configuration, or absent, counts as `false`), and every field rule of the profile holds (**400** `<path>: <rule message>`). Rules check the stored values — the key trimmed, hidden fields dropped — as a whole-value match, an absent value as empty, and a `[0]` path the first list entry only. Without `profile` nothing changes: no field rules apply. Renames and solution-flag changes are never checked against profile rules ([TD-024](tech-debt/024-solution-key-rules-only-on-profile-creates.md)).
+
 
 **Person-field validation (enforced on the v4 write path — see ADR-015).** Restored from the old `EscrowConfigValidator` + the (formerly default-off CI) `ComponentRegistryValidationTask`, and modernised into per-request checks on `POST /rest/api/4/components` and `PATCH /rest/api/4/components/{id}`:
 
@@ -71,7 +74,7 @@ Base URLs for links are configurable per deployment via `registry_config` (same 
 
 **UI — Create Component dialog:**
 
-1. **Profile selection** (future feature, out of scope for initial implementation) — admin-defined profiles (e.g., "Gradle Library", "Spring Boot Service", "Kotlin DSL Plugin") that pre-fill build, VCS, and escrow settings. For now, component defaults serve as a single implicit profile.
+1. **Profile selection** — the start page offers the profiles from `GET /rest/api/4/component-profiles` (see 7.4). A profile sets the classification (external, explicit, solution) and carries field rules, such as the Solution key pattern; the create sends its id as `profile`. When CRS returns no profiles, the dialog says so and goes straight to the wizard without one: the classification is set there, no `profile` is sent and no field rules apply. Pre-filling build, VCS and escrow settings from a profile is a later feature (templates); component defaults still pre-fill the rest.
 2. **Component name** (required) + **display name** (optional; required for explicit+external components)
 3. **Owner** — pre-filled with current user
 4. **TeamCity integration** — optional checkbox "Create TeamCity project". When checked, user selects a parent TeamCity project from a dropdown/search. On component creation, the system calls TeamCity API to create a sub-project. (Out of scope for initial implementation — documented as future integration point.)
@@ -108,6 +111,63 @@ shape/format rules on both `POST /rest/api/4/components` and
 
 These format checks are skipped for a field whose admin field-config visibility is
 `HIDDEN`. On `PATCH`, the hidden value is also stripped before persistence.
+
+#### VCS entry checkout layout and Build Working Directory (create + update + field overrides)
+
+Each VCS entry of a configuration row (base or `vcs.settings` marker) may carry `sourcePath` (the
+repository directory that belongs to the component; absent = whole repository) and
+`checkoutDirectory` (where the entry is checked out on the build agent). At most one entry has no
+`checkoutDirectory`; it is checked out at the checkout root, and it may be listed at any position.
+The row may carry `buildWorkingDirectory`, where the build runs, relative to the checkout root
+(absent = the checkout root); build-chain generation sets it as the TeamCity parameter `WORK_DIR`
+(`%teamcity.build.checkoutDir%/<buildWorkingDirectory>`). A blank value is absent. In a base PATCH `buildWorkingDirectory: null`
+leaves the stored value and `""` clears it; a `vcs.settings` marker payload replaces the row, so an
+absent value clears it.
+
+Every v4 write that replaces a row's VCS entries or sets its `buildWorkingDirectory` (create, PATCH
+`baseConfiguration`, the field-override endpoints, a PATCH `fieldOverrides` row) validates the final
+row; the first failing rule is a `400` `{ "errorMessage": "<field>: <reason>" }`, entry rules first:
+
+| Rule | Reported on |
+|------|-------------|
+| At most one entry has no `checkoutDirectory` | the later such entry's `vcsEntries[<i>].checkoutDirectory` |
+| `checkoutDirectory` is at most 255 characters, matches `^[A-Za-z0-9_][A-Za-z0-9._-]*$` (one segment, no leading dot) and is not `report-templates`, `sonar-config`, `target` or `sonar-report`, ignoring case | that entry's `checkoutDirectory` |
+| Entry names are unique in the row, case-insensitively | the later entry's `checkoutDirectory` |
+| `sourcePath` is at most 255 characters, `/`-separated, each segment matches `^[A-Za-z0-9._-]+$` and is not `.` or `..` | that entry's `sourcePath` |
+| (repository, `sourcePath`) is unique in the row; Git repositories compare case-insensitively | the later entry's `sourcePath` |
+| `buildWorkingDirectory` has the `sourcePath` shape and starts in the `checkoutDirectory` of an entry (case-sensitive), unless an entry is at the checkout root; a row without entries has none | `buildWorkingDirectory` |
+| `buildWorkingDirectory` is required when every entry has a `checkoutDirectory` | `buildWorkingDirectory` |
+
+The prefix before the colon is the routing key and stays fixed; the reason after it is for people:
+it names VCS roots 1-based as the Portal does ("VCS root N"), with the repository (the last segment of its path,
+without `.git`), says what is wrong and what to do, and gives an example value.
+
+In a component PATCH, a `vcsEntries[` or `buildWorkingDirectory:` error of the `j`-th
+`fieldOverrides` element is prefixed `fieldOverrides[<j>].`; other errors of that element keep their
+shape.
+
+**Names are derived; a request `name` is ignored.** An entry with a `checkoutDirectory` is named by
+it; an entry without one keeps the stored name of the row's previous entry on the same repository
+(Git ignoring case; when the repository appeared twice, a previous entry at the root first, then the
+lowest previous position), otherwise `main`; a kept name that is now another entry's
+`checkoutDirectory` (ignoring case) gives `main`. An entry therefore keeps its name while it stays at the checkout root on the same
+repository; re-pointed to another repository it is named `main`; moved from a Checkout Directory to
+the root it keeps the name it had.
+
+**Chain-mismatch warning.** `ComponentDetailResponse.warnings` is `[]` except on a create or PATCH
+that carries `baseConfiguration.vcsEntries` or `baseConfiguration.buildWorkingDirectory` for a
+component with a linked TeamCity project: `"VCS entries changed; the TeamCity build chain no longer
+matches and must be recreated."` (logged at INFO). Marker-row writes do not warn.
+
+The legacy v2 VCS settings carry `sourcePath` / `checkoutDirectory` per root
+(`VersionControlSystemRootDTO`) and `buildWorkingDirectory` (`VCSSettingsDTO`) from the row that
+supplies the version's entries, all omitted when empty, so a component without them serves the same
+v2 JSON as before. The Groovy DSL mode and the as-code export do not carry them.
+
+**Deriving these fields from an existing TeamCity chain (ONB-002).** `rest/api/4/admin/teamcity-checkout-layout`
+offers a read-only Diff that compares a component's linked TeamCity project(s)' compile build
+chains against these fields, and a Sync that writes the resolved rows through this same validated
+path (never direct SQL) — see [technical-design.md §6.10](technical-design.md#610-teamcity-checkout-layout-diffsync-onb-002).
 
 #### Intentional legacy-validation relaxations
 
@@ -165,6 +225,33 @@ These format checks are skipped for a field whose admin field-config visibility 
   escrow libraries are involved — it is a plain string builder). Surfaced in the Portal as the
   read-only **"As Code"** tab on the component page (syntax-highlighted, with Full/Resolved toggle).
 
+### 1.7 Search as Code (SYS-100)
+
+The DB-era replacement for grepping the Groovy DSL files: one text search over every component's
+FULL as-code view (§1.6), so artifact/group patterns, version ranges, VCS URLs, Jira keys, docker
+images, people and every other rendered field are found without a per-field filter.
+
+- **Endpoint**: `GET /rest/api/4/components/as-code/search` — auth `ACCESS_COMPONENTS`
+- **Params**: `q` (required, 2–200 chars after trim), `regex` (default `false`), `archived`
+  (omitted = both), `limit` (components, 1–1000, default 100), `maxMatchesPerComponent` (1–1000,
+  default 20).
+- **Matching**: line by line, case-insensitive substring; `regex=true` treats `q` as a
+  case-insensitive regular expression in RE2 syntax — linear-time matching; no lookarounds or
+  backreferences; bounded by a 2 s evaluation budget per request. The RMS
+  section of the as-code view is not searched.
+- **Output**: JSON `{query, regex, totalComponents, truncated, results[]}`; each result is
+  `{id, componentKey, archived, matchCount, matches[]}` (sorted by key; `id` is the component UUID), each match
+  `{line, text, path, ranges}` — the 1-based line in the FULL as-code view, the line without
+  indentation, the enclosing block headers (e.g. the version range a match sits in), and the
+  matched spans of the text (`{start, end}`, end exclusive) for highlighting.
+- **400** for an invalid `q` / `limit` / `maxMatchesPerComponent`, an invalid or non-RE2 regex, a
+  regex that compiles to an oversized program, or a regex over the time budget.
+- **Freshness**: an edit is visible to the next search on every pod (the in-memory index is rebuilt
+  when the DB change stamp moves); writes that bypass both the component rows and the audit log are
+  picked up within 5 minutes.
+- **CLI**: `crsctl search <query> [--regex] [--archived true|false] [--limit N] [--max-matches N]`.
+- **Portal**: UI is a follow-up in the Portal repository.
+
 ## 2. Version Range Management
 
 Version overrides are **per-field**, not per-component-version. Each field in each parameter group (build, VCS, jira, distribution, escrow) can have its own independent set of version ranges.
@@ -209,10 +296,12 @@ Conflicts with **other** components → **409 Conflict** (`CrossComponentConflic
 The **migration pipeline enforces the same invariants up front** (§6.0 uniqueness pre-pass, `ImportServiceImpl.detectUniquenessViolations`): before the first write, every invariant above (plus displayName uniqueness) is checked across the incoming DSL and against the already-persisted DB state, and the migration fails with ONE aggregated report naming every offender. Incoming rows are modelled exactly as `importModule` would persist them (base GAV rows, `DISTRIBUTION_MAVEN`/`GROUP_ARTIFACT_PATTERN` marker rows, jira scalars, docker images). Reruns are idempotent: only not-yet-imported components contribute candidate rows, and same-componentKey pairs never collide. Pre-existing DB-vs-DB conflicts are NOT flagged (they are fixed through the API and must not brick the migration). Single-component migration (`migrateComponent`) runs the same checks BEFORE any write — dictionary upserts included — and returns a failed `MigrationResult` with the `uniqueness violation: …` message.
 
 Malformed-input rules → **400 Bad Request** (`IllegalArgumentException`, field-name-prefixed message):
-- **Explicit+external requires ≥1 distribution coordinate** — when `distributionExplicit && distributionExternal`, the component must define at least one maven artifact, docker image, or package on some configuration row.
+- **Explicit+external requires ≥1 distribution coordinate** — when `distributionExplicit && distributionExternal`, the component must define at least one maven artifact, docker image, package, or generic artifact (SYS-098) on some configuration row. **Exemption (SYS-097):** not applied when the BASE build system is `WHISKEY` (case-insensitive; per-range build-system overrides are ignored) — on create, component PATCH and the field-override endpoints alike. A coordinate-less explicit+external component switched off WHISKEY is rejected.
 - **`groupId` supported prefix** — every maven `groupPattern` element must start with a configured `components-registry.supportedGroupIds` prefix. When that list is unconfigured/empty the check is skipped (logged), not enforced.
 - **Archived ≠ explicit+external** — an archived component cannot be explicitly+externally distributed.
 - **Doc-component existence** — every `docs[].docComponentKey` must reference an existing component. The reference is a soft string ref (no FK, see `schema-spec.md:288`), so existence is verified in the service layer. This check runs **post-flush** (alongside the 409 checks), so a component may reference its **own** key (self-documenting) without a false 400 — the component's own row exists by then, and the own key is excluded explicitly regardless of persistence order.
+- **Real products never reference test components (SYS-099)** — a component with `testComponent = false` may not have a test component as its parent (`parentComponentName: …`) or doc component (`docs: …`); setting `testComponent = true` on a component that non-test components reference as parent or doc component fails with `testComponent: …`. Every message names both components. Runs post-flush on create; on update it is change-based (an unchanged echo of the General slice is grandfathered): a test component is checked against its non-test referrers when it becomes one or is renamed (renaming it onto a key a real component's soft doc link still names fails with `name: …`), a real component against every target when it stops being a test component (`testComponent: …`), otherwise only against a new parent (`parentComponentName: …`) or newly added doc keys (`docs: …`) — an untouched grandfathered reference is not re-checked. A concurrent write that loses the row lock to another (a deadlock) answers `409` `LOCK_CONFLICT`; nothing was changed, retry it. A component that carries the `test-component` label while `testComponent` is false gets a `warnings` entry on the create/update response, not an error.
+- **Test components need a matching key (SYS-099)** — `testComponent = true` requires the component key to match one of `components-registry.test-components.name-patterns` (regexes, find semantics; default `^test-`, `^cvelab-`). Create with the flag, a PATCH that turns it on, and a rename of a flagged component to a non-matching key fail with `testComponent: …` / `name: …` naming the key and the patterns; echoing an unchanged `true` and unflagging are always allowed. `GET /meta/test-component-name-patterns` serves the active list. The patterns are bound at startup: changing them needs a restart (`/admin/reload-config` does not rebind them).
 
 **Performance**: Docker image and Jira collision checks use indexed equality queries (`image_name`, `jira_project_key`). Maven collision validation loads projected artifact rows from other components and performs legacy-compatible wildcard/regex/CSV pattern overlap plus Maven range intersection in-memory; exact SQL equality cannot safely narrow those candidates. The docker check is backed by `idx_dist_docker_image_name` on `distribution_docker_images(image_name)`.
 
@@ -330,7 +419,7 @@ The canonical role/permission matrix, filter-chain rules, and Keycloak role nami
 - **Roles** (4): `ROLE_ANONYMOUS` → public reads only; `ROLE_COMPONENTS_REGISTRY_VIEWER`; `ROLE_COMPONENTS_REGISTRY_EDITOR`; `ROLE_ADMIN` (super-admin, reuses the existing Keycloak `ADMIN` realm-role). No separate `COMPONENTS_REGISTRY_ADMIN` — we piggyback on the platform admin role.
 - **v1/v2/v3 reads**: public (Phase 1 backward compat).
 - **v4 GET `/components/**` and `/config/**`**: public via `ROLE_ANONYMOUS` → `ACCESS_COMPONENTS`. All other v4 endpoints (writes, admin, audit) require authentication + the permission named in ADR-004.
-- **`PATCH /rest/api/4/components/{id}`** is field-level guarded: a plain edit needs `ACCESS_COMPONENTS && canEditComponent(id)` where `canEditComponent` means component owner / release manager / security champion / the owner's manager (`SYS-063`), or `EDIT_ANY_COMPONENT` for admin bypass. Flipping `archived` additionally needs `ARCHIVE_COMPONENTS`; changing `name` (rename) additionally needs `RENAME_COMPONENTS`. `ARCHIVE_COMPONENTS` and `RENAME_COMPONENTS` are reserved for `ROLE_ADMIN` today — `ROLE_COMPONENTS_REGISTRY_EDITOR` cannot archive or rename through this endpoint.
+- **`PATCH /rest/api/4/components/{id}`** is field-level guarded: a plain edit needs `ACCESS_COMPONENTS && canEditComponent(id)` where `canEditComponent` means component owner / release manager / security champion / the owner's manager (`SYS-063`), or `EDIT_ANY_COMPONENT` for admin bypass. Flipping `archived` additionally needs `ARCHIVE_COMPONENTS` (`testComponent` needs only the plain edit permission); changing `name` (rename) additionally needs `RENAME_COMPONENTS`. `ARCHIVE_COMPONENTS` and `RENAME_COMPONENTS` are reserved for `ROLE_ADMIN` today — `ROLE_COMPONENTS_REGISTRY_EDITOR` cannot archive or rename through this endpoint.
 - **Field-override CRUD** uses the same component-scoped edit gate as plain component edits: `ACCESS_COMPONENTS && canEditComponent(id)`.
 
 ## 7. Field Configuration & Defaults (Admin)
@@ -378,6 +467,35 @@ Replaces `Defaults.groovy`. Admin defines default values applied when creating a
 
 Changes to field configuration and component defaults are recorded in the audit log (entity_type = `registry_config`).
 
+### 7.4 Component Profiles
+
+The Create-component start-page profiles are configuration, in service-config under `components-registry.component-profiles` (a map of profile id → profile), delivered and reloaded like field configuration ([ADR-016](adr/016-admin-config-as-code.md)).
+
+- **Keys.** Id: lowercase letters, digits and `-`. Required: `kind` (`regular`, or `template` — see 7.5), `title`, `description` (non-blank), `order` (whole number), `classification.external` (`true`/`false`), `classification.explicit` (`true`/`false`/`ask`). Optional: `classification.solution` (default `false`; `true` needs `external: true` and `explicit: true`) and `rules`, a map of create-request path → `{pattern, message}` (written empty, `{}` or no value, it means no rules). Rule paths are the free-text create-request fields (`name`, `displayName`, `clientCode`, `artifactIds[0].groupPattern`, and the `baseConfiguration` build-tasks, first VCS entry, Jira, first Maven artifact, first Docker image and first package fields), written as plain YAML keys without bracket notation. A `pattern` is checked with Java by CRS and with JavaScript by the Portal, so it uses syntax both accept; a client that cannot compile one skips its own check.
+- **Checking.** Every entry is checked on load; any other key, a missing required key, a value outside the allowed values, an invalid rule pattern or an empty message makes the entry invalid, and every problem is reported with the key it concerns. A `kind: template` entry is checked as a template (7.5); a failed template is not offered and never blocks the load.
+- **Startup.** Without the subtree, or with it written empty (`{}`, `[]`, no value), CRS starts with no profiles: the listing is empty, a create naming a profile is rejected as unknown, and a create without one is unchanged. CRS does not start when the subtree cannot be read, is written as a plain value or a list, holds entries (templates included) but no `regular` profile, or holds an invalid one; a reload of such a subtree keeps the profiles in use.
+- **Reload.** `POST /rest/api/4/admin/reload-config` reloads the profiles; a usable result replaces them as a whole (a removed subtree applies no profiles and no templates), otherwise the profiles in use are kept and the reload answers **422** `component-profiles`. The response lists every entry with its status (`live` / `failed`) and problems, also when the rest of the refresh fails (**422** `config-validation` for an invalid `field-config`, **500** `config-refresh` otherwise). Overlapping reloads run one after the other, so each loads one configuration revision. No-db mode has no reload endpoint: its profiles change with a restart.
+- **Listing.** `GET /rest/api/4/component-profiles` (`ACCESS_COMPONENTS`) returns the live profiles and templates in `order`, then id (a template with `kind: template` and its `version`), with their classification, rules and whether the caller may use them: everything with `CREATE_COMPONENTS`; templates only with `CREATE_FROM_TEMPLATE` alone, the regular profiles then unusable with "You may create components from templates only" (SYS-105); the rules returned are the ones a create naming the profile is checked against.
+- **Existing components** are never re-checked against profile rules; a changed rule applies to the next create.
+- **Administrator read.** `GET /rest/api/4/admin/component-profiles` (`IMPORT_DATA`) returns every entry in use, live or failed, with its problems, its parsed definition and its configuration as YAML, the configuration version those entries were loaded from, and the outcome of the last load or reload. When the last reload failed, the entries shown, and their version, are the ones still in use.
+
+### 7.5 Component Templates
+
+A template is a `kind: template` entry of `components-registry.component-profiles`: it fixes most create-request fields and asks for the few that differ. The registry builds the component and checks it with today's create.
+
+- **Keys.** `title`, `description`, `order`, `version` (whole number above 0), a fixed `classification` (`explicit` is `true` or `false`, never `ask`), `parameters`, `fields` (create-request path → value), `overridable` (paths a creator may replace) and optional `rules`, as for a profile.
+- **Parameters.** Types `text` (`pattern`, `message`, `max-length`), `select` (`options`, `multiple`, `max-selection`), `crs-list` (`list`: `build-systems`, `escrow-generation` or `labels`) and `person` (`multiple`); each with `label`, optional `hint`, `required` (default `true`) and `default` (`current-user` for a person). There is no client-code list: a template offers client codes as a `select`'s `options`.
+- **Field values.** Text with expressions in a small subset of Jinja syntax — `{{ NAME }}`, `{{ NAME | lower }}`, `{{ NAME | upper }}` — parsed by the registry; any other Jinja construct fails the template. A build system, escrow mode, owner or list item takes a parameter whole (`{{ NAME }}`), without a filter.
+- **Checked on load and reload.** Unknown keys, parameters no field uses, a field that does not accept its parameter, a fixed value outside a static list, a required field nothing fills, an `overridable` path the template does not set or that is the build system, and a fixed value breaking the template's rules fail the template, with every problem reported. A required field is filled by a fixed value, a required parameter or `component-defaults`; the Portal's own fallbacks do not count. Fixed labels, fixed people and uniqueness are checked by the dry run.
+- **Defaults.** A field the template leaves unset takes the `component-defaults` value the Portal's create wizard pre-fills (build system, display name, copyright for an explicit and external template, Jira project key and version formats, escrow generation, VCS tag and branch when the build system needs VCS).
+- **Describe.** `GET /rest/api/4/component-templates/{id}` (`ACCESS_COMPONENTS`) returns a live template's parameters, a `crs-list` with its current values and a `current-user` default as the caller; **404** for a failed or unknown template.
+- **Dry run and create.** `POST /rest/api/4/component-templates/{id}/components` takes `parameters`, `overrides`, `jiraTaskKey` and `changeComment`, and needs a template the caller may use (`CREATE_COMPONENTS` or `CREATE_FROM_TEMPLATE`). Only `CREATE_COMPONENTS` may send `overrides` (SYS-105).
+  - Steps: check the parameter values (P1–P9; stop on failure), render, check the template's rules, fixed labels and override values (a label or CRS value in its list, a login an active employee, one value for a field that is not a list), then run today's create on the rendered request.
+  - `dryRun` absent or `true`: the create is always rolled back; **200** with `valid`, the parameter problems, the rendered component, each field's source parameters and every problem, each naming the parameters to change or marked a template problem. At most one problem comes from today's create rules.
+  - `dryRun=false`: the create commits only when nothing failed (**201** with the component, audited as any create); otherwise **422** with the dry-run body.
+  - The Jira task key follows today's create: optional, **400** when malformed. **400** for an override on a path not in `overridable`; **403** when the caller may not override; **404** for a failed, removed or unknown template.
+  - The component keeps no link to its template.
+
 ## 8. Error Handling
 
 | Scenario | HTTP Status | Response |
@@ -386,6 +504,7 @@ Changes to field configuration and component defaults are recorded in the audit 
 | Duplicate name on **create** | 400 | `{ "errorMessage": "name: a component with name '...' already exists" }` (field-prefixed → Portal routes inline) |
 | Duplicate name on **rename** (PATCH name) | 409 | `{ "errorMessage": "Component with name '...' already exists" }` (`ComponentNameConflictException`) |
 | Duplicate `displayName` (create/update) | 400 | `{ "errorMessage": "displayName: a component with display name '...' already exists" }` |
+| Invalid VCS entry checkout layout or Build Working Directory (§1.4) | 400 | `{ "errorMessage": "vcsEntries[1].checkoutDirectory: required: VCS root 1 (app) is already checked out at the checkout root, and only one VCS root can be. Set a Checkout Directory for this VCS root, a folder name such as 'plugins', or give one to VCS root 1." }` or `buildWorkingDirectory: …` (`fieldOverrides[<j>].` prefix inside a PATCH `fieldOverrides` row) |
 | Optimistic lock conflict | 409 | `{ "error": "Component was modified by another user" }` |
 | Validation failure | 400 | `{ "errors": [{ "field": "name", "message": "must not be blank" }] }` |
 | Unauthorized | 401 | Standard Spring Security response |

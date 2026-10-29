@@ -7,7 +7,7 @@ QA database with a copy of the production one. Script: `scripts/teamcity/recreat
 
 1. Checks that the target is not production (below). Nothing is written before these checks pass.
 2. Dumps the production schema, including the extensions installed in it (`pgcrypto`).
-3. Keeps the current QA schema as the build artifact `qa-backup/qa-before-recreate.sql.gz` (this dump,
+3. Keeps the current QA schema as the build artifact `qa-before-recreate.sql.gz` (this dump,
    too, gives up after 30 s if QA holds a conflicting lock).
 4. In one transaction on QA: `DROP SCHEMA "components-registry" CASCADE`, then loads the dump. Any failure
    rolls back and leaves QA as it was. The drop waits at most 30 s for a QA session holding a table; once
@@ -69,13 +69,33 @@ The database side (role, network, `pg_hba`, Vault policy) is written up as a rea
      (no dots: TeamCity reads the key as a JsonPath).
      The name deliberately does not start with `components-registry-service`, so the config server
      serves it to no application;
-   - the QA credentials are read from the QA application's own secret
-     `components-registry-service-cloud-qa` (`spring.datasource.username` / `spring.datasource.password`);
+   - the QA credentials are read where the QA application gets them, the profile-less secret
+     `components-registry-service` (`spring.datasource.username` / `spring.datasource.password`). That
+     secret also holds other credentials of the application, all readable by any build using this
+     Vault connection;
    - the approle of the TeamCity Vault connection needs `read` on both paths. The mount is KV v2, so
      policies and the `%vault:...%` references in `.teamcity/settings.kts` address
      `f1-config-server/data/<secret>`. The QA keys contain dots, so their references use the JsonPath
-     bracket form (`!/['spring.datasource.password']`); the first run confirms it. If TeamCity rejects it,
-     copy the QA credentials into `teamcity-crs-qa-refresh` as `qa_username` / `qa_password`.
+     bracket form (`!/['spring.datasource.password']`), which TeamCity accepts.
+
+   Granting the approle access, as a Vault administrator (`vault login` with an admin token):
+
+   ```bash
+   vault policy write teamcity-crs-qa-refresh - <<'HCL'
+   path "f1-config-server/data/teamcity-crs-qa-refresh"     { capabilities = ["read"] }
+   path "f1-config-server/data/components-registry-service" { capabilities = ["read"] }
+   HCL
+   ```
+
+   The TeamCity connection ("HashiCorp Vault Cloud Wrapper") logs in
+   as the approle `cloud-wrapper`; its `role-id` is shown in the connection settings and can be checked
+   with `vault read -field=role_id auth/approle/role/cloud-wrapper/role-id`. Writing `token_policies`
+   replaces the whole list, so read it first and write it back with the new policy added:
+
+   ```bash
+   vault read -field=token_policies auth/approle/role/cloud-wrapper     # e.g. [cloud-wrapper rnd-okd-secrets]
+   vault write auth/approle/role/cloud-wrapper token_policies="cloud-wrapper,rnd-okd-secrets,teamcity-crs-qa-refresh"
+   ```
 
 3. **TeamCity parameters** on the parent project: `CRS_PROD_DB_HOST` and `CRS_QA_DB_HOST`, preferably
    with the read-only spec.

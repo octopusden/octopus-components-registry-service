@@ -28,12 +28,14 @@ import java.nio.file.Paths
 import java.util.UUID
 
 /**
- * SYS-046 — the four in-use meta option-list endpoints that back the extended-search
+ * SYS-046 — the in-use meta option-list endpoints that back the list-page
  * multi-select dropdowns: `/meta/client-codes`, `/meta/jira-project-keys`,
- * `/meta/parent-component-names`, `/meta/group-keys`. Each returns sorted distinct
- * values **actually in use**, null/blank-filtered, 200 + JSON array (never 404) —
- * parity with `/meta/owners` (MetaOptionsEndpointsTest covers the enum/labels/systems
- * family). Focused ft-db test; does NOT extend the global Groovy fixtures.
+ * `/meta/parent-component-names`, `/meta/group-keys`, plus the people pair
+ * `/meta/release-managers` and `/meta/security-champions`. Each returns sorted
+ * distinct values **actually in use**, null/blank-filtered, 200 + JSON array
+ * (never 404) — parity with `/meta/owners` (MetaOptionsEndpointsTest covers the
+ * enum/labels/systems family). Focused ft-db test; does NOT extend the global
+ * Groovy fixtures.
  */
 @AutoConfigureMockMvc
 @SpringBootTest(
@@ -164,7 +166,59 @@ class MetaInUseOptionsEndpointsTest {
     }
 
     @Test
-    @DisplayName("SYS-046: the four in-use meta endpoints always return 200 + a JSON array (never 404)")
+    @DisplayName("SYS-046: GET /meta/release-managers returns sorted distinct in-use release managers")
+    fun `SYS-046 meta release-managers returns sorted distinct in-use values`() {
+        val a = uniqueName("zrm")
+        val b = uniqueName("arm")
+        // A multi-RM component plus a second component reusing `a` — exercises
+        // both the ordered child collection and DISTINCT across components.
+        create(baseBody(uniqueName("rm_one"), ""","releaseManager":["$a","$b"]"""))
+        create(baseBody(uniqueName("rm_two"), ""","releaseManager":["$a"]"""))
+
+        val all = metaList("/rest/api/4/components/meta/release-managers")
+        val seeded = all.filter { it == a || it == b }
+        assert(seeded == listOf(a, b).sorted()) { "expected seeded release managers sorted ascending; got $seeded" }
+        assert(all.size == all.toSet().size) { "expected no duplicates; got $all" }
+        assert(all.none { it.isBlank() }) { "expected no blank entries; got $all" }
+    }
+
+    @Test
+    @DisplayName("SYS-046: GET /meta/security-champions returns sorted distinct in-use security champions")
+    fun `SYS-046 meta security-champions returns sorted distinct in-use values`() {
+        val a = uniqueName("zsc")
+        val b = uniqueName("asc")
+        create(baseBody(uniqueName("sc_one"), ""","securityChampion":["$a","$b"]"""))
+        create(baseBody(uniqueName("sc_two"), ""","securityChampion":["$a"]"""))
+
+        val all = metaList("/rest/api/4/components/meta/security-champions")
+        val seeded = all.filter { it == a || it == b }
+        assert(seeded == listOf(a, b).sorted()) { "expected seeded security champions sorted ascending; got $seeded" }
+        assert(all.size == all.toSet().size) { "expected no duplicates; got $all" }
+        assert(all.none { it.isBlank() }) { "expected no blank entries; got $all" }
+    }
+
+    @Test
+    @DisplayName("SYS-046: the two people option lists stay separate dimensions (RM is not advertised as SC)")
+    fun `SYS-046 meta people option lists do not bleed across roles`() {
+        // Guard against the copy-paste failure mode of wiring both endpoints to
+        // the same child collection: a user who is ONLY an RM must never show up
+        // in /meta/security-champions, and vice versa. `?releaseManager=` and
+        // `?securityChampion=` are separate filters (ListComponentsPeopleFilterTest),
+        // so a bled-through option would be a guaranteed dead entry in the picker.
+        val rmOnly = uniqueName("rmonly")
+        val scOnly = uniqueName("sconly")
+        create(baseBody(uniqueName("people_split"), ""","releaseManager":["$rmOnly"],"securityChampion":["$scOnly"]"""))
+
+        val releaseManagers = metaList("/rest/api/4/components/meta/release-managers")
+        val securityChampions = metaList("/rest/api/4/components/meta/security-champions")
+        assert(releaseManagers.contains(rmOnly)) { "seeded RM $rmOnly must be advertised; got $releaseManagers" }
+        assert(!releaseManagers.contains(scOnly)) { "SC-only $scOnly must NOT appear in release-managers" }
+        assert(securityChampions.contains(scOnly)) { "seeded SC $scOnly must be advertised; got $securityChampions" }
+        assert(!securityChampions.contains(rmOnly)) { "RM-only $rmOnly must NOT appear in security-champions" }
+    }
+
+    @Test
+    @DisplayName("SYS-046: the in-use meta endpoints always return 200 + a JSON array (never 404)")
     fun `SYS-046 meta endpoints always return 200 array`() {
         // AC#7 shape contract: 200 + array regardless of DB state — the Portal's
         // lazy-activation guard is for the transitional pre-deploy window only.
@@ -173,6 +227,8 @@ class MetaInUseOptionsEndpointsTest {
             "/rest/api/4/components/meta/jira-project-keys",
             "/rest/api/4/components/meta/parent-component-names",
             "/rest/api/4/components/meta/group-keys",
+            "/rest/api/4/components/meta/release-managers",
+            "/rest/api/4/components/meta/security-champions",
         ).forEach { path ->
             mvc
                 .perform(get(path).with(viewerJwt()))
@@ -235,6 +291,31 @@ class MetaInUseOptionsEndpointsTest {
         }
         assert(all.contains(withChildKey)) {
             "fake aggregator $withChildKey with a real child must still appear; got $all"
+        }
+    }
+
+    @Test
+    @DisplayName("SYS-046: the people option lists exclude usernames held only by a hidden fake self-linked stub")
+    fun `SYS-046 meta people option lists exclude fake self-linked stubs`() {
+        // The v4 list always hides a fake aggregator stub self-linked to its own group
+        // (buildSpecification), so ?releaseManager= / ?securityChampion= never match it.
+        // A username held only by such a stub would be a dead option in the picker.
+        val stubKey = uniqueName("people_fakestub")
+        val stubRm = uniqueName("stubrm")
+        val stubSc = uniqueName("stubsc")
+        create(baseBody(stubKey, ""","releaseManager":["$stubRm"],"securityChampion":["$stubSc"]"""))
+        val stubGroup = componentGroupRepository.save(ComponentGroupEntity(groupKey = stubKey, isFake = true))
+        val stub = componentRepository.findByComponentKey(stubKey)!!
+        stub.componentGroup = stubGroup
+        componentRepository.save(stub)
+
+        val releaseManagers = metaList("/rest/api/4/components/meta/release-managers")
+        val securityChampions = metaList("/rest/api/4/components/meta/security-champions")
+        assert(!releaseManagers.contains(stubRm)) {
+            "RM $stubRm held only by hidden stub $stubKey must NOT appear; got $releaseManagers"
+        }
+        assert(!securityChampions.contains(stubSc)) {
+            "SC $stubSc held only by hidden stub $stubKey must NOT appear; got $securityChampions"
         }
     }
 }

@@ -6,6 +6,7 @@ import org.octopusden.octopus.components.registry.core.exceptions.NotFoundExcept
 import org.octopusden.octopus.components.registry.server.config.ComponentsRegistryProperties
 import org.octopusden.octopus.components.registry.server.config.ConditionalOnDatabaseEnabled
 import org.octopusden.octopus.components.registry.server.dto.v4.ArchiveReadinessResponse
+import org.octopusden.octopus.components.registry.server.dto.v4.AsCodeSearchResponse
 import org.octopusden.octopus.components.registry.server.dto.v4.ComponentCreateRequest
 import org.octopusden.octopus.components.registry.server.dto.v4.ComponentDetailResponse
 import org.octopusden.octopus.components.registry.server.dto.v4.ComponentEditorsResponse
@@ -28,7 +29,9 @@ import org.octopusden.octopus.components.registry.server.repository.SystemReposi
 import org.octopusden.octopus.components.registry.server.security.PermissionEvaluator
 import org.octopusden.octopus.components.registry.server.service.ComponentManagementService
 import org.octopusden.octopus.components.registry.server.service.archivereadiness.ArchiveReadinessService
+import org.octopusden.octopus.components.registry.server.service.impl.ComponentCodeSearchService
 import org.octopusden.octopus.components.registry.server.service.impl.EmployeeDirectoryService
+import org.octopusden.octopus.components.registry.server.teamcity.checkoutlayout.CheckoutLayoutEditHistory
 import org.octopusden.octopus.escrow.BuildSystem
 import org.octopusden.octopus.escrow.RepositoryType
 import org.slf4j.LoggerFactory
@@ -80,6 +83,7 @@ class ComponentControllerV4(
     private val permissionEvaluator: PermissionEvaluator,
     private val properties: ComponentsRegistryProperties,
     private val archiveReadinessService: ArchiveReadinessService,
+    private val componentCodeSearchService: ComponentCodeSearchService,
 ) {
     private val log = LoggerFactory.getLogger(ComponentControllerV4::class.java)
 
@@ -99,6 +103,20 @@ class ComponentControllerV4(
     @GetMapping("/meta/owners")
     @PreAuthorize("@permissionEvaluator.hasPermission('ACCESS_COMPONENTS')")
     fun getDistinctOwners(): List<String> = componentRepository.findDistinctOwners()
+
+    // In-use people option lists backing the Portal's release-manager and
+    // security-champion filter dropdowns. Mirror /meta/owners in shape and
+    // intent, but source the ordered child collections (a component may carry
+    // several of each). Two separate endpoints, not one merged list: the
+    // `?releaseManager=` and `?securityChampion=` filters are separate
+    // dimensions, so a merged list would advertise dead options in both pickers.
+    @GetMapping("/meta/release-managers")
+    @PreAuthorize("@permissionEvaluator.hasPermission('ACCESS_COMPONENTS')")
+    fun getDistinctReleaseManagers(): List<String> = componentManagementService.getDistinctReleaseManagers()
+
+    @GetMapping("/meta/security-champions")
+    @PreAuthorize("@permissionEvaluator.hasPermission('ACCESS_COMPONENTS')")
+    fun getDistinctSecurityChampions(): List<String> = componentManagementService.getDistinctSecurityChampions()
 
     // Employee picker lookup (Stage 2). The employee-service client exposes no
     // prefix search, so this is an exact-match probe of `search`: it returns a
@@ -228,6 +246,12 @@ class ComponentControllerV4(
     @PreAuthorize("@permissionEvaluator.hasPermission('ACCESS_COMPONENTS')")
     fun getMavenVersions(): List<String> = properties.buildToolVersions.maven.sortedWith(VERSION_COMPARATOR)
 
+    // SYS-099: the regexes a key must match for `testComponent = true` (configured order), so the
+    // Portal can disable the switch with a hint for other keys.
+    @GetMapping("/meta/test-component-name-patterns")
+    @PreAuthorize("@permissionEvaluator.hasPermission('ACCESS_COMPONENTS')")
+    fun getTestComponentNamePatterns(): List<String> = properties.testComponents.namePatterns
+
     @PostMapping
     @ResponseStatus(HttpStatus.CREATED)
     @PreAuthorize(
@@ -236,7 +260,10 @@ class ComponentControllerV4(
     )
     fun createComponent(
         @Valid @RequestBody request: ComponentCreateRequest,
-    ): ComponentDetailResponse = withCanEdit(componentManagementService.createComponent(request))
+    ): ComponentDetailResponse {
+        CheckoutLayoutEditHistory.requireNotReserved(request.changeComment)
+        return withCanEdit(componentManagementService.createComponent(request))
+    }
 
     @GetMapping
     @PreAuthorize("@permissionEvaluator.hasPermission('ACCESS_COMPONENTS')")
@@ -244,10 +271,14 @@ class ComponentControllerV4(
         @RequestParam(required = false) system: List<String>?,
         @RequestParam(required = false) productType: String?,
         @RequestParam(required = false) archived: Boolean?,
+        @RequestParam(required = false) testComponent: Boolean?,
+        @RequestParam(required = false) autoRelease: Boolean?,
         @RequestParam(required = false) search: String?,
         @RequestParam(required = false) owner: List<String>?,
         @RequestParam(required = false) releaseManager: List<String>?,
         @RequestParam(required = false) securityChampion: List<String>?,
+        @RequestParam(required = false) involves: List<String>?,
+        @RequestParam(required = false) involvesRoles: List<String>?,
         @RequestParam(required = false) buildSystem: List<String>?,
         @RequestParam(required = false) javaVersion: List<String>?,
         @RequestParam(required = false) labels: List<String>?,
@@ -275,10 +306,14 @@ class ComponentControllerV4(
                 system = normalizeCsvParam(system),
                 productType = productType,
                 archived = archived,
+                testComponent = testComponent,
+                autoRelease = autoRelease,
                 search = search,
                 owner = normalizeCsvParam(owner),
                 releaseManager = normalizeCsvParam(releaseManager),
                 securityChampion = normalizeCsvParam(securityChampion),
+                involves = normalizeCsvParam(involves),
+                involvesRoles = normalizeCsvParam(involvesRoles),
                 buildSystem = normalizeCsvParam(buildSystem),
                 javaVersion = normalizeCsvParam(javaVersion),
                 labels = normalizeCsvParam(labels),
@@ -357,6 +392,28 @@ class ComponentControllerV4(
         return withCanEdit(componentManagementService.getComponentByName(idOrName))
     }
 
+    /**
+     * Global text search over every component's FULL as-code view (SYS-100) — the replacement
+     * for grepping the Groovy DSL files. Case-insensitive substring by default; `regex=true`
+     * matches `q` as a case-insensitive regular expression in RE2 syntax. `archived` narrows to archived /
+     * active components (omitted = both). Results are grouped by component, sorted by key.
+     *
+     * Two path segments (`/as-code/search`) rather than `/search` so the literal never shadows
+     * `GET /{id}` for a component that happens to be named `search`.
+     */
+    @GetMapping("/as-code/search")
+    @PreAuthorize("@permissionEvaluator.hasPermission('ACCESS_COMPONENTS')")
+    fun searchAsCode(
+        @RequestParam q: String,
+        @RequestParam(required = false, defaultValue = "false") regex: Boolean,
+        @RequestParam(required = false) archived: Boolean?,
+        @RequestParam(required = false, defaultValue = "${ComponentCodeSearchService.DEFAULT_LIMIT}") limit: Int,
+        @RequestParam(
+            required = false,
+            defaultValue = "${ComponentCodeSearchService.DEFAULT_MAX_MATCHES_PER_COMPONENT}",
+        ) maxMatchesPerComponent: Int,
+    ): AsCodeSearchResponse = componentCodeSearchService.search(q, regex, archived, limit, maxMatchesPerComponent)
+
     // `{id}` (bound to `idOrName`) for the same reason as [getComponent] — keeps the component
     // identifier path variable consistently named `id` across all item-level paths.
 
@@ -432,7 +489,10 @@ class ComponentControllerV4(
     fun updateComponent(
         @PathVariable id: UUID,
         @Valid @RequestBody request: ComponentUpdateRequest,
-    ): ComponentDetailResponse = withCanEdit(componentManagementService.updateComponent(id, request))
+    ): ComponentDetailResponse {
+        CheckoutLayoutEditHistory.requireNotReserved(request.changeComment)
+        return withCanEdit(componentManagementService.updateComponent(id, request))
+    }
 
     @DeleteMapping("/{id}")
     @ResponseStatus(HttpStatus.NO_CONTENT)
@@ -520,7 +580,10 @@ class ComponentControllerV4(
     fun setSupportedVersions(
         @PathVariable id: UUID,
         @Valid @RequestBody request: SupportedVersionsRequest,
-    ): SupportedVersionsResponse = componentManagementService.setSupportedVersions(id, request)
+    ): SupportedVersionsResponse {
+        CheckoutLayoutEditHistory.requireNotReserved(request.changeComment)
+        return componentManagementService.setSupportedVersions(id, request)
+    }
 
     companion object {
         // Numeric-aware version order: compare dot-separated segments as integers so

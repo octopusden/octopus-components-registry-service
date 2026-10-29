@@ -968,7 +968,8 @@
           "vcsPath": "ssh://hg@mercurial/releng",
           "type": "MERCURIAL",
           "tag": "$module-$version",
-          "branch": "v2"
+          "branch": "v2",
+          "checkoutDirectory": "mercurial"
         }
       ],
       "externalRegistry": null

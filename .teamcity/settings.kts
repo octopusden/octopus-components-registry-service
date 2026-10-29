@@ -169,13 +169,15 @@ object id10CompileUtAuto : BuildType({
             -Pokd.cluster-domain=%OKD_APPS_DOMAIN_DEV%
             -Pokd.project=%OKD_F1_TEST_PROJECT%
         """.trimIndent())
-        // [1.0] compiles, runs unit + H2/MOCK smoke + static quality, publishes artifacts and
-        // pushes the image — one step, so the image carries [1.0]'s OWN version (no cross-config
-        // propagation). `build` also runs the fat-jar FT (dockerPushImage depends on it, so it
-        // gates the push) and :…-automation:test (depends on ocCreate -> dockerPushImage, so it
-        // deploys the just-pushed image). Only the heavy @Tag("integration") DB suite is split
-        // out, to [2.1] (excluded from build/check by the gradle tag filter).
-        param("GRADLE_TASK", "clean build publish dockerPushImage")
+        // [1.0] compiles, runs unit + H2/MOCK smoke + static quality and pushes the image — one
+        // step, so the image carries [1.0]'s OWN version (no cross-config propagation). It
+        // publishes no Maven artifacts: the active downstream configs take the docker image.
+        // (Add `publishAllPublicationsToArtifactoryRepository` to upload them for [2.0].)
+        // `build` also runs the fat-jar FT (dockerPushImage depends on it, so it gates the push)
+        // and :…-automation:test (depends on ocCreate -> dockerPushImage, so it deploys the
+        // just-pushed image). Only the heavy @Tag("integration") DB suite is split out, to [2.1]
+        // (excluded from build/check by the gradle tag filter).
+        param("GRADLE_TASK", "clean build dockerPushImage")
         param("COMPONENTS_REGISTRY_BRANCH", "master")
     }
 
@@ -211,7 +213,7 @@ object id10CompileUtAuto : BuildType({
     }
 
     failureConditions {
-        executionTimeoutMin = 240
+        executionTimeoutMin = 35
     }
 
     features {
@@ -358,7 +360,7 @@ object id12IntegrationDbTestsAuto : BuildType({
     }
 
     failureConditions {
-        executionTimeoutMin = 240
+        executionTimeoutMin = 45
     }
 
     features {
@@ -1115,11 +1117,8 @@ object id17CompatLocalStandManual : BuildType({
     }
 
     failureConditions {
-        // Full sweep budget. With `components/all.txt` (~475 IDs) and
-        // COMPAT_FULL=true the per-test-class matrix is ~30-50 min after
-        // cold-pull + postgres + auto-migrate (~5-7 min upfront). Headroom
-        // for slow agents or congested registry → cap at 120 min.
-        executionTimeoutMin = 120
+        // Scales with COMPAT_COMPONENTS_FILE and COMPAT_TRACE_LIMIT; revisit when either grows.
+        executionTimeoutMin = 85
     }
 
     features {
@@ -1393,9 +1392,8 @@ object id18CompatLocalStandGitModeAuto : BuildType({
     }
 
     failureConditions {
-        // Git-mode skips auto-migrate AND Postgres, so the candidate comes up faster
-        // than id17; keep a generous cap for cold image pulls + two stand boots.
-        executionTimeoutMin = 120
+        // Scales with COMPAT_COMPONENTS_FILE and COMPAT_TRACE_LIMIT; revisit when either grows.
+        executionTimeoutMin = 50
     }
 
     features {
@@ -1443,6 +1441,8 @@ object id20ValidateComponentsRegistryProductionDataAuto : BuildType({
     id("20ValidateComponentsRegistryProductionDataAuto")
     name = "[2.0] Validate Git-based Components Registry [AUTO]"
 
+    // Resolves the [1.0] candidate (components-registry-service.version=%BUILD_NUMBER%) from the
+    // dev repository; this project's [1.0] does not upload it (see its GRADLE_TASK).
     paused = true
 
     artifactRules = "%COMPONENTS_REGISTRY_CHECKOUT_DIR% => %COMPONENTS_REGISTRY_CHECKOUT_DIR%"
@@ -1578,6 +1578,10 @@ object id30Step2AggregateAuto : BuildType({
             reuseBuilds = ReuseBuilds.SUCCESSFUL
             onDependencyFailure = FailureAction.ADD_PROBLEM
         }
+    }
+
+    failureConditions {
+        executionTimeoutMin = 10
     }
 })
 
@@ -1734,7 +1738,6 @@ object id70DeployToOkdProdManual_2 : BuildType({
             name = "Publish documentation on wiki"
             id = "RUNNER_869"
             tasks = "adocPublishToWiki"
-            buildFile = "build.gradle"
             workingDir = "octopus-%COMPONENT_NAME%"
             gradleParams = """-Pdocker.registry=%DOCKER_REGISTRY% -Pwiki.url=%WIKI_URL% -Pwiki.username=%WIKI_USER% -Pwiki.password=%WIKI_PASSWORD% -Pwiki.space-key=%WIKI_SPACE_KEY% -Pwiki.page-id=%WIKI_PAGE_ID% -Padoc.glossary-component-link=%GLOSSARY_COMPONENT_LINK% -Padoc.components-registry-portal-link=%COMPONENTS_REGISTRY_PORTAL_LINK% -Padoc.components-registry-swagger-link=%COMPONENTS_REGISTRY_SWAGGER_LINK% -Padoc.release-management-automation-link=%RELEASE_MANAGEMENT_AUTOMATION_LINK% -Padoc.escrow-automation-tool-link=%ESCROW_AUTOMATION_TOOL_LINK% -Padoc.components-registry-validation-link=%COMPONENTS_REGISTRY_VALIDATION_LINK% -Padoc.service-desk-link=%SERVICE_DESK_LINK% "-Padoc.header=%WIKI_PAGE_HEADER%""""
             enableStacktrace = true
@@ -1788,9 +1791,10 @@ object id80RecreateQaDbFromProdManual : BuildType({
         text("env.DST_HOST", "%CRS_QA_DB_HOST%", readOnly = true, allowEmpty = false)
         text("env.DST_PORT", "5432", readOnly = true, allowEmpty = false)
         text("env.DST_DB", "components-registry", readOnly = true, allowEmpty = false)
-        // The QA application's own datasource credentials, so a password rotation needs no change here.
-        text("env.DST_USER", "%vault:f1-config-server/data/components-registry-service-cloud-qa!/['spring.datasource.username']%", readOnly = true, allowEmpty = false)
-        password("env.DST_PASSWORD", "%vault:f1-config-server/data/components-registry-service-cloud-qa!/['spring.datasource.password']%", readOnly = true)
+        // The QA application's own datasource credentials (the profile-less secret; production overrides
+        // them from -cloud-prod), so a password rotation needs no change here.
+        text("env.DST_USER", "%vault:f1-config-server/data/components-registry-service!/['spring.datasource.username']%", readOnly = true, allowEmpty = false)
+        password("env.DST_PASSWORD", "%vault:f1-config-server/data/components-registry-service!/['spring.datasource.password']%", readOnly = true)
 
         text("env.DB_SCHEMA", "components-registry", readOnly = true, allowEmpty = false)
         text("env.QA_BACKUP_FILE", "qa-backup/qa-before-recreate.sql.gz", readOnly = true, allowEmpty = false)

@@ -14,6 +14,7 @@ import org.octopusden.octopus.components.registry.server.entity.ComponentConfigu
 import org.octopusden.octopus.components.registry.server.entity.ComponentEntity
 import org.octopusden.octopus.components.registry.server.entity.ComponentRequiredToolEntity
 import org.octopusden.octopus.components.registry.server.entity.DistributionDockerImageEntity
+import org.octopusden.octopus.components.registry.server.entity.DistributionGenericArtifactEntity
 import org.octopusden.octopus.components.registry.server.entity.DistributionSecurityGroupEntity
 import org.octopusden.octopus.components.registry.server.entity.VcsSettingsEntryEntity
 import org.octopusden.octopus.components.registry.server.mapper.MarkerAttributes
@@ -123,6 +124,16 @@ class ComponentCodeRendererTest {
         componentConfiguration = cfg,
         imageName = image,
         flavor = flavor,
+        sortOrder = order,
+    )
+
+    private fun generic(
+        cfg: ComponentConfigurationEntity,
+        path: String,
+        order: Int = 0,
+    ) = DistributionGenericArtifactEntity(
+        componentConfiguration = cfg,
+        path = path,
         sortOrder = order,
     )
 
@@ -379,6 +390,28 @@ class ComponentCodeRendererTest {
     }
 
     @Test
+    @DisplayName("ONB-001: DSL export omits sourcePath, checkoutDirectory and buildWorkingDirectory (Groovy DSL has none)")
+    fun fullMultiVcsCheckoutLayoutOmitted() {
+        fun render(placed: Boolean): String {
+            val c = component()
+            val b = base(c) { buildSystem = "MAVEN" }
+            b.vcsEntries.add(vcs(b, name = "core", path = "org/core", repo = "GIT", order = 0).apply { if (placed) sourcePath = "mapper" })
+            b.vcsEntries.add(
+                vcs(b, name = "ui", path = "org/ui", repo = "GIT", order = 1).apply {
+                    if (placed) {
+                        sourcePath = "data"
+                        checkoutDirectory = "ui"
+                    }
+                },
+            )
+            if (placed) b.buildWorkingDirectory = "ui/app"
+            return renderer.renderFull(c)
+        }
+
+        assertEquals(render(placed = false), render(placed = true))
+    }
+
+    @Test
     @DisplayName("FULL: single unnamed VCS root renders flat (no named sub-block)")
     fun fullSingleVcsFlat() {
         val c = component()
@@ -464,6 +497,36 @@ class ComponentCodeRendererTest {
         assertTrue(out.contains("docker {"), out)
         assertTrue(out.contains("imageName = \"acme/svc\""), out)
         assertTrue(out.contains("flavor = \"slim\""), out)
+    }
+
+    @Test
+    @DisplayName("SYS-098: FULL — distribution generic child renders inside distribution block")
+    fun `SYS-098 full distribution generic child renders inside distribution block`() {
+        val c = component()
+        val b = base(c) { buildSystem = "MAVEN" }
+        b.genericArtifacts.add(generic(b, path = "releases/foo/1.0.0/foo.tar.gz"))
+
+        val out = renderer.renderFull(c)
+        assertTrue(out.contains("distribution {"), out)
+        assertTrue(out.contains("generic {"), out)
+        assertTrue(out.contains("path = \"releases/foo/1.0.0/foo.tar.gz\""), out)
+    }
+
+    @Test
+    @DisplayName("SYS-098: FULL — per-range distribution.generic marker renders a generic block only in the range")
+    fun `SYS-098 full per-range distribution generic marker`() {
+        val c = component()
+        val b = base(c) { buildSystem = "MAVEN" }
+        b.genericArtifacts.add(generic(b, path = "releases/foo/1.0.0/foo.tar.gz"))
+        val m = marker(c, "[2,)", MarkerAttributes.DISTRIBUTION_GENERIC) {}
+        m.genericArtifacts.add(generic(m, path = "releases/foo/2.0.0/foo.tar.gz"))
+
+        val out = renderer.renderFull(c)
+        assertTrue(out.contains("path = \"releases/foo/1.0.0/foo.tar.gz\""), out)
+        val rangeBlock = out.substringAfter("\"[2,)\" {")
+        assertTrue(rangeBlock.contains("generic {"), rangeBlock)
+        assertTrue(rangeBlock.contains("releases/foo/2.0.0/foo.tar.gz"), rangeBlock)
+        assertFalse(rangeBlock.contains("releases/foo/1.0.0/foo.tar.gz"), rangeBlock)
     }
 
     @Test
