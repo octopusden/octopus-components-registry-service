@@ -1,0 +1,16 @@
+<?xml version="1.0" encoding="utf-8"?>
+<baseline version="1.0">
+    <file name="src/test/kotlin/org/octopusden/octopus/components/registry/compat/ComparatorLogicTest.kt">
+        <error line="602" column="17" source="standard:property-naming" />
+    </file>
+    <file name="src/test/kotlin/org/octopusden/octopus/components/registry/compat/EnvironmentPreflightEvaluator.kt">
+        <error line="86" column="141" source="standard:max-line-length" />
+        <error line="132" column="141" source="standard:max-line-length" />
+    </file>
+    <file name="src/test/kotlin/org/octopusden/octopus/components/registry/compat/RawArraySorters.kt">
+        <error line="39" column="5" source="standard:no-consecutive-comments" />
+    </file>
+    <file name="src/test/kotlin/org/octopusden/octopus/components/registry/compat/TraceReplayCompatTest.kt">
+        <error line="144" column="5" source="standard:no-consecutive-comments" />
+    </file>
+</baseline>

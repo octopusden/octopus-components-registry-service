@@ -5,5 +5,5 @@ import com.fasterxml.jackson.annotation.JsonProperty
 
 @JsonIgnoreProperties(ignoreUnknown = true)
 data class SecurityGroupsDTO(
-    @JsonProperty("read") val read: List<String> = emptyList()
+    @JsonProperty("read") val read: List<String> = emptyList(),
 )

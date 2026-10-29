@@ -8,7 +8,9 @@ import java.io.IOException
  * Process exit codes for crsctl. The numeric values are part of the CLI contract (scripts depend on
  * them), so they are pinned explicitly.
  */
-enum class ExitCode(val code: Int) {
+enum class ExitCode(
+    val code: Int,
+) {
     /** Successful completion. */
     OK(0),
 
@@ -29,20 +31,22 @@ enum class ExitCode(val code: Int) {
  * Maps thrown errors to an [ExitCode].
  */
 object ExitCodes {
-    fun fromThrowable(t: Throwable): ExitCode = when (t) {
-        is CrsApiException -> fromHttpStatus(t.httpStatus)
-        is AuthRequiredException -> ExitCode.AUTH_REQUIRED
-        is IOException -> ExitCode.SERVER
-        is ConfigResolutionException -> ExitCode.USAGE
-        is ConfigLoadException -> ExitCode.USAGE
-        else -> ExitCode.SERVER
-    }
+    fun fromThrowable(t: Throwable): ExitCode =
+        when (t) {
+            is CrsApiException -> fromHttpStatus(t.httpStatus)
+            is AuthRequiredException -> ExitCode.AUTH_REQUIRED
+            is IOException -> ExitCode.SERVER
+            is ConfigResolutionException -> ExitCode.USAGE
+            is ConfigLoadException -> ExitCode.USAGE
+            else -> ExitCode.SERVER
+        }
 
-    fun fromHttpStatus(status: Int): ExitCode = when (status) {
-        400 -> ExitCode.USAGE
-        404 -> ExitCode.NOT_FOUND
-        401, 403 -> ExitCode.AUTH_REQUIRED
-        in 500..599 -> ExitCode.SERVER
-        else -> ExitCode.SERVER
-    }
+    fun fromHttpStatus(status: Int): ExitCode =
+        when (status) {
+            400 -> ExitCode.USAGE
+            404 -> ExitCode.NOT_FOUND
+            401, 403 -> ExitCode.AUTH_REQUIRED
+            in 500..599 -> ExitCode.SERVER
+            else -> ExitCode.SERVER
+        }
 }

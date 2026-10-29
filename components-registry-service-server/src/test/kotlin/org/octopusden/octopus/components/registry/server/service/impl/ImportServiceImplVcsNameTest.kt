@@ -1,8 +1,5 @@
 package org.octopusden.octopus.components.registry.server.service.impl
 
-import java.lang.reflect.Method
-import java.util.UUID
-import java.util.concurrent.TimeUnit
 import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.BeforeEach
 import org.junit.jupiter.api.DisplayName
@@ -12,16 +9,16 @@ import org.mockito.Mockito.mock
 import org.octopusden.octopus.components.registry.server.entity.ComponentConfigurationEntity
 import org.octopusden.octopus.components.registry.server.entity.ComponentEntity
 import org.octopusden.octopus.components.registry.server.mapper.ALL_VERSIONS
+import org.octopusden.octopus.components.registry.server.repository.ComponentArtifactMappingRepository
 import org.octopusden.octopus.components.registry.server.repository.ComponentBuildToolBeanRepository
 import org.octopusden.octopus.components.registry.server.repository.ComponentConfigurationRepository
 import org.octopusden.octopus.components.registry.server.repository.ComponentGroupRepository
 import org.octopusden.octopus.components.registry.server.repository.ComponentLabelRepository
-import org.octopusden.octopus.components.registry.server.repository.ComponentSystemRepository
 import org.octopusden.octopus.components.registry.server.repository.ComponentRepository
 import org.octopusden.octopus.components.registry.server.repository.ComponentRequiredToolRepository
 import org.octopusden.octopus.components.registry.server.repository.ComponentSourceRepository
+import org.octopusden.octopus.components.registry.server.repository.ComponentSystemRepository
 import org.octopusden.octopus.components.registry.server.repository.DistributionDockerImageRepository
-import org.octopusden.octopus.components.registry.server.repository.ComponentArtifactMappingRepository
 import org.octopusden.octopus.components.registry.server.repository.DistributionMavenArtifactRepository
 import org.octopusden.octopus.components.registry.server.repository.LabelRepository
 import org.octopusden.octopus.components.registry.server.repository.SystemRepository
@@ -31,9 +28,12 @@ import org.octopusden.octopus.escrow.RepositoryType
 import org.octopusden.octopus.escrow.configuration.loader.EscrowConfigurationLoader
 import org.octopusden.octopus.escrow.model.VCSSettings
 import org.octopusden.octopus.escrow.model.VersionControlSystemRoot
-import org.octopusden.releng.versions.VersionNames
 import org.octopusden.releng.versions.NumericVersionFactory
+import org.octopusden.releng.versions.VersionNames
 import org.octopusden.releng.versions.VersionRangeFactory
+import java.lang.reflect.Method
+import java.util.UUID
+import java.util.concurrent.TimeUnit
 
 /**
  * Unit tests for `ImportServiceImpl.attachVcsEntries` — verifies that VCS root
@@ -51,7 +51,6 @@ import org.octopusden.releng.versions.VersionRangeFactory
  */
 @Timeout(30, unit = TimeUnit.SECONDS)
 class ImportServiceImplVcsNameTest {
-
     private lateinit var service: ImportServiceImpl
     private lateinit var attachVcsEntriesMethod: Method
 
@@ -89,7 +88,10 @@ class ImportServiceImplVcsNameTest {
         attachVcsEntriesMethod.isAccessible = true
     }
 
-    private fun callAttachVcsEntries(row: ComponentConfigurationEntity, vcsSettings: VCSSettings?) {
+    private fun callAttachVcsEntries(
+        row: ComponentConfigurationEntity,
+        vcsSettings: VCSSettings?,
+    ) {
         attachVcsEntriesMethod.invoke(service, row, vcsSettings)
     }
 
@@ -175,5 +177,59 @@ class ImportServiceImplVcsNameTest {
         assertEquals(2, row.vcsEntries.size, "Expected two VCS entries for multi-root")
         val names = row.vcsEntries.map { it.name }.toSet()
         assertEquals(setOf(keyA, keyB), names, "Multi-root entities must preserve distinct names $keyA and $keyB")
+    }
+
+    @Test
+    @DisplayName("ONB-001: multi-root import back-fills checkoutDirectory = name on secondary roots only; sourcePath stays null")
+    fun multiRoot_secondaryRootsGetCheckoutDirectory() {
+        val roots =
+            listOf("alpha", "beta", "gamma").map {
+                VersionControlSystemRoot.create(it, RepositoryType.GIT, "ssh://git@gitlab:project/$it.git", null, "main", null)
+            }
+        val row = baseRow()
+
+        callAttachVcsEntries(row, VCSSettings.create(roots))
+
+        assertEquals(listOf(null, "beta", "gamma"), row.vcsEntries.map { it.checkoutDirectory })
+        assertEquals(listOf(null, null, null), row.vcsEntries.map { it.sourcePath })
+    }
+
+    @Test
+    @DisplayName("ONB-001: a two-root import back-fills checkoutDirectory = name on the second root")
+    fun twoRoots_secondRootGetsCheckoutDirectory() {
+        val roots =
+            listOf("alpha", "beta").map {
+                VersionControlSystemRoot.create(it, RepositoryType.GIT, "ssh://git@gitlab:project/$it.git", null, "main", null)
+            }
+        val row = baseRow()
+
+        callAttachVcsEntries(row, VCSSettings.create(roots))
+
+        assertEquals(listOf(null, "beta"), row.vcsEntries.map { it.checkoutDirectory })
+    }
+
+    @Test
+    @DisplayName("ONB-001: single-root import leaves the entry unplaced")
+    fun singleRoot_noCheckoutDirectory() {
+        val root = VersionControlSystemRoot.create("core", RepositoryType.GIT, "ssh://git@gitlab:project/repo.git", null, "main", null)
+        val row = baseRow()
+
+        callAttachVcsEntries(row, VCSSettings.create(listOf(root)))
+
+        assertEquals(null, row.vcsEntries.single().checkoutDirectory)
+    }
+
+    @Test
+    @DisplayName("ONB-001 rev. 3: VCS settings that differ only in the Build Working Directory differ (a marker row is emitted)")
+    fun vcsSettingsDiffer_buildWorkingDirectory() {
+        val differ =
+            ImportServiceImpl::class.java
+                .getDeclaredMethod("vcsSettingsDiffer", VCSSettings::class.java, VCSSettings::class.java)
+                .apply { isAccessible = true }
+        val roots =
+            listOf(VersionControlSystemRoot.create("core", RepositoryType.GIT, "ssh://git@gitlab:project/core.git", null, "main", null))
+
+        assertEquals(true, differ.invoke(service, VCSSettings.create(null, roots), VCSSettings.create(null, roots, "core")))
+        assertEquals(false, differ.invoke(service, VCSSettings.create(null, roots, "core"), VCSSettings.create(null, roots, "core")))
     }
 }

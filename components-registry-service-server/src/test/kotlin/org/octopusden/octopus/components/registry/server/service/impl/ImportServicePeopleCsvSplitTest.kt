@@ -1,7 +1,5 @@
 package org.octopusden.octopus.components.registry.server.service.impl
 
-import java.lang.reflect.Method
-import java.util.concurrent.TimeUnit
 import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.Assertions.assertTrue
 import org.junit.jupiter.api.BeforeEach
@@ -11,16 +9,16 @@ import org.junit.jupiter.api.Timeout
 import org.mockito.Mockito
 import org.mockito.Mockito.mock
 import org.octopusden.octopus.components.registry.server.entity.ComponentEntity
+import org.octopusden.octopus.components.registry.server.repository.ComponentArtifactMappingRepository
 import org.octopusden.octopus.components.registry.server.repository.ComponentBuildToolBeanRepository
 import org.octopusden.octopus.components.registry.server.repository.ComponentConfigurationRepository
 import org.octopusden.octopus.components.registry.server.repository.ComponentGroupRepository
 import org.octopusden.octopus.components.registry.server.repository.ComponentLabelRepository
-import org.octopusden.octopus.components.registry.server.repository.ComponentSystemRepository
 import org.octopusden.octopus.components.registry.server.repository.ComponentRepository
 import org.octopusden.octopus.components.registry.server.repository.ComponentRequiredToolRepository
 import org.octopusden.octopus.components.registry.server.repository.ComponentSourceRepository
+import org.octopusden.octopus.components.registry.server.repository.ComponentSystemRepository
 import org.octopusden.octopus.components.registry.server.repository.DistributionDockerImageRepository
-import org.octopusden.octopus.components.registry.server.repository.ComponentArtifactMappingRepository
 import org.octopusden.octopus.components.registry.server.repository.DistributionMavenArtifactRepository
 import org.octopusden.octopus.components.registry.server.repository.LabelRepository
 import org.octopusden.octopus.components.registry.server.repository.SystemRepository
@@ -29,9 +27,11 @@ import org.octopusden.octopus.components.registry.server.service.ComponentSource
 import org.octopusden.octopus.escrow.configuration.loader.EscrowConfigurationLoader
 import org.octopusden.octopus.escrow.configuration.model.DefaultConfigParameters
 import org.octopusden.octopus.escrow.configuration.model.EscrowModuleConfig
-import org.octopusden.releng.versions.VersionNames
 import org.octopusden.releng.versions.NumericVersionFactory
+import org.octopusden.releng.versions.VersionNames
 import org.octopusden.releng.versions.VersionRangeFactory
+import java.lang.reflect.Method
+import java.util.concurrent.TimeUnit
 
 /**
  * Unit tests for the import-side CSV → ordered-list split. This is a
@@ -51,7 +51,6 @@ import org.octopusden.releng.versions.VersionRangeFactory
  */
 @Timeout(30, unit = TimeUnit.SECONDS)
 class ImportServicePeopleCsvSplitTest {
-
     private lateinit var service: ImportServiceImpl
     private lateinit var buildComponentEntityMethod: Method
 
@@ -62,7 +61,8 @@ class ImportServicePeopleCsvSplitTest {
         // itself is now stored verbatim from the DSL (nullable, no key backfill), independent
         // of the common defaults.
         val configurationLoaderMock = mock(EscrowConfigurationLoader::class.java)
-        Mockito.`when`(configurationLoaderMock.loadCommonDefaults(emptyMap()))
+        Mockito
+            .`when`(configurationLoaderMock.loadCommonDefaults(emptyMap()))
             .thenReturn(DefaultConfigParameters())
         service = ImportServiceImpl(
             gitResolver = mock(ComponentRegistryResolverImpl::class.java),
@@ -98,7 +98,10 @@ class ImportServicePeopleCsvSplitTest {
         return buildComponentEntityMethod.invoke(service, "svc", cfg) as ComponentEntity
     }
 
-    private fun EscrowModuleConfig.setField(name: String, value: Any?) {
+    private fun EscrowModuleConfig.setField(
+        name: String,
+        value: Any?,
+    ) {
         val f = EscrowModuleConfig::class.java.getDeclaredField(name)
         f.isAccessible = true
         f.set(this, value)

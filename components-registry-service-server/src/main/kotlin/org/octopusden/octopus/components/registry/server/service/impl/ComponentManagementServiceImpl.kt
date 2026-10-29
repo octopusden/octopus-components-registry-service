@@ -6,6 +6,7 @@ import org.apache.maven.artifact.versioning.DefaultArtifactVersion
 import org.octopusden.octopus.components.registry.core.exceptions.ComponentNameConflictException
 import org.octopusden.octopus.components.registry.core.exceptions.CrossComponentConflictException
 import org.octopusden.octopus.components.registry.core.exceptions.NotFoundException
+import org.octopusden.octopus.components.registry.server.config.ComponentsRegistryProperties
 import org.octopusden.octopus.components.registry.server.config.ConditionalOnDatabaseEnabled
 import org.octopusden.octopus.components.registry.server.dto.v4.BaseConfigurationRequest
 import org.octopusden.octopus.components.registry.server.dto.v4.BuildToolBeanRequest
@@ -18,45 +19,47 @@ import org.octopusden.octopus.components.registry.server.dto.v4.ComponentUpdateR
 import org.octopusden.octopus.components.registry.server.dto.v4.DockerImageRequest
 import org.octopusden.octopus.components.registry.server.dto.v4.FieldOverrideCreateRequest
 import org.octopusden.octopus.components.registry.server.dto.v4.FieldOverrideResponse
-import org.octopusden.octopus.components.registry.server.dto.v4.SupportedVersionsRequest
-import org.octopusden.octopus.components.registry.server.dto.v4.SupportedVersionsResponse
 import org.octopusden.octopus.components.registry.server.dto.v4.FieldOverrideUpdateRequest
 import org.octopusden.octopus.components.registry.server.dto.v4.FieldOverrideUpsertRequest
 import org.octopusden.octopus.components.registry.server.dto.v4.FileUrlArtifactRequest
+import org.octopusden.octopus.components.registry.server.dto.v4.GenericArtifactRequest
 import org.octopusden.octopus.components.registry.server.dto.v4.MarkerChildrenPayload
 import org.octopusden.octopus.components.registry.server.dto.v4.MavenArtifactRequest
 import org.octopusden.octopus.components.registry.server.dto.v4.PackageRequest
+import org.octopusden.octopus.components.registry.server.dto.v4.SupportedVersionsRequest
+import org.octopusden.octopus.components.registry.server.dto.v4.SupportedVersionsResponse
 import org.octopusden.octopus.components.registry.server.dto.v4.VcsEntryRequest
 import org.octopusden.octopus.components.registry.server.entity.ArtifactIdMode
 import org.octopusden.octopus.components.registry.server.entity.ComponentArtifactMappingEntity
 import org.octopusden.octopus.components.registry.server.entity.ComponentArtifactMappingTokenEntity
-import org.octopusden.octopus.components.registry.server.util.ArtifactOwnershipModeClassifier
+import org.octopusden.octopus.components.registry.server.entity.ComponentBuildToolBeanEntity
 import org.octopusden.octopus.components.registry.server.entity.ComponentConfigurationEntity
 import org.octopusden.octopus.components.registry.server.entity.ComponentDocLinkEntity
 import org.octopusden.octopus.components.registry.server.entity.ComponentEntity
 import org.octopusden.octopus.components.registry.server.entity.ComponentGroupEntity
 import org.octopusden.octopus.components.registry.server.entity.ComponentLabelEntity
-import org.octopusden.octopus.components.registry.server.entity.ComponentBuildToolBeanEntity
 import org.octopusden.octopus.components.registry.server.entity.ComponentReleaseManagerEntity
 import org.octopusden.octopus.components.registry.server.entity.ComponentRequiredToolEntity
 import org.octopusden.octopus.components.registry.server.entity.ComponentSecurityChampionEntity
 import org.octopusden.octopus.components.registry.server.entity.ComponentSystemEntity
-import org.octopusden.octopus.components.registry.server.entity.ComponentTeamcityProjectEntity
 import org.octopusden.octopus.components.registry.server.entity.DistributionDockerImageEntity
 import org.octopusden.octopus.components.registry.server.entity.DistributionFileUrlArtifactEntity
+import org.octopusden.octopus.components.registry.server.entity.DistributionGenericArtifactEntity
 import org.octopusden.octopus.components.registry.server.entity.DistributionMavenArtifactEntity
 import org.octopusden.octopus.components.registry.server.entity.DistributionPackageEntity
 import org.octopusden.octopus.components.registry.server.entity.DistributionSecurityGroupEntity
 import org.octopusden.octopus.components.registry.server.entity.LabelEntity
 import org.octopusden.octopus.components.registry.server.entity.SystemEntity
+import org.octopusden.octopus.components.registry.server.entity.TeamcityProjectEntity
 import org.octopusden.octopus.components.registry.server.entity.ToolEntity
 import org.octopusden.octopus.components.registry.server.entity.VcsSettingsEntryEntity
+import org.octopusden.octopus.components.registry.server.entity.VersionLineEntity
+import org.octopusden.octopus.components.registry.server.event.AuditCorrelationIdProvider
 import org.octopusden.octopus.components.registry.server.event.AuditEvent
 import org.octopusden.octopus.components.registry.server.mapper.ALL_VERSIONS
-import org.octopusden.octopus.components.registry.server.util.VersionRangePartition
+import org.octopusden.octopus.components.registry.server.mapper.ARTIFACT_MAPPING_ORDER
 import org.octopusden.octopus.components.registry.server.mapper.BEAN_TYPE_NAMES
 import org.octopusden.octopus.components.registry.server.mapper.BUILD_SYSTEM_NAMES
-import org.octopusden.octopus.components.registry.server.mapper.numericVersionComparator
 import org.octopusden.octopus.components.registry.server.mapper.ESCROW_GENERATION_MODE_NAMES
 import org.octopusden.octopus.components.registry.server.mapper.MarkerAttributes
 import org.octopusden.octopus.components.registry.server.mapper.NOT_AVAILABLE_EXTERNAL_REGISTRY
@@ -65,7 +68,7 @@ import org.octopusden.octopus.components.registry.server.mapper.PRODUCT_TYPE_NAM
 import org.octopusden.octopus.components.registry.server.mapper.REPOSITORY_TYPE_NAMES
 import org.octopusden.octopus.components.registry.server.mapper.SCALAR_ATTRIBUTE_PATHS
 import org.octopusden.octopus.components.registry.server.mapper.applyScalarValue
-import org.octopusden.octopus.components.registry.server.mapper.ARTIFACT_MAPPING_ORDER
+import org.octopusden.octopus.components.registry.server.mapper.numericVersionComparator
 import org.octopusden.octopus.components.registry.server.mapper.toDetailResponse
 import org.octopusden.octopus.components.registry.server.mapper.toFieldOverrideResponse
 import org.octopusden.octopus.components.registry.server.mapper.toSummaryResponse
@@ -77,40 +80,57 @@ import org.octopusden.octopus.components.registry.server.repository.ComponentLab
 import org.octopusden.octopus.components.registry.server.repository.ComponentRepository
 import org.octopusden.octopus.components.registry.server.repository.ComponentRequiredToolRepository
 import org.octopusden.octopus.components.registry.server.repository.ComponentSystemRepository
+import org.octopusden.octopus.components.registry.server.repository.CrossComponentMappingRow
 import org.octopusden.octopus.components.registry.server.repository.DistributionDockerImageRepository
 import org.octopusden.octopus.components.registry.server.repository.DistributionMavenArtifactRepository
 import org.octopusden.octopus.components.registry.server.repository.LabelRepository
 import org.octopusden.octopus.components.registry.server.repository.SystemRepository
+import org.octopusden.octopus.components.registry.server.repository.TeamcityProjectRepository
+import org.octopusden.octopus.components.registry.server.repository.TeamcityValidationRepository
 import org.octopusden.octopus.components.registry.server.repository.ToolRepository
 import org.octopusden.octopus.components.registry.server.security.CurrentUserResolver
 import org.octopusden.octopus.components.registry.server.security.PermissionEvaluator
 import org.octopusden.octopus.components.registry.server.service.ComponentManagementService
 import org.octopusden.octopus.components.registry.server.service.ComponentSourceRegistry
 import org.octopusden.octopus.components.registry.server.service.RenderedComponentCode
+import org.octopusden.octopus.components.registry.server.service.TestComponentFlags
+import org.octopusden.octopus.components.registry.server.service.rms.ComponentBuildRanges
+import org.octopusden.octopus.components.registry.server.service.rms.RMSBuildParametersService
+import org.octopusden.octopus.components.registry.server.service.rms.RMSOverrideGate
+import org.octopusden.octopus.components.registry.server.service.rms.RegisteredBuildParametersMapper
+import org.octopusden.octopus.components.registry.server.service.rms.client.RMSBuild
 import org.octopusden.octopus.components.registry.server.teamcity.TeamcityProperties
+import org.octopusden.octopus.components.registry.server.util.ArtifactOwnershipModeClassifier
 import org.octopusden.octopus.components.registry.server.util.ComponentCodeRenderer
+import org.octopusden.octopus.components.registry.server.util.JavaVersionComparator
 import org.octopusden.octopus.components.registry.server.util.JiraRowView
 import org.octopusden.octopus.components.registry.server.util.MavenGavCollision
+import org.octopusden.octopus.components.registry.server.util.MavenVersionComparator
+import org.octopusden.octopus.components.registry.server.util.VcsCheckoutLayoutValidator
+import org.octopusden.octopus.components.registry.server.util.VersionRangePartition
 import org.octopusden.octopus.components.registry.server.util.computeEffectiveJiraPairs
 import org.octopusden.octopus.escrow.config.ConfigHelper
+import org.octopusden.octopus.escrow.configuration.validation.GroovySlurperConfigValidator
 import org.octopusden.releng.versions.NumericVersionFactory
 import org.octopusden.releng.versions.VersionRangeFactory
 import org.springframework.context.ApplicationEventPublisher
 import org.springframework.core.env.Environment
 import org.springframework.data.domain.Page
+import org.springframework.data.domain.PageImpl
 import org.springframework.data.domain.PageRequest
 import org.springframework.data.domain.Pageable
 import org.springframework.data.domain.Sort
 import org.springframework.data.jpa.domain.Specification
 import org.springframework.http.HttpStatus
 import org.springframework.stereotype.Service
+import org.springframework.transaction.PlatformTransactionManager
+import org.springframework.transaction.annotation.Propagation
 import org.springframework.transaction.annotation.Transactional
+import org.springframework.transaction.support.TransactionTemplate
 import org.springframework.web.server.ResponseStatusException
 import java.nio.file.Files
 import java.time.Instant
 import java.util.UUID
-import java.util.regex.Pattern
-import java.util.regex.PatternSyntaxException
 
 /**
  * v4 CRUD against the v2 schema (Model A'). Top-level scalars and per-component
@@ -135,6 +155,7 @@ class ComponentManagementServiceImpl(
     private val dockerImageRepository: DistributionDockerImageRepository,
     private val labelRepository: LabelRepository,
     private val systemRepository: SystemRepository,
+    private val teamcityProjectRepository: TeamcityProjectRepository,
     private val toolRepository: ToolRepository,
     private val sourceRegistry: ComponentSourceRegistry,
     private val applicationEventPublisher: ApplicationEventPublisher,
@@ -147,6 +168,32 @@ class ComponentManagementServiceImpl(
     private val environment: Environment,
     private val componentCodeRenderer: ComponentCodeRenderer,
     private val employeeDirectory: EmployeeDirectoryService,
+    transactionManager: PlatformTransactionManager,
+    // Defaulted so the few unit tests that construct this service directly need
+    // no new wiring; Spring injects the singleton bean in production.
+    private val auditCorrelationIdProvider: AuditCorrelationIdProvider = AuditCorrelationIdProvider(),
+    // Defaulted (nullable) so unit tests constructing this service directly need no new wiring;
+    // Spring injects the singleton bean in production. Used to attach TeamCity validation findings
+    // onto the component detail response (see toDetail / attachTeamcityValidations).
+    private val teamcityValidationRepository: TeamcityValidationRepository? = null,
+    // Defaulted (nullable) so unit tests constructing this service directly need no new wiring;
+    // Spring injects the singleton bean in production (always registered, self-gates on
+    // RMSProperties.enabled — see RMSBuildParametersService). Used to attach RMS-registered
+    // build parameters onto both the summary rollup and the detail ranges/warnings.
+    private val rmsBuildParametersService: RMSBuildParametersService? = null,
+    // Defaulted (nullable) so unit tests constructing this service directly need no new wiring;
+    // Spring always registers the bean in production (RMSOverrideGate itself self-gates on
+    // RMSProperties.enabled and a null RMSClient) — see RMSOverrideGate.
+    private val rmsOverrideGate: RMSOverrideGate? = null,
+    // Defaulted (nullable) so unit tests constructing this service directly need no new wiring;
+    // Spring always registers the bean (ComponentProfilesConfig). Checks a create that names a profile.
+    private val profileCreateCheck: ProfileCreateCheck? = null,
+    // Defaulted (nullable) so unit tests constructing this service directly need no new wiring;
+    // Spring injects the bound properties in production. Null ⇒ no key may be flagged testComponent.
+    private val registryProperties: ComponentsRegistryProperties? = null,
+    // Defaulted (nullable) so unit tests constructing this service directly need no new wiring;
+    // Spring injects the bean in production. Evicted when the set of flagged keys changes.
+    private val testComponentFlags: TestComponentFlags? = null,
 ) : ComponentManagementService {
     // ConfigHelper is constructed lazily because it touches the Spring
     // Environment on first access; mirrors the pattern used by
@@ -156,6 +203,16 @@ class ComponentManagementServiceImpl(
     // first access is sufficient — admins re-config via redeploy, not
     // hot-reload.
     private val configHelper: ConfigHelper by lazy { ConfigHelper(environment) }
+
+    // Used only by getEditors, via an explicit TransactionTemplate rather than
+    // @Transactional — same self-invocation-avoidance precedent as
+    // ServiceEventRecorderImpl / TeamcitySyncService — so the DB read gets its own
+    // short-lived transaction that closes BEFORE the employee-service manager lookup,
+    // instead of that network call holding a pooled DB connection for its duration.
+    private val readOnlyTemplate =
+        TransactionTemplate(transactionManager).apply {
+            isReadOnly = true
+        }
     // ============================================================
     // Create
     // ============================================================
@@ -220,6 +277,9 @@ class ComponentManagementServiceImpl(
         request.clientCode?.let {
             if (!fieldConfigService.isHidden("component.clientCode")) validateClientCode(it)
         }
+        // SYS-095: the key's legal charset depends on the clientCode that will actually be
+        // persisted — a value supplied for a hidden field is stripped below, so it grants nothing.
+        validateComponentKey(normalizedKey, stripIfHidden("component.clientCode", request.clientCode))
         request.copyright?.let {
             if (!fieldConfigService.isHidden("component.copyright")) validateCopyright(it)
         }
@@ -288,6 +348,8 @@ class ComponentManagementServiceImpl(
                 productType = stripIfHidden("component.productType", request.productType),
                 clientCode = stripIfHidden("component.clientCode", request.clientCode),
                 archived = request.archived,
+                testComponent = request.testComponent,
+                autoRelease = request.autoRelease && !fieldConfigService.isHidden(AUTO_RELEASE_FIELD),
                 solution = stripIfHidden("component.solution", request.solution),
                 parentComponent = parent,
                 // R1: group = migration-derived aggregator membership only; never assigned via API.
@@ -326,6 +388,13 @@ class ComponentManagementServiceImpl(
         applyBaseConfigurationCreate(baseConfig, baseConfigRequest)
         entity.configurations.add(baseConfig)
 
+        // Against the values this create stores — trimmed, hidden fields stripped — not the raw request.
+        request.profile?.trim()?.takeIf { it.isNotEmpty() }?.let { profileId ->
+            checkNotNull(
+                profileCreateCheck,
+            ) { "profile check is not configured" }.check(profileId, EntityCreatedComponent(entity, baseConfig))
+        }
+
         // Person fields (componentOwner / releaseManager / securityChampion) FIRST.
         // On create everything is new, so the active-employee check is always
         // triggered (subject to the flag). Person-field errors take precedence over
@@ -335,6 +404,7 @@ class ComponentManagementServiceImpl(
         // the person-field error first, so person validation runs ahead of the
         // malformed-input checks here.
         validatePersonFields(entity, runActiveCheck = true)
+        validateTestComponentName(entity, "testComponent")
         validateRequiredCopyright(entity)
         validateRequiredDisplayName(entity)
 
@@ -360,6 +430,8 @@ class ComponentManagementServiceImpl(
         // flush so the queries exclude this component by its now-assigned id.
         validateCrossComponentIntegrity(saved)
         validateArtifactOwnershipIfChanged(saved) // self-skips when the create carried no ownership
+        validateTestComponentReferences(saved)
+        if (saved.testComponent) testComponentFlags?.evictAfterCommit()
 
         // M:N junctions (no cascade — see ComponentEntity kdoc convention) must be
         // persisted via their own repositories AFTER the parent has an assigned id.
@@ -392,6 +464,8 @@ class ComponentManagementServiceImpl(
         )
 
         return toDetail(saved)
+            .withVcsChainWarning(request.baseConfiguration?.writesVcs() == true, saved)
+            .withTestComponentLabelWarning(saved)
     }
 
     // ============================================================
@@ -399,8 +473,13 @@ class ComponentManagementServiceImpl(
     // ============================================================
 
     @Transactional(readOnly = true)
-    override fun getComponent(id: UUID): ComponentDetailResponse =
-        toDetail(findComponentOr404(id))
+    override fun getDistinctReleaseManagers(): List<String> = componentRepository.findDistinctReleaseManagers()
+
+    @Transactional(readOnly = true)
+    override fun getDistinctSecurityChampions(): List<String> = componentRepository.findDistinctSecurityChampions()
+
+    @Transactional(readOnly = true)
+    override fun getComponent(id: UUID): ComponentDetailResponse = toDetail(findComponentOr404(id))
 
     @Transactional(readOnly = true)
     override fun getComponentByName(name: String): ComponentDetailResponse =
@@ -416,7 +495,7 @@ class ComponentManagementServiceImpl(
         val entity = findByIdOrName(idOrName)
         return RenderedComponentCode(
             entity.componentKey,
-            componentCodeRenderer.renderFull(entity, ownershipExportPatterns(entity)),
+            componentCodeRenderer.renderFull(entity, ownershipExportPatterns(entity), rmsRangesFor(entity)),
         )
     }
 
@@ -427,22 +506,66 @@ class ComponentManagementServiceImpl(
     ): RenderedComponentCode {
         val entity = findByIdOrName(idOrName)
         val body =
-            componentCodeRenderer.renderResolved(entity, version, ownershipExportPatterns(entity))
+            componentCodeRenderer.renderResolved(entity, version, ownershipExportPatterns(entity), rmsRangesFor(entity))
                 ?: throw NotFoundException(
                     "No configuration resolves for component '${entity.componentKey}' at version '$version'",
                 )
         return RenderedComponentCode(entity.componentKey, body)
     }
 
-    // Reads LAZY child collections (releaseManagers / securityChampions), so it must run
-    // inside this readOnly transaction (the session that loaded the entity).
+    // Bulk FULL render for the as-code search index (SYS-100). RMS ranges are deliberately
+    // omitted: they are RMS's data, not this component's configuration, and they change on the
+    // RMS sweep without touching any component row the index's change stamp watches.
     @Transactional(readOnly = true)
+    override fun renderAllComponentsAsCode(): List<RenderedComponentCode> {
+        val ownershipContext = lazy(LazyThreadSafetyMode.NONE) { loadOwnershipExportContext() }
+        return componentRepository
+            .findAll()
+            .sortedBy { it.componentKey }
+            .map { entity ->
+                RenderedComponentCode(
+                    componentKey = entity.componentKey,
+                    body = componentCodeRenderer.renderFull(entity, ownershipExportPatterns(entity, ownershipContext)),
+                    archived = entity.archived,
+                    id = entity.id,
+                )
+            }
+    }
+
+    /**
+     * RMS's ACTUAL ranges for [entity], or `null` when the feature is disabled, the component is
+     * ineligible (non-Maven/Gradle, archived), or it has never been successfully swept — the
+     * sweep's cache map simply has no entry in any of those cases, so no separate eligibility
+     * check is needed here.
+     */
+    private fun rmsRangesFor(entity: ComponentEntity): ComponentBuildRanges? =
+        rmsBuildParametersService?.currentReport()?.components?.get(entity.componentKey)
+
+    // employeeDirectory.getManager() is a network call that can take up to the configured
+    // read timeout under an employee-service outage (failures are deliberately not cached —
+    // see EmployeeDirectoryService.getManager), so it must NOT run inside a DB transaction:
+    // concurrent /editors requests would each hold a pooled connection for that long and
+    // could exhaust the pool (PR #434 review). NOT_SUPPORTED overrides the class-level
+    // @Transactional so this method runs with no ambient transaction; only the DB read
+    // (entity + LAZY releaseManagers/securityChampions) gets its own short-lived transaction
+    // via readOnlyTemplate, which closes before the manager lookup below runs.
+    @Transactional(propagation = Propagation.NOT_SUPPORTED)
     override fun getEditors(idOrName: String): ComponentEditorsResponse {
-        val entity = findByIdOrName(idOrName)
-        return ComponentEditorsResponse(
-            componentOwner = entity.componentOwner,
-            releaseManagers = entity.releaseManagerUsernames(),
-            securityChampions = entity.securityChampionUsernames(),
+        val projection =
+            readOnlyTemplate.execute {
+                val entity = findByIdOrName(idOrName)
+                ComponentEditorsResponse(
+                    componentOwner = entity.componentOwner,
+                    releaseManagers = entity.releaseManagerUsernames(),
+                    securityChampions = entity.securityChampionUsernames(),
+                )
+                // execute() returns the callback's value; the lambda never returns null, so the
+                // !! cannot trip in practice — Kotlin just sees the API's declared T? signature
+                // (mirrors the same !! precedent in TeamcitySyncService.resync).
+            }!!
+        val ownerTrimmed = projection.componentOwner?.trim()
+        return projection.copy(
+            manager = ownerTrimmed?.takeIf { it.isNotEmpty() }?.let { employeeDirectory.getManager(it) },
         )
     }
 
@@ -497,12 +620,35 @@ class ComponentManagementServiceImpl(
         // row for jira/build aspect currents, so it must run ahead of the patch appliers.
         enforceEditabilityOnUpdate(entity, request)
 
+        if (isRename) {
+            // SYS-095, placed AFTER enforceEditabilityOnUpdate on purpose. Not for `name`
+            // itself — rename authorization is the controller's @PreAuthorize
+            // (`canRenameComponent`, 403 before this method) and `name` is not a
+            // field-config-gated field. It is for the REST of the same PATCH: a request
+            // that renames and also touches a non-editable field must see that 422, not a
+            // value-400 about the key's shape.
+            //
+            // Validated against the clientCode this request leaves persisted: the supplied one
+            // when the field is editable, the stored one when it is hidden (a hidden clientCode
+            // is ignored by the write site below, but it is really there).
+            val effectiveClientCode =
+                if (fieldConfigService.isHidden("component.clientCode")) {
+                    entity.clientCode
+                } else {
+                    request.clientCode ?: entity.clientCode
+                }
+            validateComponentKey(normalizedNewKey!!, effectiveClientCode)
+        }
+
         // Hidden productType is stripped at its write site → don't 4xx on its value here.
         request.productType?.let { if (!fieldConfigService.isHidden("component.productType")) validateProductType(it) }
         // `baseConfiguration.versionRange` is validated downstream inside the
         // base-configuration patch block via `validateRangeSyntax` — no
         // top-level guard needed here.
-        request.baseConfiguration?.build?.buildSystem?.let { validateBuildSystem(it) }
+        request.baseConfiguration
+            ?.build
+            ?.buildSystem
+            ?.let { validateBuildSystem(it) }
         // Hidden escrow.generation is stripped in applyBaseConfigurationPatch → don't 4xx here.
         request.baseConfiguration?.escrow?.generation?.let {
             if (!fieldConfigService.isHidden("escrow.generation")) validateEscrowGenerationMode(it)
@@ -554,7 +700,14 @@ class ComponentManagementServiceImpl(
         // warning) must tolerate an unchanged echo; only a real transition (flag false→true while
         // WHISKEY, or buildSystem→WHISKEY while the flag is set) is rejected 422.
         val oldSkipCommitCheck = entity.skipCommitCheck
-        val oldBaseBuildSystem = entity.configurations.firstOrNull { it.rowType == "BASE" }?.buildSystem
+        val oldBase = entity.configurations.firstOrNull { it.rowType == ROW_TYPE_BASE }
+        val oldBaseBuildSystem = oldBase?.buildSystem
+        val oldBaseJavaVersion = oldBase?.javaVersion
+        val oldBaseMavenVersion = oldBase?.mavenVersion
+        // SYS-099: the test-component checks are CHANGE-based too (same full-form echo reason as
+        // above) — snapshot the flag and the doc targets so an unchanged echo is not re-validated.
+        val oldTestComponent = entity.testComponent
+        val oldDocKeys = entity.docLinks.map { it.docComponentKey }.toSet()
 
         if (isRename) entity.componentKey = normalizedNewKey!!
 
@@ -584,6 +737,14 @@ class ComponentManagementServiceImpl(
         }
         request.solution?.let { if (!fieldConfigService.isHidden("component.solution")) entity.solution = it }
         request.archived?.let { entity.archived = it }
+        request.testComponent?.let { entity.testComponent = it }
+        request.autoRelease?.let { if (!fieldConfigService.isHidden(AUTO_RELEASE_FIELD)) entity.autoRelease = it }
+        val flaggedNow = !oldTestComponent && entity.testComponent
+        val unflaggedNow = oldTestComponent && !entity.testComponent
+        // Flagging, or renaming a flagged component, must keep the key inside the configured patterns.
+        if (flaggedNow || (isRename && entity.testComponent)) {
+            validateTestComponentName(entity, if (flaggedNow) "testComponent" else "name")
+        }
         // canBeParent: editability enforced above; `hidden` silently strips (consistent with
         // the other field-config-gated scalars). Structural invariants are validated below.
         request.canBeParent?.let { if (!fieldConfigService.isHidden("component.canBeParent")) entity.canBeParent = it }
@@ -685,9 +846,15 @@ class ComponentManagementServiceImpl(
             entity.securityGroups.clear()
             addSecurityGroups(entity, it.map { req -> req.groupType to req.groupName })
         }
-        request.teamcityProjects?.let {
-            entity.teamcityProjects.clear()
-            addTeamcityProjects(entity, it.map { req -> req.projectId })
+        request.teamcityProjects?.let { reqs ->
+            // `version` is sync-owned metadata (derived from TeamCity), and v4 write carries only
+            // project ids. So a read-modify-write PATCH must NOT wipe it: keep the existing
+            // version_line rows whose project id is still requested (preserving their version),
+            // drop the rest, and add version = null rows only for genuinely new project ids.
+            val desiredProjectIds = reqs.map { it.projectId }.toSet()
+            entity.versionLines.removeAll { it.teamcityProject.projectId !in desiredProjectIds }
+            val keptProjectIds = entity.versionLines.map { it.teamcityProject.projectId }.toSet()
+            addTeamcityProjects(entity, desiredProjectIds.filterNot { it in keptProjectIds })
         }
         request.docs?.let {
             entity.docLinks.clear()
@@ -713,17 +880,42 @@ class ComponentManagementServiceImpl(
         // that echoes an unchanged skipCommitCheck=true or buildSystem="WHISKEY" on a grandfathered
         // row (import admits WHISKEY+sentinel with a warning) is legal, mirroring the CRS-B
         // change-based write-gate and the "grandfathered on update" convention below.
-        val newBaseBuildSystem = entity.configurations.firstOrNull { it.rowType == "BASE" }?.buildSystem
+        val newBase = entity.configurations.firstOrNull { it.rowType == ROW_TYPE_BASE }
+
+        val newBaseBuildSystem = newBase?.buildSystem
         if (entity.skipCommitCheck != oldSkipCommitCheck || newBaseBuildSystem != oldBaseBuildSystem) {
             validateSkipCommitCheckNotWhiskey(entity)
         }
+
+        // RMS write-gate: the BASE row's own javaVersion/mavenVersion, change-based against the
+        // oldBase* snapshots above. rmsBuildsCache is shared with applyFieldOverrideDesiredSet,
+        // so one PATCH fetches RMS data at most once.
+        val rmsBuildsCache = mutableMapOf<String, List<RMSBuild>>()
+        checkRMSOverrideGate(
+            entity,
+            ATTR_JAVA_VERSION,
+            newBase?.javaVersion != oldBaseJavaVersion,
+            newBase?.javaVersion,
+            newBase?.mavenVersion,
+            ALL_VERSIONS,
+            rmsBuildsCache,
+        )
+        checkRMSOverrideGate(
+            entity,
+            ATTR_MAVEN_VERSION,
+            newBase?.mavenVersion != oldBaseMavenVersion,
+            newBase?.javaVersion,
+            newBase?.mavenVersion,
+            ALL_VERSIONS,
+            rmsBuildsCache,
+        )
 
         // Field overrides (item D): desired-FULL-SET applied in-place on the
         // configuration collection — cascade (orphanRemoval) persists the
         // inserts/deletes on the saveAndFlush below, bumping the aggregate
         // @Version once. null = don't touch. The returned plan carries the
         // post-flush required-tool syncs + per-override audit rows.
-        val fieldOverridePlan = request.fieldOverrides?.let { applyFieldOverrideDesiredSet(entity, it) }
+        val fieldOverridePlan = request.fieldOverrides?.let { applyFieldOverrideDesiredSet(entity, it, rmsBuildsCache) }
 
         // Cross-component / malformed-input checks are GRANDFATHERED on update:
         // they re-run only when the PATCH actually touches a field they govern
@@ -736,9 +928,12 @@ class ComponentManagementServiceImpl(
         // check when it changes; only untouched legacy data is left alone. On
         // CREATE everything is new, so they always run (see createComponent).
         val crossComponentRelevantChange =
-            request.name != null || // rename can invalidate soft docs[] references to the old key
-                request.baseConfiguration != null || // maven / docker / packages / jira live on the base config row
-                request.artifactIds != null || // groupId/artifactId ownership mapping (#357 cross-component check)
+            request.name != null ||
+                // rename can invalidate soft docs[] references to the old key
+                request.baseConfiguration != null ||
+                // maven / docker / packages / jira live on the base config row
+                request.artifactIds != null ||
+                // groupId/artifactId ownership mapping (#357 cross-component check)
                 request.docs != null ||
                 request.distributionExplicit != null ||
                 request.distributionExternal != null ||
@@ -763,6 +958,39 @@ class ComponentManagementServiceImpl(
             // Ownership uniqueness only when the PATCH actually replaced the ownership mappings —
             // not on an unrelated rename/baseConfig change (which must not 409 on pre-existing data).
             if (request.artifactIds != null) validateArtifactOwnershipIfChanged(saved)
+        }
+        // CHANGE-based, like the checks above (an unchanged echo is grandfathered). A test component is
+        // re-checked against its non-test referrers when it becomes one or is renamed (a soft doc link
+        // left on a renamed-away key re-binds to whatever component takes that key); a real component
+        // against what changed: a new parent, newly added doc keys, or — when it stops being a test
+        // component — every target. An untouched grandfathered reference is never re-checked.
+        val newDocKeys = saved.docLinks.map { it.docComponentKey }.toSet()
+        val parentCheck =
+            when {
+                parentChanged -> "parentComponentName"
+                unflaggedNow -> "testComponent"
+                else -> null
+            }
+        val docChecks =
+            newDocKeys
+                .mapNotNull { docKey ->
+                    when {
+                        docKey !in oldDocKeys -> docKey to "docs"
+                        unflaggedNow -> docKey to "testComponent"
+                        else -> null
+                    }
+                }.toMap()
+        val reverseCheck = saved.testComponent && (flaggedNow || isRename)
+        val forwardCheck = !saved.testComponent && (parentCheck != null || docChecks.isNotEmpty())
+        val flaggedKeysChanged = flaggedNow || unflaggedNow || (isRename && saved.testComponent)
+        if (flaggedKeysChanged) testComponentFlags?.evictAfterCommit()
+        if (reverseCheck || forwardCheck) {
+            validateTestComponentReferences(
+                saved,
+                flagField = if (flaggedNow) "testComponent" else "name",
+                parentField = parentCheck,
+                docChecks = docChecks,
+            )
         }
 
         // Junctions — synced via their repositories after the parent flush so the
@@ -834,6 +1062,8 @@ class ComponentManagementServiceImpl(
         )
 
         return toDetail(saved)
+            .withVcsChainWarning(request.baseConfiguration?.writesVcs() == true, saved)
+            .withTestComponentLabelWarning(saved)
     }
 
     // ============================================================
@@ -862,10 +1092,58 @@ class ComponentManagementServiceImpl(
     override fun listComponents(
         filter: ComponentFilter,
         pageable: Pageable,
-    ): Page<ComponentSummaryResponse> =
-        componentRepository
-            .findAll(buildSpecification(filter), translateSort(pageable))
-            .map { it.toSummaryResponse(teamcityProperties.baseUrl) }
+    ): Page<ComponentSummaryResponse> {
+        val rmsComponents = rmsBuildParametersService?.currentReport()?.components.orEmpty()
+        val sortedPageable = translateSort(pageable)
+        if (filter.javaVersion.isNullOrEmpty()) {
+            return componentRepository
+                .findAll(buildSpecification(filter), sortedPageable)
+                .map { it.toSummaryResponse(teamcityProperties.baseUrl, rmsComponents[it.componentKey]) }
+        }
+
+        // The effective Java version isn't a DB column, so it can't be filtered or paginated
+        // by SQL — every other-filter-matching candidate is loaded, sorted DB-side, then
+        // filtered and paginated here. Acceptable while the candidate set stays in the low
+        // thousands; revisit if that assumption stops holding. See TD-020.
+        val javaVersionFilter = filter.javaVersion.toSet()
+        val matches =
+            componentRepository
+                .findAll(buildSpecification(filter), sortedPageable.sort)
+                .filter { entity ->
+                    val base = entity.configurations.firstOrNull { it.rowType == "BASE" }
+                    val effective =
+                        RegisteredBuildParametersMapper.effectiveJavaVersion(
+                            base?.javaVersion,
+                            rmsComponents[entity.componentKey]?.javaRanges.orEmpty(),
+                        )
+                    effective != null && matchesJavaVersionFilter(effective, javaVersionFilter)
+                }
+
+        // Long arithmetic then clamp: `pageNumber * pageSize` in Int overflows for a large but
+        // perfectly acceptable page number (`?page=200000000` with the default size of 20 is
+        // already past Int.MAX), and a negative fromIndex reaches subList as an exception, not a
+        // 400. Pageable.offset does the same multiply in long, so it can't wrap.
+        val fromIndex = sortedPageable.offset.coerceIn(0L, matches.size.toLong()).toInt()
+        val toIndex = (fromIndex.toLong() + sortedPageable.pageSize).coerceIn(0L, matches.size.toLong()).toInt()
+        val pageContent =
+            matches
+                .subList(fromIndex, toIndex)
+                .map { it.toSummaryResponse(teamcityProperties.baseUrl, rmsComponents[it.componentKey]) }
+        return PageImpl(pageContent, sortedPageable, matches.size.toLong())
+    }
+
+    /**
+     * Java-version filter equality. Compares by major version, so `?javaVersion=8` matches a
+     * component whose effective value RMS recorded as `1.8` — the spec treats those as one version
+     * (`JavaVersionComparator.valuesEqual`), and a filter that disagreed with that would be unable
+     * to match a value the list itself displays. Falls back to exact string equality so a value
+     * neither side can parse as a Java version (a hand-typed configured value, say) is still
+     * matchable by typing it verbatim.
+     */
+    private fun matchesJavaVersionFilter(
+        effective: String,
+        filterValues: Set<String>,
+    ): Boolean = filterValues.any { it == effective || JavaVersionComparator.valuesEqual(effective, it) }
 
     /**
      * Translate API-facing sort field names to `ComponentEntity` property names.
@@ -885,16 +1163,17 @@ class ComponentManagementServiceImpl(
         if (pageable.sort.isUnsorted) return pageable
         val translated =
             Sort.by(
-                pageable.sort.map { order ->
-                    when (order.property) {
-                        "name" ->
-                            // 4-arg ctor — preserves `ignoreCase` alongside direction
-                            // and null-handling. The 3-arg variant defaults
-                            // ignoreCase to false and would silently drop the flag.
-                            Sort.Order(order.direction, "componentKey", order.isIgnoreCase, order.nullHandling)
-                        else -> order
-                    }
-                }.toList(),
+                pageable.sort
+                    .map { order ->
+                        when (order.property) {
+                            "name" ->
+                                // 4-arg ctor — preserves `ignoreCase` alongside direction
+                                // and null-handling. The 3-arg variant defaults
+                                // ignoreCase to false and would silently drop the flag.
+                                Sort.Order(order.direction, "componentKey", order.isIgnoreCase, order.nullHandling)
+                            else -> order
+                        }
+                    }.toList(),
             )
         return PageRequest.of(pageable.pageNumber, pageable.pageSize, translated)
     }
@@ -926,11 +1205,13 @@ class ComponentManagementServiceImpl(
             attribute = request.overriddenAttribute,
             excludeOverrideId = null,
         )
-        require(configurationRepository.findByComponentIdAndVersionRangeAndOverriddenAttribute(
-            componentId,
-            canonicalRange,
-            request.overriddenAttribute,
-        ) == null) {
+        require(
+            configurationRepository.findByComponentIdAndVersionRangeAndOverriddenAttribute(
+                componentId,
+                canonicalRange,
+                request.overriddenAttribute,
+            ) == null,
+        ) {
             "Override row for attribute '${request.overriddenAttribute}' and range '$canonicalRange' already exists"
         }
 
@@ -968,6 +1249,16 @@ class ComponentManagementServiceImpl(
                         "Scalar override '${request.overriddenAttribute}' must not carry markerChildren"
                     }
                     row.applyScalarValue(request.overriddenAttribute, request.value)
+                    // CRS-B (above): introducing an override is always an effective change — there
+                    // was nothing at this range/attribute before.
+                    checkRMSOverrideGate(
+                        component = component,
+                        attribute = request.overriddenAttribute,
+                        effectiveChange = true,
+                        javaVersion = row.javaVersion,
+                        mavenVersion = row.mavenVersion,
+                        newRange = canonicalRange,
+                    )
                     null
                 }
 
@@ -1055,9 +1346,18 @@ class ComponentManagementServiceImpl(
         // override on a non-editable field. Snapshot-diff keeps it change-based across
         // both scalar and marker attributes — an unchanged echo leaves the snapshot
         // equal and is allowed (the transaction rolls back on the thrown 403/422).
-        if (fieldOverrideAuditSnapshot(row) != beforeSnapshot) {
+        val effectiveChange = fieldOverrideAuditSnapshot(row) != beforeSnapshot
+        if (effectiveChange) {
             enforceOverrideEditable(row.overriddenAttribute!!)
         }
+        checkRMSOverrideGate(
+            component = row.component,
+            attribute = row.overriddenAttribute!!,
+            effectiveChange = effectiveChange,
+            javaVersion = row.javaVersion,
+            mavenVersion = row.mavenVersion,
+            newRange = row.versionRange,
+        )
 
         val saved = configurationRepository.save(row)
         if (pendingTools != null) {
@@ -1178,11 +1478,11 @@ class ComponentManagementServiceImpl(
     private fun applyFieldOverrideDesiredSet(
         component: ComponentEntity,
         desired: List<FieldOverrideUpsertRequest>,
+        rmsBuildsCache: MutableMap<String, List<RMSBuild>> = mutableMapOf(),
     ): FieldOverrideApplyPlan {
-        fun isImportManaged(row: ComponentConfigurationEntity) =
-            row.rowType == "MARKER" && row.overriddenAttribute !in MarkerAttributes.ALL
+        fun isImportManaged(row: ComponentConfigurationEntity) = row.rowType == "MARKER" && row.overriddenAttribute !in MarkerAttributes.ALL
 
-        val existing = component.configurations.filter { it.rowType in FIELD_OVERRIDE_ROW_TYPES }
+        val existing = component.configurations.filter { it.rowType in fieldOverrideRowTypes }
         val byId = existing.mapNotNull { row -> row.id?.let { it to row } }.toMap()
 
         // Referenced ids must exist on this component (clear 400, not a silent create).
@@ -1212,7 +1512,7 @@ class ComponentManagementServiceImpl(
 
         // 2) UPDATE existing editable rows referenced by id.
         val updated = mutableListOf<Pair<ComponentConfigurationEntity, Map<String, Any?>>>()
-        desired.filter { it.id != null }.forEach { d ->
+        desired.withIndex().filter { it.value.id != null }.forEach { (j, d) ->
             val row = byId.getValue(d.id!!)
             if (isImportManaged(row)) return@forEach // preserve; ignore client echo
             // CRS-B: hidden-attribute rows are stripped — preserved as-is, incoming change ignored.
@@ -1226,20 +1526,30 @@ class ComponentManagementServiceImpl(
             // yields the editability error (403/422), not a value-400. A valid change is
             // still gated change-based by the snapshot diff below.
             gatingEditabilityOnInvalidPayload(d.overriddenAttribute) {
-                applyOverrideUpsertPayload(component, row, d, excludeOverrideId = row.id)
+                withFieldOverrideIndex(j) { applyOverrideUpsertPayload(component, row, d, excludeOverrideId = row.id) }
             }?.let { pendingTools[row] = it }
             // CRS-B: gate any actual change (value / markerChildren / range) to an
             // override on a non-editable field; an unchanged echo (combined Save
             // re-sends the whole set) leaves the snapshot equal and is left alone.
-            if (fieldOverrideAuditSnapshot(row) != before) {
+            val effectiveChange = fieldOverrideAuditSnapshot(row) != before
+            if (effectiveChange) {
                 enforceOverrideEditable(d.overriddenAttribute)
             }
+            checkRMSOverrideGate(
+                component = component,
+                attribute = d.overriddenAttribute,
+                effectiveChange = effectiveChange,
+                javaVersion = row.javaVersion,
+                mavenVersion = row.mavenVersion,
+                newRange = row.versionRange,
+                rmsBuildsCache = rmsBuildsCache,
+            )
             updated += row to before
         }
 
         // 3) CREATE rows without an id.
         val created = mutableListOf<ComponentConfigurationEntity>()
-        desired.filter { it.id == null }.forEach { d ->
+        desired.withIndex().filter { it.value.id == null }.forEach { (j, d) ->
             // CRS-B: hidden-attribute create is silently dropped (strip); otherwise a new
             // override is a value change on the overridden attribute — gate it.
             if (isHiddenOverrideAttribute(d.overriddenAttribute)) return@forEach
@@ -1251,8 +1561,21 @@ class ComponentManagementServiceImpl(
                     overriddenAttribute = d.overriddenAttribute,
                     rowType = "",
                 )
-            applyOverrideUpsertPayload(component, row, d, excludeOverrideId = null)?.let { pendingTools[row] = it }
+            withFieldOverrideIndex(j) {
+                applyOverrideUpsertPayload(component, row, d, excludeOverrideId = null)
+            }?.let { pendingTools[row] = it }
             component.configurations.add(row)
+            // A new override is always an effective change — there was nothing at this
+            // range/attribute before (mirrors the single-row create path).
+            checkRMSOverrideGate(
+                component = component,
+                attribute = d.overriddenAttribute,
+                effectiveChange = true,
+                javaVersion = row.javaVersion,
+                mavenVersion = row.mavenVersion,
+                newRange = row.versionRange,
+                rmsBuildsCache = rmsBuildsCache,
+            )
             // Explicit save (like the single-row create path) so the generated id
             // is assigned to this instance now — the parent saveAndFlush's cascade
             // does not back-populate it onto our reference, which the post-flush
@@ -1277,13 +1600,26 @@ class ComponentManagementServiceImpl(
         excludeOverrideId: UUID?,
     ): List<String>? {
         val canonicalRange = normalizeRange(d.versionRange)
-        validateFieldOverrideRange(
-            range = canonicalRange,
-            component = component,
-            attribute = d.overriddenAttribute,
-            excludeOverrideId = excludeOverrideId,
-        )
-        row.versionRange = canonicalRange
+        // SYS-065 — change-scoped range validation on the desired-set path. On the UPDATE branch
+        // (excludeOverrideId == row.id, a persisted row) an echo of an UNCHANGED range must be a true
+        // no-op: legacy composite rows predate the single-segment input contract, so the portal's
+        // combined Save (which re-sends the whole desired set, untouched rows included) would otherwise
+        // 400 on every save of a component that owns one. Compare NORMALIZED forms — stored ranges are
+        // returned verbatim by the read mapper and may carry whitespace — and when unchanged neither
+        // validate NOR reassign (reassigning would mutate the row and trip audit/editability diffs).
+        // A CREATE (excludeOverrideId == null) always validates + assigns, so composite CREATE stays
+        // rejected and an empty/invalid range cannot slip in. An actual range change is still validated.
+        val rangeUnchangedOnUpdate =
+            excludeOverrideId != null && canonicalRange == normalizeRange(row.versionRange)
+        if (!rangeUnchangedOnUpdate) {
+            validateFieldOverrideRange(
+                range = canonicalRange,
+                component = component,
+                attribute = d.overriddenAttribute,
+                excludeOverrideId = excludeOverrideId,
+            )
+            row.versionRange = canonicalRange
+        }
         return when {
             d.overriddenAttribute in MarkerAttributes.ALL -> {
                 row.rowType = "MARKER"
@@ -1322,7 +1658,7 @@ class ComponentManagementServiceImpl(
                 .findByComponentId(componentId)
                 .filter { it.rowType == "RANGE_PRESENCE" }
                 .map { it.versionRange }
-                .sortedWith(SUPPORTED_RANGE_ORDER)
+                .sortedWith(supportedRangeOrder)
         // No bounded RANGE_PRESENCE rows ⇒ the ALL_VERSIONS base covers everything (ADR-018).
         return SupportedVersionsResponse(all = ranges.isEmpty(), ranges = ranges)
     }
@@ -1350,7 +1686,8 @@ class ComponentManagementServiceImpl(
                 // (e.g. ["(,2.0)","[2.0,)"]) collapse to the sentinel under mergeUnion — drop it so we
                 // store zero presence rows (= ALL) rather than a bounded-looking all-versions row that
                 // reports all=false yet matches every override. Mirrors ImportServiceImpl's coverage filter.
-                VersionRangePartition.mergeUnion(normalized, numericVersionComparator(numericVersionFactory))
+                VersionRangePartition
+                    .mergeUnion(normalized, numericVersionComparator(numericVersionFactory))
                     .filterNot { isAllVersionsCoverage(it) }
             }
 
@@ -1388,11 +1725,11 @@ class ComponentManagementServiceImpl(
             component.configurations
                 .filter { it.rowType == "RANGE_PRESENCE" }
                 .map { it.versionRange }
-                .sortedWith(SUPPORTED_RANGE_ORDER)
+                .sortedWith(supportedRangeOrder)
         publishAuditEvent(
             action = "UPDATE",
             entityId = component.id.toString(),
-            oldValue = mapOf("supportedVersions" to existingPresence.map { it.versionRange }.sortedWith(SUPPORTED_RANGE_ORDER)),
+            oldValue = mapOf("supportedVersions" to existingPresence.map { it.versionRange }.sortedWith(supportedRangeOrder)),
             newValue = mapOf("supportedVersions" to resulting.ifEmpty { listOf("ALL") }),
             jiraTaskKey = request.jiraTaskKey,
             changeComment = request.changeComment,
@@ -1436,14 +1773,13 @@ class ComponentManagementServiceImpl(
         if (all) return emptyList()
         val supportedObjs = supported.mapNotNull { runCatching { versionRangeFactory.create(it) }.getOrNull() }
         return component.configurations
-            .filter { it.rowType in FIELD_OVERRIDE_ROW_TYPES }
+            .filter { it.rowType in fieldOverrideRowTypes }
             .filter { ov ->
                 // An unparseable override range is itself unreachable — surface it (warn), do NOT
                 // silently treat it as covered (that would suppress the very advisory it should raise).
                 val ovObj = runCatching { versionRangeFactory.create(ov.versionRange) }.getOrNull() ?: return@filter true
                 supportedObjs.none { it.isIntersect(ovObj) }
-            }
-            .map { ov ->
+            }.map { ov ->
                 "Override '${ov.overriddenAttribute}' on range '${ov.versionRange}' is outside the supported " +
                     "versions and will never resolve (V1/V5) — remove it or extend supported to cover it."
             }
@@ -1534,7 +1870,10 @@ class ComponentManagementServiceImpl(
      * Mode default (review-fix — no silent downgrade): an unspecified mode defaults to ALL only
      * when there are no tokens; tokens present + no mode ⇒ EXPLICIT; an explicit mode is honored.
      */
-    private fun resolveArtifactIdMode(mode: String?, tokens: List<String>): ArtifactIdMode =
+    private fun resolveArtifactIdMode(
+        mode: String?,
+        tokens: List<String>,
+    ): ArtifactIdMode =
         when {
             !mode.isNullOrBlank() ->
                 runCatching { ArtifactIdMode.valueOf(mode) }.getOrElse {
@@ -1547,7 +1886,10 @@ class ComponentManagementServiceImpl(
     /** Per-component non-base ownership ranges must be pairwise non-overlapping (most-specific wins). */
     private fun validateNonOverlappingOwnershipRanges(component: ComponentEntity) {
         val nonBaseRanges =
-            component.artifactMappings.map { it.versionRange }.filter { it != ALL_VERSIONS }.distinct()
+            component.artifactMappings
+                .map { it.versionRange }
+                .filter { it != ALL_VERSIONS }
+                .distinct()
         for (i in nonBaseRanges.indices) {
             for (j in i + 1 until nonBaseRanges.size) {
                 val intersects =
@@ -1581,12 +1923,16 @@ class ComponentManagementServiceImpl(
         component: ComponentEntity,
         projectIds: List<String>,
     ) {
-        projectIds.forEachIndexed { index, projectId ->
-            component.teamcityProjects.add(
-                ComponentTeamcityProjectEntity(
+        // v4 write carries only project ids (no version yet), so each becomes a version_line
+        // with version = null, pointing at a deduplicated teamcity_project (find-or-create).
+        projectIds.forEach { projectId ->
+            val teamcityProject = teamcityProjectRepository.findByProjectId(projectId)
+                ?: teamcityProjectRepository.save(TeamcityProjectEntity(projectId = projectId))
+            component.versionLines.add(
+                VersionLineEntity(
                     component = component,
-                    projectId = projectId,
-                    sortOrder = index,
+                    version = null,
+                    teamcityProject = teamcityProject,
                 ),
             )
         }
@@ -1619,8 +1965,7 @@ class ComponentManagementServiceImpl(
      * persist `"A "` and never be filterable as `A` again — see SYS-040
      * write-side canonicalisation rationale.
      */
-    private fun canonicalizeLabels(raw: Set<String>): Set<String> =
-        raw.map { it.trim() }.filter { it.isNotEmpty() }.toSet()
+    private fun canonicalizeLabels(raw: Set<String>): Set<String> = raw.map { it.trim() }.filter { it.isNotEmpty() }.toSet()
 
     /**
      * Reject a write that consists entirely of blank/whitespace label
@@ -1645,7 +1990,8 @@ class ComponentManagementServiceImpl(
      * neither config-allowed nor a known master code throws → 400.
      */
     private fun canonicalizeSystems(raw: Set<String>): Set<String> =
-        raw.map { it.trim() }
+        raw
+            .map { it.trim() }
             .filter { it.isNotEmpty() }
             .map { validateAndCanonicalizeSystemCode(it) }
             .toSet()
@@ -1668,9 +2014,27 @@ class ComponentManagementServiceImpl(
         // row. Canonicalise here too so the persistence layer is the
         // single source of truth for the canonical form.
         val canonical = canonicalizeLabels(desired)
+        // Set-diff, NOT delete-all-then-reinsert. `deleteAllInBatch` bulk-deletes
+        // rows but leaves the entities MANAGED in the persistence context; a
+        // subsequent `save` of a still-present code resolves to a `merge` onto
+        // that managed entity, so Hibernate emits neither an INSERT (it believes
+        // the row exists) nor an UPDATE (immutable @Id/@ManyToOne -> HHH000502) —
+        // the bulk-deleted row is silently never recreated, and an edit keeps
+        // only the newly-added labels. Touching only the true delta (remove
+        // codes no longer desired, insert genuinely new ones) avoids the merge
+        // entirely and is idempotent for an unchanged set.
+        //
+        // Invariant that keeps this safe: `toDelete` (existing − desired) and the
+        // insert set (desired − existing) are disjoint by construction, and each
+        // component is synced at most once per transaction — so a just-deleted
+        // (still-managed) row is never re-saved in the same persistence context.
+        // If a future caller ever re-syncs the same component twice in one tx,
+        // detach `toDelete` (or use a PC-aware delete) before re-inserting.
         val existing = componentLabelRepository.findByComponentId(componentId)
-        if (existing.isNotEmpty()) componentLabelRepository.deleteAllInBatch(existing)
-        canonical.forEach { code ->
+        val existingCodes = existing.map { it.labelCode }.toSet()
+        val toDelete = existing.filter { it.labelCode !in canonical }
+        if (toDelete.isNotEmpty()) componentLabelRepository.deleteAllInBatch(toDelete)
+        (canonical - existingCodes).forEach { code ->
             ensureLabelExists(code)
             componentLabelRepository.save(
                 ComponentLabelEntity(componentId = componentId, labelCode = code),
@@ -1690,9 +2054,13 @@ class ComponentManagementServiceImpl(
         componentId: UUID,
         desired: Set<String>,
     ) {
+        // Set-diff, not delete-all-then-reinsert — see [syncLabels] for the
+        // managed-entity/merge hazard the delete-all pattern hides.
         val existing = componentSystemRepository.findByComponentId(componentId)
-        if (existing.isNotEmpty()) componentSystemRepository.deleteAllInBatch(existing)
-        desired.forEach { code ->
+        val existingCodes = existing.map { it.systemCode }.toSet()
+        val toDelete = existing.filter { it.systemCode !in desired }
+        if (toDelete.isNotEmpty()) componentSystemRepository.deleteAllInBatch(toDelete)
+        (desired - existingCodes).forEach { code ->
             ensureSystemExists(code)
             componentSystemRepository.save(
                 ComponentSystemEntity(componentId = componentId, systemCode = code),
@@ -1709,9 +2077,15 @@ class ComponentManagementServiceImpl(
         configId: UUID,
         desired: List<String>,
     ) {
+        // Set-diff, not delete-all-then-reinsert — see [syncLabels] for the
+        // managed-entity/merge hazard the delete-all pattern hides.
+        val canonicalTools = desired.distinct()
+        val canonicalToolSet = canonicalTools.toSet()
         val existing = componentRequiredToolRepository.findByComponentConfigurationId(configId)
-        if (existing.isNotEmpty()) componentRequiredToolRepository.deleteAllInBatch(existing)
-        desired.distinct().forEach { tool ->
+        val existingNames = existing.map { it.toolName }.toSet()
+        val toDelete = existing.filter { it.toolName !in canonicalToolSet }
+        if (toDelete.isNotEmpty()) componentRequiredToolRepository.deleteAllInBatch(toDelete)
+        canonicalTools.filter { it !in existingNames }.forEach { tool ->
             ensureToolExists(tool)
             componentRequiredToolRepository.save(
                 ComponentRequiredToolEntity(componentConfigurationId = configId, toolName = tool),
@@ -1869,7 +2243,9 @@ class ComponentManagementServiceImpl(
                 "parentComponentName: a component that can be a parent cannot itself have a parent"
             }
         }
-        if (canBeParentChanged && !entity.canBeParent && entity.id != null &&
+        if (canBeParentChanged &&
+            !entity.canBeParent &&
+            entity.id != null &&
             componentRepository.existsByParentComponentId(entity.id!!)
         ) {
             throw IllegalArgumentException(
@@ -1979,9 +2355,26 @@ class ComponentManagementServiceImpl(
             throw e
         }
 
+    /**
+     * Routes a VCS entry error of the [j]-th `fieldOverrides` element to that element: the Portal re-sends
+     * every override row, so an unprefixed `vcsEntries[<i>]` could not be told apart. Other errors keep their shape.
+     */
+    private inline fun <T> withFieldOverrideIndex(
+        j: Int,
+        applyPayload: () -> T,
+    ): T =
+        try {
+            applyPayload()
+        } catch (e: IllegalArgumentException) {
+            val message = e.message.orEmpty()
+            if (message.startsWith("vcsEntries[") || message.startsWith("buildWorkingDirectory:")) {
+                throw IllegalArgumentException("fieldOverrides[$j].$message", e)
+            }
+            throw e
+        }
+
     /** True when the override's attribute maps to a field-config `visibility: hidden`. */
-    private fun isHiddenOverrideAttribute(attribute: String?): Boolean =
-        attribute != null && fieldConfigService.isHidden(attribute)
+    private fun isHiddenOverrideAttribute(attribute: String?): Boolean = attribute != null && fieldConfigService.isHidden(attribute)
 
     /**
      * Standalone field-override CRUD rejects a `hidden` attribute with the SAME 400 as a
@@ -2046,6 +2439,7 @@ class ComponentManagementServiceImpl(
         request.productType?.let { enforceFieldEditable("component.productType", it, entity.productType) }
         request.clientCode?.let { enforceFieldEditable("component.clientCode", it, entity.clientCode) }
         request.solution?.let { enforceFieldEditable("component.solution", it, entity.solution) }
+        request.autoRelease?.let { enforceFieldEditable(AUTO_RELEASE_FIELD, it, entity.autoRelease) }
         request.copyright?.let { enforceFieldEditable("component.copyright", it, entity.copyright) }
         request.releasesInDefaultBranch?.let {
             enforceFieldEditable("component.releasesInDefaultBranch", it, entity.releasesInDefaultBranch)
@@ -2130,6 +2524,7 @@ class ComponentManagementServiceImpl(
         request.productType?.let { enforceFieldEditable("component.productType", it, null) }
         request.clientCode?.let { enforceFieldEditable("component.clientCode", it, null) }
         request.solution?.let { enforceFieldEditable("component.solution", it, null) }
+        if (request.autoRelease) enforceFieldEditable(AUTO_RELEASE_FIELD, true, null)
         request.copyright?.let { enforceFieldEditable("component.copyright", it, null) }
         request.releasesInDefaultBranch?.let { enforceFieldEditable("component.releasesInDefaultBranch", it, null) }
         request.jiraDisplayName?.let { enforceFieldEditable("component.jiraDisplayName", it, null) }
@@ -2255,7 +2650,10 @@ class ComponentManagementServiceImpl(
             if (!fieldConfigService.isHidden("build.deprecated")) config.deprecated = b.deprecated
             if (!fieldConfigService.isHidden("build.requiredProject")) config.requiredProject = b.requiredProject
             if (!fieldConfigService.isHidden("build.projectVersion")) config.projectVersion = b.projectVersion?.let(::clearBlankScalar)
-            if (!fieldConfigService.isHidden("build.systemProperties")) config.systemProperties = b.systemProperties?.let(::clearBlankScalar)
+            if (!fieldConfigService.isHidden("build.systemProperties")) {
+                config.systemProperties =
+                    b.systemProperties?.let(::clearBlankScalar)
+            }
             if (!fieldConfigService.isHidden("build.buildTasks")) config.buildTasks = b.buildTasks?.let(::clearBlankScalar)
         }
         request.escrow?.let { e ->
@@ -2300,12 +2698,20 @@ class ComponentManagementServiceImpl(
             // exposed via V4 (no UI need today); DSL import is the only
             // producer of the per-range column.
         }
+        request.buildWorkingDirectory?.let { config.buildWorkingDirectory = it.trim().ifEmpty { null } }
         request.vcsEntries?.let { replaceVcsEntries(config, it) }
+            ?: request.buildWorkingDirectory?.let {
+                VcsCheckoutLayoutValidator.validateBuildWorkingDirectory(config.vcsEntries, config.buildWorkingDirectory)
+            }
         request.mavenArtifacts?.let { replaceMavenArtifacts(config, it) }
         request.fileUrlArtifacts?.let { replaceFileUrlArtifacts(config, it) }
         request.dockerImages?.let { replaceDockerImages(config, it) }
         request.packages?.let { replacePackages(config, it) }
-        request.buildToolBeans?.let { validateBuildToolBeans(it); replaceBuildToolBeans(config, it) }
+        request.genericArtifacts?.let { replaceGenericArtifacts(config, it) }
+        request.buildToolBeans?.let {
+            validateBuildToolBeans(it)
+            replaceBuildToolBeans(config, it)
+        }
         // requiredTools is a non-cascaded M:N junction — caller syncs via syncRequiredTools
         // after the configuration row's id has been assigned (post parent flush).
     }
@@ -2368,7 +2774,10 @@ class ComponentManagementServiceImpl(
                 }
             }
             e.gradleIncludeTestConfigurations?.let {
-                if (!fieldConfigService.isHidden("escrow.gradleIncludeTestConfigurations")) config.escrowGradleIncludeTestConfigurations = it
+                if (!fieldConfigService.isHidden("escrow.gradleIncludeTestConfigurations")) {
+                    config.escrowGradleIncludeTestConfigurations =
+                        it
+                }
             }
             e.buildTask?.let { if (!fieldConfigService.isHidden("escrow.buildTask")) config.escrowBuildTask = clearBlankScalar(it) }
         }
@@ -2392,12 +2801,21 @@ class ComponentManagementServiceImpl(
             // jiraHotfixVersionFormat per-range PATCH is intentionally not
             // exposed via V4; see applyBaseConfigurationCreate above.
         }
+        // null = unchanged, blank = clear (V4_SCALAR_CLEAR_SEMANTICS).
+        patch.buildWorkingDirectory?.let { config.buildWorkingDirectory = it.trim().ifEmpty { null } }
         patch.vcsEntries?.let { replaceVcsEntries(config, it) }
+            ?: patch.buildWorkingDirectory?.let {
+                VcsCheckoutLayoutValidator.validateBuildWorkingDirectory(config.vcsEntries, config.buildWorkingDirectory)
+            }
         patch.mavenArtifacts?.let { replaceMavenArtifacts(config, it) }
         patch.fileUrlArtifacts?.let { replaceFileUrlArtifacts(config, it) }
         patch.dockerImages?.let { replaceDockerImages(config, it) }
         patch.packages?.let { replacePackages(config, it) }
-        patch.buildToolBeans?.let { validateBuildToolBeans(it); replaceBuildToolBeans(config, it) }
+        patch.genericArtifacts?.let { replaceGenericArtifacts(config, it) }
+        patch.buildToolBeans?.let {
+            validateBuildToolBeans(it)
+            replaceBuildToolBeans(config, it)
+        }
         // requiredTools: caller syncs via syncRequiredTools after flush — see updateComponent.
     }
 
@@ -2410,21 +2828,32 @@ class ComponentManagementServiceImpl(
         entries: List<VcsEntryRequest>,
     ) {
         entries.forEach { req -> req.repositoryType?.let { validateRepositoryType(it) } }
-        config.vcsEntries.clear()
-        entries.forEachIndexed { index, req ->
-            config.vcsEntries.add(
+        // Name derivation (ADR-022 decision 4) is shared with the TeamCity checkout layout Diff job's
+        // INVALID check — see VcsCheckoutLayoutValidator.deriveNames' kdoc for the rule.
+        val checkoutDirectories = entries.map { it.checkoutDirectory?.trim()?.ifEmpty { null } }
+        val names = VcsCheckoutLayoutValidator.deriveNames(
+            config.vcsEntries.toList(),
+            entries.mapIndexed { index, req -> Triple(req.vcsPath, req.repositoryType, checkoutDirectories[index]) },
+        )
+        val replacement =
+            entries.mapIndexed { index, req ->
                 VcsSettingsEntryEntity(
                     componentConfiguration = config,
-                    name = req.name ?: "main",
+                    name = names[index],
                     vcsPath = req.vcsPath,
                     branch = req.branch,
                     tag = req.tag,
                     hotfixBranch = req.hotfixBranch,
                     repositoryType = req.repositoryType,
                     sortOrder = index,
-                ),
-            )
-        }
+                    sourcePath = req.sourcePath?.trim()?.ifEmpty { null },
+                    checkoutDirectory = checkoutDirectories[index],
+                )
+            }
+        VcsCheckoutLayoutValidator.validateVcsCheckoutLayout(replacement)
+        VcsCheckoutLayoutValidator.validateBuildWorkingDirectory(replacement, config.buildWorkingDirectory)
+        config.vcsEntries.clear()
+        config.vcsEntries.addAll(replacement)
     }
 
     private fun replaceMavenArtifacts(
@@ -2503,6 +2932,44 @@ class ComponentManagementServiceImpl(
         }
     }
 
+    private fun replaceGenericArtifacts(
+        config: ComponentConfigurationEntity,
+        generics: List<GenericArtifactRequest>,
+    ) {
+        generics.forEach { validateGenericArtifactPath(it.path) }
+        config.genericArtifacts.clear()
+        generics.forEachIndexed { index, req ->
+            config.genericArtifacts.add(
+                DistributionGenericArtifactEntity(
+                    componentConfiguration = config,
+                    path = req.path,
+                    sortOrder = index,
+                ),
+            )
+        }
+    }
+
+    private fun validateGenericArtifactPath(path: String) {
+        require(path.isNotBlank()) { "path is not specified for a genericArtifact" }
+        val allowedPlaceholders = setOf("version", "major", "minor", "service", "fix", "build")
+        val placeholderRegex = Regex("""\$\{([^}]+)\}""")
+        val allowedList = allowedPlaceholders.sorted().joinToString(", ") { "\${$it}" }
+        placeholderRegex.findAll(path).forEach { match ->
+            val name = match.groupValues[1]
+            require(name in allowedPlaceholders) {
+                "genericArtifact path '$path' contains a disallowed placeholder '\${$name}'; " +
+                    "only $allowedList are permitted"
+            }
+        }
+        val masked = placeholderRegex.replace(path) { "0" }
+        require(GroovySlurperConfigValidator.GENERIC_ENTRY.matcher(masked).matches()) {
+            "genericArtifact path '$path' does not match the required shape " +
+                "'<segment>/<segment>/<segment>[/…]' where each segment is [A-Za-z0-9._-] " +
+                "(commas, URL schemes, whitespace and leading slashes are not allowed — " +
+                "one path per request row)"
+        }
+    }
+
     private fun replaceBuildToolBeans(
         config: ComponentConfigurationEntity,
         beans: List<BuildToolBeanRequest>,
@@ -2564,6 +3031,7 @@ class ComponentManagementServiceImpl(
         return when (markerName) {
             MarkerAttributes.VCS_SETTINGS -> {
                 requireNotNull(payload.vcsEntries) { "Marker '$markerName' requires vcsEntries payload" }
+                row.buildWorkingDirectory = payload.buildWorkingDirectory?.trim()?.ifEmpty { null }
                 replaceVcsEntries(row, payload.vcsEntries)
                 null
             }
@@ -2585,6 +3053,11 @@ class ComponentManagementServiceImpl(
             MarkerAttributes.DISTRIBUTION_PACKAGES -> {
                 requireNotNull(payload.packages) { "Marker '$markerName' requires packages payload" }
                 replacePackages(row, payload.packages)
+                null
+            }
+            MarkerAttributes.DISTRIBUTION_GENERIC -> {
+                requireNotNull(payload.genericArtifacts) { "Marker '$markerName' requires genericArtifacts payload" }
+                replaceGenericArtifacts(row, payload.genericArtifacts)
                 null
             }
             MarkerAttributes.BUILD_REQUIRED_TOOLS -> {
@@ -2618,8 +3091,10 @@ class ComponentManagementServiceImpl(
                 if (payload.fileUrlArtifacts != null) add("fileUrlArtifacts")
                 if (payload.dockerImages != null) add("dockerImages")
                 if (payload.packages != null) add("packages")
+                if (payload.genericArtifacts != null) add("genericArtifacts")
                 if (payload.requiredTools != null) add("requiredTools")
                 if (payload.buildToolBeans != null) add("buildToolBeans")
+                if (payload.buildWorkingDirectory != null && markerName != MarkerAttributes.VCS_SETTINGS) add("buildWorkingDirectory")
             }
         val expected =
             when (markerName) {
@@ -2628,6 +3103,7 @@ class ComponentManagementServiceImpl(
                 MarkerAttributes.DISTRIBUTION_FILE_URL -> "fileUrlArtifacts"
                 MarkerAttributes.DISTRIBUTION_DOCKER -> "dockerImages"
                 MarkerAttributes.DISTRIBUTION_PACKAGES -> "packages"
+                MarkerAttributes.DISTRIBUTION_GENERIC -> "genericArtifacts"
                 MarkerAttributes.BUILD_REQUIRED_TOOLS -> "requiredTools"
                 MarkerAttributes.BUILD_TOOLS -> "buildToolBeans"
                 else -> error("Unknown marker '$markerName' — caller did not validate")
@@ -2696,12 +3172,21 @@ class ComponentManagementServiceImpl(
     // D5 (closed-range only) is enforced by the Portal at input but is NOT
     // yet mirrored here; see the validateFieldOverrideRange KDoc.
 
-    private val FIELD_OVERRIDE_ROW_TYPES = setOf("SCALAR_OVERRIDE", "MARKER")
+    private val fieldOverrideRowTypes = setOf("SCALAR_OVERRIDE", "MARKER")
 
     // Anchored regex matches only single-segment ranges (no top-level comma
     // between segments), so composites short-circuit via the regex-mismatch
     // path inside parseSimpleSegment without a separate composite-detector.
-    private val SIMPLE_SEGMENT_PATTERN = Regex("^([\\[(])([^,]*),([^,]*)([\\])])$")
+    private val simpleSegmentPattern = Regex("^([\\[(])([^,]*),([^,]*)([\\])])$")
+
+    // The exact-version ("hard version") form `[X]` is also a single Maven
+    // segment — the simplest one — but carries no comma, so it never matched
+    // simpleSegmentPattern and was misclassified as composite (rejected on
+    // POST/PATCH). Maven only allows the closed `[X]` shape for a hard version:
+    // `(X)`, `[X)`, `(X]` are all invalid, so this pattern is intentionally
+    // square-bracket only. The releng VersionRangeFactory parses `[X]` as
+    // lo == hi, both inclusive — we mirror that below.
+    private val exactVersionPattern = Regex("^\\[([^,\\[\\]()]+)]$")
 
     private data class ParsedSimpleRange(
         val lo: String?,
@@ -2710,12 +3195,15 @@ class ComponentManagementServiceImpl(
         val hiIncl: Boolean,
     )
 
-    private fun normalizeRange(range: String): String =
-        range.trim().replace(Regex("\\s+"), "")
+    private fun normalizeRange(range: String): String = range.trim().replace(Regex("\\s+"), "")
 
     private fun parseSimpleSegment(range: String): ParsedSimpleRange? {
         val compact = normalizeRange(range)
-        val m = SIMPLE_SEGMENT_PATTERN.matchEntire(compact) ?: return null
+        exactVersionPattern.matchEntire(compact)?.let { exact ->
+            val v = exact.groupValues[1]
+            return ParsedSimpleRange(lo = v, loIncl = true, hi = v, hiIncl = true)
+        }
+        val m = simpleSegmentPattern.matchEntire(compact) ?: return null
         val (open, loStr, hiStr, close) = m.destructured
         if (loStr.any { it in "()[]" } || hiStr.any { it in "()[]" }) return null
         return ParsedSimpleRange(
@@ -2726,20 +3214,25 @@ class ComponentManagementServiceImpl(
         )
     }
 
-    private fun compareMavenVersions(a: String, b: String): Int =
-        DefaultArtifactVersion(a).compareTo(DefaultArtifactVersion(b))
+    private fun compareMavenVersions(
+        a: String,
+        b: String,
+    ): Int = DefaultArtifactVersion(a).compareTo(DefaultArtifactVersion(b))
 
     /**
      * Stable display ordering for supported-coverage ranges: by lower bound (open-lower / composite
      * ranges, whose simple floor is null, sort first via the "0" fallback), then by raw string.
      */
-    private val SUPPORTED_RANGE_ORDER: Comparator<String> =
+    private val supportedRangeOrder: Comparator<String> =
         compareBy<String>(
             { parseSimpleSegment(it)?.lo?.let(::DefaultArtifactVersion) ?: DefaultArtifactVersion("0") },
             { it },
         )
 
-    private fun simpleContains(outer: ParsedSimpleRange, inner: ParsedSimpleRange): Boolean {
+    private fun simpleContains(
+        outer: ParsedSimpleRange,
+        inner: ParsedSimpleRange,
+    ): Boolean {
         val leftOK = when {
             outer.lo == null -> true
             inner.lo == null -> false
@@ -2773,6 +3266,19 @@ class ComponentManagementServiceImpl(
      *    Existing composite rows (legacy DSL import) are untouched — the
      *    sibling walk below uses `isIntersect` on them but treats them as
      *    opaque when measuring containment.
+     *
+     *    ECHO-SAFETY CONTRACT (SYS-065): this composite rejection is an
+     *    INPUT-CONTRACT limit (a shape the API declines to accept), NOT a data
+     *    invariant — legacy data may legitimately hold a composite. On the
+     *    desired-set path (a full-collection echo), per-row input-contract
+     *    validators like this one MUST be change-scoped: an UNCHANGED echo of a
+     *    stored row must be a no-op, or a component owning a legacy composite
+     *    can never be saved. See `applyOverrideUpsertPayload`, which skips this
+     *    call when the normalized range is unchanged on update. Set-level data
+     *    invariants (disjointness, point 3) still run against the whole set but
+     *    are satisfied by unchanged rows. Checklist for any future desired-set /
+     *    full-collection-echo endpoint: does any per-item validator reject data
+     *    that already legitimately exists in the store?
      * 3. Any intersection with a sibling override on the same attribute is
      *    rejected — field-override ranges must be DISJOINT. Partial overlap
      *    AND strict containment are both conflicts: a version inside the
@@ -2809,14 +3315,15 @@ class ComponentManagementServiceImpl(
         val parsedNew = parseSimpleSegment(range)
         require(parsedNew != null) {
             "Field-override range '$range' must be a single Maven segment " +
-                "(e.g. [1.0,2.0)). Composite ranges are not accepted on POST / " +
-                "PATCH — split the override into multiple rows, one per segment."
+                "(e.g. [1.0,2.0) or an exact version [1.0.49]). Composite ranges " +
+                "are not accepted on POST / PATCH — split the override into " +
+                "multiple rows, one per segment."
         }
         val newRangeObj = versionRangeFactory.create(range)
         for (row in component.configurations) {
             if (row.id != null && row.id == excludeOverrideId) continue
             if (row.overriddenAttribute != attribute) continue
-            if (row.rowType !in FIELD_OVERRIDE_ROW_TYPES) continue
+            if (row.rowType !in fieldOverrideRowTypes) continue
             val existingRangeObj = try {
                 versionRangeFactory.create(row.versionRange)
             } catch (_: Exception) {
@@ -2881,8 +3388,10 @@ class ComponentManagementServiceImpl(
      *
      *  - **explicit-external ≥1 distribution coordinate** (#6): when
      *    `distributionExplicit && distributionExternal`, at least one of GAV
-     *    (maven artifact), docker image, or DEB/RPM package must be defined on
-     *    some configuration row.
+     *    (maven artifact), docker image, DEB/RPM package, or generic artifact
+     *    (SYS-098) must be defined on some configuration row. Not applied when the BASE build system is
+     *    WHISKEY: legacy WHISKEY components define no GAV / docker /
+     *    package coordinate, and the rule must not block editing them.
      *  - **groupId supported prefix** (#10): every maven `groupPattern` element
      *    must start with one of the env-configured `supportedGroupIds`.
      *  - **archived ≠ explicit-external** (#28): an archived component cannot be
@@ -2907,9 +3416,9 @@ class ComponentManagementServiceImpl(
                 "distribution: an archived component can't be explicitly+externally " +
                     "distributed — set distributionExplicit=false (component '${entity.componentKey}')"
             }
-            require(hasAnyDistributionCoordinate(entity)) {
+            require(isBaseBuildSystemWhiskey(entity) || hasAnyDistributionCoordinate(entity)) {
                 "distribution: an explicit+external component must define at least one " +
-                    "distribution coordinate (maven GAV, docker image, or package) " +
+                    "distribution coordinate (maven GAV, docker image, package, or generic artifact) " +
                     "(component '${entity.componentKey}')"
             }
         }
@@ -2936,7 +3445,8 @@ class ComponentManagementServiceImpl(
         if (referencedKeys.isEmpty()) return
 
         val existingKeys =
-            componentRepository.findByComponentKeyIn(referencedKeys)
+            componentRepository
+                .findByComponentKeyIn(referencedKeys)
                 .mapTo(HashSet()) { it.componentKey }
         val missingKey =
             entity.docLinks
@@ -2949,11 +3459,104 @@ class ComponentManagementServiceImpl(
         }
     }
 
+    /**
+     * A test component's key must match a configured name pattern
+     * (`components-registry.test-components.name-patterns`, SYS-099) — 400, prefixed with [field].
+     * Unflagged components are not checked.
+     */
+    private fun validateTestComponentName(
+        entity: ComponentEntity,
+        field: String,
+    ) {
+        if (!entity.testComponent) return
+        val settings = registryProperties?.testComponents ?: ComponentsRegistryProperties.TestComponentsSettings()
+        require(settings.matches(entity.componentKey)) {
+            "$field: test component key '${entity.componentKey}' matches none of the test-component name patterns " +
+                "${settings.namePatterns}"
+        }
+    }
+
+    /**
+     * Test data must never become part of a real product: a non-test component may not reference a
+     * test component as its parent or doc component (400, like the can-be-parent rule). Checked both
+     * ways — this component's own references, and, for a test component, the non-test components that
+     * already reference it. Runs post-flush, like [validateDocComponentExistence].
+     *
+     * Race safety: both directions serialize on the row of the component that would become the test
+     * target. Flagging (or renaming) a test component A already holds A's row: the caller has flushed
+     * the UPDATE that changed it (on create, the row is uncommitted and invisible to others). Referencing
+     * A from a real component takes `SELECT … FOR UPDATE` on A, then reads A's flag fresh. Whichever
+     * commits second sees the other's committed write and fails. (Optimistic versions cannot catch it:
+     * the two writes bump different components' rows.)
+     * The field prefixes name what triggered the check: [flagField] for the reverse direction
+     * (`name` for a rename). The forward direction checks only what the caller passes: the parent when
+     * [parentField] is set (prefixed with it), and the doc keys in [docChecks] (key → prefix field);
+     * the defaults — the parent and every doc key — are for create, where everything is new.
+     */
+    private fun validateTestComponentReferences(
+        entity: ComponentEntity,
+        flagField: String = "testComponent",
+        parentField: String? = "parentComponentName",
+        docChecks: Map<String, String> = entity.docLinks.associate { it.docComponentKey to "docs" },
+    ) {
+        val key = entity.componentKey
+        val violation =
+            if (entity.testComponent) {
+                val id = entity.id ?: return
+                val children = componentRepository.findNonTestChildKeys(id)
+                val docReferrers = componentRepository.findNonTestDocReferrerKeys(key, id)
+                when {
+                    children.isNotEmpty() ->
+                        "non-test component(s) ${children.sorted().joinToString { "'$it'" }} reference it as their parent"
+                    docReferrers.isNotEmpty() ->
+                        "non-test component(s) ${docReferrers.sorted().joinToString { "'$it'" }} reference it as their doc component"
+                    else -> null
+                }?.let { "$flagField: test component '$key' cannot be referenced by a real product: $it" }
+            } else {
+                val parentKey = entity.parentComponent?.componentKey?.takeIf { parentField != null }
+                val docKeys = docChecks.keys.filterNot { it == key }.toSet()
+                val targets = docKeys + listOfNotNull(parentKey)
+                // Lock first, then read the flags fresh (the managed parent entity may predate a concurrent commit).
+                val testTargets =
+                    if (targets.isEmpty()) {
+                        emptySet()
+                    } else {
+                        componentRepository.lockByComponentKeys(targets)
+                        componentRepository.findTestComponentKeysIn(targets).toSet()
+                    }
+                val testDocKey = docKeys.filter { it in testTargets }.minOrNull()
+                when {
+                    parentKey != null && parentKey in testTargets ->
+                        "$parentField: component '$key' is not a test component but references test component " +
+                            "'$parentKey' as its parent"
+                    testDocKey != null ->
+                        docChecks.getValue(testDocKey) +
+                            ": component '$key' is not a test component but references test component " +
+                            "'$testDocKey' as its doc component"
+                    else -> null
+                }
+            }
+        if (violation != null) throw IllegalArgumentException(violation)
+    }
+
+    /** The flag is the source of truth; the `test-component` label is kept for its readers, so a mismatch only warns. */
+    private fun ComponentDetailResponse.withTestComponentLabelWarning(entity: ComponentEntity): ComponentDetailResponse {
+        if (entity.testComponent || TEST_COMPONENT_LABEL !in labels) return this
+        return copy(warnings = warnings + TEST_COMPONENT_LABEL_WARNING)
+    }
+
+    private fun isBaseBuildSystemWhiskey(entity: ComponentEntity): Boolean =
+        entity.configurations
+            .firstOrNull { it.rowType == ROW_TYPE_BASE }
+            ?.buildSystem
+            .equals("WHISKEY", ignoreCase = true)
+
     private fun hasAnyDistributionCoordinate(entity: ComponentEntity): Boolean =
         entity.configurations.any { cfg ->
             cfg.mavenArtifacts.isNotEmpty() ||
                 cfg.dockerImages.isNotEmpty() ||
-                cfg.packages.isNotEmpty()
+                cfg.packages.isNotEmpty() ||
+                cfg.genericArtifacts.isNotEmpty()
         }
 
     /**
@@ -2975,7 +3578,10 @@ class ComponentManagementServiceImpl(
         }
         entity.configurations.forEach { cfg ->
             cfg.mavenArtifacts.forEach { artifact ->
-                artifact.groupPattern.split(GROUP_ID_SPLIT).map { it.trim() }.filter { it.isNotEmpty() }
+                artifact.groupPattern
+                    .split(GROUP_ID_SPLIT)
+                    .map { it.trim() }
+                    .filter { it.isNotEmpty() }
                     .forEach { groupId ->
                         require(supported.any { groupId.startsWith(it) }) {
                             "groupId: '$groupId' does not start with a supported prefix " +
@@ -3027,12 +3633,16 @@ class ComponentManagementServiceImpl(
      * `component_artifact_mappings` of this component vs every other component). Restores legacy
      * #24/#25 deterministically from stored modes. Throws 409 `CrossComponentConflictException`.
      */
-    private fun validateArtifactOwnershipCollisions(entity: ComponentEntity, componentId: UUID) {
+    private fun validateArtifactOwnershipCollisions(
+        entity: ComponentEntity,
+        componentId: UUID,
+    ) {
         val ownClaims = entity.artifactMappings.map { it.toOwnershipClaim(entity.componentKey) }
         if (ownClaims.isEmpty()) return
         val rivalRows = componentArtifactMappingRepository.findOtherComponents(componentId)
         val explicitTokensByMapping =
-            rivalRows.filter { it.artifactIdMode == ArtifactIdMode.EXPLICIT.name }
+            rivalRows
+                .filter { it.artifactIdMode == ArtifactIdMode.EXPLICIT.name }
                 .map { it.mappingId }
                 .takeIf { it.isNotEmpty() }
                 ?.let { ids -> componentArtifactMappingTokenRepository.findTokensByMappingIdIn(ids) }
@@ -3085,10 +3695,17 @@ class ComponentManagementServiceImpl(
      * to the wire render at the renderer, so this map carries ONLY the ALL_EXCEPT_CLAIMED entries —
      * and is empty (no cross-component query) when the component has none, keeping the common path free.
      */
-    private fun ownershipExportPatterns(entity: ComponentEntity): Map<UUID, String> {
-        val allExcept =
-            entity.artifactMappings.filter { it.artifactIdMode == ArtifactIdMode.ALL_EXCEPT_CLAIMED.name }
-        if (allExcept.isEmpty()) return emptyMap()
+    private fun ownershipExportPatterns(entity: ComponentEntity): Map<UUID, String> =
+        ownershipExportPatterns(entity, lazy(LazyThreadSafetyMode.NONE) { loadOwnershipExportContext() })
+
+    /** Registry-wide ownership rows the ALL_EXCEPT_CLAIMED export render needs (see [ownershipExportPatterns]). */
+    private class OwnershipExportContext(
+        val explicitRows: List<CrossComponentMappingRow>,
+        val shadowRangesByComponent: Map<String, Set<String>>,
+        val tokensByMapping: Map<UUID, List<String>>,
+    )
+
+    private fun loadOwnershipExportContext(): OwnershipExportContext {
         val allRows = componentArtifactMappingRepository.findAllRows()
         val explicitRows = allRows.filter { it.artifactIdMode == ArtifactIdMode.EXPLICIT.name }
         // Each component's own override (non-base) ranges. A rival's BASE EXPLICIT is shadowed (not in
@@ -3099,35 +3716,53 @@ class ComponentManagementServiceImpl(
                 .groupBy { it.componentKey }
                 .mapValues { (_, rows) -> rows.map { it.versionRange }.filterTo(mutableSetOf()) { it != OWNERSHIP_ALL_VERSIONS } }
         val tokensByMapping =
-            explicitRows.map { it.mappingId }.takeIf { it.isNotEmpty() }
+            explicitRows
+                .map { it.mappingId }
+                .takeIf { it.isNotEmpty() }
                 ?.let { ids -> componentArtifactMappingTokenRepository.findTokensByMappingIdIn(ids) }
                 ?.groupBy({ it.mappingId }, { it.artifactPattern })
                 .orEmpty()
+        return OwnershipExportContext(explicitRows, shadowRangesByComponent, tokensByMapping)
+    }
+
+    // [context] is Lazy so a single-component render loads the registry-wide rows only when the
+    // component actually has an ALL_EXCEPT_CLAIMED mapping, while a bulk render (renderAllComponentsAsCode)
+    // shares ONE load across every component instead of re-reading all mappings per component.
+    private fun ownershipExportPatterns(
+        entity: ComponentEntity,
+        context: Lazy<OwnershipExportContext>,
+    ): Map<UUID, String> {
+        val allExcept =
+            entity.artifactMappings.filter { it.artifactIdMode == ArtifactIdMode.ALL_EXCEPT_CLAIMED.name }
+        if (allExcept.isEmpty()) return emptyMap()
+        val explicitRows = context.value.explicitRows
+        val shadowRangesByComponent = context.value.shadowRangesByComponent
+        val tokensByMapping = context.value.tokensByMapping
         val intersect: (String, String) -> Boolean = { a, b ->
             runCatching { versionRangeFactory.create(a).isIntersect(versionRangeFactory.create(b)) }.getOrDefault(true)
         }
-        return allExcept.mapNotNull { m ->
-            val id = m.id ?: return@mapNotNull null
-            val groups = groupTokensOf(m.groupPattern)
-            val siblings =
-                explicitRows
-                    // OTHER components only: ALL_EXCEPT_CLAIMED yields to OTHER components' EXPLICIT
-                    // claims. This component's own EXPLICIT mappings live in disjoint ranges that
-                    // REPLACE (not coexist with) this base mapping, so they must not narrow it.
-                    .filter { it.componentKey != entity.componentKey }
-                    .filter { row -> groupTokensOf(row.groupPattern).any { it in groups } }
-                    .filter { intersect(it.versionRange, m.versionRange) }
-                    .filterNot { row ->
-                        row.versionRange == OWNERSHIP_ALL_VERSIONS &&
-                            m.versionRange in shadowRangesByComponent[row.componentKey].orEmpty()
-                    }
-                    .flatMap { tokensByMapping[it.mappingId].orEmpty() }
-                    .distinct()
-                    .sorted()
-            id to
-                org.octopusden.octopus.components.registry.server.util.ArtifactOwnershipRendering
-                    .renderExportPattern(ArtifactIdMode.ALL_EXCEPT_CLAIMED, emptyList(), siblings)
-        }.toMap()
+        return allExcept
+            .mapNotNull { m ->
+                val id = m.id ?: return@mapNotNull null
+                val groups = groupTokensOf(m.groupPattern)
+                val siblings =
+                    explicitRows
+                        // OTHER components only: ALL_EXCEPT_CLAIMED yields to OTHER components' EXPLICIT
+                        // claims. This component's own EXPLICIT mappings live in disjoint ranges that
+                        // REPLACE (not coexist with) this base mapping, so they must not narrow it.
+                        .filter { it.componentKey != entity.componentKey }
+                        .filter { row -> groupTokensOf(row.groupPattern).any { it in groups } }
+                        .filter { intersect(it.versionRange, m.versionRange) }
+                        .filterNot { row ->
+                            row.versionRange == OWNERSHIP_ALL_VERSIONS &&
+                                m.versionRange in shadowRangesByComponent[row.componentKey].orEmpty()
+                        }.flatMap { tokensByMapping[it.mappingId].orEmpty() }
+                        .distinct()
+                        .sorted()
+                id to
+                    org.octopusden.octopus.components.registry.server.util.ArtifactOwnershipRendering
+                        .renderExportPattern(ArtifactIdMode.ALL_EXCEPT_CLAIMED, emptyList(), siblings)
+            }.toMap()
     }
 
     /**
@@ -3136,7 +3771,7 @@ class ComponentManagementServiceImpl(
      * preview needs the negative-lookahead, which depends on OTHER components' claims).
      */
     private fun toDetail(entity: ComponentEntity): ComponentDetailResponse {
-        val response = entity.toDetailResponse(teamcityProperties.baseUrl)
+        val response = attachRegisteredBuildParameters(attachTeamcityValidations(entity.toDetailResponse(teamcityProperties.baseUrl)))
         val patterns = ownershipExportPatterns(entity)
         if (patterns.isEmpty()) return response
         return response.copy(
@@ -3145,6 +3780,121 @@ class ComponentManagementServiceImpl(
                     patterns[ai.id]?.let { ai.copy(legacyArtifactIdPattern = it) } ?: ai
                 },
         )
+    }
+
+    private fun BaseConfigurationRequest.writesVcs() = vcsEntries != null || buildWorkingDirectory != null
+
+    /**
+     * ONB-001: a write carrying base-configuration VCS entries or Build Working Directory on a component
+     * with a linked TeamCity project leaves its build chain out of date. No before/after diff: the Portal sends the base VCS
+     * slice only when it changed. Marker-row (per-range) writes do not warn.
+     */
+    private fun ComponentDetailResponse.withVcsChainWarning(
+        baseVcsWritten: Boolean,
+        entity: ComponentEntity,
+    ): ComponentDetailResponse {
+        if (!baseVcsWritten || entity.versionLines.isEmpty()) return this
+        log.info("VCS entries of component '{}' changed; its TeamCity build chain must be recreated", entity.componentKey)
+        return copy(warnings = listOf(VCS_CHAIN_MISMATCH_WARNING))
+    }
+
+    /**
+     * Attach stored TeamCity validation findings (WARNING/ERROR only) onto each linked TeamCity
+     * project in [response], in one batch query. No findings for a project means "clean" (given a
+     * validation run has completed). The nullable repo default keeps direct unit-test construction
+     * wiring-free; when absent, findings are simply not attached.
+     */
+    private fun attachTeamcityValidations(response: ComponentDetailResponse): ComponentDetailResponse {
+        val repo = teamcityValidationRepository ?: return response
+        if (response.teamcityProjects.isEmpty()) return response
+        val byProject = repo.findByProjectIdIn(response.teamcityProjects.map { it.projectId }).groupBy { it.projectId }
+        return response.copy(
+            teamcityProjects =
+                response.teamcityProjects.map { project ->
+                    project.copy(
+                        validations =
+                            byProject[project.projectId].orEmpty().map { finding ->
+                                org.octopusden.octopus.components.registry.server.dto.v4.ValidationResponse(
+                                    type = finding.type,
+                                    status = finding.status,
+                                    message = finding.message,
+                                    updatedAt = finding.updatedAt,
+                                )
+                            },
+                    )
+                },
+        )
+    }
+
+    /**
+     * Attach RMS-registered build parameters (ACTUAL) onto [response]: the per-attribute range
+     * lists, warnings for any DEFAULT/OVERRIDDEN row that disagrees with an intersecting ACTUAL
+     * range, and an unavailable flag when RMS has never successfully reported this component.
+     * Left `null` for a non-Maven/Gradle component, when no bean is present (no-db mode), or when
+     * RMS integration is disabled — a disabled integration must show nothing at all, not an
+     * "unavailable" indicator, since there was never an attempt to check RMS in the first place.
+     */
+    private fun attachRegisteredBuildParameters(response: ComponentDetailResponse): ComponentDetailResponse {
+        val service = rmsBuildParametersService ?: return response
+        if (!service.isEnabled()) return response
+        val detail =
+            RegisteredBuildParametersMapper.detailFor(
+                response,
+                service.currentReport().components,
+                numericVersionComparator(numericVersionFactory),
+            )
+        return response.copy(registeredBuildParameters = detail)
+    }
+
+    /**
+     * Live write-time check for a single `build.javaVersion`/`build.mavenVersion` write. A no-op
+     * for any other attribute, when the feature is off/unconfigured, or when [component]'s build
+     * system isn't Maven/Gradle — [RMSOverrideGate] itself makes those calls, this just resolves
+     * the attribute-specific comparator pair and the component's build system.
+     * Throws [org.octopusden.octopus.components.registry.core.exceptions.RMSRegisteredValueConflictException]
+     * or [org.octopusden.octopus.components.registry.core.exceptions.RMSUnavailableException].
+     */
+    private fun checkRMSOverrideGate(
+        component: ComponentEntity,
+        attribute: String,
+        effectiveChange: Boolean,
+        javaVersion: String?,
+        mavenVersion: String?,
+        newRange: String,
+        rmsBuildsCache: MutableMap<String, List<RMSBuild>> = mutableMapOf(),
+    ) {
+        val gate = rmsOverrideGate ?: return
+        val buildSystem = component.configurations.firstOrNull { it.rowType == ROW_TYPE_BASE }?.buildSystem
+        val compare = numericVersionComparator(numericVersionFactory)
+        when (attribute) {
+            ATTR_JAVA_VERSION ->
+                gate.check(
+                    componentKey = component.componentKey,
+                    buildSystem = buildSystem,
+                    effectiveChange = effectiveChange,
+                    newValue = javaVersion,
+                    newRange = newRange,
+                    selectValue = { it.javaVersion },
+                    valuesEqual = JavaVersionComparator::valuesEqual,
+                    compare = compare,
+                    buildsCache = rmsBuildsCache,
+                )
+
+            ATTR_MAVEN_VERSION ->
+                gate.check(
+                    componentKey = component.componentKey,
+                    buildSystem = buildSystem,
+                    effectiveChange = effectiveChange,
+                    newValue = mavenVersion,
+                    newRange = newRange,
+                    selectValue = { it.mavenVersion },
+                    valuesEqual = MavenVersionComparator::valuesEqual,
+                    compare = compare,
+                    buildsCache = rmsBuildsCache,
+                )
+
+            else -> Unit
+        }
     }
 
     /**
@@ -3177,7 +3927,10 @@ class ComponentManagementServiceImpl(
         validateCrossComponentIntegrity(reloaded)
     }
 
-    private fun validateMavenArtifactCollisions(entity: ComponentEntity, componentId: UUID) {
+    private fun validateMavenArtifactCollisions(
+        entity: ComponentEntity,
+        componentId: UUID,
+    ) {
         val otherArtifacts = mavenArtifactRepository.findOtherComponents(componentId)
         entity.configurations.forEach { cfg ->
             val ownRange = runCatching { versionRangeFactory.create(cfg.versionRange) }.getOrNull()
@@ -3186,10 +3939,14 @@ class ComponentManagementServiceImpl(
                     // Identity is the FULL coordinate (group, artifact, extension,
                     // classifier) — `g:a:zip` vs `g:a:apk` are distinct artifacts.
                     if (MavenGavCollision.identityCollides(
-                            artifact.groupPattern, artifact.artifactPattern,
-                            artifact.extension, artifact.classifier,
-                            other.groupPattern, other.artifactPattern,
-                            other.extension, other.classifier,
+                            artifact.groupPattern,
+                            artifact.artifactPattern,
+                            artifact.extension,
+                            artifact.classifier,
+                            other.groupPattern,
+                            other.artifactPattern,
+                            other.extension,
+                            other.classifier,
                         )
                     ) {
                         val intersects =
@@ -3202,8 +3959,10 @@ class ComponentManagementServiceImpl(
                             }
                         if (intersects) {
                             val gav = MavenGavCollision.gavLabel(
-                                artifact.groupPattern, artifact.artifactPattern,
-                                artifact.extension, artifact.classifier,
+                                artifact.groupPattern,
+                                artifact.artifactPattern,
+                                artifact.extension,
+                                artifact.classifier,
                             )
                             // Name the REAL source: group-artifact-pattern marker rows come from
                             // the component-level groupId/artifactId mapping, not a distribution{}
@@ -3235,19 +3994,28 @@ class ComponentManagementServiceImpl(
         val ownRows =
             entity.configurations.map { cfg ->
                 JiraRowView(
-                    entity.componentKey, cfg.versionRange, cfg.rowType,
-                    cfg.overriddenAttribute, cfg.jiraProjectKey, cfg.jiraVersionPrefix,
+                    entity.componentKey,
+                    cfg.versionRange,
+                    cfg.rowType,
+                    cfg.overriddenAttribute,
+                    cfg.jiraProjectKey,
+                    cfg.jiraVersionPrefix,
                 )
             }
         val ownPairs = computeEffectiveJiraPairs(ownRows)[entity.componentKey].orEmpty()
         if (ownPairs.isEmpty()) return
         val rivalRows =
-            configurationRepository.findAllNonArchivedJiraRows()
+            configurationRepository
+                .findAllNonArchivedJiraRows()
                 .filter { it.componentKey != entity.componentKey }
                 .map {
                     JiraRowView(
-                        it.componentKey, it.versionRange, it.rowType,
-                        it.overriddenAttribute, it.projectKey, it.versionPrefix,
+                        it.componentKey,
+                        it.versionRange,
+                        it.rowType,
+                        it.overriddenAttribute,
+                        it.projectKey,
+                        it.versionPrefix,
                     )
                 }
         val rivalsByPair = mutableMapOf<Pair<String, String?>, MutableSet<String>>()
@@ -3269,7 +4037,10 @@ class ComponentManagementServiceImpl(
         }
     }
 
-    private fun validateDockerImageUniqueness(entity: ComponentEntity, componentId: UUID) {
+    private fun validateDockerImageUniqueness(
+        entity: ComponentEntity,
+        componentId: UUID,
+    ) {
         val imageNames =
             entity.configurations
                 .flatMap { it.dockerImages }
@@ -3424,6 +4195,33 @@ class ComponentManagementServiceImpl(
     }
 
     /**
+     * SYS-095 / ADR-020: a component key is plain kebab, or the lowercased [clientCode]
+     * as a leading prefix followed by the end of the key or `-` plus a kebab tail. An
+     * underscore is legal only inside that prefix, so a component with no clientCode may
+     * carry none. A key must start with a lowercase letter either way — the prefix
+     * relaxes the charset, not the letter start. [clientCode] is the effective
+     * (persisted) value, never the raw request.
+     */
+    private fun validateComponentKey(
+        key: String,
+        clientCode: String?,
+    ) {
+        if (COMPONENT_KEY_PATTERN.matches(key)) return
+        val prefix = clientCode?.trim()?.lowercase()?.takeIf { it.isNotEmpty() && key.startsWith(it) }
+        val tail = prefix?.let { key.substring(it.length) }
+        // The prefix branch relaxes the charset, never the letter start: a clientCode may
+        // begin with a digit or an underscore (`[A-Z_0-9]+`), and a key may not.
+        val startsWithLetter = key.isNotEmpty() && key[0] in 'a'..'z'
+        require(startsWithLetter && tail != null && COMPONENT_KEY_TAIL_PATTERN.matches(tail)) {
+            // Field-prefixed like the uniqueness check above, so the Portal renders the
+            // message inline on the Component Key (`name`) field with the field name stripped.
+            "name: '$key' must match '${COMPONENT_KEY_PATTERN.pattern}', " +
+                "or be the lowercased clientCode followed by end-of-name or '-' and the same tail " +
+                "(underscores are allowed only inside that prefix)"
+        }
+    }
+
+    /**
      * `copyright` must name a file in the configured copyright directory (audit
      * #21; old `EscrowConfigValidator.validateCopyright`). The supported list is
      * the same source the old validator used: the regular files under
@@ -3485,7 +4283,8 @@ class ComponentManagementServiceImpl(
         val path = configHelper.copyrightPath() ?: return null
         return runCatching {
             Files.list(path).use { stream ->
-                stream.filter { Files.isRegularFile(it) }
+                stream
+                    .filter { Files.isRegularFile(it) }
                     .map { it.fileName.toString() }
                     .sorted()
                     .toList()
@@ -3493,6 +4292,38 @@ class ComponentManagementServiceImpl(
         }.onFailure {
             log.warn("Copyright directory '{}' is unreadable; copyright validation skipped", path, it)
         }.getOrNull()
+    }
+
+    private fun involvesSpecification(
+        users: List<String>,
+        roles: Set<String>,
+    ): Specification<ComponentEntity> =
+        Specification { root, query, cb ->
+            val predicates = mutableListOf<jakarta.persistence.criteria.Predicate>()
+            if (INVOLVES_OWNER in roles) predicates += root.get<String>("componentOwner").`in`(users)
+            if (INVOLVES_RELEASE_MANAGER in roles) {
+                predicates += cb.exists(roleMembership(ComponentReleaseManagerEntity::class.java, users, root, query!!, cb))
+            }
+            if (INVOLVES_SECURITY_CHAMPION in roles) {
+                predicates += cb.exists(roleMembership(ComponentSecurityChampionEntity::class.java, users, root, query!!, cb))
+            }
+            cb.or(*predicates.toTypedArray())
+        }
+
+    /** `EXISTS (SELECT 1 FROM <role table> WHERE component = root AND username IN users)`. */
+    private fun <T> roleMembership(
+        roleEntity: Class<T>,
+        users: List<String>,
+        root: jakarta.persistence.criteria.Root<ComponentEntity>,
+        query: jakarta.persistence.criteria.CriteriaQuery<*>,
+        cb: jakarta.persistence.criteria.CriteriaBuilder,
+    ): jakarta.persistence.criteria.Subquery<Int> {
+        val sub = query.subquery(Int::class.java)
+        val member = sub.from(roleEntity)
+        return sub.select(cb.literal(1)).where(
+            cb.equal(member.get<ComponentEntity>("component"), root),
+            member.get<String>("username").`in`(users),
+        )
     }
 
     private fun buildSpecification(filter: ComponentFilter): Specification<ComponentEntity> {
@@ -3527,6 +4358,12 @@ class ComponentManagementServiceImpl(
         }
         filter.archived?.let { archived ->
             spec = spec.and(Specification { root, _, cb -> cb.equal(root.get<Boolean>("archived"), archived) })
+        }
+        filter.autoRelease?.let { autoRelease ->
+            spec = spec.and(Specification { root, _, cb -> cb.equal(root.get<Boolean>("autoRelease"), autoRelease) })
+        }
+        filter.testComponent?.let { testComponent ->
+            spec = spec.and(Specification { root, _, cb -> cb.equal(root.get<Boolean>("testComponent"), testComponent) })
         }
         // OR across selected owners — a component matches when its scalar
         // componentOwner column equals any of the listed values. No JOIN
@@ -3572,6 +4409,13 @@ class ComponentManagementServiceImpl(
                     },
                 )
         }
+        // SYS-101 involvement: OR across the chosen roles (owner / release manager / security
+        // champion) for ANY listed username. Role memberships are EXISTS subqueries rather than
+        // joins: an OR across two child collections via joins would need LEFT joins and multiply
+        // rows; subqueries keep one row per component and no distinct.
+        if (!filter.involves.isNullOrEmpty()) {
+            spec = spec.and(involvesSpecification(filter.involves, involvementRoles(filter.involvesRoles)))
+        }
         filter.search?.let { search ->
             val pattern = "%${search.lowercase()}%"
             spec =
@@ -3606,6 +4450,11 @@ class ComponentManagementServiceImpl(
                     },
                 )
         }
+
+        // javaVersion is deliberately NOT filtered here — it matches against the effective
+        // Java version (RMS's registered value, falling back to this BASE row's configured
+        // value), which the DB doesn't have. See listComponents.
+
         // OR across selected system codes — a component matches when ANY of its
         // system junctions has a code in the list. Unlike labels (also
         // junction-backed but AND across selections), the picker semantics here
@@ -3801,6 +4650,8 @@ class ComponentManagementServiceImpl(
             "productType" to entity.productType,
             "clientCode" to entity.clientCode,
             "archived" to entity.archived,
+            "testComponent" to entity.testComponent,
+            "autoRelease" to entity.autoRelease,
             "solution" to entity.solution,
             "parentComponentName" to entity.parentComponent?.componentKey,
             "canBeParent" to entity.canBeParent,
@@ -3882,6 +4733,7 @@ class ComponentManagementServiceImpl(
             "jira.versionPrefix" to base?.jiraVersionPrefix,
             "jira.versionFormat" to base?.jiraVersionFormat,
             "jira.hotfixVersionFormat" to base?.jiraHotfixVersionFormat,
+            "buildWorkingDirectory" to base?.buildWorkingDirectory,
         )
 
     private fun baseConfigCollectionAuditEntries(base: ComponentConfigurationEntity?): Map<String, Any?> =
@@ -3895,6 +4747,8 @@ class ComponentManagementServiceImpl(
                         "tag" to it.tag,
                         "hotfixBranch" to it.hotfixBranch,
                         "repositoryType" to it.repositoryType,
+                        "sourcePath" to it.sourcePath,
+                        "checkoutDirectory" to it.checkoutDirectory,
                     )
                 },
             "mavenArtifacts" to
@@ -3928,6 +4782,10 @@ class ComponentManagementServiceImpl(
                         "packageName" to it.packageName,
                     )
                 },
+            "genericArtifacts" to
+                base?.genericArtifacts.orEmpty().sortedBy { it.sortOrder }.map {
+                    mapOf("path" to it.path)
+                },
             "buildToolBeans" to
                 base?.buildToolBeans.orEmpty().sortedBy { it.sortOrder }.map {
                     mapOf(
@@ -3938,7 +4796,11 @@ class ComponentManagementServiceImpl(
                         "edition" to it.edition,
                     )
                 },
-            "requiredTools" to base?.requiredToolJunctions.orEmpty().map { it.toolName }.sorted(),
+            "requiredTools" to base
+                ?.requiredToolJunctions
+                .orEmpty()
+                .map { it.toolName }
+                .sorted(),
         )
 
     private fun componentCollectionAuditEntries(entity: ComponentEntity): Map<String, Any?> =
@@ -3959,7 +4821,7 @@ class ComponentManagementServiceImpl(
                         "groupName" to it.groupName,
                     )
                 },
-            "teamcityProjects" to entity.teamcityProjects.sortedBy { it.sortOrder }.map { it.projectId },
+            "teamcityProjects" to entity.versionLines.sortedBy { it.teamcityProject.projectId }.map { it.teamcityProject.projectId },
             "docs" to
                 entity.docLinks.sortedBy { it.sortOrder }.map {
                     mapOf(
@@ -4014,6 +4876,8 @@ class ComponentManagementServiceImpl(
                 // is never persisted (the @Pattern accepts blank as "no key").
                 jiraTaskKey = jiraTaskKey?.trim()?.ifBlank { null },
                 changeComment = changeComment?.trim()?.ifBlank { null },
+                // Same id for every audit row written in this save's transaction.
+                correlationId = auditCorrelationIdProvider.current(),
             ),
         )
     }
@@ -4021,10 +4885,43 @@ class ComponentManagementServiceImpl(
     private companion object {
         private val log = org.slf4j.LoggerFactory.getLogger(ComponentManagementServiceImpl::class.java)
 
+        private const val AUTO_RELEASE_FIELD = "component.autoRelease"
+
+        // SYS-101 `involvesRoles` values.
+        private const val INVOLVES_OWNER = "owner"
+        private const val INVOLVES_RELEASE_MANAGER = "releaseManager"
+        private const val INVOLVES_SECURITY_CHAMPION = "securityChampion"
+        private val INVOLVES_ALL_ROLES = setOf(INVOLVES_OWNER, INVOLVES_RELEASE_MANAGER, INVOLVES_SECURITY_CHAMPION)
+
         /** Split a multi-valued `groupPattern` on comma or pipe (legacy DSL semantics). */
         private val GROUP_ID_SPLIT = Regex("[,|]")
 
         // Same shape as the old EscrowConfigValidator.CLIENT_CODE_PATTERN.
         private val CLIENT_CODE_PATTERN = Regex("[A-Z_0-9]+")
+
+        // SYS-095: strict kebab for a plain key, and the tail permitted after a client-code prefix.
+        private val COMPONENT_KEY_PATTERN = Regex("[a-z][a-z0-9-]*")
+        private val COMPONENT_KEY_TAIL_PATTERN = Regex("(-[a-z0-9-]*)?")
+
+        private const val VCS_CHAIN_MISMATCH_WARNING =
+            "VCS entries changed; the TeamCity build chain no longer matches and must be recreated."
+
+        private const val TEST_COMPONENT_LABEL = "test-component"
+        private const val TEST_COMPONENT_LABEL_WARNING =
+            "Label 'test-component' is set but testComponent is false; set testComponent = true to mark a test component."
+
+        private const val ROW_TYPE_BASE = "BASE"
+        private const val ATTR_JAVA_VERSION = "build.javaVersion"
+        private const val ATTR_MAVEN_VERSION = "build.mavenVersion"
+
+        /** The roles an `involves` filter checks: all three when none are given; an unknown role is a 400. */
+        private fun involvementRoles(requested: List<String>?): Set<String> {
+            if (requested.isNullOrEmpty()) return INVOLVES_ALL_ROLES
+            val unknown = requested.filterNot { it in INVOLVES_ALL_ROLES }
+            require(unknown.isEmpty()) {
+                "involvesRoles: unknown role(s) ${unknown.joinToString()}; expected any of ${INVOLVES_ALL_ROLES.joinToString()}"
+            }
+            return requested.toSet()
+        }
     }
 }

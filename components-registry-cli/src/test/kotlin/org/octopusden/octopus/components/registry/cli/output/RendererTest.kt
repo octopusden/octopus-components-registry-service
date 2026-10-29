@@ -10,7 +10,6 @@ import kotlin.test.assertEquals
 import kotlin.test.assertTrue
 
 class RendererTest {
-
     private val parser = Json
 
     @Test

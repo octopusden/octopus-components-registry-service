@@ -3,7 +3,7 @@
 **Status:** Accepted (see [ADR-014](adr/014-schema-v2.md))
 **Implementation status:** the Flyway baseline `V1__schema.sql` is the canonical schema; the entity layer matches it. See ADR-014 for the landing PRs.
 
-This document is the canonical reference for the v2 schema. ADR-014 records the decision and alternatives; this file specifies the exact shape, semantics, and intended usage of every table.
+This document is the canonical reference for the v2 schema. ADR-014 records the decision and alternatives; this file specifies the exact shape, semantics, and intended usage of every table. Tables added by migrations after the baseline are tracked in [§10 Post-v2 additions](#10-post-v2-additions), not folded into the counts/diagrams above.
 
 ## 1. Overview
 
@@ -165,6 +165,8 @@ Identity + fields that never vary per version range.
 | `product_type` | VARCHAR(20) | nullable | App-validated against `ProductTypes` enum (PT_K/PT_C/PT_D_DB/PT_D) |
 | `client_code` | VARCHAR(255) | nullable | |
 | `archived` | BOOLEAN | NOT NULL DEFAULT false | |
+| `test_component` | BOOLEAN | NOT NULL DEFAULT false | Synthetic (test-stand) component, SYS-099. `V11__` sets it on components labelled `test-component`. A non-test component may not reference a test component as parent or doc component (service-layer rule). |
+| `auto_release` | BOOLEAN | NOT NULL DEFAULT false | Releases may be started by release automation once a candidate passes its gates (SYS-104); DB/v4 only. |
 | `solution` | BOOLEAN | nullable | |
 | `parent_component_id` | UUID | FK → components(id) | DSL `parentComponent = "X"` reference between peers |
 | `can_be_parent` | BOOLEAN | NOT NULL DEFAULT false | True when referenced as a `parentComponent` by ≥1 other component — i.e. eligible to be selected as a parent in the Portal picker. **NOT the same as an aggregator:** being a `parentComponent` target is a flat peer reference, whereas an aggregator owns a `components { }` block (§4.3); the two are independent. Seeded by import (Pass 2 sets `true` for DSL-referenced parents, never `false`) and editable via v4. Service invariants: a chosen parent must be `can_be_parent`; a `can_be_parent` component may not have a parent (single-level — a parent cannot have a parent, matching the DSL validator); `can_be_parent` may not be disabled while children still reference it. Grandfathered parent-of-parent rows are tolerated on no-op updates. The `?canBeParent=true` list filter backs the Portal parent picker. |
@@ -234,6 +236,8 @@ Per-(component, version_range) typed rows; the spine of Model A'.
 | `jira_line_version_format` | VARCHAR(255) | | |
 | `jira_version_prefix` | VARCHAR(255) | | jira.customer.versionPrefix |
 | `jira_version_format` | VARCHAR(255) | | jira.customer.versionFormat |
+| VCS aspect | | | |
+| `build_working_directory` | VARCHAR(255) | nullable | ONB-001 (`V9__`): where the build runs, relative to the checkout root; set on the base row or a `vcs.settings` marker row; NULL = the checkout root |
 | Timestamps | | | |
 | `created_at` | TIMESTAMP WITH TIME ZONE | NOT NULL DEFAULT now() | |
 | `updated_at` | TIMESTAMP WITH TIME ZONE | NOT NULL DEFAULT now() | |
@@ -320,7 +324,7 @@ System membership is many-to-many — a component may be classified under severa
 | `component_release_managers` | `username, sort_order` | Ordered multi-value (first = primary). Surrogate UUID PK (mirrors `component_artifact_ids`, NOT a composite PK on `sort_order` — avoids Hibernate INSERT-before-DELETE collisions on clear/re-add). No `UNIQUE(component_id, sort_order)`; username dedupe (keep-first, trim, drop-blank) is service-layer, not DB. Indexed `(component_id)`. Legacy v1/v2/v3 read the comma-joined string. |
 | `component_security_champions` | `username, sort_order` | Identical shape to `component_release_managers` (ordered multi-value security champions). |
 | `distribution_security_groups` | `group_type ∈ {read, write}, group_name` | Audit confirms never per-version |
-| `component_teamcity_projects` | `project_id, sort_order` | Multi-id supported |
+| `component_teamcity_projects` | `project_id, project_version, sort_order` | Multi-id supported. `project_version` (nullable, added in `V6`) is the TC `PROJECT_VERSION` line marker; TeamCity sync writes one row per distinct version line, ordered by version then id. |
 | `component_doc_links` | `doc_component_key, major_version, sort_order` | Soft-reference; target may be archived or out-of-installation; UNIQUE `(component_id, doc_component_key, major_version)` |
 
 ### 4.7 Children of `component_configurations` (per-version-rangeable)
@@ -339,16 +343,28 @@ SINGLE-VCS is "1 entry with `name = NULL`"; MULTI-VCS is "N entries with names".
 | `tag` | TEXT | |
 | `hotfix_branch` | TEXT | |
 | `repository_type` | VARCHAR(20) | GIT/MERCURIAL/CVS (Java enum); typically GIT |
-| `sort_order` | INT NOT NULL DEFAULT 0 | |
+| `sort_order` | INT NOT NULL DEFAULT 0 | `0..n-1` per row (list order) |
+| `source_path` | VARCHAR(255), nullable | Repository directory that belongs to the component; NULL = whole repository (`V8__`) |
+| `checkout_directory` | VARCHAR(255), nullable | Directory the entry is checked out to; NULL = the checkout root, which at most one entry of a row may use (v4 write path) (`V8__`) |
+
+VCS checkout layout (`V8__`): the migration adds `source_path` / `checkout_directory` and sets
+`checkout_directory = name` on every entry with `sort_order > 0`; the DSL import applies the same
+rule to the rows it creates. (The migration's SQL comment still says "NULL on the primary entry";
+applied migrations are immutable, and since revision 3 any entry may have a checkout directory, so
+this table is authoritative.) Names are copied verbatim, so a row whose later names are not valid or
+not distinct checkout directories stays readable and fails its next v4 VCS write with `400`. On v4
+writes `name` is derived: an entry's `checkout_directory`, else the stored name of the row's previous
+entry on the same repository, else `main`. The row's Build Working Directory is
+`component_configurations.build_working_directory` (`V9__`). Checkout layout rules: functional-spec §1.4.
 
 `vcs.type` (GIT/EXTERNAL/null) computed at API layer:
 - `components.vcs_external_registry IS NOT NULL` → `EXTERNAL`
 - else `vcs_settings_entries` count = 0 → `null` (no VCS)
 - else → `GIT` (or other repository_type from entries[0])
 
-#### Distribution split (4 specialized tables)
+#### Distribution split (5 specialized tables)
 
-DSL `distribution { GAV = "...", docker = "...", DEB = "...", RPM = "..." }` decomposes into four families. `sort_order` is **per-family** within a `component_configuration_id`.
+DSL `distribution { GAV = "...", docker = "...", DEB = "...", RPM = "...", generic = "..." }` decomposes into five families. `sort_order` is **per-family** within a `component_configuration_id`.
 
 | Table | Distinct columns |
 |---|---|
@@ -356,6 +372,7 @@ DSL `distribution { GAV = "...", docker = "...", DEB = "...", RPM = "..." }` dec
 | `distribution_file_url_artifacts` | `url, artifact_id, classifier` |
 | `distribution_docker_images` | `image_name, flavor` (flavor = OW build variant, NOT a Docker registry tag) |
 | `distribution_packages` | `package_type ∈ {DEB, RPM}, package_name` |
+| `distribution_generic_artifacts` | `path` (relative path to the artifact on the generic repository) |
 
 API mapper recomposes the v1-v3 `GAV` CSV by reading Maven entries (sort_order), then file-URL entries (sort_order), concatenating canonically. `docker`, `DEB`, `RPM` are separate DSL fields; each family's order is preserved by its own `sort_order`.
 
@@ -395,7 +412,9 @@ All v1-v3 endpoints implemented as adapters over the new schema. Mapper rules:
 | `name` (v1-v3) | `components.component_key` (rename in mapper) |
 | `componentKey` (v4) | `components.component_key` direct |
 | `repositoryType` | `vcs_settings_entries.repository_type`; NULL → default GIT |
-| `teamcityProjectUrl` | Computed at mapper: `<teamcity-base>/buildConfiguration/<project_id>` |
+| `sourcePath` / `checkoutDirectory` (v2 VCS roots) | `vcs_settings_entries.source_path` / `checkout_directory`; omitted when NULL; null in Git (DSL) mode |
+| `buildWorkingDirectory` (v2 VCS settings) | `component_configurations.build_working_directory` of the row supplying the version's VCS entries (base or `vcs.settings` marker); omitted when NULL; null in Git (DSL) mode |
+| `teamcityProjectUrl` | Computed at mapper: `<teamcity-base>/project/<project_id>` |
 | `hotfixVersionFormat` (jira) | `components.jira_hotfix_version_format`; UI read-only |
 | `escrow.buildTask` (legacy) | `component_configurations.build_tasks` (consolidated) |
 | `doc: {component, majorVersion}` (singular) | `component_doc_links` filtered: for requested version X.Y.Z, pick row WHERE `major_version = 'X.Y'`; else fall back to row WHERE `major_version IS NULL`; else null |
@@ -534,12 +553,13 @@ range yields **no** `RANGE_PRESENCE` row (`supported = ALL`). See ADR-018 case m
 
 ### 6.6 Distribution parsing
 
-`distribution { GAV = "csv1,csv2", docker = "img1,img2:flavor", DEB = "p1,p2", RPM = "p" }`:
+`distribution { GAV = "csv1,csv2", docker = "img1,img2:flavor", DEB = "p1,p2", RPM = "p", generic = "rel/1.0/a.tar.gz" }`:
 - Split `GAV` CSV; for each entry:
   - Starts with `file://`/`http(s)://` → `distribution_file_url_artifacts` row (parse query string for `artifactId`, `classifier`); per-family sort_order counter.
   - Else parse `group:artifact[:ext[:classifier]]` → `distribution_maven_artifacts` row; per-family sort_order counter.
 - Split `docker` CSV; parse `image[:flavor]` (split on last `:`; flavor is the OW build variant, not a Docker registry tag); warn if flavor matches a version pattern.
 - Split `DEB`, `RPM` CSV; one `distribution_packages` row per entry.
+- Split `generic` CSV; one `distribution_generic_artifacts` row per entry (`path` = relative path to the artifact on the generic repository).
 
 ### 6.7 Tools and required tools
 
@@ -605,3 +625,18 @@ Baseline JSON files in internal artifact storage record exact counts per install
 ## 9. Anonymization
 
 This document and all artifacts published to the public repository use anonymized names and structural descriptions. Real component names from production DSL appear only in internal working notes (kept outside the repository).
+
+## 10. Post-v2 additions
+
+This document specifies the ADR-014 **v2 baseline** (`V1__schema.sql`, 25 tables) and is not
+rewritten for every later migration. Tables added since the baseline, in order, with the
+technical-design.md section that documents their behavior/lifecycle:
+
+| Migration | Table(s) | Purpose | Details |
+|---|---|---|---|
+| `V4__add_service_event.sql` | `service_event` | Append-only operational-event journal (redeploys, migration/sync/validation job runs) | [technical-design.md §6.6](technical-design.md#66-operational-service-event-journal-sys-060061) |
+| `V6__add_teamcity_project_version.sql` | `teamcity_project`, `version_line` | Normalizes the former flat `component_teamcity_projects` table: `teamcity_project` is one row per distinct TeamCity project id (append-only — sync never removes a row here even after a project is unlinked); `version_line` links a component + release version to a `teamcity_project` and is the source of truth for which projects are *currently* linked | §6 (TeamCity sync) |
+| `V7__add_teamcity_validation.sql` | `teamcity_validation` | Stores WARNING/ERROR build-configuration findings (Java/Maven version checks, template attachment), latest-only per project, keyed by `(project_id, type)` | [technical-design.md §6.7](technical-design.md#67-teamcity-validation-sys-075084) |
+
+`teamcity_validation`'s scope (which projects to validate/prune) is derived from `version_line`,
+not `teamcity_project` — see §6.7 for why the append-only table is the wrong source for that.

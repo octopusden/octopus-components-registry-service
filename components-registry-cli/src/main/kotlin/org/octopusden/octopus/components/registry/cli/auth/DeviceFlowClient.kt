@@ -1,8 +1,8 @@
 package org.octopusden.octopus.components.registry.cli.auth
 
-import kotlinx.serialization.SerializationException
 import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
+import kotlinx.serialization.SerializationException
 import org.octopusden.octopus.components.registry.cli.client.HttpExchange
 import org.octopusden.octopus.components.registry.cli.client.JdkHttpExchange
 import org.octopusden.octopus.components.registry.cli.client.Json
@@ -60,7 +60,10 @@ class ThreadSleeper : Sleeper {
 }
 
 /** Thrown when the device-flow grant cannot complete (expired, denied, or a hard transport error). */
-class DeviceFlowException(message: String, cause: Throwable? = null) : RuntimeException(message, cause)
+class DeviceFlowException(
+    message: String,
+    cause: Throwable? = null,
+) : RuntimeException(message, cause)
 
 /**
  * OIDC Device Authorization Grant (RFC 8628) client over the injectable [HttpExchange] seam.
@@ -78,7 +81,6 @@ class DeviceFlowClient(
     private val sleeper: Sleeper = ThreadSleeper(),
     private val nowMillis: () -> Long = System::currentTimeMillis,
 ) {
-
     /**
      * Starts the grant: POSTs `client_id` + `scope` to the device-authorization endpoint and returns
      * the parsed [DeviceAuthorizationResponse]. [scope] defaults to "openid"; callers append
@@ -164,7 +166,11 @@ class DeviceFlowClient(
      * Exchanges a refresh token for a fresh [TokenResponse]. Keycloak may rotate the refresh token,
      * so the caller MUST persist [TokenResponse.refreshToken] when it is present.
      */
-    fun refresh(issuer: String, clientId: String, refreshToken: String): TokenResponse {
+    fun refresh(
+        issuer: String,
+        clientId: String,
+        refreshToken: String,
+    ): TokenResponse {
         val form = formBody(
             "grant_type" to "refresh_token",
             "client_id" to clientId,
@@ -185,7 +191,11 @@ class DeviceFlowClient(
      * Best-effort token revocation (RFC 7009). Returns true when the server accepted the revocation
      * (2xx); returns false on a non-2xx so the caller can warn-but-continue rather than fail logout.
      */
-    fun revoke(issuer: String, clientId: String, refreshToken: String): Boolean {
+    fun revoke(
+        issuer: String,
+        clientId: String,
+        refreshToken: String,
+    ): Boolean {
         val form = formBody(
             "client_id" to clientId,
             "token" to refreshToken,
@@ -197,8 +207,12 @@ class DeviceFlowClient(
 
     private fun issuerBase(issuer: String): String = issuer.trimEnd('/')
 
-    private fun postForm(uri: String, body: String): HttpRequest =
-        HttpRequest.newBuilder()
+    private fun postForm(
+        uri: String,
+        body: String,
+    ): HttpRequest =
+        HttpRequest
+            .newBuilder()
             .uri(URI.create(uri))
             .header("Content-Type", "application/x-www-form-urlencoded")
             .header("Accept", "application/json")
@@ -210,8 +224,7 @@ class DeviceFlowClient(
             "${urlEncode(k)}=${urlEncode(v)}"
         }
 
-    private fun urlEncode(value: String): String =
-        URLEncoder.encode(value, StandardCharsets.UTF_8)
+    private fun urlEncode(value: String): String = URLEncoder.encode(value, StandardCharsets.UTF_8)
 
     private fun parseError(body: String?): TokenErrorResponse? {
         if (body.isNullOrBlank()) {
@@ -229,7 +242,11 @@ class DeviceFlowClient(
         return parsed?.errorDescription ?: parsed?.error ?: (body?.take(200).orEmpty())
     }
 
-    private fun <T> decode(body: String?, serializer: kotlinx.serialization.KSerializer<T>, what: String): T {
+    private fun <T> decode(
+        body: String?,
+        serializer: kotlinx.serialization.KSerializer<T>,
+        what: String,
+    ): T {
         try {
             return Json.decodeFromString(serializer, body ?: "")
         } catch (e: SerializationException) {
@@ -239,7 +256,6 @@ class DeviceFlowClient(
 
     companion object {
         /** Builds the scope string, appending `offline_access` when a refresh token is wanted. */
-        fun scopeFor(offline: Boolean): String =
-            if (offline) "openid offline_access" else "openid"
+        fun scopeFor(offline: Boolean): String = if (offline) "openid offline_access" else "openid"
     }
 }

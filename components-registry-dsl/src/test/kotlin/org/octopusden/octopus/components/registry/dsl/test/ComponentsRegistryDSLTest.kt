@@ -56,14 +56,41 @@ class ComponentsRegistryDSLTest {
                 }
             }
         }
-        assertEquals("12", components.getValue("manager").build.tools.filter { it.buildToolType == BuildToolTypes.ODBC }.map { it as OdbcTool }[0].version)
-        assertEquals("11", components.getValue("component_commons").build.tools.filter { it.buildToolType == BuildToolTypes.ODBC }.map { it as OdbcTool }[0].version)
-        assertEquals("12.2", components.getValue("octopusweb").build.tools.filter { it.buildToolType == BuildToolTypes.ODBC }.map { it as OdbcTool }[0].version)
+        assertEquals(
+            "12",
+            components
+                .getValue("manager")
+                .build.tools
+                .filter {
+                    it.buildToolType == BuildToolTypes.ODBC
+                }.map { it as OdbcTool }[0]
+                .version,
+        )
+        assertEquals(
+            "11",
+            components
+                .getValue("component_commons")
+                .build.tools
+                .filter {
+                    it.buildToolType == BuildToolTypes.ODBC
+                }.map { it as OdbcTool }[0]
+                .version,
+        )
+        assertEquals(
+            "12.2",
+            components
+                .getValue("octopusweb")
+                .build.tools
+                .filter {
+                    it.buildToolType == BuildToolTypes.ODBC
+                }.map { it as OdbcTool }[0]
+                .version,
+        )
     }
 
     @Test
     fun testProductTypes() {
-        val components = registryDsl (PRODUCT_TYPES_MAP) {
+        val components = registryDsl(PRODUCT_TYPES_MAP) {
             component("DDD") {
                 productType = "PT_K"
                 build {
@@ -194,7 +221,7 @@ class ComponentsRegistryDSLTest {
         assertEquals("11.2", (tool as OracleDatabaseTool).version)
     }
 
-    //TODO Add vice versa test when the build section is defined later than version section
+    // TODO Add vice versa test when the build section is defined later than version section
     @Test
     fun testOracleDatabaseVersioning() {
         val components = registryDsl {
@@ -224,9 +251,34 @@ class ComponentsRegistryDSLTest {
             }
         }
         val component = components.getValue("test")
-        assertEquals("11.2", (component.build.tools.iterator().next() as OracleDatabaseTool).version)
-        assertEquals("11.2", (component.versions.getValue("(2,3)").build.tools.iterator().next() as OracleDatabaseTool).version)
-        assertEquals("12", (component.versions.getValue("(1,2)").build.tools.iterator().next() as OracleDatabaseTool).version)
+        assertEquals(
+            "11.2",
+            (
+                component.build.tools
+                    .iterator()
+                    .next() as OracleDatabaseTool
+            ).version,
+        )
+        assertEquals(
+            "11.2",
+            (
+                component.versions
+                    .getValue("(2,3)")
+                    .build.tools
+                    .iterator()
+                    .next() as OracleDatabaseTool
+            ).version,
+        )
+        assertEquals(
+            "12",
+            (
+                component.versions
+                    .getValue("(1,2)")
+                    .build.tools
+                    .iterator()
+                    .next() as OracleDatabaseTool
+            ).version,
+        )
     }
 
     /**
@@ -278,15 +330,53 @@ class ComponentsRegistryDSLTest {
                 }
             }
         }
-        assertTrue(components.getValue("X").build.dependencies.autoUpdate)
+        assertTrue(
+            components
+                .getValue("X")
+                .build.dependencies.autoUpdate,
+        )
         assertNull(components.getValue("Y").build)
-        assertTrue(components.getValue("XY").build.dependencies.autoUpdate)
-        assertTrue(components.getValue("XY").subComponents.getValue("XY1").build.dependencies.autoUpdate)
-        assertFalse(components.getValue("XY").subComponents.getValue("XY2").build.dependencies.autoUpdate)
-        assertTrue(components.getValue("XY").subComponents.getValue("XY3").build.dependencies.autoUpdate)
+        assertTrue(
+            components
+                .getValue("XY")
+                .build.dependencies.autoUpdate,
+        )
+        assertTrue(
+            components
+                .getValue("XY")
+                .subComponents
+                .getValue("XY1")
+                .build.dependencies.autoUpdate,
+        )
+        assertFalse(
+            components
+                .getValue("XY")
+                .subComponents
+                .getValue("XY2")
+                .build.dependencies.autoUpdate,
+        )
+        assertTrue(
+            components
+                .getValue("XY")
+                .subComponents
+                .getValue("XY3")
+                .build.dependencies.autoUpdate,
+        )
         assertNull(components.getValue("Z").build)
-        assertTrue(components.getValue("Z").subComponents.getValue("Z1").build.dependencies.autoUpdate)
-        assertNull(components.getValue("Z").subComponents.getValue("Z2").build)
+        assertTrue(
+            components
+                .getValue("Z")
+                .subComponents
+                .getValue("Z1")
+                .build.dependencies.autoUpdate,
+        )
+        assertNull(
+            components
+                .getValue("Z")
+                .subComponents
+                .getValue("Z2")
+                .build,
+        )
     }
 
     companion object {

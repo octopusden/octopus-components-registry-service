@@ -136,8 +136,12 @@ class VersionsControllerV4Test {
         val component = "SUB"
         val version = "3.0.0"
 
-        val reference = getJson("/rest/api/2/components/$component/versions/$version/detailed-version", DetailedComponentVersion::class.java)
-        val jira = getJson("/rest/api/2/components/$component/versions/$version/jira-component", JiraComponentVersionDTO::class.java).component
+        val reference =
+            getJson("/rest/api/2/components/$component/versions/$version/detailed-version", DetailedComponentVersion::class.java)
+        val jira = getJson(
+            "/rest/api/2/components/$component/versions/$version/jira-component",
+            JiraComponentVersionDTO::class.java,
+        ).component
         val cvf = jira.componentVersionFormat
 
         val request =
@@ -185,7 +189,11 @@ class VersionsControllerV4Test {
         type: Class<T>,
     ): T =
         objectMapper.readValue(
-            mvc.perform(get(url).accept(MediaType.APPLICATION_JSON)).andExpect(status().isOk).andReturn().response.contentAsString,
+            mvc
+                .perform(get(url).accept(MediaType.APPLICATION_JSON))
+                .andExpect(status().isOk)
+                .andReturn()
+                .response.contentAsString,
             type,
         )
 

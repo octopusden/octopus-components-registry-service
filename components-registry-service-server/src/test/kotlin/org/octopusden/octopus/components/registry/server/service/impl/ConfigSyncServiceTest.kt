@@ -3,14 +3,14 @@ package org.octopusden.octopus.components.registry.server.service.impl
 import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.Assertions.assertThrows
 import org.junit.jupiter.api.Test
-import org.octopusden.octopus.components.registry.server.config.AdminConfigProperties
-import org.octopusden.octopus.components.registry.server.entity.RegistryConfigEntity
-import org.octopusden.octopus.components.registry.server.repository.RegistryConfigRepository
 import org.mockito.ArgumentMatchers.any
 import org.mockito.ArgumentMatchers.eq
 import org.mockito.Mockito.mock
 import org.mockito.Mockito.never
 import org.mockito.Mockito.verify
+import org.octopusden.octopus.components.registry.server.config.AdminConfigProperties
+import org.octopusden.octopus.components.registry.server.entity.RegistryConfigEntity
+import org.octopusden.octopus.components.registry.server.repository.RegistryConfigRepository
 
 /**
  * Unit coverage for [ConfigSyncService] serialization + validation + no-clobber.
@@ -328,7 +328,10 @@ class ConfigSyncServiceTest {
                 solution = false
                 build = AdminConfigProperties.Build().apply { requiredProject = false }
                 jira = AdminConfigProperties.Jira().apply { technical = false }
-                distribution = AdminConfigProperties.Distribution().apply { explicit = false; external = false }
+                distribution = AdminConfigProperties.Distribution().apply {
+                    explicit = false
+                    external = false
+                }
                 escrow = AdminConfigProperties.Escrow().apply { reusable = false }
             }
         }
@@ -379,6 +382,7 @@ class ConfigSyncServiceTest {
                         buildVersionFormat = "\$major.\$minor.\$service-\$build"
                         lineVersionFormat = "\$major.\$minor"
                         hotfixVersionFormat = "\$major.\$minor.\$service.\$fix"
+                        versionFormat = "\$versionPrefix-\$baseVersionFormat"
                     }
                 }
                 distribution = AdminConfigProperties.Distribution().apply {
@@ -388,6 +392,7 @@ class ConfigSyncServiceTest {
                     DEB = "deb"
                     RPM = "rpm"
                     docker = "img"
+                    generic = "generic"
                     securityGroups = AdminConfigProperties.Distribution.SecurityGroups().apply { read = "Prod" }
                 }
                 vcs = AdminConfigProperties.Vcs().apply {
@@ -450,6 +455,7 @@ class ConfigSyncServiceTest {
                         "buildVersionFormat" to "\$major.\$minor.\$service-\$build",
                         "lineVersionFormat" to "\$major.\$minor",
                         "hotfixVersionFormat" to "\$major.\$minor.\$service.\$fix",
+                        "versionFormat" to "\$versionPrefix-\$baseVersionFormat",
                     ),
                 ),
                 "distribution" to mapOf(
@@ -459,6 +465,7 @@ class ConfigSyncServiceTest {
                     "DEB" to "deb",
                     "RPM" to "rpm",
                     "docker" to "img",
+                    "generic" to "generic",
                     "securityGroups" to mapOf("read" to "Prod"),
                 ),
                 "vcs" to mapOf(

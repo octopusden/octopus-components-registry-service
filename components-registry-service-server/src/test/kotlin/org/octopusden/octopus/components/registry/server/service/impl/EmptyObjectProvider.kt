@@ -20,7 +20,9 @@ class EmptyObjectProvider<T> : ObjectProvider<T> {
 /**
  * Test-only single-element [ObjectProvider] — models a wired client bean.
  */
-class SingletonObjectProvider<T>(private val value: T) : ObjectProvider<T> {
+class SingletonObjectProvider<T>(
+    private val value: T,
+) : ObjectProvider<T> {
     override fun getObject(): T = value
 
     override fun getObject(vararg args: Any?): T = value

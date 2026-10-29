@@ -12,14 +12,17 @@ import kotlin.test.assertTrue
  * `-w <value>` argument (the only reliable non-interactive path; a bare `-w` would prompt on the tty).
  */
 class CredentialStoreTest {
-
     /** Records both argv and stdin per call so the secret's transport channel can be asserted. */
     private class RecordingRunner(
         private val results: List<CommandResult>,
     ) : CommandRunner {
         val argvs = mutableListOf<List<String>>()
         val stdins = mutableListOf<String?>()
-        override fun run(args: List<String>, stdin: String?): CommandResult {
+
+        override fun run(
+            args: List<String>,
+            stdin: String?,
+        ): CommandResult {
             argvs += args
             stdins += stdin
             return results[argvs.size - 1]
@@ -27,7 +30,9 @@ class CredentialStoreTest {
     }
 
     private fun ok() = CommandResult(0, "", "")
+
     private fun notFound() = CommandResult(KeychainCredentialStore.ITEM_NOT_FOUND, "", "not found")
+
     private fun fail() = CommandResult(1, "", "boom")
 
     @Test

@@ -20,17 +20,13 @@ class DistributionDockerImageEntity(
     @Id
     @GeneratedValue(strategy = GenerationType.UUID)
     var id: UUID? = null,
-
     @ManyToOne(fetch = FetchType.LAZY, optional = false)
     @JoinColumn(name = "component_configuration_id", nullable = false)
     var componentConfiguration: ComponentConfigurationEntity,
-
     @Column(name = "image_name", columnDefinition = "TEXT", nullable = false)
     var imageName: String = "",
-
     @Column(name = "flavor")
     var flavor: String? = null,
-
     @Column(name = "sort_order", nullable = false)
     var sortOrder: Int = 0,
 )

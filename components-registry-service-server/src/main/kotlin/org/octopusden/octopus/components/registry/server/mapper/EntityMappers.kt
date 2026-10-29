@@ -17,6 +17,7 @@ import org.octopusden.octopus.components.registry.server.entity.ComponentDocLink
 import org.octopusden.octopus.components.registry.server.entity.ComponentEntity
 import org.octopusden.octopus.components.registry.server.entity.DistributionDockerImageEntity
 import org.octopusden.octopus.components.registry.server.entity.DistributionFileUrlArtifactEntity
+import org.octopusden.octopus.components.registry.server.entity.DistributionGenericArtifactEntity
 import org.octopusden.octopus.components.registry.server.entity.DistributionMavenArtifactEntity
 import org.octopusden.octopus.components.registry.server.entity.DistributionPackageEntity
 import org.octopusden.octopus.components.registry.server.entity.DistributionSecurityGroupEntity
@@ -59,6 +60,7 @@ internal object MarkerAttributes {
     const val DISTRIBUTION_FILE_URL: String = "distribution.fileUrl"
     const val DISTRIBUTION_DOCKER: String = "distribution.docker"
     const val DISTRIBUTION_PACKAGES: String = "distribution.packages"
+    const val DISTRIBUTION_GENERIC: String = "distribution.generic"
     const val BUILD_REQUIRED_TOOLS: String = "build.requiredTools"
     const val BUILD_TOOLS: String = "build.buildTools"
 
@@ -82,6 +84,7 @@ internal object MarkerAttributes {
             DISTRIBUTION_FILE_URL,
             DISTRIBUTION_DOCKER,
             DISTRIBUTION_PACKAGES,
+            DISTRIBUTION_GENERIC,
             BUILD_REQUIRED_TOOLS,
             BUILD_TOOLS,
         )
@@ -287,7 +290,11 @@ fun ComponentEntity.toResolvedEscrowModuleConfig(
     // the resolved DTO returned base ownership at a version an override owns (disagreeing with
     // ComponentCodeRenderer.renderResolved). Ranges are disjoint by invariant; sorted for determinism.
     val ownershipRange =
-        this.artifactMappings.map { it.versionRange }.filter { it != ALL_VERSIONS }.distinct().sorted()
+        this.artifactMappings
+            .map { it.versionRange }
+            .filter { it != ALL_VERSIONS }
+            .distinct()
+            .sorted()
             .firstOrNull { range ->
                 try {
                     versionRangeFactory.create(range).containsVersion(numericVersion)
@@ -385,6 +392,7 @@ private fun ComponentEntity.resolveForRange(
  * a far-out internal gap); this does not occur for the integer-component, single-range overrides this
  * registry uses, and is noted as a deferred approximation in the TD-010 doc.
  */
+
 /**
  * A comparator over RAW version-range-endpoint strings using the registry's own scheme
  * ([NumericVersionFactory] / [VersionNames]) — the SAME ordering [VersionRangeFactory] uses to
@@ -399,7 +407,8 @@ internal fun numericVersionComparator(factory: NumericVersionFactory): (String, 
         try {
             factory.create(a).compareTo(factory.create(b))
         } catch (_: Exception) {
-            org.octopusden.octopus.components.registry.server.util.VersionRangePartition.defaultVersionCompare(a, b)
+            org.octopusden.octopus.components.registry.server.util.VersionRangePartition
+                .defaultVersionCompare(a, b)
         }
     }
 
@@ -718,12 +727,9 @@ private fun buildEscrowModuleConfig(
     // with no VCS roots round-trips correctly (the Groovy resolver kept the
     // VCSSettings instance with externalRegistry set and roots empty; v2 was
     // silently dropping it).
-    val vcsEntries =
-        pickMarkerChildren(
-            attribute = MarkerAttributes.VCS_SETTINGS,
-            markerOverrides = markerOverrides,
-            baseChildren = base.vcsEntries.toList(),
-        ) { it.vcsEntries.toList() }
+    // The row that supplies the VCS entries also supplies the Build Working Directory (ONB-001).
+    val vcsRow = markerOverrides.firstOrNull { it.overriddenAttribute == MarkerAttributes.VCS_SETTINGS } ?: base
+    val vcsEntries = vcsRow.vcsEntries.toList()
     // CRS-C legacy bridge: the dedicated skipCommitCheck flag re-materializes the legacy
     // `externalRegistry = "NOT_AVAILABLE"` sentinel for v1–v3 consumers (Jira plugin / RM),
     // so the legacy surface is bit-for-bit identical to the pre-flag world. The flag WINS
@@ -732,7 +738,7 @@ private fun buildEscrowModuleConfig(
     val effectiveExternalRegistry =
         if (component.skipCommitCheck) NOT_AVAILABLE_EXTERNAL_REGISTRY else component.vcsExternalRegistry
     if (vcsEntries.isNotEmpty() || effectiveExternalRegistry != null) {
-        setField(config, "vcsSettings", vcsEntries.toVCSSettings(effectiveExternalRegistry))
+        setField(config, "vcsSettings", vcsEntries.toVCSSettings(effectiveExternalRegistry, vcsRow.buildWorkingDirectory))
     }
 
     // Distribution — composed from four family child collections, each
@@ -761,6 +767,12 @@ private fun buildEscrowModuleConfig(
             markerOverrides = markerOverrides,
             baseChildren = base.packages.toList(),
         ) { it.packages.toList() }
+    val genericArtifacts =
+        pickMarkerChildren(
+            attribute = MarkerAttributes.DISTRIBUTION_GENERIC,
+            markerOverrides = markerOverrides,
+            baseChildren = base.genericArtifacts.toList(),
+        ) { it.genericArtifacts.toList() }
 
     val distribution =
         buildDistribution(
@@ -770,6 +782,7 @@ private fun buildEscrowModuleConfig(
             fileUrlArtifacts = fileUrlArtifacts,
             dockerImages = dockerImages,
             packages = packages,
+            genericArtifacts = genericArtifacts,
             securityGroups = component.securityGroups.toList(),
         )
     if (distribution != null) {
@@ -837,18 +850,22 @@ private fun buildEscrowModuleConfig(
     // the legacy single pair (groupId re-joined by ',') so the escrow view / view-as-code / compat
     // baseline stay byte-identical. All rows in a run share mode + tokens, so the primary renders both.
     org.octopusden.octopus.components.registry.server.util.ArtifactOwnershipGrouping
-        .collapseRuns(effectiveMappings).firstOrNull()?.let { primaryRun ->
+        .collapseRuns(effectiveMappings)
+        .firstOrNull()
+        ?.let { primaryRun ->
             val primary = primaryRun.first()
             setField(
                 config,
                 "groupIdPattern",
-                org.octopusden.octopus.components.registry.server.util.ArtifactOwnershipGrouping.joinGroupPattern(primaryRun),
+                org.octopusden.octopus.components.registry.server.util.ArtifactOwnershipGrouping
+                    .joinGroupPattern(primaryRun),
             )
             setField(
                 config,
                 "artifactIdPattern",
                 org.octopusden.octopus.components.registry.server.util.ArtifactOwnershipRendering.renderArtifactPattern(
-                    org.octopusden.octopus.components.registry.server.entity.ArtifactIdMode.valueOf(primary.artifactIdMode),
+                    org.octopusden.octopus.components.registry.server.entity.ArtifactIdMode
+                        .valueOf(primary.artifactIdMode),
                     primary.tokens.sortedBy { it.sortOrder }.map { it.artifactPattern },
                 ),
             )
@@ -951,7 +968,9 @@ internal class ComponentConfigurationView {
             "escrow.additionalSources" -> escrowAdditionalSources = override.escrowAdditionalSources
             "escrow.gradleIncludeConfigurations" -> escrowGradleIncludeConfigurations = override.escrowGradleIncludeConfigurations
             "escrow.gradleExcludeConfigurations" -> escrowGradleExcludeConfigurations = override.escrowGradleExcludeConfigurations
-            "escrow.gradleIncludeTestConfigurations" -> escrowGradleIncludeTestConfigurations = override.escrowGradleIncludeTestConfigurations
+            "escrow.gradleIncludeTestConfigurations" ->
+                escrowGradleIncludeTestConfigurations =
+                    override.escrowGradleIncludeTestConfigurations
 
             "jira.projectKey" -> jiraProjectKey = override.jiraProjectKey
             "jira.technical" -> jiraTechnical = override.jiraTechnical
@@ -1112,7 +1131,10 @@ private fun Boolean?.orFalse(): Boolean = this == true
 // Internal: VCS / Distribution / Jira builders
 // ============================================================
 
-internal fun List<VcsSettingsEntryEntity>.toVCSSettings(externalRegistry: String?): VCSSettings {
+internal fun List<VcsSettingsEntryEntity>.toVCSSettings(
+    externalRegistry: String?,
+    buildWorkingDirectory: String? = null,
+): VCSSettings {
     val sorted = this.sortedBy { it.sortOrder }
     val roots =
         sorted.map { entry ->
@@ -1123,9 +1145,11 @@ internal fun List<VcsSettingsEntryEntity>.toVCSSettings(externalRegistry: String
                 entry.tag,
                 entry.branch,
                 entry.hotfixBranch,
+                entry.sourcePath,
+                entry.checkoutDirectory,
             )
         }
-    return VCSSettings.create(externalRegistry, roots)
+    return VCSSettings.create(externalRegistry, roots, buildWorkingDirectory)
 }
 
 @Suppress("LongParameterList")
@@ -1136,12 +1160,23 @@ internal fun buildDistribution(
     fileUrlArtifacts: List<DistributionFileUrlArtifactEntity>,
     dockerImages: List<DistributionDockerImageEntity>,
     packages: List<DistributionPackageEntity>,
+    genericArtifacts: List<DistributionGenericArtifactEntity>,
     securityGroups: List<DistributionSecurityGroupEntity>,
 ): Distribution? {
     val gavStr = composeGavCsv(mavenArtifacts, fileUrlArtifacts)
     val dockerStr = composeDockerCsv(dockerImages)
-    val debStr = packages.filter { it.packageType == "DEB" }.sortedBy { it.sortOrder }.joinToString(",") { it.packageName }.ifEmpty { null }
-    val rpmStr = packages.filter { it.packageType == "RPM" }.sortedBy { it.sortOrder }.joinToString(",") { it.packageName }.ifEmpty { null }
+    val debStr = packages
+        .filter { it.packageType == "DEB" }
+        .sortedBy { it.sortOrder }
+        .joinToString(",") { it.packageName }
+        .ifEmpty { null }
+    val rpmStr = packages
+        .filter { it.packageType == "RPM" }
+        .sortedBy { it.sortOrder }
+        .joinToString(",") { it.packageName }
+        .ifEmpty { null }
+
+    val genericStr = composeGenericCsv(genericArtifacts)
 
     val secReadGroups =
         securityGroups
@@ -1156,11 +1191,12 @@ internal fun buildDistribution(
             dockerStr != null ||
             debStr != null ||
             rpmStr != null ||
+            genericStr != null ||
             secGroups != null
 
     if (!anyContent) return null
 
-    return Distribution(explicit ?: true, external ?: false, gavStr, debStr, rpmStr, dockerStr, secGroups)
+    return Distribution(explicit ?: true, external ?: false, gavStr, debStr, rpmStr, dockerStr, genericStr, secGroups)
 }
 
 private fun composeGavCsv(
@@ -1206,6 +1242,11 @@ private fun composeDockerCsv(images: List<DistributionDockerImageEntity>): Strin
     return csv.ifEmpty { null }
 }
 
+private fun composeGenericCsv(generic: List<DistributionGenericArtifactEntity>): String? {
+    val csv = generic.sortedBy { it.sortOrder }.joinToString(",") { it.path }
+    return csv.ifEmpty { null }
+}
+
 @Suppress("LongMethod")
 private fun buildJiraComponent(
     component: ComponentEntity,
@@ -1246,7 +1287,9 @@ private fun buildJiraComponent(
 
     return JiraComponent(
         projectKey,
-        component.jiraDisplayName,
+        // Effective display name (ADR-021). isNotBlank, not a plain `?:`: jira_display_name is
+        // NOT normalized on the v4 write paths, so "" reaches here and would short-circuit.
+        component.jiraDisplayName?.takeIf { it.isNotBlank() } ?: component.displayName,
         format,
         info,
         merged.jiraTechnical ?: false,
@@ -1343,7 +1386,9 @@ internal fun ComponentBuildToolBeanEntity.toBuildToolBean(): BuildTool? {
             entityVersionPattern?.let { bean.setVersion(it) }
             entitySettingsProperty?.let { bean.setSettingsProperty(it) }
             entityEdition?.let { edStr ->
-                OracleDatabaseEditions.values().firstOrNull { it.name == edStr }
+                OracleDatabaseEditions
+                    .values()
+                    .firstOrNull { it.name == edStr }
                     ?.let { bean.setEdition(it) }
             }
             bean

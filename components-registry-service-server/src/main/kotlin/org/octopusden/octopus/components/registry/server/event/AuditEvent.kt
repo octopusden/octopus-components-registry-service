@@ -11,4 +11,7 @@ data class AuditEvent(
     // null for internal/cascade events that carry no user-supplied context.
     val jiraTaskKey: String? = null,
     val changeComment: String? = null,
+    // Shared across every audit row written in the same save/transaction, so the
+    // audit history can group them into one record (see AuditCorrelationIdProvider).
+    val correlationId: String? = null,
 )

@@ -1,0 +1,92 @@
+package org.octopusden.octopus.components.registry.server.service.impl
+
+import org.junit.jupiter.api.Assertions.assertEquals
+import org.junit.jupiter.api.DisplayName
+import org.junit.jupiter.api.Test
+import org.octopusden.octopus.components.registry.server.service.ProfileAvailability
+import org.octopusden.octopus.components.registry.server.support.designExampleProperties
+import org.octopusden.octopus.components.registry.server.support.standaloneTemplateProperties
+
+class PermissionProfileAvailabilityTest {
+    private val catalog = ComponentProfileCatalog { designExampleProperties() + standaloneTemplateProperties() }
+    private val profile = catalog.profiles().first()
+    private val template = catalog.templates().single()
+
+    @Test
+    @DisplayName("Decision 6: a user with CREATE_COMPONENTS may use a profile")
+    fun withCreatePermission() {
+        val availability = PermissionProfileAvailability { it == "CREATE_COMPONENTS" }
+
+        assertEquals(ProfileAvailability.Availability(usable = true, reason = null), availability.evaluate(profile))
+    }
+
+    @Test
+    @DisplayName("Decision 6: a user without CREATE_COMPONENTS may not, with the reason")
+    fun withoutCreatePermission() {
+        val availability = PermissionProfileAvailability { it == "ACCESS_COMPONENTS" }
+
+        assertEquals(
+            ProfileAvailability.Availability(usable = false, reason = "You do not have permission to create components"),
+            availability.evaluate(profile),
+        )
+    }
+
+    @Test
+    @DisplayName("Decision 12: a template is usable with CREATE_COMPONENTS, and then may be overridden")
+    fun templateWithCreatePermission() {
+        val availability = PermissionProfileAvailability { it == "CREATE_COMPONENTS" }
+
+        assertEquals(ProfileAvailability.Availability(usable = true, reason = null), availability.evaluate(template))
+        assertEquals(true, availability.mayOverride(template))
+    }
+
+    @Test
+    @DisplayName("Decision 12: without CREATE_COMPONENTS a template is unusable, with the reason, and may not be overridden")
+    fun templateWithoutCreatePermission() {
+        val availability = PermissionProfileAvailability { it == "ACCESS_COMPONENTS" }
+
+        assertEquals(
+            ProfileAvailability.Availability(usable = false, reason = "You do not have permission to create components"),
+            availability.evaluate(template),
+        )
+        assertEquals(false, availability.mayOverride(template))
+    }
+
+    @Test
+    @DisplayName("SYS-105: with CREATE_FROM_TEMPLATE only, a template is usable (Decision 3)")
+    fun `SYS-105 template for template only creator`() {
+        val availability = PermissionProfileAvailability { it in setOf("ACCESS_COMPONENTS", "CREATE_FROM_TEMPLATE") }
+
+        assertEquals(ProfileAvailability.Availability(usable = true, reason = null), availability.evaluate(template))
+    }
+
+    @Test
+    @DisplayName("SYS-105: with CREATE_FROM_TEMPLATE only, a regular profile is unusable, with the template-only reason (Decision 3)")
+    fun `SYS-105 profile for template only creator`() {
+        val availability = PermissionProfileAvailability { it in setOf("ACCESS_COMPONENTS", "CREATE_FROM_TEMPLATE") }
+
+        assertEquals(
+            ProfileAvailability.Availability(usable = false, reason = "You may create components from templates only"),
+            availability.evaluate(profile),
+        )
+    }
+
+    @Test
+    @DisplayName("SYS-105: with CREATE_FROM_TEMPLATE only, a template may not be overridden (Decision 3)")
+    fun `SYS-105 override for template only creator`() {
+        val availability = PermissionProfileAvailability { it in setOf("ACCESS_COMPONENTS", "CREATE_FROM_TEMPLATE") }
+
+        assertEquals(false, availability.mayOverride(template))
+    }
+
+    @Test
+    @DisplayName("SYS-105: with both create permissions, CREATE_COMPONENTS decides (Decision 3)")
+    fun `SYS-105 both create permissions`() {
+        val availability =
+            PermissionProfileAvailability { it in setOf("ACCESS_COMPONENTS", "CREATE_COMPONENTS", "CREATE_FROM_TEMPLATE") }
+
+        assertEquals(ProfileAvailability.Availability(usable = true, reason = null), availability.evaluate(profile))
+        assertEquals(ProfileAvailability.Availability(usable = true, reason = null), availability.evaluate(template))
+        assertEquals(true, availability.mayOverride(template))
+    }
+}

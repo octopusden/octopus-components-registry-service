@@ -13,7 +13,6 @@ import org.junit.jupiter.api.Test
  * and on pre-existing DB-vs-DB conflicts.
  */
 class UniquenessPrePassTest {
-
     private val alwaysIntersect: (String, String) -> Boolean = { _, _ -> true }
 
     private fun gav(
@@ -287,10 +286,20 @@ class UniquenessPrePassTest {
         val pairs = org.octopusden.octopus.components.registry.server.util.computeEffectiveJiraPairs(
             listOf(
                 org.octopusden.octopus.components.registry.server.util.JiraRowView(
-                    "editor-model-comp", "(,0),[0,)", "BASE", null, "PROJM", "EditorModel",
+                    "editor-model-comp",
+                    "(,0),[0,)",
+                    "BASE",
+                    null,
+                    "PROJM",
+                    "EditorModel",
                 ),
                 org.octopusden.octopus.components.registry.server.util.JiraRowView(
-                    "editor-model-comp", "(52.0.1-6,52.0.1-21]", "SCALAR_OVERRIDE", "jira.projectKey", "PROJW", null,
+                    "editor-model-comp",
+                    "(52.0.1-6,52.0.1-21]",
+                    "SCALAR_OVERRIDE",
+                    "jira.projectKey",
+                    "PROJW",
+                    null,
                 ),
             ),
         )
@@ -301,23 +310,45 @@ class UniquenessPrePassTest {
     }
 
     @Test
-    @DisplayName("effective jira: same-range projectKey + prefix override rows merge into one claim; prefix-clear override claims (basePk, null)")
+    @DisplayName(
+        "effective jira: same-range projectKey + prefix override rows merge into one claim; prefix-clear override claims (basePk, null)",
+    )
     fun effectiveJira_sameRangeRowsMerge_andNullClear() {
         val pairs = org.octopusden.octopus.components.registry.server.util.computeEffectiveJiraPairs(
             listOf(
                 org.octopusden.octopus.components.registry.server.util.JiraRowView(
-                    "comp", "(,0),[0,)", "BASE", null, "PROJ", "base",
+                    "comp",
+                    "(,0),[0,)",
+                    "BASE",
+                    null,
+                    "PROJ",
+                    "base",
                 ),
                 // one range overriding BOTH scalars → single merged claim
                 org.octopusden.octopus.components.registry.server.util.JiraRowView(
-                    "comp", "[2,3)", "SCALAR_OVERRIDE", "jira.projectKey", "OTHER", null,
+                    "comp",
+                    "[2,3)",
+                    "SCALAR_OVERRIDE",
+                    "jira.projectKey",
+                    "OTHER",
+                    null,
                 ),
                 org.octopusden.octopus.components.registry.server.util.JiraRowView(
-                    "comp", "[2,3)", "SCALAR_OVERRIDE", "jira.versionPrefix", null, "ov",
+                    "comp",
+                    "[2,3)",
+                    "SCALAR_OVERRIDE",
+                    "jira.versionPrefix",
+                    null,
+                    "ov",
                 ),
                 // a range CLEARING the prefix (override row with null value) → (PROJ, null)
                 org.octopusden.octopus.components.registry.server.util.JiraRowView(
-                    "comp", "[3,)", "SCALAR_OVERRIDE", "jira.versionPrefix", null, null,
+                    "comp",
+                    "[3,)",
+                    "SCALAR_OVERRIDE",
+                    "jira.versionPrefix",
+                    null,
+                    null,
                 ),
             ),
         )

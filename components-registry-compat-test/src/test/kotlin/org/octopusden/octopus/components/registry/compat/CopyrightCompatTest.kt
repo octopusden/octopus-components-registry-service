@@ -23,7 +23,6 @@ import java.util.stream.Stream
  */
 @TestInstance(TestInstance.Lifecycle.PER_CLASS)
 class CopyrightCompatTest : CompatibilityTestBase() {
-
     @ParameterizedTest(name = "GET /rest/api/3/components/{0}/copyright")
     @MethodSource("smokeComponentArgs")
     fun `GET v3 copyright must match per component (binary, content-redacted)`(componentName: String) {
@@ -53,7 +52,9 @@ class CopyrightCompatTest : CompatibilityTestBase() {
         ) {
             DiffCollector.record(
                 DiffRecord(
-                    ts = java.time.Instant.now().toString(),
+                    ts = java.time.Instant
+                        .now()
+                        .toString(),
                     endpoint = endpoint,
                     pathParams = params,
                     category = DiffClassifier.VALUE_DIFF,

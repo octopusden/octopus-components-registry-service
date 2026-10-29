@@ -36,8 +36,7 @@ class AdminConfigPropertiesBindingTest {
         runner
             .withPropertyValues(
                 "components-registry.field-config.distribution.[maven.groupPattern].label=Example Label",
-            )
-            .run { ctx ->
+            ).run { ctx ->
                 val props = ctx.getBean(AdminConfigProperties::class.java)
                 val entry = props.fieldConfig["distribution"]?.get("maven.groupPattern")
                 assertEquals("Example Label", entry?.label)
@@ -49,8 +48,7 @@ class AdminConfigPropertiesBindingTest {
         runner
             .withPropertyValues(
                 "components-registry.field-config.distribution.maven.groupPattern.label=Example Label",
-            )
-            .run { ctx ->
+            ).run { ctx ->
                 val props = ctx.getBean(AdminConfigProperties::class.java)
                 // The binder consumes "maven" as the field key; "groupPattern" is
                 // not a FieldEntry property and is dropped by ignoreUnknownFields.
@@ -67,8 +65,7 @@ class AdminConfigPropertiesBindingTest {
                 "components-registry.field-config.component.vcsExternalRegistry.editable=adminOnly",
                 "components-registry.field-config.component.vcsExternalRegistry.options[0]=alpha",
                 "components-registry.field-config.component.vcsExternalRegistry.options[1]=beta",
-            )
-            .run { ctx ->
+            ).run { ctx ->
                 val props = ctx.getBean(AdminConfigProperties::class.java)
                 assertEquals("adminOnly", props.fieldConfig["jira"]?.get("technical")?.editable)
                 val registry = props.fieldConfig["component"]?.get("vcsExternalRegistry")
@@ -89,10 +86,11 @@ class AdminConfigPropertiesBindingTest {
         runner
             .withPropertyValues(
                 "components-registry.component-defaults.jira.componentVersionFormat.majorVersionFormat=legacy",
-            )
-            .run { ctx ->
-                val cvf = ctx.getBean(AdminConfigProperties::class.java)
-                    .componentDefaults.jira?.componentVersionFormat
+            ).run { ctx ->
+                val cvf = ctx
+                    .getBean(AdminConfigProperties::class.java)
+                    .componentDefaults.jira
+                    ?.componentVersionFormat
                 assertEquals("legacy", cvf?.minorVersionFormat)
             }
     }
@@ -103,10 +101,11 @@ class AdminConfigPropertiesBindingTest {
             .withPropertyValues(
                 "components-registry.component-defaults.jira.componentVersionFormat.majorVersionFormat=legacy",
                 "components-registry.component-defaults.jira.componentVersionFormat.minorVersionFormat=new",
-            )
-            .run { ctx ->
-                val cvf = ctx.getBean(AdminConfigProperties::class.java)
-                    .componentDefaults.jira?.componentVersionFormat
+            ).run { ctx ->
+                val cvf = ctx
+                    .getBean(AdminConfigProperties::class.java)
+                    .componentDefaults.jira
+                    ?.componentVersionFormat
                 assertEquals("new", cvf?.minorVersionFormat)
             }
     }

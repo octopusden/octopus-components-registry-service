@@ -9,8 +9,8 @@ buildscript {
 
 plugins {
     id 'io.github.gradle-nexus.publish-plugin'
-    id 'org.octopusden.octopus-release-management'
     id 'org.octopusden.octopus-quality'
+    id 'org.sonarqube'
     id 'jacoco'
     id 'org.springframework.boot'                 apply false
     id 'org.jetbrains.kotlin.jvm'                 apply false
@@ -19,36 +19,104 @@ plugins {
     id 'io.gitlab.arturbosch.detekt'              apply false
     id 'org.jlleitschuh.gradle.ktlint'            apply false
     id 'signing'
-    id 'org.asciidoctor.jvm.convert' version '3.3.2'
+    id 'org.asciidoctor.jvm.convert' version '4.0.5'
     id 'com.platformlib.gradle-wrapper' version '0.2.6'
 }
 
+// Modules published to Maven Central — an allowlist, so a module that is not listed is not
+// published. Central is for artifacts other projects consume as a Maven dependency.
+//
+// Deliberately NOT listed:
+//   components-registry-service-server, components-registry-cli — deployables (docker image on
+//     ghcr / built locally per the CLI README);
+//   components-registry-compat-test — internal harness;
+//   test-common — this repository's own test data. Its only non-empty artifact is the
+//     test-fixtures jar, which the client, light-client and server tests use as
+//     `testFixtures(project(':test-common'))`, so it needs no publication;
+//   component-validation — pure validation library with no external consumer yet. The server
+//     depends on it as `project(':component-validation')`, which needs no publication, and it has
+//     never been on Central (it was added after the last release). Publishing it would start
+//     costing quota for something nobody can resolve; add it here the moment a consumer outside
+//     this repository needs it as a dependency.
+//
+// components-registry-automation IS listed even though it is tooling: its TeamCity metarunner
+// resolves `<group>:components-registry-automation:<version>:jar:all` from a Maven repo at build
+// time (see components-registry-automation/metarunners/). This list gates publication CREATION,
+// so it stays here — the publication now goes to GitHub Packages rather than Central.
+// Allowlist PROJECT PATHS, not names. A Set of names collapses two modules that share a
+// simple name, and the root project's name is a repository-level string rather than a module
+// name, so it cannot sit here meaningfully. `as Set` is load-bearing: in Groovy a Set is never
+// equal to a List even with identical elements, so declaring this as a plain list would fail
+// the check on every publish.
+def centralPublishedProjects = [
+        ':component-resolver-api',
+        ':component-resolver-core',
+        ':components-registry-api',
+        ':components-registry-dsl',
+        ':components-registry-service-client',
+        ':components-registry-service-light-client',
+        ':components-registry-service-core',
+        ':components-registry-automation',
+] as Set
+
 octopusQuality {
-    // TODO(crsctl): enabling the detekt/ktlint quality gate for components-registry-cli is a follow-up;
-    // excluded for the first PR to avoid baseline churn. Keep the module's code clean regardless.
+    // Regression guard on what this repository publishes to Maven Central, provided by the shared
+    // policy from octopus-base v2.7.0. This repository hand-rolled a task of exactly that name
+    // until this commit; the plugin registers the same name, so the deletion and the version bump
+    // cannot be separated — keeping both fails configuration.
+    //
+    // The declared set is INDEPENDENT of `centralPublishedProjects` above, which stays because it
+    // gates publication creation at `if (project.path in centralPublishedProjects)`. The old guard
+    // compared that same list against the projects that publish, so both sides always moved
+    // together and editing it could never be reported as drift; only a publication arriving by
+    // another route, or a path naming a project that does not exist, was catchable. Declaring the
+    // expected coordinates separately is what makes an edit to that list detectable.
+    publication {
+        enforceCentralPublications.set(true)
+        centralPublications.set([
+            ':component-resolver-api|mavenJava|org.octopusden.octopus.infrastructure:component-resolver-api|[jar, jar:javadoc, jar:sources]',
+            ':component-resolver-core|mavenJava|org.octopusden.octopus.infrastructure:component-resolver-core|[jar, jar:javadoc, jar:sources]',
+            ':components-registry-api|mavenJava|org.octopusden.octopus.infrastructure:components-registry-api|[jar, jar:javadoc, jar:sources]',
+            ':components-registry-automation|mavenJava|org.octopusden.octopus.components.registry.automation:components-registry-automation|[jar, jar:all, jar:javadoc, jar:sources, zip:metarunners]',
+            ':components-registry-dsl|mavenJava|org.octopusden.octopus.infrastructure:components-registry-dsl|[jar, jar:javadoc, jar:sources]',
+            ':components-registry-service-client|mavenJava|org.octopusden.octopus.infrastructure:components-registry-service-client|[jar, jar:javadoc, jar:sources]',
+            ':components-registry-service-core|mavenJava|org.octopusden.octopus.infrastructure:components-registry-service-core|[jar, jar:javadoc, jar:sources]',
+            ':components-registry-service-light-client|mavenJava|org.octopusden.octopus.infrastructure:components-registry-service-light-client|[jar, jar:javadoc, jar:sources]',
+        ] as Set)
+    }
+    // NOTE: in octopus-quality 2.5.2 `excludeProjects` maps ONLY to coverage exclusion
+    // (coverageExcludedProjects) — it does NOT exclude these modules from qualityStatic, which
+    // runs checkstyle/pmd/codenarc/detekt/ktlint over ALL subprojects. These four are excluded
+    // from the aggregate coverage gate (CLI/automation/compat-test/test-common are tooling/test
+    // modules where unit coverage is not meaningful). Their static analysis (incl. detekt/ktlint)
+    // still runs and is gated via each module's baseline.
     excludeProjects('components-registry-automation', 'components-registry-compat-test', 'test-common', 'components-registry-cli')
-    java { failOnViolation = true }
+    // `errorProne` runs ErrorProne on every module whose Java sources reach javac; only its
+    // on-by-default ERROR checks are active, and `failOnViolation` governs whether they fail
+    // the compile.
+    java {
+        failOnViolation = true
+        errorProne = true
+    }
     kotlin { failOnViolation = true }
     coverage {
-        // Disable built-in qualityCoverage aggregate wiring: the plugin registers
-        // jacocoOverallCoverage* tasks inside a lazy task action, which Gradle 8.6
-        // guards with IllegalMutationException (tasks.register(String,Class,Action)
-        // cannot be called from within another task's configuration action).
-        // Per-module jacoco (jacocoTestReport, jacocoTestCoverageVerification) is
-        // still configured by the plugin. The aggregate tasks are registered manually
-        // in projectsEvaluated below and wired into the plugin-owned qualityCoverage task.
+        // Not "no coverage": the gates are registered in projectsEvaluated below, which says why they
+        // are not the plugin's. Two things follow from `false` and are the reason not to flip it:
+        // the plugin would register `jacocoOverallCoverage*` beside tasks of those exact names, and
+        // `jacocoTestCoverageVerification` carries its rule only while this is true.
+        // `qualityCoverage` stays the entry point, so the shared workflow's default command holds.
         enabled = false
     }
 }
 
 def adocProperties = [:]
-['header', 'glossary-component-link', 'components-registry-link', 'release-management-automation-link',
+['header', 'glossary-component-link', 'components-registry-portal-link', 'release-management-automation-link', 'components-registry-swagger-link',
  'escrow-automation-tool-link', 'service-desk-link', 'components-registry-validation-link'].each {
     (project.findProperty("adoc.$it") as String)?.with { property -> adocProperties[it] = property }
 }
 
 def checkMandatoryAdocProperties = {
-    ['glossary-component-link', 'components-registry-link', 'release-management-automation-link',
+    ['glossary-component-link', 'components-registry-portal-link', 'release-management-automation-link', 'components-registry-swagger-link',
      'escrow-automation-tool-link', 'service-desk-link', 'components-registry-validation-link'].each {
         if (adocProperties[it] == null) throw new IllegalArgumentException("`adoc.$it` property must be defined")
     }
@@ -88,6 +156,20 @@ tasks.register('adocPublishToWiki', DockerTask) {
         if (project.findProperty('docker.registry') == null) throw new IllegalArgumentException("`docker.registry` property must be defined")
         checkMandatoryWikiProperties.run()
         checkMandatoryAdocProperties.run()
+        // The container runs as the agent user (-u uid:gid) and writes into the bind-mounted docs
+        // directory. Under rootless Podman that uid maps to a subordinate uid that cannot write the
+        // mount (AccessDeniedException on /var/asciidoc-root-folder/templates), so keep the user's
+        // own uid there - as the Gradle steps in .teamcity/settings.kts do. Docker has no such flag.
+        // Probe the binary DockerTask runs (its container-bin overrides, else docker). Podman reached
+        // through the podman-docker wrapper says so in --version; through a plain symlink it prints
+        // "docker version", so the resolved executable's name counts as well.
+        def binEnv = rootProject.findProperty('platformlib.container-bin.env-parameter')
+        def bin = (binEnv ? System.getenv(binEnv as String) : null) ?: rootProject.findProperty('platformlib.container-bin.command') ?: 'docker'
+        def exe = new File(bin as String).absolute ? new File(bin as String) :
+                System.getenv('PATH').split(File.pathSeparator).collect { new File(it, bin as String) }.find { it.canExecute() }
+        if (exe?.canonicalFile?.name?.contains('podman') || [bin, '--version'].execute().text.toLowerCase().contains('podman')) {
+            dockerOptions = dockerOptions + ['--userns=keep-id']
+        }
     }
     image = "${project.findProperty('docker.registry')}/confluencepublisher/confluence-publisher:0.22.0"
     dockerOptions = ['--network', 'host']
@@ -127,6 +209,20 @@ allprojects {
 allprojects {
     repositories {
         mavenLocal()
+        // The legacy org.gradle artifacts (gradle-core 1.6 and friends in component-resolver-core) come only
+        // from Gradle's own repository. Central republished old gradle-core versions with Gradle module
+        // metadata that declares a single `gradle-distribution` variant and no library, so resolving them
+        // from Central fails with "No matching variant" on any build without a warm cache.
+        exclusiveContent {
+            forRepository {
+                maven {
+                    url = uri("https://repo.gradle.org/gradle/libs-releases-local")
+                }
+            }
+            filter {
+                includeGroup("org.gradle")
+            }
+        }
         mavenCentral()
         maven {
             url = uri("https://repo.gradle.org/gradle/libs-releases-local")
@@ -145,6 +241,16 @@ configure(subprojects) {
 
     if (!project.name.equalsIgnoreCase("components-registry-service-light-client")) {
         apply plugin: 'org.jetbrains.kotlin.jvm'
+        // octopus-quality 2.5.2 self-applies the Java/Groovy analysers (checkstyle/pmd — now gated
+        // to Java-source modules — plus codenarc/spotbugs/jacoco). Per its documented consumer
+        // contract it merely *configures* detekt/ktlint reactively via plugins.withId(...) — they
+        // must be APPLIED here or the Kotlin static-analysis gate silently does nothing (checkstyle/
+        // pmd have no .kt to read). 2.4.1 additionally enforces this: the hollow-gate guard
+        // (verifyStaticAnalysisApplied, wired into qualityStatic) FAILS the build if a module has
+        // Kotlin sources but no detekt/ktlintCheck tasks — so this apply is now mandatory, not just
+        // best practice. Versions come from settings.gradle pluginManagement (detekt.version / ktlint-gradle.version).
+        apply plugin: 'io.gitlab.arturbosch.detekt'
+        apply plugin: 'org.jlleitschuh.gradle.ktlint'
 
         configurations.matching { cfg ->
             cfg?.name?.toLowerCase()?.contains('test')
@@ -163,6 +269,8 @@ configure(subprojects) {
             testImplementation "org.junit.jupiter:junit-jupiter-params"
             testImplementation "junit:junit:4.12"
             testRuntimeOnly "org.junit.vintage:junit-vintage-engine"
+            // Gradle no longer puts the JUnit Platform launcher on the test runtime classpath itself.
+            testRuntimeOnly "org.junit.platform:junit-platform-launcher"
         }
 
         compileKotlin {
@@ -173,18 +281,29 @@ configure(subprojects) {
             kotlinOptions.jvmTarget = "21"
         }
 
-        sourceCompatibility = 21
-        targetCompatibility = 21
+        // The Kotlin Gradle plugin (kotlin-plugin.version) is newer than the Kotlin runtime these
+        // modules ship with and run on (kotlin.version). Hold the compiler to the runtime's level so
+        // the bytecode and metadata stay what consumers of the published modules can read, and no
+        // call can reach a stdlib API newer than the stdlib on the classpath.
+        kotlin {
+            // Version the plugin gives kotlin-stdlib / kotlin-reflect and its own constraints on them;
+            // it defaults to the plugin's version, which would leak into the published POMs/modules.
+            coreLibrariesVersion = project['kotlin.version']
+            compilerOptions {
+                languageVersion = org.jetbrains.kotlin.gradle.dsl.KotlinVersion.KOTLIN_1_9
+                apiVersion = org.jetbrains.kotlin.gradle.dsl.KotlinVersion.KOTLIN_1_9
+            }
+        }
+
+        java.sourceCompatibility = 21
+        java.targetCompatibility = 21
     }
 
     afterEvaluate {
-        // SpotBugs stays disabled. octopus-quality 2.3.5 already gates SpotBugs to Java-without-
-        // Kotlin modules, but CRS's Java/Groovy modules (component-resolver-*, *-light-client) still
-        // yield low-value noise — EI_EXPOSE_REP on the escrow model/config POJOs plus findings on
-        // Groovy-generated classes (22 in component-resolver-api alone) — exactly the exclude-filter
-        // maintenance we opted out of (1 real bug / 21 HIGH in build 2.0.84-3436, PR #218).
-        // Checkstyle + PMD (Java, blocking), detekt + ktlint (Kotlin, blocking) and CodeNarc (Groovy)
-        // already cover each language. See AGENTS.md Quality Gates section.
+        // SpotBugs stays disabled: on CRS's Java/Groovy modules (component-resolver-*, *-light-client)
+        // it yields low-value noise (EI_EXPOSE_REP on escrow POJOs, findings on Groovy-generated
+        // classes) that would need an ongoing exclude-filter. Checkstyle + PMD (Java), detekt + ktlint
+        // (Kotlin) and CodeNarc (Groovy) already cover each language. See AGENTS.md Quality Gates.
         //
         // Disable the *tasks* (not apply-false): the SpotBugs plugin is owned by octopus-quality.
         if (pluginManager.hasPlugin('com.github.spotbugs')) {
@@ -277,44 +396,73 @@ configure(subprojects) {
         withSourcesJar()
     }
 
-    publishing {
-        publications {
-            mavenJava(MavenPublication) {
-                from components.java
-                pom {
-                    name.set(project.name)
-                    description.set("Octopus module: ${project.name}")
-                    url.set("https://github.com/octopusden/octopus-components-registry-service.git")
-                    licenses {
-                        license {
-                            name.set("The Apache License, Version 2.0")
-                            url.set("http://www.apache.org/licenses/LICENSE-2.0.txt")
+    // Only allowlisted modules get a publication (see centralPublishedProjects above); for the
+    // rest `publishToSonatype` has nothing to upload, while `build`, the docker image and the
+    // shadow/boot jars are unaffected.
+    if (project.path in centralPublishedProjects) {
+        publishing {
+            publications {
+                mavenJava(MavenPublication) {
+                    from components.java
+                    pom {
+                        name.set(project.name)
+                        description.set("Octopus module: ${project.name}")
+                        url.set("https://github.com/octopusden/octopus-components-registry-service.git")
+                        licenses {
+                            license {
+                                name.set("The Apache License, Version 2.0")
+                                url.set("http://www.apache.org/licenses/LICENSE-2.0.txt")
+                            }
+                        }
+                        scm {
+                            url.set("https://github.com/octopusden/octopus-components-registry-service.git")
+                            connection.set("scm:git://github.com/octopusden/octopus-components-registry-service.git")
+                        }
+                        developers {
+                            developer {
+                                id.set("octopus")
+                                name.set("octopus")
+                            }
                         }
                     }
-                    scm {
-                        url.set("https://github.com/octopusden/octopus-components-registry-service.git")
-                        connection.set("scm:git://github.com/octopusden/octopus-components-registry-service.git")
-                    }
-                    developers {
-                        developer {
-                            id.set("octopus")
-                            name.set("octopus")
+                }
+            }
+            // Dev builds to Artifactory, for a TeamCity that resolves the candidate from there
+            // ([2.0] Validate Git-based Components Registry). Exists only where ARTIFACTORY_URL is
+            // set, and there `publish` goes to Artifactory alone, as under the former
+            // octopus-release-management: GitHub Packages has no credentials on TeamCity. This
+            // repository's own [1.0] does not publish at all.
+            def artifactoryUrl = System.getenv('ARTIFACTORY_URL')
+            if (artifactoryUrl) {
+                tasks.withType(PublishToMavenRepository).configureEach { t ->
+                    t.onlyIf('ARTIFACTORY_URL is set: Artifactory only') { t.repository.name == 'Artifactory' }
+                }
+                def toRelease = (findProperty('publishToReleaseRepository') ?: System.getenv('publishToReleaseRepository')) == 'true'
+                repositories {
+                    maven {
+                        name = 'Artifactory'
+                        url = uri("${artifactoryUrl - ~/\/+$/ - ~/\/artifactory$/}/artifactory/${toRelease ? 'rnd-maven-release-local' : 'rnd-maven-dev-local'}")
+                        if (System.getenv('ARTIFACTORY_DEPLOYER_USERNAME')) {
+                            credentials {
+                                username = System.getenv('ARTIFACTORY_DEPLOYER_USERNAME')
+                                password = System.getenv('ARTIFACTORY_DEPLOYER_PASSWORD')
+                            }
                         }
                     }
                 }
             }
         }
-    }
 
-    signing {
-        required(gradle.taskGraph.hasTask("publishToSonatype"))
-        sign(publishing.publications)
-        def signingKey = findProperty("signingKey")
-        def signingPassword = findProperty("signingPassword")
-        useInMemoryPgpKeys(
-                signingKey,
-                signingPassword
-        )
+        signing {
+            required(gradle.taskGraph.hasTask("publishToSonatype"))
+            sign(publishing.publications)
+            def signingKey = findProperty("signingKey")
+            def signingPassword = findProperty("signingPassword")
+            useInMemoryPgpKeys(
+                    signingKey,
+                    signingPassword
+            )
+        }
     }
 }
 
@@ -336,6 +484,11 @@ def writeQualityReportsIndex = {
             ],
             'Tests': [
                     [pattern: '**/build/reports/tests/**/index.html', artifactPrefix: 'tests']
+            ],
+            // Only present after `:components-registry-service-server:pitest` has run (its own workflow,
+            // not `build`), so on an ordinary build this section is simply absent from the index.
+            'Mutation Testing': [
+                    [pattern: '**/build/reports/pitest/index.html', artifactPrefix: 'pitest']
             ]
     ]
 
@@ -406,45 +559,103 @@ ${sectionsHtml}
 """
 }
 
-// Aggregate JaCoCo tasks and coverage gate wired in projectsEvaluated (outside any task
-// configuration action) so the task container is still mutable.
-// Workaround for an octopus-quality plugin bug: the plugin's qualityCoverage task calls
-// tasks.register(String,Class,Action) inside its own lazy configuration action, which
-// Gradle 8.6 prohibits (IllegalMutationException during task-graph resolution).
-// coverage.enabled = false stops the plugin from triggering that code path; we then
-// register the aggregate tasks here and wire them into the plugin-owned qualityCoverage
-// task so the shared workflow default command (./gradlew qualityCoverage) remains correct.
+// Aggregate JaCoCo tasks and coverage gate, registered here rather than delegated to the plugin:
+// its aggregate gates LINE only and knows nothing of per-module floors, while these verify BRANCH
+// too — the counter LINE cannot substitute for — and carry a measured floor per module.
+// `coverage.enabled = false` above keeps the plugin from registering tasks of these names; the
+// gates are wired into the plugin-owned `qualityCoverage`, so the shared workflow's default command
+// (./gradlew qualityCoverage) remains correct.
+// In projectsEvaluated, outside any task configuration action, so the task container is mutable.
 gradle.projectsEvaluated {
     def coverageProjects = subprojects.findAll {
         // components-registry-cli is a standalone CLI tool (like -automation): much of its code is
         // Clikt wiring / main() / gated interactive auth paths that unit coverage can't meaningfully
-        // reach. Excluded from the aggregate 70% gate, consistent with octopusQuality.excludeProjects.
+        // reach. Excluded from the aggregate coverage gate, consistent with octopusQuality.excludeProjects.
         !(it.name in ['components-registry-automation', 'components-registry-compat-test', 'test-common', 'components-registry-cli'])
     }
     def testTargets = coverageProjects.findAll { it.tasks.findByName('test') != null }
 
     // Heavy @Tag("integration") tests run in `dbTest`/`integrationTest` (excluded from
-    // `check`), but their coverage must still count toward the gate and they must run
-    // as part of `qualityCoverage` (the command the GH quality job invokes).
+    // `check`). `qualityCoverage` (the command the GH quality job invokes) TRIGGERS the
+    // heavy suites listed here and folds their coverage into the aggregate gate.
+    //
+    // `integrationTest` (FatJar boot FT) is deliberately NOT triggered here. It launches the
+    // packaged fat jar in a SEPARATE JVM (in-memory H2 — no Testcontainers) and asserts
+    // startup/health + the auth-disabled fail-fast contract within tight time windows. Those
+    // timing-sensitive smoke checks flake on shared GH-hosted runners (observed: the fail-fast
+    // assertion missing its 15s window), and the extra full-app JVM piles memory pressure onto
+    // the co-scheduled dbTest Postgres Testcontainers in the same coverage job — code-unrelated
+    // red (GH issue #424). It stays TeamCity-only, where it still runs and gates publish/push
+    // via `dockerPushImage`'s hard dependency (see components-registry-service-server/build.gradle).
+    // Its coverage is deliberately not folded in either — see `coverageExecData` below for why reading a
+    // file this invocation did not produce makes the gate non-deterministic.
     def heavyTestTaskPaths = []
     subprojects.each { sp ->
-        ['dbTest', 'integrationTest'].each { tn ->
+        ['dbTest'].each { tn ->
             if (sp.tasks.findByName(tn) != null) heavyTestTaskPaths << "${sp.path}:${tn}"
         }
     }
-    // Coverage exec data for a set of projects: unit (`test`) + heavy (`dbTest`,
-    // `integrationTest`) so the split does not lose coverage. Missing files are ignored.
+    // Coverage exec data for a set of projects: exactly the test tasks this invocation runs — `test` and
+    // `dbTest`.
+    //
+    // `integrationTest.exec` is deliberately NOT included, though it used to be "when present". That made
+    // the gate non-deterministic: the coverage job never runs `integrationTest` (it is TeamCity-only, see
+    // `heavyTestTaskPaths`), so a leftover exec file from an earlier local run would fold in coverage that
+    // a clean CI run does not have — and only ever upwards, quietly masking a real drop. A gate must read
+    // the same numbers on a developer's machine and on a fresh agent, so it now reads only data the
+    // invocation itself produced. The per-module floors were calibrated without it, so nothing is lost.
     def coverageExecData = { Collection projs ->
         files(projs.collect { p ->
             p.fileTree(p.layout.buildDirectory) {
-                include 'jacoco/test.exec', 'jacoco/dbTest.exec', 'jacoco/integrationTest.exec'
+                include 'jacoco/test.exec', 'jacoco/dbTest.exec'
             }
         })
     }
 
+    // A JaCoCo verification task with EMPTY execution data is SKIPPED, not failed — Gradle's own
+    // `onlyIf` on the task, which a consumer cannot override (specs are AND-ed). So every coverage gate
+    // here has a silent-pass mode: if the exec files are absent, `qualityCoverage` goes green having
+    // measured nothing. Observed, not theorised: pointing the exec glob at a non-existent name makes
+    // `jacocoOverallCoverageVerification` SKIP after a full unit-test run, with BUILD SUCCESSFUL.
+    //
+    // The per-module floor is protected structurally (its map is checked against modules that own test
+    // sources), but that says nothing about whether the data was actually produced. This task closes the
+    // remaining case for both the aggregate and the per-module gates by asserting, at execution time,
+    // that each coverage module left exec data behind.
+    // THE definition of "a module the coverage gates apply to", computed once and used by every guard
+    // below (this task and the two floors-map checks). Keyed on test SOURCES, not on the presence of a
+    // `test` task: the Kotlin/Java plugins register `test` even for a module with no test code
+    // (`components-registry-service-core`), and such a module legitimately produces no exec data — keying
+    // on the task would fail the build for the one module that is correctly untested. Single definition on
+    // purpose: two copies of this predicate could drift apart under editing, and each guard would then be
+    // protecting a different set of modules than the others.
+    def modulesWithTests = testTargets.findAll { !it.sourceSets.test.allSource.isEmpty() }
+    def moduleNamesWithTests = modulesWithTests*.name
+    if (modulesWithTests.isEmpty()) {
+        throw new GradleException(
+            "no coverage modules with tests resolved — the aggregate coverage gate would silently pass on " +
+                "empty execution data; check octopusQuality.excludeProjects and coverageProjects in build.gradle")
+    }
+    def execDataByModule = modulesWithTests.collectEntries { p -> [(p.name): coverageExecData([p])] }
+    tasks.register('verifyCoverageDataPresent') {
+        group = 'verification'
+        description = 'Fails when a coverage module produced no JaCoCo execution data (JaCoCo verification SKIPS silently on empty data)'
+        dependsOn(testTargets.collect { "${it.path}:test" })
+        dependsOn(heavyTestTaskPaths)
+        doLast {
+            def missing = execDataByModule.findAll { name, execFiles -> execFiles.isEmpty() }*.key
+            if (missing) {
+                throw new GradleException(
+                    "no JaCoCo execution data for: ${missing.join(', ')}. The coverage gates would have " +
+                        "been SKIPPED rather than failed, passing without measuring anything. Check that the " +
+                        "module's tests ran and that the JaCoCo agent is attached.")
+            }
+        }
+    }
+
     tasks.register('jacocoOverallCoverageReport', org.gradle.testing.jacoco.tasks.JacocoReport) {
         group = 'verification'
-        description = 'Aggregated JaCoCo report across all coverage modules (test + dbTest + integrationTest)'
+        description = 'Aggregated JaCoCo report across all coverage modules (test + dbTest)'
         dependsOn(testTargets.collect { "${it.path}:test" })
         dependsOn(heavyTestTaskPaths)
         executionData.from(coverageExecData(testTargets))
@@ -460,7 +671,7 @@ gradle.projectsEvaluated {
 
     tasks.register('jacocoOverallCoverageVerification', org.gradle.testing.jacoco.tasks.JacocoCoverageVerification) {
         group = 'verification'
-        description = 'Verifies aggregated JaCoCo line coverage >= 70% across all coverage modules (test + dbTest + integrationTest)'
+        description = 'Verifies aggregated JaCoCo LINE >= 86% and BRANCH >= 65% across all coverage modules (test + dbTest)'
         dependsOn(testTargets.collect { "${it.path}:test" })
         dependsOn(heavyTestTaskPaths)
         executionData.from(coverageExecData(testTargets))
@@ -469,13 +680,220 @@ gradle.projectsEvaluated {
         violationRules {
             rule {
                 element = 'BUNDLE'
+                // Floors, not targets: each minimum is the measured aggregate coverage minus ~2 p.p.
+                // of headroom (see docs/registry/quality-baseline.md for the measured values and the
+                // recipe to re-measure). Raise them when coverage rises; never lower one silently.
                 limit {
                     counter = 'LINE'
                     value = 'COVEREDRATIO'
-                    minimum = 0.70
+                    minimum = 0.86
+                }
+                // BRANCH is the counter LINE cannot substitute for: a fully line-covered `if` exercised
+                // only on its true path still reports 100% LINE. BRANCH distinguishes "one branch ran"
+                // from "both branches ran" — it says nothing about whether either outcome was asserted,
+                // which is a different question and a different gate (mutation testing).
+                limit {
+                    counter = 'BRANCH'
+                    value = 'COVEREDRATIO'
+                    minimum = 0.65
                 }
             }
         }
+    }
+
+    // Per-module coverage floor, and the ONLY one — nothing gates underneath it (see the root
+    // `coverage` block). It carries the LINE/BRANCH minimums, in a task of our own so that:
+    //   - it declares the heavy suites it needs (`dependsOn`), so a standalone invocation measures the
+    //     same exec set as CI instead of failing on missing dbTest coverage, and
+    //   - it never runs as part of `check`/`test`, so TeamCity [1.0] (`clean build …`) is unaffected —
+    //     coverage stays a `qualityCoverage` (GitHub) concern, as before.
+    // Minimums are FLOORS, set to the measured value minus ~2 p.p.; docs/registry/quality-baseline.md
+    // records the measured values, the snapshot they came from, and how to re-measure.
+    //
+    // They are not a ratchet, and the name no longer claims to be one: nothing here stops someone
+    // lowering 0.97 to 0.40 and staying green. Monotonicity is a review property — the number is in the
+    // diff and lowering it needs saying so in the PR — not a build property. Enforcing it mechanically
+    // means comparing against the target branch, which belongs in a coverage service (Sonar, Codecov),
+    // not in hand-rolled Git plumbing inside a build script.
+    def moduleCoverageFloors = [
+        'components-registry-service-server'      : [line: 0.87, branch: 0.68],
+        'components-registry-service-client'      : [line: 0.94, branch: 0.63],
+        'component-resolver-core'                 : [line: 0.78, branch: 0.60],
+        'components-registry-dsl'                 : [line: 0.79, branch: 0.45],
+        'components-registry-service-light-client': [line: 0.77, branch: 0.43],
+        'component-resolver-api'                  : [line: 0.68, branch: 0.28],
+        'components-registry-api'                 : [line: 0.14, branch: 0.07],
+        'component-validation'                    : [line: 0.97, branch: 0.83],
+    ]
+    // Escape hatch: a coverage module that OWNS tests but is deliberately left ungated goes here, with the
+    // reason. Empty today, and `components-registry-service-core` deliberately does not need an entry — it
+    // has no test sources at all, so the source-keyed check below already accounts for it (and will demand
+    // a decision the moment someone gives it tests). Every other module that owns tests must be in the
+    // floors map: absent from both is a configuration error, not a default.
+    def coverageFloorsExempt = [:]
+
+    // The map is checked against reality in BOTH directions, against `moduleNamesWithTests` (defined with
+    // the exec-data guard above — one definition of "module the gates apply to", deliberately not a second
+    // copy of the predicate). Why test SOURCES and not the presence of a `test` task: a
+    // JacocoCoverageVerification with empty execution data is SKIPPED, not failed, so keying on the task
+    // would let a module delete every test and keep a green floor, while the ~2 p.p. of aggregate
+    // headroom absorbs a small module's loss. Keying on sources makes that state fail loudly.
+    //
+    // POLICY checks, run in a task action wired into `qualityCoverage` — deliberately NOT at
+    // configuration time: a coverage-policy problem must fail the coverage gate, not every Gradle
+    // invocation (`build`, `test`, `dependencies`, IDE sync).
+    def floorPolicyProblems = {
+        def problems = []
+        // The two top-level maps are checked before anything reads them, for the same reason every entry is:
+        // the first unchecked read is where a config mistake stops being a reportable problem and becomes a
+        // stack trace. If either is not a map there is nothing further worth saying, so report and stop.
+        if (!(moduleCoverageFloors instanceof Map) || !(coverageFloorsExempt instanceof Map)) {
+            return ["moduleCoverageFloors and coverageFloorsExempt must both be maps of module name -> " +
+                        "thresholds / reason; got ${moduleCoverageFloors.getClass().simpleName} and " +
+                        "${coverageFloorsExempt.getClass().simpleName}"]
+        }
+        def unfloored = moduleNamesWithTests - moduleCoverageFloors.keySet() - coverageFloorsExempt.keySet()
+        if (unfloored) {
+            problems << ("coverage modules with tests but no floor: ${unfloored.join(', ')} — measure them " +
+                "(see docs/registry/quality-baseline.md §7) and add entries to moduleCoverageFloors in build.gradle")
+        }
+        def flooredWithoutTests = moduleCoverageFloors.keySet() - moduleNamesWithTests
+        if (flooredWithoutTests) {
+            problems << ("a coverage floor is configured for ${flooredWithoutTests.join(', ')}, which has no " +
+                "test sources — the floor task would SKIP on empty JaCoCo execution data and gate nothing. " +
+                "Restore the tests, or (if the module is intentionally untested) move it to " +
+                "coverageFloorsExempt with the reason")
+        }
+        // Validate the whole entry contract, not just "> 0". A malformed value used to reach JaCoCo and
+        // fail late and obscurely (`1.2` silently unsatisfiable, a String blowing up in the limit, a
+        // misspelled key silently ignored — the worst of the three, since the gate then measures nothing).
+        //
+        // `line` is required. `branch` is OPTIONAL on purpose: demanding a branch floor everywhere is this
+        // repo's own policy, not a general rule, and for a module whose code has no meaningful branching a
+        // line-only gate is the honest configuration. What is NOT allowed is an unknown key or a value
+        // outside (0, 1] — a threshold of zero reads as a configured gate that cannot fail, which is worse
+        // than no gate at all. (Sibling repos have both shapes of that: a coverage minimum of 0.00 with the
+        // gate "enabled", and a CVE gate whose fail-on score sits above the top of the CVSS scale.)
+        def allowedKeys = ['line', 'branch'] as Set
+        moduleCoverageFloors.each { name, thresholds ->
+            if (!(thresholds instanceof Map)) {
+                problems << "coverage floor for $name must be a map like [line: 0.80, branch: 0.60], got: $thresholds"
+                return
+            }
+            def unknown = thresholds.keySet() - allowedKeys
+            if (unknown) {
+                problems << ("coverage floor for $name has unknown key(s) ${unknown.join(', ')} — only " +
+                    "${allowedKeys.join(' and ')} are read, so anything else is silently ignored")
+            }
+            if (!thresholds.containsKey('line')) {
+                problems << "coverage floor for $name has no `line` threshold — it is required"
+            }
+            allowedKeys.each { counter ->
+                if (!thresholds.containsKey(counter)) {
+                    return
+                }
+                def value = thresholds[counter]
+                if (!(value instanceof Number)) {
+                    problems << "coverage floor $name.$counter must be a number in (0, 1], got: $value"
+                } else if (value <= 0 || value > 1) {
+                    problems << ("coverage floor $name.$counter must be in (0, 1] — got $value; a " +
+                        "non-positive value is a gate that cannot fail, and JaCoCo ratios never exceed 1")
+                }
+            }
+        }
+        // Declared in both places is a contradiction, and the loser is silent: the floor is registered and
+        // the exemption becomes dead text that still reads as policy.
+        def flooredAndExempt = moduleCoverageFloors.keySet().intersect(coverageFloorsExempt.keySet())
+        if (flooredAndExempt) {
+            problems << ("${flooredAndExempt.join(', ')} appears in both moduleCoverageFloors and " +
+                "coverageFloorsExempt — the floor wins and the exemption is dead; keep exactly one")
+        }
+        // An exemption without a stated reason is an exemption nobody can review: the entry survives, the
+        // "why" does not. Values are required to be non-blank text.
+        coverageFloorsExempt.each { name, reason ->
+            if (!(reason instanceof CharSequence) || reason.toString().trim().isEmpty()) {
+                problems << ("coverage floor exemption for $name needs a non-empty reason — the map is " +
+                    "read as name -> why, and an unexplained exemption cannot be reviewed")
+            }
+        }
+        problems
+    }
+    tasks.register('verifyCoverageFloorsPolicy') {
+        group = 'verification'
+        description = 'Fails when the per-module coverage floors map disagrees with the modules that own tests, or declares an invalid threshold'
+        doLast {
+            def problems = floorPolicyProblems()
+            if (problems) {
+                throw new GradleException(problems.join('\n'))
+            }
+        }
+    }
+
+    def floorTaskPaths = []
+    moduleCoverageFloors.each { moduleName, thresholds ->
+        def p = testTargets.find { it.name == moduleName }
+        // A key that resolves to nothing — module removed, renamed, misspelled, or newly excluded from
+        // coverage — is skipped here rather than dereferenced. Reporting it is `verifyCoverageFloorsPolicy`'s
+        // job (`flooredWithoutTests` covers it), so a stale key fails the gate with a readable message
+        // instead of aborting configuration with a null-dereference.
+        if (p == null) {
+            return
+        }
+        // Only `dbTest` — deliberately NOT `integrationTest`, for the reason spelled out at
+        // `heavyTestTaskPaths` above: the FatJar boot FT must not be pulled into the GitHub coverage job
+        // (timing-sensitive on shared runners, and it piles a second full-app JVM onto the co-scheduled
+        // Postgres containers — GH issue #424). Its exec file is not read either: `coverageExecData`
+        // deliberately covers only the tasks this invocation runs, so the gate reads the same numbers
+        // locally and on a fresh agent.
+        def heavyForModule = ['dbTest'].findAll { p.tasks.findByName(it) != null }
+        // `branch` is optional (see the contract validation in floorPolicyProblems), so only gate the
+        // counters the entry actually declares — a line-only entry must not silently become BRANCH >= 0,
+        // which JaCoCo satisfies unconditionally and which would read as a branch gate in the report.
+        //
+        // Nothing about the entry is trusted before it is checked, because registration happens at
+        // configuration time — before `verifyCoverageFloorsPolicy` can report anything. Two levels of
+        // malformed input both used to abort the build with whatever Groovy made of them instead of the
+        // policy task's precise message:
+        //   - a non-Map entry (`'module': 'oops'`) → `No such property: line for class: java.lang.String`
+        //     on the very first read;
+        //   - a non-numeric value (`line: 'oops'`) → `For input string: "oopsoops…"`, since String * 100
+        //     repeats the string.
+        // So the shape is checked first, then each value, and anything unusable is skipped here: the entry
+        // is still reported by the policy check, while a module whose floors are unusable simply gets no
+        // floor task rather than breaking configuration for everyone.
+        if (!(thresholds instanceof Map)) {
+            return
+        }
+        def wellFormed = { v -> v instanceof Number && v > 0 && v <= 1 }
+        def declaredCounters = ['LINE': thresholds.line, 'BRANCH': thresholds.branch]
+            .findAll { counter, value -> wellFormed(value) }
+        if (declaredCounters.isEmpty()) {
+            return
+        }
+        p.tasks.register('jacocoCoverageFloor', org.gradle.testing.jacoco.tasks.JacocoCoverageVerification) {
+            group = 'verification'
+            description = "Verifies ${moduleName} JaCoCo " +
+                declaredCounters.collect { counter, minimum -> "$counter >= ${(minimum * 100) as int}%" }.join(' and ') +
+                " (floor)"
+            dependsOn("${p.path}:test")
+            heavyForModule.each { dependsOn("${p.path}:$it") }
+            executionData.from(coverageExecData([p]))
+            sourceDirectories.from(files(p.sourceSets.main.allSource.srcDirs))
+            classDirectories.from(files(p.sourceSets.main.output))
+            violationRules {
+                rule {
+                    element = 'BUNDLE'
+                    declaredCounters.each { counterName, minimumValue ->
+                        limit {
+                            counter = counterName
+                            value = 'COVEREDRATIO'
+                            minimum = minimumValue
+                        }
+                    }
+                }
+            }
+        }
+        floorTaskPaths << "${p.path}:jacocoCoverageFloor"
     }
 
     // Per-module jacoco (registered by octopus-quality off the `test` task) must also
@@ -490,10 +908,13 @@ gradle.projectsEvaluated {
         def p = project(":$name")
         p.tasks.matching { it.name in ['jacocoTestReport', 'jacocoTestCoverageVerification'] }.configureEach {
             mustRunAfter(p.tasks.matching { it.name in ['dbTest', 'integrationTest'] })
-            // `test.exec` is already wired by the octopus-quality plugin; add ONLY the heavy
-            // exec files so inputs stay clean (JaCoCo would OR-merge a duplicate harmlessly).
+            // `test.exec` is already wired by the octopus-quality plugin; add ONLY `dbTest.exec` so
+            // inputs stay clean (JaCoCo would OR-merge a duplicate harmlessly). `integrationTest.exec` is
+            // excluded here for the same determinism reason as in `coverageExecData`: this invocation does
+            // not run that suite, so reading a leftover file would make the plugin-owned per-module floor
+            // depend on what happens to be on disk.
             executionData.from(files(p.fileTree(p.layout.buildDirectory) {
-                include 'jacoco/dbTest.exec', 'jacoco/integrationTest.exec'
+                include 'jacoco/dbTest.exec'
             }))
         }
     }
@@ -506,13 +927,16 @@ gradle.projectsEvaluated {
         dependsOn(heavyTestTaskPaths)
         dependsOn('jacocoOverallCoverageReport')
         dependsOn('jacocoOverallCoverageVerification')
+        dependsOn(floorTaskPaths)
+        // Without this, an empty-exec-data run reports every coverage gate as SKIPPED and passes.
+        dependsOn('verifyCoverageDataPresent')
+        dependsOn('verifyCoverageFloorsPolicy')
     }
 
     // Part A.7: gate publish + image push on the server fat-jar FT. dockerPushImage HARD-depends
     // on the FT — an image is never pushed without a validated boot jar. Maven publish is only
-    // ORDERED after the FT (mustRunAfter): when the FT is part of the same invocation — as in
-    // CI [1.0] (`clean build publish dockerPushImage`, where dockerPushImage pulls in the FT) —
-    // default fail-fast aborts before any publish. A standalone `publish`/`publishToMavenLocal` is
+    // ORDERED after the FT (mustRunAfter): when the FT is part of the same invocation, default
+    // fail-fast aborts before any publish. A standalone `publish`/`publishToMavenLocal` is
     // deliberately NOT forced to run the (slow) fat-jar FT.
     def serverFt = project(':components-registry-service-server').tasks.named('integrationTest')
     project(':components-registry-service-server').tasks.named('dockerPushImage').configure {

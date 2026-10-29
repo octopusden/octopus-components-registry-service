@@ -11,7 +11,8 @@ class AuditLogResponseTest {
 
     @Test
     fun decodesAuditPageWithFreeFormDiff() {
-        val literal = """
+        val literal =
+            """
             {
               "content": [
                 {
@@ -34,7 +35,7 @@ class AuditLogResponseTest {
               "totalPages": 1,
               "last": true
             }
-        """.trimIndent()
+            """.trimIndent()
 
         val page = json.decodeFromString<PageAuditLogResponse>(literal)
 
@@ -52,7 +53,19 @@ class AuditLogResponseTest {
         val diff = row.changeDiff
         assertNotNull(diff)
         assertEquals("renamed", diff["displayName"]?.jsonPrimitive?.content)
-        assertEquals("new", row.newValue?.get("displayName")?.jsonPrimitive?.content)
-        assertEquals("old", row.oldValue?.get("displayName")?.jsonPrimitive?.content)
+        assertEquals(
+            "new",
+            row.newValue
+                ?.get("displayName")
+                ?.jsonPrimitive
+                ?.content,
+        )
+        assertEquals(
+            "old",
+            row.oldValue
+                ?.get("displayName")
+                ?.jsonPrimitive
+                ?.content,
+        )
     }
 }

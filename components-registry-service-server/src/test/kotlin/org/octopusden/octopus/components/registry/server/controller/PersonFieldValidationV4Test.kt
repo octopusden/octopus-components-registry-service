@@ -5,6 +5,7 @@ import org.junit.jupiter.api.DisplayName
 import org.junit.jupiter.api.Tag
 import org.junit.jupiter.api.Test
 import org.junit.jupiter.api.Timeout
+import org.mockito.ArgumentMatchers.anyString
 import org.mockito.Mockito.never
 import org.mockito.Mockito.verify
 import org.mockito.Mockito.`when`
@@ -25,7 +26,6 @@ import org.springframework.test.web.servlet.request.MockMvcRequestBuilders.patch
 import org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post
 import org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath
 import org.springframework.test.web.servlet.result.MockMvcResultMatchers.status
-import org.mockito.ArgumentMatchers.anyString
 import java.nio.file.Paths
 import java.util.UUID
 
@@ -89,16 +89,21 @@ class PersonFieldValidationV4Test {
                 .content(body),
         )
 
-    private fun patchComponent(id: String, body: String) =
-        mvc.perform(
-            patch("/rest/api/4/components/$id")
-                .with(adminJwt())
-                .contentType(MediaType.APPLICATION_JSON)
-                .content(body),
-        )
+    private fun patchComponent(
+        id: String,
+        body: String,
+    ) = mvc.perform(
+        patch("/rest/api/4/components/$id")
+            .with(adminJwt())
+            .contentType(MediaType.APPLICATION_JSON)
+            .content(body),
+    )
 
     /** Valid create with an owner and the explicit&&external gate OFF. */
-    private fun validBody(name: String, owner: String = "owner_$name"): String =
+    private fun validBody(
+        name: String,
+        owner: String = "owner_$name",
+    ): String =
         """{"name":"$name","componentOwner":"$owner",""" +
             """"baseConfiguration":{"build":{"buildSystem":"MAVEN"}}}"""
 
@@ -108,7 +113,7 @@ class PersonFieldValidationV4Test {
     @DisplayName("flag off: blank componentOwner ⇒ 400 with field-named errorMessage, no employee call")
     fun `flag off blank owner rejected`() {
         `when`(employeeDirectory.isEnabled()).thenReturn(false)
-        val name = "pf_owner_blank_${uniqueSuffix()}"
+        val name = "pf-owner-blank-${uniqueSuffix()}"
         val body =
             """{"name":"$name","componentOwner":"   ",""" +
                 """"baseConfiguration":{"build":{"buildSystem":"MAVEN"}}}"""
@@ -122,7 +127,7 @@ class PersonFieldValidationV4Test {
     @DisplayName("flag off: missing RM/SC under explicit && external ⇒ 400 (releaseManager)")
     fun `flag off missing rm under gate rejected`() {
         `when`(employeeDirectory.isEnabled()).thenReturn(false)
-        val name = "pf_rm_missing_${uniqueSuffix()}"
+        val name = "pf-rm-missing-${uniqueSuffix()}"
         val body =
             """{"name":"$name","componentOwner":"owner1",""" +
                 """"distributionExplicit":true,"distributionExternal":true,""" +
@@ -136,7 +141,7 @@ class PersonFieldValidationV4Test {
     @DisplayName("flag off: per-element \"alice,bob\" fails ^\\w+\$ under the gate")
     fun `flag off csv element rejected`() {
         `when`(employeeDirectory.isEnabled()).thenReturn(false)
-        val name = "pf_csv_${uniqueSuffix()}"
+        val name = "pf-csv-${uniqueSuffix()}"
         val body =
             """{"name":"$name","componentOwner":"owner1",""" +
                 """"distributionExplicit":true,"distributionExternal":true,""" +
@@ -151,7 +156,7 @@ class PersonFieldValidationV4Test {
     @DisplayName("flag off: valid component (gate off) ⇒ 2xx, no employee call (fail-open / disabled)")
     fun `flag off valid passes`() {
         `when`(employeeDirectory.isEnabled()).thenReturn(false)
-        postCreate(validBody("pf_valid_off_${uniqueSuffix()}"))
+        postCreate(validBody("pf-valid-off-${uniqueSuffix()}"))
             .andExpect(status().isCreated)
         verify(employeeDirectory, never()).isActive(anyString())
     }
@@ -163,7 +168,7 @@ class PersonFieldValidationV4Test {
     fun `flag on active owner passes`() {
         `when`(employeeDirectory.isEnabled()).thenReturn(true)
         `when`(employeeDirectory.isActive(anyString())).thenReturn(ActiveStatus.ACTIVE)
-        postCreate(validBody("pf_active_${uniqueSuffix()}")).andExpect(status().isCreated)
+        postCreate(validBody("pf-active-${uniqueSuffix()}")).andExpect(status().isCreated)
     }
 
     @Test
@@ -171,7 +176,7 @@ class PersonFieldValidationV4Test {
     fun `flag on inactive owner rejected`() {
         `when`(employeeDirectory.isEnabled()).thenReturn(true)
         `when`(employeeDirectory.isActive(anyString())).thenReturn(ActiveStatus.INACTIVE)
-        postCreate(validBody("pf_inactive_${uniqueSuffix()}"))
+        postCreate(validBody("pf-inactive-${uniqueSuffix()}"))
             .andExpect(status().isBadRequest)
             .andExpect(jsonPath("$.errorMessage").value(org.hamcrest.Matchers.startsWith("componentOwner")))
     }
@@ -181,7 +186,7 @@ class PersonFieldValidationV4Test {
     fun `flag on unknown owner rejected`() {
         `when`(employeeDirectory.isEnabled()).thenReturn(true)
         `when`(employeeDirectory.isActive(anyString())).thenReturn(ActiveStatus.UNKNOWN)
-        postCreate(validBody("pf_unknown_${uniqueSuffix()}"))
+        postCreate(validBody("pf-unknown-${uniqueSuffix()}"))
             .andExpect(status().isBadRequest)
             .andExpect(jsonPath("$.errorMessage").value(org.hamcrest.Matchers.startsWith("componentOwner")))
     }
@@ -191,7 +196,7 @@ class PersonFieldValidationV4Test {
     fun `flag on transport error allowed`() {
         `when`(employeeDirectory.isEnabled()).thenReturn(true)
         `when`(employeeDirectory.isActive(anyString())).thenReturn(ActiveStatus.UNAVAILABLE)
-        postCreate(validBody("pf_unavailable_${uniqueSuffix()}")).andExpect(status().isCreated)
+        postCreate(validBody("pf-unavailable-${uniqueSuffix()}")).andExpect(status().isCreated)
     }
 
     @Test
@@ -199,7 +204,7 @@ class PersonFieldValidationV4Test {
     fun `flag on archived component skips active check`() {
         `when`(employeeDirectory.isEnabled()).thenReturn(true)
         `when`(employeeDirectory.isActive(anyString())).thenReturn(ActiveStatus.INACTIVE)
-        val name = "pf_archived_${uniqueSuffix()}"
+        val name = "pf-archived-${uniqueSuffix()}"
         val body =
             """{"name":"$name","componentOwner":"inactive_owner","archived":true,""" +
                 """"baseConfiguration":{"build":{"buildSystem":"MAVEN"}}}"""
@@ -216,12 +221,15 @@ class PersonFieldValidationV4Test {
         `when`(employeeDirectory.isEnabled()).thenReturn(true)
         `when`(employeeDirectory.isActive(anyString())).thenReturn(ActiveStatus.ACTIVE)
         // Seed a component with the gate OFF, with RM but no SC.
-        val name = "pf_gateflip_${uniqueSuffix()}"
+        val name = "pf-gateflip-${uniqueSuffix()}"
         val seedBody =
             """{"name":"$name","componentOwner":"owner1","releaseManager":["rm1"],""" +
                 """"baseConfiguration":{"build":{"buildSystem":"MAVEN"}}}"""
         val seed =
-            postCreate(seedBody).andExpect(status().isCreated).andReturn().response.contentAsString
+            postCreate(seedBody)
+                .andExpect(status().isCreated)
+                .andReturn()
+                .response.contentAsString
         val node = objectMapper.readTree(seed)
         val id = node["id"].asText()
         val version = node["version"].asLong()
@@ -237,9 +245,12 @@ class PersonFieldValidationV4Test {
     fun `patch unrelated does not recheck`() {
         `when`(employeeDirectory.isEnabled()).thenReturn(true)
         `when`(employeeDirectory.isActive(anyString())).thenReturn(ActiveStatus.ACTIVE)
-        val name = "pf_grandfather_${uniqueSuffix()}"
+        val name = "pf-grandfather-${uniqueSuffix()}"
         val seed =
-            postCreate(validBody(name)).andExpect(status().isCreated).andReturn().response.contentAsString
+            postCreate(validBody(name))
+                .andExpect(status().isCreated)
+                .andReturn()
+                .response.contentAsString
         val node = objectMapper.readTree(seed)
         val id = node["id"].asText()
         val version = node["version"].asLong()

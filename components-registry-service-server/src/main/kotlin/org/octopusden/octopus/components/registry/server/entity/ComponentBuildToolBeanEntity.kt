@@ -30,31 +30,24 @@ class ComponentBuildToolBeanEntity(
     @Id
     @GeneratedValue(strategy = GenerationType.UUID)
     var id: UUID? = null,
-
     @ManyToOne(fetch = FetchType.LAZY, optional = false)
     @JoinColumn(name = "component_configuration_id", nullable = false)
     var componentConfiguration: ComponentConfigurationEntity,
-
     /** Discriminator: one of oracleDatabase, cProduct, kProduct, dProduct, dDbProduct, odbc. */
     @Column(name = "bean_type", length = 32, nullable = false)
     var beanType: String,
-
     /** Tool type string (e.g. "ORACLE" for oracleDatabase; null for product-type beans). */
     @Column(name = "tool_type", length = 32)
     var toolType: String? = null,
-
     /** Settings property key used by the build system (e.g. "db", "uscschema"). */
     @Column(name = "settings_property", length = 64)
     var settingsProperty: String? = null,
-
     /** Version pattern / version string (e.g. "[12,)" for Oracle, "12.2" for ODBC). */
     @Column(name = "version_pattern", columnDefinition = "TEXT")
     var versionPattern: String? = null,
-
     /** Oracle DB edition (e.g. "ENTERPRISE"). Only valid when beanType = "oracleDatabase". */
     @Column(name = "edition", length = 32)
     var edition: String? = null,
-
     @Column(name = "sort_order", nullable = false)
     var sortOrder: Int = 0,
 )

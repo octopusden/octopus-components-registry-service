@@ -13,17 +13,21 @@ import org.octopusden.octopus.components.registry.cli.client.PrettyJson
  * STDERR; keeping the rendering pure makes it trivially testable.
  */
 object Renderer {
-
     /** Pretty JSON for STDOUT. */
-    fun <T> renderJson(value: T, serializer: KSerializer<T>): String =
-        PrettyJson.encodeToString(serializer, value)
+    fun <T> renderJson(
+        value: T,
+        serializer: KSerializer<T>,
+    ): String = PrettyJson.encodeToString(serializer, value)
 
     /**
      * A simple fixed-width table for list-shaped data. [headers] names the columns; [rows] supplies
      * one cell per column per row. Null cells render as an empty string. Columns are padded to the
      * widest cell so output lines up. An empty [rows] renders just the header line.
      */
-    fun renderTable(headers: List<String>, rows: List<List<String?>>): String {
+    fun renderTable(
+        headers: List<String>,
+        rows: List<List<String?>>,
+    ): String {
         val widths = IntArray(headers.size) { headers[it].length }
         for (row in rows) {
             for (i in headers.indices) {
@@ -42,7 +46,11 @@ object Renderer {
         return sb.toString().trimEnd('\n')
     }
 
-    private fun appendRow(sb: StringBuilder, cells: List<String>, widths: IntArray) {
+    private fun appendRow(
+        sb: StringBuilder,
+        cells: List<String>,
+        widths: IntArray,
+    ) {
         val line = cells.indices.joinToString("  ") { i ->
             cells[i].padEnd(widths[i])
         }

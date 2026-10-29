@@ -36,7 +36,12 @@ internal fun validatePerComponentDistributionInvariants(
     val fields: List<Pair<String, (EscrowModuleConfig) -> Any?>> = listOf(
         "distribution.explicit" to { c -> c.distribution?.explicit() ?: false },
         "distribution.external" to { c -> c.distribution?.external() ?: false },
-        "distribution.securityGroups.read" to { c -> c.distribution?.securityGroups?.read?.takeIf { it.isNotBlank() } },
+        "distribution.securityGroups.read" to { c ->
+            c.distribution
+                ?.securityGroups
+                ?.read
+                ?.takeIf { it.isNotBlank() }
+        },
     )
 
     val violations = fields.mapNotNull { (attribute, extractor) ->

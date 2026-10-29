@@ -29,15 +29,12 @@ class ComponentRequiredToolEntity(
     @Id
     @Column(name = "component_configuration_id", nullable = false)
     var componentConfigurationId: UUID = UUID(0, 0),
-
     @Id
     @Column(name = "tool_name", length = 100, nullable = false)
     var toolName: String = "",
-
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "component_configuration_id", insertable = false, updatable = false)
     var componentConfiguration: ComponentConfigurationEntity? = null,
-
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "tool_name", insertable = false, updatable = false)
     var tool: ToolEntity? = null,

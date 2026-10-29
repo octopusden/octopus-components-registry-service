@@ -3,6 +3,7 @@ package org.octopusden.octopus.components.registry.server.security
 import org.octopusden.cloud.commons.security.BasePermissionEvaluator
 import org.octopusden.cloud.commons.security.SecurityService
 import org.octopusden.octopus.components.registry.server.repository.ComponentRepository
+import org.octopusden.octopus.components.registry.server.service.impl.EmployeeDirectoryService
 import org.slf4j.LoggerFactory
 import org.springframework.beans.factory.ObjectProvider
 import org.springframework.stereotype.Component
@@ -18,9 +19,11 @@ class PermissionEvaluator(
     // so `canEditComponent` is never actually invoked there — but if it were, a null repo
     // denies (fail-closed).
     componentRepositoryProvider: ObjectProvider<ComponentRepository>,
+    private val employeeDirectory: EmployeeDirectoryService,
 ) : BasePermissionEvaluator(securityService) {
     private val log = LoggerFactory.getLogger(PermissionEvaluator::class.java)
     private val componentRepository: ComponentRepository? by lazy { componentRepositoryProvider.getIfAvailable() }
+
     /**
      * Per-component edit gate (ADR-004, Phase 2). A user may edit a component only
      * when they are listed on it as its `componentOwner`, a `releaseManager`, or a
@@ -60,9 +63,13 @@ class PermissionEvaluator(
             // match skips the SC query. Any no-match — including an owner-less component (no
             // owner, empty RM, empty SC) — falls through to deny (owner-less is then admin-only,
             // reachable only via the EDIT_ANY_COMPONENT bypass handled above).
-            if (matches(username, repository.findComponentOwnerById(id))) return true
+            val owner = repository.findComponentOwnerById(id)
+            if (matches(username, owner)) return true
             if (repository.findReleaseManagerUsernames(id).any { matches(username, it) }) return true
             if (repository.findSecurityChampionUsernames(id).any { matches(username, it) }) return true
+            // the manager of the componentOwner may also edit.
+            val ownerTrimmed = owner?.trim()
+            if (!ownerTrimmed.isNullOrEmpty() && matches(username, employeeDirectory.getManager(ownerTrimmed))) return true
             false
         } catch (e: RuntimeException) {
             // Fail closed: a lookup failure (e.g. DB unavailable) denies the edit (→ 403)
@@ -98,6 +105,13 @@ class PermissionEvaluator(
     fun canImport(): Boolean = hasPermission(IMPORT_DATA)
 
     /**
+     * ONB-002: the TeamCity checkout layout Diff's report (GET, read-only) is gated by plain component
+     * read access, not [IMPORT_DATA] — running the Diff (and Sync entirely) still requires
+     * [canImport]. Same permission [canEditComponent] itself requires before its own per-component check.
+     */
+    fun canViewComponents(): Boolean = hasPermission(ACCESS_COMPONENTS)
+
+    /**
      * CRS-B field-config `editable: adminOnly` gate. A caller may write a field marked
      * `adminOnly` only when they hold [EDIT_ANY_COMPONENT] — the same permission that
      * bypasses the per-component ownership check in [canEditComponent]. Read server-side
@@ -116,6 +130,12 @@ class PermissionEvaluator(
     companion object {
         const val ACCESS_COMPONENTS = "ACCESS_COMPONENTS"
         const val CREATE_COMPONENTS = "CREATE_COMPONENTS"
+
+        /**
+         * Create a component from a template, without overrides. [CREATE_COMPONENTS] includes it,
+         * so a holder of both has every right of [CREATE_COMPONENTS].
+         */
+        const val CREATE_FROM_TEMPLATE = "CREATE_FROM_TEMPLATE"
 
         /**
          * Bypass for the per-component ownership check in [canEditComponent]:

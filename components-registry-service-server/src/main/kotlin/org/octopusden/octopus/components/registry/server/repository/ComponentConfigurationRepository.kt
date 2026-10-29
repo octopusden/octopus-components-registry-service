@@ -2,7 +2,6 @@ package org.octopusden.octopus.components.registry.server.repository
 import org.octopusden.octopus.components.registry.server.entity.ComponentConfigurationEntity
 import org.springframework.data.jpa.repository.JpaRepository
 import org.springframework.data.jpa.repository.Query
-import org.springframework.data.repository.query.Param
 import org.springframework.stereotype.Repository
 import java.util.UUID
 
@@ -29,6 +28,18 @@ interface ComponentConfigurationRepository : JpaRepository<ComponentConfiguratio
             "  OR cfg.overriddenAttribute IN ('jira.projectKey', 'jira.versionPrefix'))",
     )
     fun findAllNonArchivedJiraRows(): List<JiraRowProjection>
+
+    /**
+     * Component keys of every non-archived component whose BASE row's `buildSystem` is `MAVEN`
+     * or `GRADLE` — the population the RMS-registered-build-parameters sweep considers (any
+     * other build system has no meaningful Java/Maven version).
+     */
+    @Query(
+        "SELECT comp.componentKey FROM ComponentConfigurationEntity cfg " +
+            "JOIN cfg.component comp " +
+            "WHERE comp.archived = false AND cfg.rowType = 'BASE' AND cfg.buildSystem IN ('MAVEN', 'GRADLE')",
+    )
+    fun findNonArchivedMavenOrGradleComponentKeys(): List<String>
 
     /** All configuration rows (base + overrides) for a component, in arbitrary order. */
     fun findByComponentId(componentId: UUID): List<ComponentConfigurationEntity>
@@ -64,6 +75,21 @@ interface ComponentConfigurationRepository : JpaRepository<ComponentConfiguratio
         versionRange: String,
         rowType: String,
     ): ComponentConfigurationEntity?
+
+    /**
+     * Every configuration row (BASE or `vcs.settings` override) of ANY component, archived
+     * included, that carries at least one VCS entry — the population `TeamcityCheckoutLayoutDiffService`
+     * walks; the service keeps only BASE rows of non-archived components. `JOIN FETCH` avoids a lazy-init
+     * exception outside a transaction; `DISTINCT` because the fetch joins a to-many collection.
+     */
+    @Query(
+        "SELECT DISTINCT cfg FROM ComponentConfigurationEntity cfg " +
+            "JOIN FETCH cfg.component comp " +
+            "LEFT JOIN FETCH cfg.vcsEntries " +
+            "WHERE cfg.id IN " +
+            "(SELECT v.componentConfiguration.id FROM VcsSettingsEntryEntity v)",
+    )
+    fun findAllRowsWithVcsEntries(): List<ComponentConfigurationEntity>
 }
 
 /** Row projection for effective jira-pair computation (see `computeEffectiveJiraPairs`). */

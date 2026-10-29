@@ -657,16 +657,17 @@ abstract class BaseComponentsRegistryServiceTest {
             Image("test/versions-api", "1.0"),
             Image("test-docker-1", "1.0.0"),
             Image("test-docker-1_1", "1.0.0"),
-            Image("test-docker-1_1", "1.1.0")
+            Image("test-docker-1_1", "1.1.0"),
         )
-        val result = findComponentsByDockerImages(images).map {
-            it.component to it.version
-        }.toSet()
+        val result = findComponentsByDockerImages(images)
+            .map {
+                it.component to it.version
+            }.toSet()
         val expected = setOf(
             "TESTONE" to "1.0",
             "TEST_COMPONENT_WITH_DOCKER_1" to "1.0.0",
             "TEST_COMPONENT_WITH_DOCKER_1_1" to "1.0.0",
-            "TEST_COMPONENT_WITH_DOCKER_1_1" to "1.1.0"
+            "TEST_COMPONENT_WITH_DOCKER_1_1" to "1.1.0",
         )
         Assertions.assertEquals(expected, result)
     }

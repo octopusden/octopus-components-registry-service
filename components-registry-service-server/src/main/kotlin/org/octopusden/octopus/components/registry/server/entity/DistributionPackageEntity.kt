@@ -17,17 +17,13 @@ class DistributionPackageEntity(
     @Id
     @GeneratedValue(strategy = GenerationType.UUID)
     var id: UUID? = null,
-
     @ManyToOne(fetch = FetchType.LAZY, optional = false)
     @JoinColumn(name = "component_configuration_id", nullable = false)
     var componentConfiguration: ComponentConfigurationEntity,
-
     @Column(name = "package_type", length = 10, nullable = false)
     var packageType: String = "",
-
     @Column(name = "package_name", nullable = false)
     var packageName: String = "",
-
     @Column(name = "sort_order", nullable = false)
     var sortOrder: Int = 0,
 )

@@ -2,10 +2,24 @@ package org.octopusden.octopus.components.registry.dsl
 
 import com.fasterxml.jackson.databind.ser.impl.SimpleBeanPropertyFilter
 import com.fasterxml.jackson.databind.ser.impl.SimpleFilterProvider
+import org.octopusden.octopus.components.registry.api.beans.BuildBean
+import org.octopusden.octopus.components.registry.api.beans.ClassicBuildSystem
+import org.octopusden.octopus.components.registry.api.beans.ComponentBean
+import org.octopusden.octopus.components.registry.api.beans.EscrowBean
+import org.octopusden.octopus.components.registry.api.beans.GradleBuildBean
+import org.octopusden.octopus.components.registry.api.beans.OdbcToolBean
+import org.octopusden.octopus.components.registry.api.beans.OracleDatabaseToolBean
+import org.octopusden.octopus.components.registry.api.beans.PTCProductToolBean
+import org.octopusden.octopus.components.registry.api.beans.PTDDbProductToolBean
+import org.octopusden.octopus.components.registry.api.beans.PTDProductToolBean
+import org.octopusden.octopus.components.registry.api.beans.PTKProductToolBean
+import org.octopusden.octopus.components.registry.api.beans.SubComponentBean
+import org.octopusden.octopus.components.registry.api.beans.VersionedComponentConfigurationBean
 import org.octopusden.octopus.components.registry.api.build.BuildSystem
 import org.octopusden.octopus.components.registry.api.build.tools.databases.DatabaseTool
 import org.octopusden.octopus.components.registry.api.build.tools.products.ProductTool
 import org.octopusden.octopus.components.registry.api.enums.BuildSystemType
+import org.octopusden.octopus.components.registry.api.enums.EscrowGenerationMode
 import org.octopusden.octopus.components.registry.api.enums.ProductTypes
 import org.octopusden.octopus.components.registry.api.enums.VcsTypes
 import org.octopusden.octopus.components.registry.api.model.Dependencies
@@ -16,20 +30,6 @@ import java.io.ByteArrayOutputStream
 import java.lang.IllegalArgumentException
 import java.util.logging.Level
 import java.util.logging.Logger
-import org.octopusden.octopus.components.registry.api.beans.BuildBean
-import org.octopusden.octopus.components.registry.api.beans.PTCProductToolBean
-import org.octopusden.octopus.components.registry.api.beans.ClassicBuildSystem
-import org.octopusden.octopus.components.registry.api.beans.ComponentBean
-import org.octopusden.octopus.components.registry.api.beans.PTDDbProductToolBean
-import org.octopusden.octopus.components.registry.api.beans.PTDProductToolBean
-import org.octopusden.octopus.components.registry.api.beans.EscrowBean
-import org.octopusden.octopus.components.registry.api.beans.GradleBuildBean
-import org.octopusden.octopus.components.registry.api.beans.PTKProductToolBean
-import org.octopusden.octopus.components.registry.api.beans.OdbcToolBean
-import org.octopusden.octopus.components.registry.api.beans.OracleDatabaseToolBean
-import org.octopusden.octopus.components.registry.api.beans.SubComponentBean
-import org.octopusden.octopus.components.registry.api.beans.VersionedComponentConfigurationBean
-import org.octopusden.octopus.components.registry.api.enums.EscrowGenerationMode
 
 private val logger = Logger.getLogger("org.octopusden.octopus.components.registry.dsl.ComponentsRegistryDSL")
 
@@ -44,8 +44,13 @@ val PT_C = ProductTypes.PT_C
 val PT_D_DB = ProductTypes.PT_D_DB
 val PT_D = ProductTypes.PT_D
 
-open class SubComponentDSL(private val subComponent: SubComponentBean): VersionedComponentDSL(subComponent) {
-    fun version(range: String, init: VersionedComponentDSL.() -> Unit) {
+open class SubComponentDSL(
+    private val subComponent: SubComponentBean,
+) : VersionedComponentDSL(subComponent) {
+    fun version(
+        range: String,
+        init: VersionedComponentDSL.() -> Unit,
+    ) {
         val versionedComponent = clone(subComponent, VersionedComponentConfigurationBean::class.java)
         val versionedComponentDSL = VersionedComponentDSL(versionedComponent!!)
         versionedComponentDSL.init()
@@ -53,11 +58,19 @@ open class SubComponentDSL(private val subComponent: SubComponentBean): Versione
     }
 }
 
-data class JiraComponent(var versionPrefix: String, var versionFormat: String)
+data class JiraComponent(
+    var versionPrefix: String,
+    var versionFormat: String,
+)
 
-data class Distribution(var explicit: Boolean, var external: Boolean)
+data class Distribution(
+    var explicit: Boolean,
+    var external: Boolean,
+)
 
-open class ComponentDSL(private val parentComponent: ComponentBean): SubComponentDSL(parentComponent) {
+open class ComponentDSL(
+    private val parentComponent: ComponentBean,
+) : SubComponentDSL(parentComponent) {
     var productType = parentComponent.productType?.let { ComponentsRegistryScriptRunner.encodeParameters(it) }
         set(value) {
             parentComponent.productType = value?.let { ComponentsRegistryScriptRunner.decodeParameters(it) }
@@ -69,24 +82,32 @@ open class ComponentDSL(private val parentComponent: ComponentBean): SubComponen
             parentComponent.displayName = value
             field = value
         }
+
     fun components(init: ComponentsDSL.() -> Unit) {
-        val components =  ComponentsDSL(parentComponent)
+        val components = ComponentsDSL(parentComponent)
         components.init()
     }
 }
 
-class ComponentsDSL(private val parentComponent: ComponentBean) {
-    fun component(key: String, init: SubComponentDSL.() -> Unit) {
+class ComponentsDSL(
+    private val parentComponent: ComponentBean,
+) {
+    fun component(
+        key: String,
+        init: SubComponentDSL.() -> Unit,
+    ) {
         val subComponent = cloneCommonSections(parentComponent, SubComponentBean::class.java)
         subComponent.name = key
         val subComponentDSL = SubComponentDSL(subComponent)
         subComponentDSL.init()
-        checkIntegrity("Component '$key' is already defined") { !parentComponent.subComponents.any { it.key == key} }
+        checkIntegrity("Component '$key' is already defined") { !parentComponent.subComponents.any { it.key == key } }
         parentComponent.subComponents[key] = subComponent
     }
 }
 
-open class VersionedComponentDSL(private val versionedComponent: VersionedComponentConfigurationBean) {
+open class VersionedComponentDSL(
+    private val versionedComponent: VersionedComponentConfigurationBean,
+) {
     var groupId = versionedComponent.groupId
         set(value) {
             versionedComponent.groupId = value
@@ -131,7 +152,10 @@ open class VersionedComponentDSL(private val versionedComponent: VersionedCompon
     }
 }
 
-fun component(componentKey: String, init: ComponentDSL.() -> Unit) {
+fun component(
+    componentKey: String,
+    init: ComponentDSL.() -> Unit,
+) {
     val rootComponent = ComponentBean()
     rootComponent.name = componentKey
     val rootComponentDSL = ComponentDSL(rootComponent)
@@ -139,7 +163,9 @@ fun component(componentKey: String, init: ComponentDSL.() -> Unit) {
     ComponentsRegistryScriptRunner.addRootComponent(rootComponent)
 }
 
-class GradleDSL(private val gradleBuild: GradleBuildBean) {
+class GradleDSL(
+    private val gradleBuild: GradleBuildBean,
+) {
     var includeTestConfigurations = gradleBuild.includeTestConfigurations
         set(value) {
             gradleBuild.includeTestConfigurations = value
@@ -163,6 +189,7 @@ class GradleDSL(private val gradleBuild: GradleBuildBean) {
             gradleBuild.excludeConfigurations = value
             field = value
         }
+
     /**
      * Add gradle configuration to escrow. This configuration will be added to inherited including configurations.
      */
@@ -178,8 +205,9 @@ class GradleDSL(private val gradleBuild: GradleBuildBean) {
     }
 }
 
-
-class EscrowDSL(private val escrow: EscrowBean) {
+class EscrowDSL(
+    private val escrow: EscrowBean,
+) {
     var providedDependencies: Collection<String> = escrow.providedDependencies
         set(value) {
             escrow.providedDependencies.clear()
@@ -292,6 +320,7 @@ class BuildDSL {
 
 class ToolsDSL {
     private val build = BuildBean()
+
     fun database(init: DatabaseDSL.() -> Unit) {
         val databaseDSL = DatabaseDSL()
         databaseDSL.init()
@@ -311,7 +340,7 @@ class ToolsDSL {
     }
 
     internal fun getBuild(): BuildBean {
-        //TODO Perform merge with parent
+        // TODO Perform merge with parent
         return build
     }
 }
@@ -322,6 +351,7 @@ class OdbcDSL {
 
 class DatabaseDSL {
     internal val databaseTools = ArrayList<DatabaseTool>()
+
     fun oracle(init: OracleDSL.() -> Unit) {
         val oracleDSL = OracleDSL()
         oracleDSL.init()
@@ -343,11 +373,14 @@ class OracleDSL {
 class ProductDSL {
     internal val productTools = ArrayList<ProductTool>()
 
-    fun type(name: String, init: OctopusProductDSL.() -> Unit) {
+    fun type(
+        name: String,
+        init: OctopusProductDSL.() -> Unit,
+    ) {
         val productType = ComponentsRegistryScriptRunner.decodeParameters(name)
         val product = OctopusProductDSL()
         product.init()
-        val componentProduct = when(productType) {
+        val componentProduct = when (productType) {
             ProductTypes.PT_C -> PTCProductToolBean()
             ProductTypes.PT_K -> PTKProductToolBean()
             ProductTypes.PT_D_DB -> PTDDbProductToolBean()
@@ -357,7 +390,6 @@ class ProductDSL {
         checkIntegrity("More than one COMPONENT product is set") { !productTools.any { it.type == productType } }
         productTools.add(componentProduct)
     }
-
 }
 
 open class VcsSpecificationDSL {
@@ -366,16 +398,18 @@ open class VcsSpecificationDSL {
     var tag: String? = null
 }
 
-open class VcsSettingsDSL: VcsSpecificationDSL {
+open class VcsSettingsDSL : VcsSpecificationDSL {
     constructor() : super()
     constructor(repositoryType: VcsTypes) : super() {
         this.repositoryType = repositoryType
     }
+
     lateinit var repositoryType: VcsTypes
 }
 
-class GitSettingsDSL: VcsSettingsDSL(VcsTypes.GIT)
-class MercurialSettingsDSL: VcsSettingsDSL(VcsTypes.MERCURIAL)
+class GitSettingsDSL : VcsSettingsDSL(VcsTypes.GIT)
+
+class MercurialSettingsDSL : VcsSettingsDSL(VcsTypes.MERCURIAL)
 
 class JiraDSL {
     var projectKey: String? = null
@@ -383,7 +417,8 @@ class JiraDSL {
     var releaseVersionFormat: String? = null
     var buildVersionFormat: String? = null
     var technical = false
-    fun component(jiraComponent: JiraComponent.()-> Unit) {
+
+    fun component(jiraComponent: JiraComponent.() -> Unit) {
         JiraComponent(versionPrefix = "", versionFormat = "").apply(jiraComponent)
     }
 }
@@ -392,7 +427,8 @@ class DistributionDSL {
     var projectKey: String? = null
     var majorVersionFormat: String? = null
     var releaseVersionFormat: String? = null
-    fun component(jiraComponent: JiraComponent.()-> Unit) {
+
+    fun component(jiraComponent: JiraComponent.() -> Unit) {
         JiraComponent(versionPrefix = "", versionFormat = "").apply(jiraComponent)
     }
 }
@@ -400,29 +436,39 @@ class DistributionDSL {
 class DependenciesDSL {
     var autoUpdate: Boolean = false
 
-    internal fun toDependencies(): Dependencies =
-        Dependencies(autoUpdate)
-
+    internal fun toDependencies(): Dependencies = Dependencies(autoUpdate)
 }
 
 fun throwException(message: String) {
-    //TODO Log registry path to problem
+    // TODO Log registry path to problem
     throw RuntimeException(message)
 }
 
-fun checkIntegrity(message: String, closure: () -> Boolean) {
+fun checkIntegrity(
+    message: String,
+    closure: () -> Boolean,
+) {
     if (!closure()) {
         throwException(message)
     }
 }
 
-internal fun <T> clone(source: Any?, clazz: Class<T>): T? {
+internal fun <T> clone(
+    source: Any?,
+    clazz: Class<T>,
+): T? {
     if (source == null) {
         return null
     }
     val mapper = JacksonFactory.instance.objectMapper
     val outputStream = ByteArrayOutputStream()
-    val componentCloneFilter = SimpleBeanPropertyFilter.serializeAllExcept("subComponents", "versions", "name", "displayName", "productType")
+    val componentCloneFilter = SimpleBeanPropertyFilter.serializeAllExcept(
+        "subComponents",
+        "versions",
+        "name",
+        "displayName",
+        "productType",
+    )
     val filters = SimpleFilterProvider().addFilter("cloneFilter", componentCloneFilter)
     mapper.writer(filters).writeValue(outputStream, source)
     if (logger.isLoggable(Level.FINE)) {
@@ -431,9 +477,12 @@ internal fun <T> clone(source: Any?, clazz: Class<T>): T? {
     return mapper.readValue(ByteArrayInputStream(outputStream.toByteArray()), clazz)
 }
 
-internal fun <T: SubComponentBean> cloneCommonSections(source: T, clazz: Class<T>): T {
+internal fun <T : SubComponentBean> cloneCommonSections(
+    source: T,
+    clazz: Class<T>,
+): T {
     val component = clazz.getDeclaredConstructor().newInstance()
-    //Copy all properties which should be inherited, e.g. jira section
+    // Copy all properties which should be inherited, e.g. jira section
     component.setBuild(clone(source.build, BuildBean::class.java))
     return component
 }

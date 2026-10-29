@@ -25,11 +25,12 @@ import org.octopusden.octopus.components.registry.cli.output.Renderer
  * BEFORE any HTTP call, so a missing login surfaces as a clear AUTH_REQUIRED (exit 4) rather than a
  * generic server 401.
  */
-class AuditCommand : CliktCommand(
-    name = "audit",
-    help = "Query the audit log (requires login and the ACCESS_AUDIT permission).",
-    invokeWithoutSubcommand = false,
-) {
+class AuditCommand :
+    CliktCommand(
+        name = "audit",
+        help = "Query the audit log (requires login and the ACCESS_AUDIT permission).",
+        invokeWithoutSubcommand = false,
+    ) {
     override fun run() = Unit
 }
 
@@ -43,10 +44,11 @@ class AuditCommand : CliktCommand(
  * `--include-migrated` is tri-state: omitted -> not sent (server default applies); `true`/`false`
  * -> sent verbatim.
  */
-class AuditRecentCommand : CliktCommand(
-    name = "recent",
-    help = "List recent audit-log entries, optionally filtered. Requires login (ACCESS_AUDIT).",
-) {
+class AuditRecentCommand :
+    CliktCommand(
+        name = "recent",
+        help = "List recent audit-log entries, optionally filtered. Requires login (ACCESS_AUDIT).",
+    ) {
     private val ctx by requireObject<CliContext>()
 
     // --- filters (CLI kebab-case -> v4.json getRecentChanges query param) ---
@@ -67,22 +69,24 @@ class AuditRecentCommand : CliktCommand(
     private val size by option("--size", help = "Page size.").int()
     private val sort by option("--sort", help = "Sort spec, e.g. changedAt,desc (repeatable).").multiple()
 
-    override fun run() = runCommand {
-        val client = ctx.authedClient()
-        val query = QueryParams.builder()
-            .add("entityType", entityType)
-            .add("entityId", entityId)
-            .add("changedBy", changedBy)
-            .add("action", action)
-            .add("source", source)
-            .add("from", from)
-            .add("to", to)
-            .add("includeMigrated", includeMigrated)
-            .pageable(page = page, size = size, sort = sort.ifEmpty { null })
-            .build()
-        val response = client.getJson(AUDIT_RECENT_PATH, PageAuditLogResponse.serializer(), query)
-        renderAuditPage(ctx, response)
-    }
+    override fun run() =
+        runCommand {
+            val client = ctx.authedClient()
+            val query = QueryParams
+                .builder()
+                .add("entityType", entityType)
+                .add("entityId", entityId)
+                .add("changedBy", changedBy)
+                .add("action", action)
+                .add("source", source)
+                .add("from", from)
+                .add("to", to)
+                .add("includeMigrated", includeMigrated)
+                .pageable(page = page, size = size, sort = sort.ifEmpty { null })
+                .build()
+            val response = client.getJson(AUDIT_RECENT_PATH, PageAuditLogResponse.serializer(), query)
+            renderAuditPage(ctx, response)
+        }
 
     companion object {
         const val AUDIT_RECENT_PATH = "/rest/api/4/audit/recent"
@@ -95,10 +99,11 @@ class AuditRecentCommand : CliktCommand(
  * Both path segments are percent-encoded via [encodePathSegment]. Supports `--include-migrated` plus
  * the standard pageable (--page/--size/--sort). Requires login (ACCESS_AUDIT).
  */
-class AuditHistoryCommand : CliktCommand(
-    name = "history",
-    help = "Show the audit history for a single entity. Requires login (ACCESS_AUDIT).",
-) {
+class AuditHistoryCommand :
+    CliktCommand(
+        name = "history",
+        help = "Show the audit history for a single entity. Requires login (ACCESS_AUDIT).",
+    ) {
     private val ctx by requireObject<CliContext>()
 
     private val entityType by argument("entity-type", help = "Entity type (e.g. COMPONENT).")
@@ -113,20 +118,25 @@ class AuditHistoryCommand : CliktCommand(
     private val size by option("--size", help = "Page size.").int()
     private val sort by option("--sort", help = "Sort spec, e.g. changedAt,desc (repeatable).").multiple()
 
-    override fun run() = runCommand {
-        val client = ctx.authedClient()
-        val path = "/rest/api/4/audit/${encodePathSegment(entityType)}/${encodePathSegment(entityId)}"
-        val query = QueryParams.builder()
-            .add("includeMigrated", includeMigrated)
-            .pageable(page = page, size = size, sort = sort.ifEmpty { null })
-            .build()
-        val response = client.getJson(path, PageAuditLogResponse.serializer(), query)
-        renderAuditPage(ctx, response)
-    }
+    override fun run() =
+        runCommand {
+            val client = ctx.authedClient()
+            val path = "/rest/api/4/audit/${encodePathSegment(entityType)}/${encodePathSegment(entityId)}"
+            val query = QueryParams
+                .builder()
+                .add("includeMigrated", includeMigrated)
+                .pageable(page = page, size = size, sort = sort.ifEmpty { null })
+                .build()
+            val response = client.getJson(path, PageAuditLogResponse.serializer(), query)
+            renderAuditPage(ctx, response)
+        }
 }
 
 /** Shared rendering of a [PageAuditLogResponse] as either JSON (the rows) or a table. */
-private fun CliktCommand.renderAuditPage(ctx: CliContext, response: PageAuditLogResponse) {
+private fun CliktCommand.renderAuditPage(
+    ctx: CliContext,
+    response: PageAuditLogResponse,
+) {
     val rows = response.content.orEmpty()
     render(
         ctx,
@@ -149,7 +159,8 @@ private fun CliktCommand.renderAuditPage(ctx: CliContext, response: PageAuditLog
  * arguments on a parent with subcommand dispatch (a bare `audit COMPONENT 123` would be read as a
  * subcommand named "COMPONENT"). `audit history <entityType> <entityId>` is the per-entity form.
  */
-fun auditCommand(): AuditCommand = AuditCommand().subcommands(
-    AuditRecentCommand(),
-    AuditHistoryCommand(),
-)
+fun auditCommand(): AuditCommand =
+    AuditCommand().subcommands(
+        AuditRecentCommand(),
+        AuditHistoryCommand(),
+    )

@@ -55,12 +55,13 @@ class WebSecurityConfig(
                     .requestMatchers(
                         "/",
                         "/error",
-                        // Only health probes are anonymous. Other actuator endpoints
-                        // (env, metrics, heapdump, loggers, configprops) leak operational
-                        // detail and must stay behind auth even if the deployed
-                        // management.endpoints.web.exposure.include broadens.
+                        // Only health probes and the Prometheus scrape are anonymous. Other
+                        // actuator endpoints (env, metrics, heapdump, loggers, configprops)
+                        // leak operational detail and must stay behind auth even if the
+                        // deployed management.endpoints.web.exposure.include broadens.
                         "/actuator/health",
                         "/actuator/health/**",
+                        "/actuator/prometheus",
                         // springdoc-openapi + swagger-ui: cover the group docs,
                         // YAML variant, web-jars (swagger-ui assets) — otherwise
                         // docs render as 401 for web-jars stylesheets/JS.
@@ -102,6 +103,13 @@ class WebSecurityConfig(
                     // sibling. Remove together with MigrationStatusControllerV4 once the
                     // migration era is over (no body detail, just a running flag — no leak).
                     .requestMatchers(HttpMethod.GET, "/rest/api/4/migration-status")
+                    .permitAll()
+                    // SYS-061: portal service-event ingest. Tokenless at the filter chain
+                    // (the portal BFF has no JWT — same pattern as /migration-status above),
+                    // guarded instead by a shared-secret header verified in
+                    // ServiceEventIngestControllerV4 (fail-closed). ONLY the POST is opened;
+                    // the sibling GET read stays under the /rest/api/4/** authenticated rule.
+                    .requestMatchers(HttpMethod.POST, "/rest/api/4/admin/service-events")
                     .permitAll()
                     // v4 writes + admin + audit — authenticated + method-level @PreAuthorize.
                     .requestMatchers("/rest/api/4/**")

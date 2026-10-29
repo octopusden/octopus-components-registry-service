@@ -18,11 +18,9 @@ import org.octopusden.employee.client.common.exception.NotFoundException
  * Spring, no network). Vanilla Mockito to match the codebase convention.
  */
 class EmployeeDirectoryServiceTest {
-    private fun directoryWith(client: EmployeeServiceClient) =
-        EmployeeDirectoryService(SingletonObjectProvider(client))
+    private fun directoryWith(client: EmployeeServiceClient) = EmployeeDirectoryService(SingletonObjectProvider(client))
 
-    private fun disabledDirectory() =
-        EmployeeDirectoryService(EmptyObjectProvider())
+    private fun disabledDirectory() = EmployeeDirectoryService(EmptyObjectProvider())
 
     @Test
     @DisplayName("active==true → ACTIVE")

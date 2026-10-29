@@ -44,7 +44,10 @@ internal object MavenGavCollision {
      * [patternsOverlap] calls both directions, so callers of that entry point
      * need not care — but do not swap the arguments here.
      */
-    fun groupIdMatches(groupId: String, groupIdPattern: String): Boolean {
+    fun groupIdMatches(
+        groupId: String,
+        groupIdPattern: String,
+    ): Boolean {
         val candidate = groupId.trim()
         if (candidate.isEmpty()) return false
         return groupIdPattern.split(',').any { it.trim() == candidate }
@@ -66,18 +69,31 @@ internal object MavenGavCollision {
      * Trim is the same deliberate deviation as in [groupIdMatches].
      */
     fun exactTokenPairShared(
-        group1: String, artifact1: String,
-        group2: String, artifact2: String,
+        group1: String,
+        artifact1: String,
+        group2: String,
+        artifact2: String,
     ): Boolean {
-        val groups1 = group1.split(',').map { it.trim() }.filter { it.isNotEmpty() }.toSet()
+        val groups1 = group1
+            .split(',')
+            .map { it.trim() }
+            .filter { it.isNotEmpty() }
+            .toSet()
         if (groups1.isEmpty()) return false
         if (group2.split(',').map { it.trim() }.none { it in groups1 }) return false
-        val artifacts1 = artifact1.split(ARTIFACT_TOKEN_SPLIT).map { it.trim() }.filter { it.isNotEmpty() }.toSet()
+        val artifacts1 = artifact1
+            .split(ARTIFACT_TOKEN_SPLIT)
+            .map { it.trim() }
+            .filter { it.isNotEmpty() }
+            .toSet()
         if (artifacts1.isEmpty()) return false
         return artifact2.split(ARTIFACT_TOKEN_SPLIT).map { it.trim() }.any { it.isNotEmpty() && it in artifacts1 }
     }
 
-    fun artifactIdMatches(artifactId: String, artifactPattern: String): Boolean {
+    fun artifactIdMatches(
+        artifactId: String,
+        artifactPattern: String,
+    ): Boolean {
         if (artifactPattern == "*") return true
         val cached = compiledArtifactPatterns.computeIfAbsent(artifactPattern) { pattern ->
             runCatching { Regex(pattern.replace(",", "|")) }.getOrNull() ?: INVALID_PATTERN
@@ -86,15 +102,20 @@ internal object MavenGavCollision {
     }
 
     private fun patternContainsAnother(
-        group1: String, artifact1: String,
-        group2: String, artifact2: String,
+        group1: String,
+        artifact1: String,
+        group2: String,
+        artifact2: String,
     ): Boolean = groupIdMatches(group1, group2) && artifactIdMatches(artifact1, artifact2)
 
     fun patternsOverlap(
-        group1: String, artifact1: String,
-        group2: String, artifact2: String,
-    ): Boolean = patternContainsAnother(group1, artifact1, group2, artifact2) ||
-        patternContainsAnother(group2, artifact2, group1, artifact1)
+        group1: String,
+        artifact1: String,
+        group2: String,
+        artifact2: String,
+    ): Boolean =
+        patternContainsAnother(group1, artifact1, group2, artifact2) ||
+            patternContainsAnother(group2, artifact2, group1, artifact1)
 
     /**
      * True when two rows claim the same artifact identity: equal extension AND
@@ -105,14 +126,21 @@ internal object MavenGavCollision {
      */
     @Suppress("LongParameterList")
     fun identityCollides(
-        group1: String, artifact1: String, extension1: String?, classifier1: String?,
-        group2: String, artifact2: String, extension2: String?, classifier2: String?,
-    ): Boolean = extension1 == extension2 &&
-        classifier1 == classifier2 &&
-        (
-            patternsOverlap(group1, artifact1, group2, artifact2) ||
-                exactTokenPairShared(group1, artifact1, group2, artifact2)
-        )
+        group1: String,
+        artifact1: String,
+        extension1: String?,
+        classifier1: String?,
+        group2: String,
+        artifact2: String,
+        extension2: String?,
+        classifier2: String?,
+    ): Boolean =
+        extension1 == extension2 &&
+            classifier1 == classifier2 &&
+            (
+                patternsOverlap(group1, artifact1, group2, artifact2) ||
+                    exactTokenPairShared(group1, artifact1, group2, artifact2)
+            )
 
     /**
      * Human-readable ORIGIN of a `distribution_maven_artifacts` row for conflict
@@ -129,7 +157,12 @@ internal object MavenGavCollision {
         }
 
     /** Human-readable `g:a[:e[:c]]` label; an empty extension slot is kept when only a classifier is present. */
-    fun gavLabel(group: String, artifact: String, extension: String?, classifier: String?): String =
+    fun gavLabel(
+        group: String,
+        artifact: String,
+        extension: String?,
+        classifier: String?,
+    ): String =
         buildString {
             append(group).append(':').append(artifact)
             if (extension != null || classifier != null) {

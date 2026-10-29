@@ -144,8 +144,7 @@ class ComponentControllerAsCodeV4Test {
                 get("/rest/api/4/components/bcomponent/as-code?version=2.1")
                     .accept(MediaType.TEXT_PLAIN)
                     .with(editorJwt()),
-            )
-            .andExpect(status().isNotFound)
+            ).andExpect(status().isNotFound)
             .andExpect(content().contentTypeCompatibleWith(MediaType.TEXT_PLAIN))
             .andExpect(content().string(containsString("No configuration resolves")))
     }
@@ -161,8 +160,7 @@ class ComponentControllerAsCodeV4Test {
                 get("/rest/api/4/components/ghost/as-code")
                     .accept(MediaType.TEXT_PLAIN)
                     .with(editorJwt()),
-            )
-            .andExpect(status().isNotFound)
+            ).andExpect(status().isNotFound)
             .andExpect(content().contentTypeCompatibleWith(MediaType.TEXT_PLAIN))
             .andExpect(content().string(containsString("not found")))
     }

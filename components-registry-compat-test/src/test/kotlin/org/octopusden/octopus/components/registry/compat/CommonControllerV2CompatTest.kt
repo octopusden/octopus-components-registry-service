@@ -18,7 +18,6 @@ import org.octopusden.octopus.components.registry.core.dto.VersionNamesDTO
  */
 @TestInstance(TestInstance.Lifecycle.PER_CLASS)
 class CommonControllerV2CompatTest : CompatibilityTestBase() {
-
     private val mapper = jacksonObjectMapper()
 
     @Test
@@ -46,10 +45,12 @@ class CommonControllerV2CompatTest : CompatibilityTestBase() {
             // same component, so slicing first would compare misaligned prefixes — canonicalising first
             // makes both sides the same merged rows, then the stable slice takes the same logical subset.
             val cls = JiraComponentVersionRangeDTO::class.java
-            val baselineSliced = baselineDtos?.toList()
+            val baselineSliced = baselineDtos
+                ?.toList()
                 ?.let { VersionRangeMapCanonicalizer.canonicalizeTypedRangeArray(it, cls) }
                 ?.let { sliceCollection(it, cap) }
-            val candidateSliced = candidateDtos?.toList()
+            val candidateSliced = candidateDtos
+                ?.toList()
                 ?.let { VersionRangeMapCanonicalizer.canonicalizeTypedRangeArray(it, cls) }
                 ?.let { sliceCollection(it, cap) }
             compareDto(endpoint, params, baselineSliced, candidateSliced)
@@ -213,7 +214,10 @@ class CommonControllerV2CompatTest : CompatibilityTestBase() {
      * Stable slice of a list: sort by [Any.toString], take first [cap] elements.
      * Returns the full list when [cap] is null or the input is null.
      */
-    private fun <T> sliceCollection(list: List<T>?, cap: Int?): List<T>? {
+    private fun <T> sliceCollection(
+        list: List<T>?,
+        cap: Int?,
+    ): List<T>? {
         if (list == null) return null
         if (cap == null) return list
         return list.sortedBy { it.toString() }.take(cap)
@@ -223,9 +227,15 @@ class CommonControllerV2CompatTest : CompatibilityTestBase() {
      * Stable slice of a map: sort entries by key, take first [cap] entries, re-assemble.
      * Returns the full map when [cap] is null or the input is null.
      */
-    private fun <V> sliceMap(map: Map<String, V>?, cap: Int?): Map<String, V>? {
+    private fun <V> sliceMap(
+        map: Map<String, V>?,
+        cap: Int?,
+    ): Map<String, V>? {
         if (map == null) return null
         if (cap == null) return map
-        return map.entries.sortedBy { it.key }.take(cap).associate { it.key to it.value }
+        return map.entries
+            .sortedBy { it.key }
+            .take(cap)
+            .associate { it.key to it.value }
     }
 }

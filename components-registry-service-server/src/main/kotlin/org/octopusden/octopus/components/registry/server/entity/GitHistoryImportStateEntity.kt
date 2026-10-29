@@ -14,8 +14,7 @@ enum class GitHistoryImportStatus {
     ;
 
     companion object {
-        fun safeValueOf(value: String?): GitHistoryImportStatus? =
-            value?.let { runCatching { valueOf(it) }.getOrNull() }
+        fun safeValueOf(value: String?): GitHistoryImportStatus? = value?.let { runCatching { valueOf(it) }.getOrNull() }
     }
 }
 
@@ -30,16 +29,12 @@ class GitHistoryImportStateEntity(
     @Id
     @Column(name = "import_key", length = 64)
     var importKey: String = "",
-
     @Column(name = "target_ref", nullable = false)
     var targetRef: String = "",
-
     @Column(name = "target_sha", nullable = false, length = 64)
     var targetSha: String = "",
-
     @Column(name = "status", nullable = false, length = 16)
     var status: String = "",
-
     @Column(name = "updated_at", nullable = false)
     var updatedAt: Instant = Instant.now(),
 )

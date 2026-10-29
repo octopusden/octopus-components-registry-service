@@ -9,12 +9,13 @@ class MetaResponseTest {
 
     @Test
     fun decodesEmployeeMatchArray() {
-        val literal = """
+        val literal =
+            """
             [
               { "username": "alice", "active": true },
               { "username": "bob", "active": false }
             ]
-        """.trimIndent()
+            """.trimIndent()
 
         val matches = json.decodeFromString<List<EmployeeMatchResponse>>(literal)
 
@@ -26,19 +27,38 @@ class MetaResponseTest {
 
     @Test
     fun decodesEditorsResponse() {
-        val literal = """
+        val literal =
+            """
             {
               "componentOwner": "owner1",
               "releaseManagers": ["rm1", "rm2"],
-              "securityChampions": ["sc1"]
+              "securityChampions": ["sc1"],
+              "manager": "mgr1"
             }
-        """.trimIndent()
+            """.trimIndent()
 
         val editors = json.decodeFromString<ComponentEditorsResponse>(literal)
 
         assertEquals("owner1", editors.componentOwner)
         assertEquals(listOf("rm1", "rm2"), editors.releaseManagers)
         assertEquals(listOf("sc1"), editors.securityChampions)
+        assertEquals("mgr1", editors.manager)
+    }
+
+    @Test
+    fun decodesEditorsResponseWithoutManager() {
+        val literal =
+            """
+            {
+              "componentOwner": "owner1",
+              "releaseManagers": ["rm1"],
+              "securityChampions": []
+            }
+            """.trimIndent()
+
+        val editors = json.decodeFromString<ComponentEditorsResponse>(literal)
+
+        assertEquals(null, editors.manager)
     }
 
     @Test

@@ -1,6 +1,5 @@
 package org.octopusden.octopus.components.registry.server.service.impl
 
-import java.nio.file.Files
 import org.junit.jupiter.api.Assertions.assertDoesNotThrow
 import org.junit.jupiter.api.Assertions.assertTrue
 import org.junit.jupiter.api.DisplayName
@@ -12,6 +11,7 @@ import org.octopusden.octopus.escrow.configuration.loader.ConfigLoader
 import org.octopusden.octopus.escrow.configuration.loader.EscrowConfigurationLoader
 import org.octopusden.octopus.escrow.configuration.model.EscrowModuleConfig
 import org.octopusden.releng.versions.VersionNames
+import java.nio.file.Files
 
 /**
  * TD-011 / #349 — the import must FAIL LOUD on a malformed `distribution.GAV`
@@ -22,7 +22,6 @@ import org.octopusden.releng.versions.VersionNames
  * test — no Spring/DB — so it runs under `:test`.
  */
 class DistributionCoordinateGuardTest {
-
     private val versionNames = VersionNames("serviceCBranch", "serviceC", "minorC")
     private val component = "distComponent"
 

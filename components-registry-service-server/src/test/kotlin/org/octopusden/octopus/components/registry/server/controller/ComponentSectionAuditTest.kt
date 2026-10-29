@@ -2,8 +2,6 @@ package org.octopusden.octopus.components.registry.server.controller
 
 import com.fasterxml.jackson.databind.JsonNode
 import com.fasterxml.jackson.databind.ObjectMapper
-import java.nio.file.Paths
-import java.util.UUID
 import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.Assertions.assertTrue
 import org.junit.jupiter.api.DisplayName
@@ -25,6 +23,8 @@ import org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get
 import org.springframework.test.web.servlet.request.MockMvcRequestBuilders.patch
 import org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post
 import org.springframework.test.web.servlet.result.MockMvcResultMatchers.status
+import java.nio.file.Paths
+import java.util.UUID
 
 /**
  * SYS-053 — a component PATCH that changes only section fields (base
@@ -72,7 +72,7 @@ class ComponentSectionAuditTest {
     @Test
     @DisplayName("SYS-053: PATCH of build.mavenVersion writes an UPDATE audit row with a field-level diff")
     fun `SYS-053 build scalar PATCH writes an UPDATE audit row with field-level diff`() {
-        val id = createComponent("sys053b_${UUID.randomUUID().toString().take(8)}", mavenVersion = "3.8")
+        val id = createComponent("sys053b-${UUID.randomUUID().toString().take(8)}", mavenVersion = "3.8")
         assertEquals(0, updateRowCount(id), "expected no UPDATE rows right after create, got ${historyActions(id)}")
 
         patchComponent(id, """{"baseConfiguration":{"build":{"mavenVersion":"3.9"}}}""")
@@ -86,7 +86,7 @@ class ComponentSectionAuditTest {
     @Test
     @DisplayName("SYS-053: PATCH of jira.projectKey writes an UPDATE audit row")
     fun `SYS-053 jira scalar PATCH writes an UPDATE audit row`() {
-        val id = createComponent("sys053j_${UUID.randomUUID().toString().take(8)}")
+        val id = createComponent("sys053j-${UUID.randomUUID().toString().take(8)}")
 
         patchComponent(id, """{"baseConfiguration":{"jira":{"projectKey":"PRJX"}}}""")
 
@@ -97,7 +97,7 @@ class ComponentSectionAuditTest {
     @Test
     @DisplayName("SYS-053: PATCH of vcsEntries (section child collection) writes an UPDATE audit row")
     fun `SYS-053 vcsEntries PATCH writes an UPDATE audit row`() {
-        val id = createComponent("sys053v_${UUID.randomUUID().toString().take(8)}")
+        val id = createComponent("sys053v-${UUID.randomUUID().toString().take(8)}")
 
         patchComponent(id, vcsPayload)
 
@@ -106,9 +106,57 @@ class ComponentSectionAuditTest {
     }
 
     @Test
+    @DisplayName("ONB-001: a layout-only vcsEntries PATCH (sourcePath / checkoutDirectory) writes an UPDATE audit row")
+    fun `layout-only vcsEntries PATCH is audited`() {
+        val id = createComponent("onb001p-${UUID.randomUUID().toString().take(8)}")
+        val entries = { layout: String ->
+            """{"baseConfiguration":{"vcsEntries":[{"vcsPath":"$REPO_A"},{"vcsPath":"$REPO_B"$layout}]}}"""
+        }
+        patchComponent(id, entries(""","checkoutDirectory":"feature""""))
+        val before = updateRowCount(id)
+
+        patchComponent(id, entries(""","checkoutDirectory":"feature","sourcePath":"data""""))
+
+        assertEquals(before + 1, updateRowCount(id), "a sourcePath-only change must be audited: ${historyActions(id)}")
+        assertTrue(diffs(id).first().toString().contains("sourcePath"), "diff must carry sourcePath: ${diffs(id).first()}")
+    }
+
+    @Test
+    @DisplayName("ONB-001 rev. 3: a base PATCH of only buildWorkingDirectory writes an UPDATE audit row")
+    fun `build working directory only PATCH is audited`() {
+        val id = createComponent("onb001w-${UUID.randomUUID().toString().take(8)}")
+        patchComponent(id, """{"baseConfiguration":{"vcsEntries":[{"vcsPath":"$REPO_A"}]}}""")
+        val before = updateRowCount(id)
+
+        patchComponent(id, """{"baseConfiguration":{"buildWorkingDirectory":"mapper"}}""")
+
+        assertEquals(before + 1, updateRowCount(id), "a buildWorkingDirectory-only change must be audited: ${historyActions(id)}")
+    }
+
+    @Test
+    @DisplayName("ONB-001: a layout-only vcs.settings marker change writes an UPDATE audit row")
+    fun `layout-only marker PATCH is audited`() {
+        val id = createComponent("onb001m-${UUID.randomUUID().toString().take(8)}")
+        val marker = { layout: String ->
+            """{"fieldOverrides":[{"overriddenAttribute":"vcs.settings","versionRange":"[1.0,2.0)",""" +
+                """"markerChildren":{"vcsEntries":[{"vcsPath":"$REPO_A"$layout}]}}]}"""
+        }
+        patchComponent(id, marker(""))
+        val markerId = overrideIds(id).single()
+        val before = updateRowCount(id)
+
+        patchComponent(
+            id,
+            marker(""","sourcePath":"data"""").replace("""[{"overriddenAttribute""", """[{"id":"$markerId","overriddenAttribute"""),
+        )
+
+        assertEquals(before + 1, updateRowCount(id), "a sourcePath-only marker change must be audited: ${historyActions(id)}")
+    }
+
+    @Test
     @DisplayName("SYS-053: PATCH of requiredTools (repo-synced junction collection) audits once; identical re-send is a no-op")
     fun `SYS-053 requiredTools PATCH writes an UPDATE audit row and identical re-send does not`() {
-        val id = createComponent("sys053t_${UUID.randomUUID().toString().take(8)}")
+        val id = createComponent("sys053t-${UUID.randomUUID().toString().take(8)}")
         val payload = """{"baseConfiguration":{"requiredTools":["BuildEnv","Oracle"]}}"""
 
         patchComponent(id, payload)
@@ -124,7 +172,7 @@ class ComponentSectionAuditTest {
     @Test
     @DisplayName("SYS-053: PATCH of securityGroups (content-sorted component collection) audits once; identical re-send is a no-op")
     fun `SYS-053 securityGroups PATCH writes an UPDATE audit row and identical re-send does not`() {
-        val id = createComponent("sys053s_${UUID.randomUUID().toString().take(8)}")
+        val id = createComponent("sys053s-${UUID.randomUUID().toString().take(8)}")
         val payload = """{"securityGroups":[{"groupType":"read","groupName":"vcs-e2e-group"}]}"""
 
         patchComponent(id, payload)
@@ -140,7 +188,7 @@ class ComponentSectionAuditTest {
     @Test
     @DisplayName("SYS-053: a no-op section PATCH (same scalar, identical collection) writes no audit row — SYS-048 holds")
     fun `SYS-053 no-op section PATCH writes no audit row`() {
-        val id = createComponent("sys053n_${UUID.randomUUID().toString().take(8)}", mavenVersion = "3.9")
+        val id = createComponent("sys053n-${UUID.randomUUID().toString().take(8)}", mavenVersion = "3.9")
         patchComponent(id, vcsPayload)
         val afterRealChange = updateRowCount(id)
 
@@ -226,6 +274,16 @@ class ComponentSectionAuditTest {
         return objectMapper.readTree(body)["content"].toList()
     }
 
+    private fun overrideIds(componentId: String): List<String> {
+        val body =
+            mvc
+                .perform(get("/rest/api/4/components/$componentId/field-overrides").with(adminJwt()))
+                .andExpect(status().isOk)
+                .andReturn()
+                .response.contentAsString
+        return objectMapper.readTree(body).map { it["id"].asText() }
+    }
+
     private fun historyActions(componentId: String): List<String> = history(componentId).map { it["action"].asText() }
 
     private fun updateRowCount(componentId: String): Int = historyActions(componentId).count { it == "UPDATE" }
@@ -241,4 +299,9 @@ class ComponentSectionAuditTest {
         componentId: String,
         key: String,
     ): JsonNode? = diffs(componentId).firstOrNull { it.isObject && it.has(key) }?.get(key)
+
+    companion object {
+        private const val REPO_A = "ssh://git@vcs.example.com/proj/repo-a.git"
+        private const val REPO_B = "ssh://git@vcs.example.com/proj/repo-b.git"
+    }
 }

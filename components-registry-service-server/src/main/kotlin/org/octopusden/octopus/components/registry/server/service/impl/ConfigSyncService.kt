@@ -79,7 +79,10 @@ class ConfigSyncService(
     /** The component-defaults map as it would be written, without touching the DB. */
     fun componentDefaultsMap(): Map<String, Any?> = buildComponentDefaultsMap()
 
-    private fun upsertIfNotEmpty(key: String, value: Map<String, Any?>): Boolean {
+    private fun upsertIfNotEmpty(
+        key: String,
+        value: Map<String, Any?>,
+    ): Boolean {
         if (value.isEmpty()) return false
         val entity = registryConfigRepository.findById(key).orElse(RegistryConfigEntity(key = key))
         entity.value = value
@@ -151,7 +154,11 @@ class ConfigSyncService(
             entry.description?.takeIf { it.isNotBlank() }?.let { put("description", it.trim()) }
         }
 
-    private fun invalid(path: String, value: String, allowed: Set<String>): Nothing =
+    private fun invalid(
+        path: String,
+        value: String,
+        allowed: Set<String>,
+    ): Nothing =
         throw ConfigValidationException(
             "Invalid field-config value '$value' at 'components-registry.field-config.$path'; allowed: $allowed",
         )
@@ -202,6 +209,7 @@ class ConfigSyncService(
                             cvf.buildVersionFormat?.let { put("buildVersionFormat", it) }
                             cvf.lineVersionFormat?.let { put("lineVersionFormat", it) }
                             cvf.hotfixVersionFormat?.let { put("hotfixVersionFormat", it) }
+                            cvf.versionFormat?.let { put("versionFormat", it) }
                         }.takeIf { it.isNotEmpty() }?.let { put("componentVersionFormat", it) }
                     }
                 }.takeIf { it.isNotEmpty() }?.let { put("jira", it) }
@@ -215,6 +223,7 @@ class ConfigSyncService(
                     dist.DEB?.let { put("DEB", it) }
                     dist.RPM?.let { put("RPM", it) }
                     dist.docker?.let { put("docker", it) }
+                    dist.generic?.let { put("generic", it) }
                     dist.securityGroups?.read?.let { put("securityGroups", mapOf("read" to it)) }
                 }.takeIf { it.isNotEmpty() }?.let { put("distribution", it) }
             }
@@ -257,6 +266,7 @@ class ConfigSyncService(
     companion object {
         const val FIELD_CONFIG_KEY = "field-config"
         const val COMPONENT_DEFAULTS_KEY = "component-defaults"
+
         /** Required enum on the BASE row — cannot be hidden (see [serializeFieldEntry]). */
         private const val BUILD_SYSTEM_PATH = "build.buildSystem"
         private val VISIBILITIES = setOf("editable", "readonly", "hidden")
@@ -266,4 +276,6 @@ class ConfigSyncService(
 }
 
 /** Thrown when bound admin config fails validation; aborts the sync without clobbering the DB cache. */
-class ConfigValidationException(message: String) : RuntimeException(message)
+class ConfigValidationException(
+    message: String,
+) : RuntimeException(message)

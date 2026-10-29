@@ -10,9 +10,10 @@ class ErrorResponseTest {
 
     @Test
     fun decodesErrorWithCodeAndMessage() {
-        val literal = """
+        val literal =
+            """
             { "errorCode": "COMPONENT_NOT_FOUND", "errorMessage": "No component with id x" }
-        """.trimIndent()
+            """.trimIndent()
 
         val error = json.decodeFromString<ErrorResponse>(literal)
 

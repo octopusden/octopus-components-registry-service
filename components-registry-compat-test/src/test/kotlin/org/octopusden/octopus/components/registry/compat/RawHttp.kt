@@ -20,18 +20,30 @@ class RawHttpClient(
     val baseUrl: String,
     private val mapper: ObjectMapper = jacksonObjectMapper(),
 ) {
-    private val http = OkHttpClient.Builder()
+    private val http = OkHttpClient
+        .Builder()
         .callTimeout(60, TimeUnit.SECONDS)
         .connectTimeout(15, TimeUnit.SECONDS)
         .readTimeout(45, TimeUnit.SECONDS)
         .retryOnConnectionFailure(true)
         .build()
 
-    fun get(path: String): RawResponse = exec(Request.Builder().url(joinUrl(baseUrl, path)).get().build())
+    fun get(path: String): RawResponse =
+        exec(
+            Request
+                .Builder()
+                .url(joinUrl(baseUrl, path))
+                .get()
+                .build(),
+        )
 
-    fun postJson(path: String, body: Any): RawResponse {
+    fun postJson(
+        path: String,
+        body: Any,
+    ): RawResponse {
         val payload = mapper.writeValueAsString(body)
-        val req = Request.Builder()
+        val req = Request
+            .Builder()
             .url(joinUrl(baseUrl, path))
             .post(payload.toRequestBody(JSON))
             .build()
@@ -39,7 +51,13 @@ class RawHttpClient(
     }
 
     fun put(path: String): RawResponse =
-        exec(Request.Builder().url(joinUrl(baseUrl, path)).put("".toRequestBody(JSON)).build())
+        exec(
+            Request
+                .Builder()
+                .url(joinUrl(baseUrl, path))
+                .put("".toRequestBody(JSON))
+                .build(),
+        )
 
     private fun exec(request: Request): RawResponse {
         val started = System.nanoTime()
@@ -50,7 +68,9 @@ class RawHttpClient(
                 val contentType = resp.header("Content-Type")
                 val parsed: JsonNode? = if (contentType?.contains("json", ignoreCase = true) == true && bodyBytes.isNotEmpty()) {
                     runCatching { mapper.readTree(bodyBytes) }.getOrNull()
-                } else null
+                } else {
+                    null
+                }
                 RawResponse(
                     status = resp.code,
                     headers = resp.headers.toMultimap().mapValues { it.value.firstOrNull().orEmpty() },
@@ -75,7 +95,10 @@ class RawHttpClient(
         }
     }
 
-    private fun joinUrl(base: String, path: String): String {
+    private fun joinUrl(
+        base: String,
+        path: String,
+    ): String {
         val b = base.trimEnd('/')
         val p = path.trimStart('/')
         return "$b/$p"

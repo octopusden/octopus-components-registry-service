@@ -22,8 +22,8 @@ import org.junit.jupiter.api.Test
  */
 @Tag("unit")
 class JsonShapeTest {
-
     private val mapper = jacksonObjectMapper()
+
     private fun n(json: String): JsonNode = mapper.readTree(json)
 
     // --- Object key-order independence ---

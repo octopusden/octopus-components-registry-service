@@ -1,7 +1,5 @@
 package org.octopusden.octopus.components.registry.server.service.impl
 
-import java.util.UUID
-import java.util.concurrent.TimeUnit
 import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.Assertions.assertNotNull
 import org.junit.jupiter.api.Assertions.assertNull
@@ -14,13 +12,13 @@ import org.mockito.Mockito.`when`
 import org.octopusden.octopus.components.registry.core.dto.ArtifactDependency
 import org.octopusden.octopus.components.registry.server.entity.ComponentConfigurationEntity
 import org.octopusden.octopus.components.registry.server.entity.ComponentEntity
-import org.octopusden.octopus.components.registry.server.entity.DistributionMavenArtifactEntity
-import org.octopusden.octopus.components.registry.server.mapper.MarkerAttributes
 import org.octopusden.octopus.components.registry.server.repository.ComponentRepository
 import org.octopusden.octopus.components.registry.server.repository.DependencyMappingRepository
 import org.octopusden.releng.versions.NumericVersionFactory
 import org.octopusden.releng.versions.VersionNames
 import org.octopusden.releng.versions.VersionRangeFactory
+import java.util.UUID
+import java.util.concurrent.TimeUnit
 
 /**
  * MIG-039: `find-by-artifacts` must mirror V1's `EscrowModuleConfigMatcher` —
@@ -59,10 +57,12 @@ class DatabaseComponentRegistryResolverFindByArtifactTest {
         )
     }
 
-    private fun makeComponent(key: String): ComponentEntity =
-        ComponentEntity(id = UUID.randomUUID(), componentKey = key)
+    private fun makeComponent(key: String): ComponentEntity = ComponentEntity(id = UUID.randomUUID(), componentKey = key)
 
-    private fun addConfig(component: ComponentEntity, versionRange: String) {
+    private fun addConfig(
+        component: ComponentEntity,
+        versionRange: String,
+    ) {
         component.configurations.add(
             ComponentConfigurationEntity(
                 component = component,
@@ -74,7 +74,11 @@ class DatabaseComponentRegistryResolverFindByArtifactTest {
         )
     }
 
-    private fun addArtifactId(component: ComponentEntity, groupPattern: String, artifactPattern: String) {
+    private fun addArtifactId(
+        component: ComponentEntity,
+        groupPattern: String,
+        artifactPattern: String,
+    ) {
         component.addOwnershipMapping(groupPattern, artifactPattern)
     }
 

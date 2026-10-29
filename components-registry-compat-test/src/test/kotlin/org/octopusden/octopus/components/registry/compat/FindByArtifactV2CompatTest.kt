@@ -21,7 +21,6 @@ import java.util.stream.Stream
  */
 @TestInstance(TestInstance.Lifecycle.PER_CLASS)
 class FindByArtifactV2CompatTest : CompatibilityTestBase() {
-
     private val mapper = jacksonObjectMapper()
 
     /**
@@ -67,7 +66,10 @@ class FindByArtifactV2CompatTest : CompatibilityTestBase() {
      */
     @ParameterizedTest(name = "POST /rest/api/2/components/findByArtifacts batch={0}")
     @MethodSource("artifactBatches")
-    fun `POST v2 findByArtifacts must match for batch`(batchLabel: String, artifacts: List<ArtifactDependency>) {
+    fun `POST v2 findByArtifacts must match for batch`(
+        batchLabel: String,
+        artifacts: List<ArtifactDependency>,
+    ) {
         val endpoint = "POST /rest/api/2/components/findByArtifacts"
         val params = mapOf("batch" to batchLabel)
         val (baseline, candidate) = postJsonPair("/rest/api/2/components/findByArtifacts", artifacts)
@@ -104,10 +106,11 @@ class FindByArtifactV2CompatTest : CompatibilityTestBase() {
      * Synthetic values that exercise the lookup logic without assuming real registry content.
      * A 404 on both sides is fine — STATUS_CODE_DIFF is only recorded when sides disagree.
      */
-    private fun artifactLookups(): Stream<Arguments> = listOf(
-        Arguments.of("org.octopusden.octopus.test", "octopusmpi", "1.2.3"),
-        Arguments.of("org.octopusden.octopus", "components-registry-service", "1.0.0"),
-    ).stream()
+    private fun artifactLookups(): Stream<Arguments> =
+        listOf(
+            Arguments.of("org.octopusden.octopus.test", "octopusmpi", "1.2.3"),
+            Arguments.of("org.octopusden.octopus", "components-registry-service", "1.0.0"),
+        ).stream()
 
     /**
      * Batches for the findByArtifacts endpoint. Each entry is (label, list-of-artifacts).

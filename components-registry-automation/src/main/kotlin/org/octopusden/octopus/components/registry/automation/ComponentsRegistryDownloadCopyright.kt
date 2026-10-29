@@ -16,11 +16,13 @@ class ComponentsRegistryDownloadCopyright : CliktCommand(name = COMMAND) {
     private val context by requireObject<MutableMap<String, Any>>()
 
     private val componentName by option(COMPONENT_NAME, help = "Component name")
-        .convert { it.trim() }.required()
+        .convert { it.trim() }
+        .required()
         .check("$COMPONENT_NAME is empty") { it.isNotBlank() }
 
     private val targetPath by option(TARGET_PATH, help = "Target path")
-        .convert { it.trim() }.required()
+        .convert { it.trim() }
+        .required()
         .check("$TARGET_PATH is empty") { it.isNotBlank() }
 
     private val client by lazy {
@@ -39,7 +41,7 @@ class ComponentsRegistryDownloadCopyright : CliktCommand(name = COMMAND) {
             logger.error(
                 "Failed to download '{}' copyright: empty response body, status={}",
                 componentName,
-                responseStatus
+                responseStatus,
             )
             throw RuntimeException("Failed to download '$componentName' copyright. HTTP status: $responseStatus")
         }
@@ -53,11 +55,11 @@ class ComponentsRegistryDownloadCopyright : CliktCommand(name = COMMAND) {
                     Files.copy(
                         inputStream,
                         path,
-                        StandardCopyOption.REPLACE_EXISTING
+                        StandardCopyOption.REPLACE_EXISTING,
                     )
                     logger.info(
                         "Successfully downloaded copyright file to '{}'",
-                        path.toAbsolutePath()
+                        path.toAbsolutePath(),
                     )
                 }
 
@@ -67,7 +69,7 @@ class ComponentsRegistryDownloadCopyright : CliktCommand(name = COMMAND) {
                         "Failed to download '{}' copyright: status={}, body={}",
                         componentName,
                         responseStatus,
-                        errorBody
+                        errorBody,
                     )
                     throw RuntimeException("Failed to download '$componentName' copyright. HTTP status: $responseStatus")
                 }

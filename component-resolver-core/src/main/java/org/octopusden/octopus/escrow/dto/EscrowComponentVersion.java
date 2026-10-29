@@ -6,9 +6,7 @@ import java.util.Objects;
 import java.util.Optional;
 
 /**
- * Escrow component DTO.
- * Specify component attributes (name, version and etc) to build escrow.
- * NOTE: better place for this class is in Escrow Generator?
+ * Escrow component DTO — component attributes (name, version, VCS revision) needed to build escrow.
  */
 public final class EscrowComponentVersion {
     private final String component;
@@ -23,7 +21,7 @@ public final class EscrowComponentVersion {
      * Create escrow component.
      * @param component component key mapped to Components Registry
      * @param version version of the component
-     * @param vcsRevision VCS revision, could be null, empty or {@link String} value. See {@link #getVcsRevision()} for
+     * @param vcsRevision VCS revision; may be null or empty
      */
     public EscrowComponentVersion(final String component, final String version, final String vcsRevision) {
         Objects.requireNonNull(component, "Component is mandatory");

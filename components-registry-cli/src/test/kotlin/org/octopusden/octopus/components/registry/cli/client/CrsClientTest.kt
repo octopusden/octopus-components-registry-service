@@ -21,12 +21,19 @@ private class FakeResponse(
     private val req: HttpRequest,
 ) : HttpResponse<String> {
     override fun statusCode(): Int = status
+
     override fun request(): HttpRequest = req
+
     override fun previousResponse(): Optional<HttpResponse<String>> = Optional.empty()
+
     override fun headers(): HttpHeaders = HttpHeaders.of(emptyMap()) { _, _ -> true }
+
     override fun body(): String? = body
+
     override fun sslSession(): Optional<SSLSession> = Optional.empty()
+
     override fun uri(): java.net.URI = req.uri()
+
     override fun version(): HttpClient.Version = HttpClient.Version.HTTP_1_1
 }
 
@@ -35,6 +42,7 @@ private class CapturingExchange(
     private val body: String?,
 ) : HttpExchange {
     var lastRequest: HttpRequest? = null
+
     override fun send(request: HttpRequest): HttpResponse<String> {
         lastRequest = request
         return FakeResponse(status, body, request)
@@ -42,7 +50,6 @@ private class CapturingExchange(
 }
 
 class CrsClientTest {
-
     @Test
     fun `2xx json body is deserialized`() {
         val json = """{"content":[{"id":"a","name":"A","archived":false,"canBeParent":true,"labels":[]}],"totalElements":1}"""
@@ -60,12 +67,23 @@ class CrsClientTest {
         val withToken = CapturingExchange(200, "{}")
         CrsClient("https://crs.example", token = "tok-123", exchange = withToken)
             .getJson("/x", PageComponentSummaryResponse.serializer())
-        assertEquals("Bearer tok-123", withToken.lastRequest!!.headers().firstValue("Authorization").get())
+        assertEquals(
+            "Bearer tok-123",
+            withToken.lastRequest!!
+                .headers()
+                .firstValue("Authorization")
+                .get(),
+        )
 
         val noToken = CapturingExchange(200, "{}")
         CrsClient("https://crs.example", token = null, exchange = noToken)
             .getJson("/x", PageComponentSummaryResponse.serializer())
-        assertTrue(noToken.lastRequest!!.headers().firstValue("Authorization").isEmpty)
+        assertTrue(
+            noToken.lastRequest!!
+                .headers()
+                .firstValue("Authorization")
+                .isEmpty,
+        )
     }
 
     @Test
@@ -127,6 +145,12 @@ class CrsClientTest {
         val exchange = CapturingExchange(200, "Component('x') { }")
         val client = CrsClient("https://crs.example", exchange = exchange)
         assertEquals("Component('x') { }", client.getText("/rest/api/4/components/x/as-code"))
-        assertEquals("text/plain", exchange.lastRequest!!.headers().firstValue("Accept").get())
+        assertEquals(
+            "text/plain",
+            exchange.lastRequest!!
+                .headers()
+                .firstValue("Accept")
+                .get(),
+        )
     }
 }

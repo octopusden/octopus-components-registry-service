@@ -9,7 +9,8 @@ class ComponentDetailResponseTest {
 
     @Test
     fun decodesDetailWithNestedConfiguration() {
-        val literal = """
+        val literal =
+            """
             {
               "id": "22222222-2222-2222-2222-222222222222",
               "name": "beta",
@@ -57,7 +58,7 @@ class ComponentDetailResponseTest {
               "createdAt": "2026-06-13T10:00:00Z",
               "updatedAt": "2026-06-13T11:00:00Z"
             }
-        """.trimIndent()
+            """.trimIndent()
 
         val detail = json.decodeFromString<ComponentDetailResponse>(literal)
 

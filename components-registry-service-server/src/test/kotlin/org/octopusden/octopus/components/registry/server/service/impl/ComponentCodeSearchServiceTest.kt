@@ -1,0 +1,561 @@
+package org.octopusden.octopus.components.registry.server.service.impl
+
+import com.google.re2j.Pattern
+import org.assertj.core.api.Assertions.assertThat
+import org.assertj.core.api.Assertions.assertThatThrownBy
+import org.junit.jupiter.api.BeforeEach
+import org.junit.jupiter.api.DisplayName
+import org.junit.jupiter.api.Test
+import org.junit.jupiter.api.Timeout
+import org.mockito.kotlin.mock
+import org.mockito.kotlin.times
+import org.mockito.kotlin.verify
+import org.mockito.kotlin.whenever
+import org.octopusden.octopus.components.registry.server.dto.v4.AsCodeMatchRange
+import org.octopusden.octopus.components.registry.server.repository.AuditChangeStats
+import org.octopusden.octopus.components.registry.server.repository.AuditLogRepository
+import org.octopusden.octopus.components.registry.server.repository.ComponentChangeStampRow
+import org.octopusden.octopus.components.registry.server.repository.ComponentRepository
+import org.octopusden.octopus.components.registry.server.service.ComponentManagementService
+import org.octopusden.octopus.components.registry.server.service.RenderedComponentCode
+import java.time.Clock
+import java.time.Duration
+import java.time.Instant
+import java.time.ZoneId
+import java.time.ZoneOffset
+import java.util.UUID
+import kotlin.random.Random
+
+/** SYS-100: as-code text search — matching, result shaping and index freshness. */
+class ComponentCodeSearchServiceTest {
+    private val componentManagementService = mock<ComponentManagementService>()
+    private val componentRepository = mock<ComponentRepository>()
+    private val auditLogRepository = mock<AuditLogRepository>()
+    private val clock = MutableClock(Instant.parse("2026-10-05T10:00:00Z"))
+    private val service = ComponentCodeSearchService(componentManagementService, componentRepository, auditLogRepository, clock)
+
+    private val alpha =
+        RenderedComponentCode(
+            "alpha",
+            """
+            alpha {
+                componentOwner = "jdoe"
+                vcsSettings {
+                    vcsUrl = "ssh://git@github.com/org/alpha.git"
+                }
+                "[1.5,)" {
+                    jira {
+                        projectKey = "ALPHA"
+                    }
+                }
+            }
+            """.trimIndent() + "\n",
+            id = ALPHA_ID,
+        )
+    private val beta =
+        RenderedComponentCode(
+            "beta",
+            """
+            beta {
+                componentOwner = "JDoe"
+                groupId = "org.example.beta"
+            }
+            """.trimIndent() + "\n",
+            archived = true,
+            id = UUID.randomUUID(),
+        )
+
+    @BeforeEach
+    fun setUp() {
+        stamp(count = 2, versionSum = 7, auditMaxId = 100)
+        whenever(componentManagementService.renderAllComponentsAsCode()).thenReturn(listOf(alpha, beta))
+    }
+
+    @Test
+    @DisplayName("SYS-100: case-insensitive substring, grouped by component with line numbers and block path")
+    fun `SYS-100 substring match is case-insensitive with line numbers and block path`() {
+        val result = service.search("jdoe")
+
+        assertThat(result.totalComponents).isEqualTo(2)
+        assertThat(result.truncated).isFalse()
+        assertThat(result.results.map { it.componentKey }).containsExactly("alpha", "beta")
+        assertThat(result.results.first().id).isEqualTo(ALPHA_ID)
+        val line =
+            result.results
+                .first()
+                .matches
+                .single()
+        assertThat(line.line).isEqualTo(2)
+        assertThat(line.text).isEqualTo("componentOwner = \"jdoe\"")
+        assertThat(line.path).containsExactly("alpha")
+    }
+
+    @Test
+    @DisplayName("SYS-100: a hit inside a version-range block reports the enclosing range in its path")
+    fun `SYS-100 hit inside a version-range block reports the range in its path`() {
+        val line =
+            service
+                .search("ALPHA\"")
+                .results
+                .single()
+                .matches
+                .single()
+
+        assertThat(line.line).isEqualTo(8)
+        assertThat(line.path).containsExactly("alpha", "\"[1.5,)\"", "jira")
+    }
+
+    @Test
+    @DisplayName("SYS-100: archived narrows to archived / active components; omitted searches both")
+    fun `SYS-100 archived narrows to archived or active components`() {
+        assertThat(service.search("jdoe", archived = true).results.map { it.componentKey }).containsExactly("beta")
+        assertThat(service.search("jdoe", archived = false).results.map { it.componentKey }).containsExactly("alpha")
+    }
+
+    @Test
+    @DisplayName("SYS-100: limit cuts the component list and flags truncation; totalComponents counts all")
+    fun `SYS-100 limit cuts the component list and flags truncation`() {
+        val result = service.search("componentOwner", limit = 1)
+
+        assertThat(result.results).hasSize(1)
+        assertThat(result.totalComponents).isEqualTo(2)
+        assertThat(result.truncated).isTrue()
+    }
+
+    @Test
+    @DisplayName("SYS-100: maxMatchesPerComponent caps lines; matchCount still reports every match")
+    fun `SYS-100 maxMatchesPerComponent caps lines while matchCount counts all`() {
+        // `= "` hits alpha's componentOwner, vcsUrl and projectKey lines.
+        val hit =
+            service
+                .search("= \"", archived = false, maxMatchesPerComponent = 2)
+                .results
+                .single()
+
+        assertThat(hit.matches).hasSize(2)
+        assertThat(hit.matchCount).isEqualTo(3)
+    }
+
+    @Test
+    @DisplayName("SYS-100: regex=true matches q as a case-insensitive regular expression")
+    fun `SYS-100 regex mode matches a case-insensitive regular expression`() {
+        val result = service.search("groupId\\s*=\\s*\"org\\.example\\.", regex = true)
+
+        assertThat(result.regex).isTrue()
+        assertThat(result.results.map { it.componentKey }).containsExactly("beta")
+    }
+
+    @Test
+    @DisplayName("SYS-100: without regex=true, regex metacharacters are matched literally")
+    fun `SYS-100 regex metacharacters are literal by default`() {
+        assertThat(service.search("org.example.beta").totalComponents).isEqualTo(1)
+        assertThat(service.search("org.*beta").totalComponents).isZero()
+    }
+
+    @Test
+    @DisplayName("SYS-100: invalid input is rejected with IllegalArgumentException (→ HTTP 400)")
+    fun `SYS-100 invalid input is rejected`() {
+        assertThatThrownBy { service.search(" a ") }.isInstanceOf(IllegalArgumentException::class.java)
+        assertThatThrownBy { service.search("x".repeat(201)) }.isInstanceOf(IllegalArgumentException::class.java)
+        assertThatThrownBy { service.search("ab", limit = 0) }.isInstanceOf(IllegalArgumentException::class.java)
+        assertThatThrownBy { service.search("([a-z", regex = true) }
+            .isInstanceOf(IllegalArgumentException::class.java)
+            .hasMessageContaining("Invalid regular expression")
+    }
+
+    @Test
+    @DisplayName("SYS-100: patterns that backtrack catastrophically in the JDK engine run in linear time")
+    fun `SYS-100 backtracking-prone regex runs in linear time`() {
+        // `(a|aa)*c`, `(a*)*b` and `(a|b)*z` are exponential or overflow the stack under java.util.regex
+        // on a long run of `a`; RE2 answers in one linear pass. A real clock: the 2 s budget would fail
+        // the test as "too expensive" if matching were not linear.
+        whenever(componentManagementService.renderAllComponentsAsCode())
+            .thenReturn(listOf(RenderedComponentCode("long", "a".repeat(100_000) + "\n", id = UUID.randomUUID())))
+        val realClockService =
+            ComponentCodeSearchService(componentManagementService, componentRepository, auditLogRepository, Clock.systemUTC())
+
+        listOf("(a|aa)*c", "(a*)*b", "(a|b)*z", "a*a*a*b").forEach { q ->
+            assertThat(realClockService.search(q, regex = true).results).describedAs(q).isEmpty()
+        }
+    }
+
+    @Test
+    @DisplayName("SYS-100: the regex budget spans lines — many cheap lines cannot outrun it")
+    fun `SYS-100 regex budget is enforced between lines`() {
+        // Every match here is cheap (far below the in-match read interval), so only the per-line
+        // check can stop it: the clock jumps 1 s per read, so the 2 s budget is gone by line 3.
+        val tickingService =
+            ComponentCodeSearchService(componentManagementService, componentRepository, auditLogRepository, TickingClock())
+
+        assertThatThrownBy { tickingService.search("zzz", regex = true) }
+            .isInstanceOf(IllegalArgumentException::class.java)
+            .hasMessageContaining("too expensive")
+    }
+
+    @Test
+    @DisplayName("SYS-100: the regex budget is checked within one line, across a run of empty matches")
+    fun `SYS-100 regex budget is enforced across empty matches`() {
+        // `z*` matches the empty string at every position of a long line. One line keeps the per-line
+        // check out of play: only the read check inside the line can stop it (1 s per clock read).
+        whenever(componentManagementService.renderAllComponentsAsCode())
+            .thenReturn(listOf(RenderedComponentCode("empty", "a".repeat(4_000), id = UUID.randomUUID())))
+        val tickingService =
+            ComponentCodeSearchService(componentManagementService, componentRepository, auditLogRepository, TickingClock())
+
+        assertThatThrownBy { tickingService.search("z*", regex = true) }
+            .isInstanceOf(IllegalArgumentException::class.java)
+            .hasMessageContaining("too expensive")
+    }
+
+    @Test
+    @DisplayName("SYS-100: RE2 syntax — lookarounds, backreferences and repetition counts over 1000 are 400")
+    fun `SYS-100 regex constructs outside RE2 are rejected`() {
+        // Lookarounds are what let a JDK-regex match spin without reading input.
+        listOf("(?=a)b", "(?<!a)b", "(a)\\1", "a{1001}").forEach { q ->
+            assertThatThrownBy { service.search(q, regex = true) }
+                .describedAs(q)
+                .isInstanceOf(IllegalArgumentException::class.java)
+                .hasMessageContaining("Invalid regular expression")
+        }
+    }
+
+    @Test
+    @Timeout(10)
+    @DisplayName("SYS-100: a regex whose nested repetitions compile to an oversized program is rejected, without compiling it")
+    fun `SYS-100 oversized regex program is rejected`() {
+        // Each count is legal, but nesting multiplies the compiled program, and with it the work per
+        // character and the matcher's recursion depth. The triple-nested `{1000}` (31 characters) would
+        // exhaust the heap inside RE2/J's compile; the pre-compile estimate rejects it first.
+        listOf(
+            "(?:(?:a?){70}){70}",
+            "(?:(?:(?:a){1000}){1000}){1000}",
+            "(?:(?:a){1000}){1000}".repeat(9),
+            "(?:(?=)){2147483647}",
+            // Quoted literals and capture groups compile to an instruction each, not one per escape / group.
+            "(\\Q" + "a".repeat(180) + "\\E){1000}",
+            "(?:\\d{1000}){1000}",
+            "(".repeat(90) + "a" + ")".repeat(90) + "{1000}",
+            // A nullable `{0,}` compiles to a star with two splits.
+            "(?:((((((){0,}){0,}){0,}){0,}){0,}){0,}){999}",
+            // An empty quote does not change what the repetition applies to.
+            "(?:a{1000})\\Q\\E{100}",
+        ).forEach { q ->
+            assertThatThrownBy { service.search(q, regex = true) }
+                .describedAs(q)
+                .isInstanceOf(IllegalArgumentException::class.java)
+                .hasMessageContaining("too complex")
+        }
+        assertThat(service.search("(?:(?:a?){30}){30}x", regex = true).results).isNotNull()
+        // A repetition after a quote repeats its last character only (1,031 instructions).
+        assertThat(service.search("\\Q" + "a".repeat(30) + "\\E{1000}", regex = true).results).isNotNull()
+    }
+
+    @Test
+    @DisplayName("SYS-100: a regex within the compiled-program cap is not rejected by the estimate")
+    fun `SYS-100 regex within the program cap is accepted`() {
+        // Each compiles to at most 2000 RE2 instructions; the estimate must not reject it first.
+        listOf(
+            "(?:a|b|c|d|e|f){1000}",
+            "\\d{1000}",
+            "[a-z]{1000}",
+            "a{1000}",
+            "(?i:abc){500}",
+            "(?:foo|bar|baz){100}",
+            "(?:a{10}){100}",
+            "(?:(?:a?){30}){30}x",
+            "\\Q" + "a".repeat(30) + "\\E{1000}",
+        ).forEach { q ->
+            assertThat(Pattern.compile(q, Pattern.CASE_INSENSITIVE).programSize()).describedAs(q).isLessThanOrEqualTo(2000)
+            assertThat(service.search(q, regex = true).results).describedAs(q).isNotNull()
+        }
+    }
+
+    @Test
+    @DisplayName("SYS-100: estimateProgramSize adds sequences and multiplies nested repetitions")
+    fun `SYS-100 estimateProgramSize`() {
+        assertThat(ComponentCodeSearchService.estimateProgramSize("abc")).isEqualTo(5)
+        assertThat(ComponentCodeSearchService.estimateProgramSize("[a-z]{5}\\p{L}{3}")).isEqualTo(18)
+        assertThat(ComponentCodeSearchService.estimateProgramSize("(?:ab{10}){10}")).isGreaterThanOrEqualTo(110)
+        assertThat(ComponentCodeSearchService.estimateProgramSize("a{,5}")).isEqualTo(7) // not a repeat: literal
+        assertThat(ComponentCodeSearchService.estimateProgramSize("(?:(?:a{1000}){1000}){1000}")).isGreaterThan(1_000_000_000)
+        assertThat(ComponentCodeSearchService.estimateProgramSize("\\Qab.c\\E")).isEqualTo(6)
+        // Rejected by the estimate itself (RE2/J compiles it to 182,002 instructions).
+        assertThat(ComponentCodeSearchService.estimateProgramSize("(\\Q" + "a".repeat(180) + "\\E){1000}")).isGreaterThan(20_000)
+    }
+
+    @Test
+    @DisplayName("SYS-100: estimateProgramSize is never below the program RE2/J actually compiles")
+    fun `SYS-100 estimateProgramSize bounds the compiled program`() {
+        listOf(
+            "abc",
+            "(a)",
+            "((((a))))",
+            "((((a)))){50}",
+            "(\\Q" + "a".repeat(20) + "\\E){50}",
+            "\\Qunterminated",
+            "\\Q\\E",
+            "(?i:a|bc|def){3,7}",
+            "(a|b)*z",
+            "[a-z]+\\d?\\p{L}{2,5}",
+            "^(?:x{0,9}|y{2,}){4}$",
+            "(?:(?:a?){30}){30}x",
+            "(a(b(c){3}){3}){3}",
+            "\\x{41}{10}\\b.{5}",
+            "(?:\\d{100}){10}",
+            "a{2,5}",
+            "(a){2,5}",
+            "(?:ab|cd){0,10}",
+            "(?:a{0,1000})",
+            "\\Q" + "a".repeat(30) + "\\E{1000}",
+            "(?:a{1000})\\Q\\E{100}",
+            "(?:a{100})\\Qbc\\E{10}",
+            "(?:((((((){0,}){0,}){0,}){0,}){0,}){0,}){999}",
+            "(?:(?:a?){0,}){5}",
+            "(?:a{0,}b{3,}){20}",
+            "()",
+            "a|",
+            "(|a)",
+            "(){1000}",
+            "(?:a|){1000}",
+        ).forEach { q ->
+            assertThat(ComponentCodeSearchService.estimateProgramSize(q))
+                .describedAs(q)
+                .isGreaterThanOrEqualTo(Pattern.compile(q, Pattern.CASE_INSENSITIVE).programSize().toLong())
+        }
+    }
+
+    @Test
+    @DisplayName("SYS-100: estimateProgramSize bounds the compiled program of random small patterns")
+    fun `SYS-100 estimateProgramSize bounds random patterns`() {
+        val tokens =
+            listOf(
+                "a",
+                "b",
+                "(",
+                ")",
+                "(?:",
+                "(?i:",
+                "(?i)",
+                "|",
+                "*",
+                "+",
+                "?",
+                "{",
+                "}",
+                "{3}",
+                "{0,4}",
+                "{2,}",
+                "{0,}",
+                "{1,}",
+                ",",
+                "\\Q",
+                "\\E",
+                "[a-c]",
+                "[^b]",
+                "\\d",
+                "\\p{L}",
+                "\\x{41}",
+                "\\b",
+                "^",
+                "$",
+                ".",
+            )
+        val random = Random(SEED)
+        var checked = 0
+        repeat(RANDOM_PATTERNS) {
+            val q = (1..random.nextInt(1, MAX_TOKENS)).joinToString("") { tokens[random.nextInt(tokens.size)] }
+            val program = runCatching { Pattern.compile(q, Pattern.CASE_INSENSITIVE).programSize() }.getOrNull() ?: return@repeat
+            checked++
+            assertThat(ComponentCodeSearchService.estimateProgramSize(q)).describedAs(q).isGreaterThanOrEqualTo(program.toLong())
+        }
+        assertThat(checked).isGreaterThan(RANDOM_PATTERNS / 10)
+    }
+
+    @Test
+    @DisplayName("SYS-100: estimateProgramSize bounds the compiled program of random nested patterns")
+    fun `SYS-100 estimateProgramSize bounds random nested patterns`() {
+        val atoms = listOf("a", "", "^", "\\b", "[a-c]", "\\Qxy\\E", "\\Q\\E", "(?i)")
+        val opens = listOf("(", "(?:", "(?i:")
+        val suffixes = listOf("", "*", "+", "?", "{2}", "{0,3}", "{0,}", "{1,}", "{2,}", "*?")
+        val random = Random(SEED)
+
+        fun pattern(depth: Int): String =
+            if (depth == 0 || random.nextInt(3) == 0) {
+                atoms[random.nextInt(atoms.size)]
+            } else {
+                val branches = (
+                    1..random.nextInt(
+                        1,
+                        3,
+                    )
+                ).joinToString("|") { (1..random.nextInt(1, 3)).joinToString("") { pattern(depth - 1) } }
+                opens[random.nextInt(opens.size)] + branches + ")" + suffixes[random.nextInt(suffixes.size)]
+            }
+        repeat(RANDOM_PATTERNS) {
+            val q = pattern(random.nextInt(1, MAX_DEPTH))
+            val program = runCatching { Pattern.compile(q, Pattern.CASE_INSENSITIVE).programSize() }.getOrNull() ?: return@repeat
+            assertThat(ComponentCodeSearchService.estimateProgramSize(q)).describedAs(q).isGreaterThanOrEqualTo(program.toLong())
+        }
+    }
+
+    @Test
+    @DisplayName("SYS-100: the index is reused while the change stamp holds and rebuilt when it moves")
+    fun `SYS-100 index is reused while the stamp holds and rebuilt when it moves`() {
+        service.search("jdoe")
+        service.search("alpha")
+        verify(componentManagementService, times(1)).renderAllComponentsAsCode()
+
+        stamp(count = 2, versionSum = 8, auditMaxId = 100)
+        service.search("jdoe")
+        verify(componentManagementService, times(2)).renderAllComponentsAsCode()
+
+        stamp(count = 2, versionSum = 8, auditMaxId = 101)
+        service.search("jdoe")
+        verify(componentManagementService, times(3)).renderAllComponentsAsCode()
+    }
+
+    @Test
+    @DisplayName("SYS-100: an index older than MAX_INDEX_AGE is rebuilt even with an unchanged stamp")
+    fun `SYS-100 index older than MAX_INDEX_AGE is rebuilt`() {
+        service.search("jdoe")
+        clock.advance(ComponentCodeSearchService.MAX_INDEX_AGE.plusSeconds(1))
+        service.search("jdoe")
+
+        verify(componentManagementService, times(2)).renderAllComponentsAsCode()
+    }
+
+    @Test
+    @DisplayName("SYS-100: indexLines keeps blank lines so positions equal as-code line numbers")
+    fun `SYS-100 indexLines keeps blank lines so positions equal line numbers`() {
+        val lines = ComponentCodeSearchService.indexLines("c {\n\n    x = 1\n}\n")
+
+        assertThat(lines.map { it.first }).containsExactly("c {", "", "    x = 1", "}", "")
+        assertThat(lines[2].second).containsExactly("c")
+        assertThat(lines[0].second).isEmpty()
+    }
+
+    @Test
+    @DisplayName("SYS-100: each line reports where the query matched, as offsets into the indentation-free text")
+    fun `SYS-100 substring match reports ranges relative to the trimmed text`() {
+        val line =
+            service
+                .search("JDOE", archived = false)
+                .results
+                .single()
+                .matches
+                .single()
+
+        val start = line.text.indexOf("jdoe")
+        assertThat(line.ranges).containsExactly(AsCodeMatchRange(start, start + 4))
+    }
+
+    @Test
+    @DisplayName("SYS-100: regex mode reports the spans the server's regex matched")
+    fun `SYS-100 regex match reports the matched spans`() {
+        val line =
+            service
+                .search("alpha\\.\\w+", regex = true)
+                .results
+                .single()
+                .matches
+                .single()
+
+        val start = line.text.indexOf("alpha.git")
+        assertThat(line.ranges).containsExactly(AsCodeMatchRange(start, start + "alpha.git".length))
+    }
+
+    @Test
+    @DisplayName("SYS-100: a regex matching only empty strings still matches lines, with nothing to mark")
+    fun `SYS-100 empty regex matches yield no ranges`() {
+        val hit = service.search("z*", regex = true, archived = false, maxMatchesPerComponent = 1).results.single()
+
+        assertThat(hit.matchCount).isEqualTo(11)
+        assertThat(hit.matches.single().ranges).isEmpty()
+    }
+
+    @Test
+    @DisplayName("SYS-100: empty regex matches do not use up the span cap before a real match")
+    fun `SYS-100 empty regex matches do not hide a later real span`() {
+        val copyright =
+            RenderedComponentCode(
+                "gamma",
+                "gamma {\n    copyright = \"" + "b".repeat(60) + "zzz\"\n}\n",
+                id = UUID.randomUUID(),
+            )
+        whenever(componentManagementService.renderAllComponentsAsCode()).thenReturn(listOf(copyright))
+
+        val line =
+            service
+                .search("z*", regex = true)
+                .results
+                .single()
+                .matches
+                .single { it.text.startsWith("copyright") }
+
+        val start = line.text.indexOf("zzz")
+        assertThat(line.ranges).containsExactly(AsCodeMatchRange(start, start + 3))
+    }
+
+    @Test
+    @DisplayName("SYS-100: substringSpans finds every case-insensitive, non-overlapping occurrence")
+    fun `SYS-100 substringSpans finds every occurrence`() {
+        assertThat(ComponentCodeSearchService.substringSpans("Org.org.ORG", "org")).containsExactly(0..2, 4..6, 8..10)
+        assertThat(ComponentCodeSearchService.substringSpans("aaaa", "aa")).containsExactly(0..1, 2..3)
+        assertThat(ComponentCodeSearchService.substringSpans("nothing", "zz")).isEmpty()
+    }
+
+    private fun stamp(
+        count: Long,
+        versionSum: Long,
+        auditMaxId: Long,
+    ) {
+        val components = count
+        val versions = versionSum
+        whenever(componentRepository.findChangeStamp()).thenReturn(
+            object : ComponentChangeStampRow {
+                override val componentCount: Long = components
+                override val maxUpdatedAt: Instant? = Instant.parse("2026-10-01T00:00:00Z")
+                override val versionSum: Long = versions
+            },
+        )
+        whenever(auditLogRepository.changeStats()).thenReturn(
+            object : AuditChangeStats {
+                override val maxId: Long = auditMaxId
+                override val count: Long = auditMaxId
+            },
+        )
+    }
+
+    private class MutableClock(
+        private var now: Instant,
+    ) : Clock() {
+        fun advance(duration: Duration) {
+            now = now.plus(duration)
+        }
+
+        override fun getZone(): ZoneId = ZoneOffset.UTC
+
+        override fun withZone(zone: ZoneId?): Clock = this
+
+        override fun instant(): Instant = now
+    }
+
+    /** A clock that moves 1 s forward on every read — makes time-budget tests deterministic. */
+    private class TickingClock : Clock() {
+        private var now = Instant.parse("2026-10-05T10:00:00Z")
+
+        override fun getZone(): ZoneId = ZoneOffset.UTC
+
+        override fun withZone(zone: ZoneId?): Clock = this
+
+        override fun instant(): Instant = now.also { now = now.plusSeconds(1) }
+    }
+
+    private companion object {
+        val ALPHA_ID: UUID = UUID.fromString("00000000-0000-0000-0000-0000000000a1")
+        const val SEED = 100
+        const val RANDOM_PATTERNS = 5000
+        const val MAX_TOKENS = 16
+        const val MAX_DEPTH = 6
+    }
+}

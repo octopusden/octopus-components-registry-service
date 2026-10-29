@@ -1,0 +1,89 @@
+package org.octopusden.octopus.components.registry.server.teamcity.validation
+
+import org.octopusden.octopus.components.registry.server.config.ConditionalOnDatabaseEnabled
+import org.octopusden.octopus.components.registry.server.teamcity.TeamcityProperties
+import org.octopusden.octopus.components.registry.server.teamcity.TeamcityValidationProperties
+import org.octopusden.octopus.infrastructure.client.commons.ClientParametersProvider
+import org.octopusden.octopus.infrastructure.client.commons.CredentialProvider
+import org.octopusden.octopus.infrastructure.client.commons.StandardBasicCredCredentialProvider
+import org.octopusden.octopus.infrastructure.teamcity.client.TeamcityClassicClient
+import org.octopusden.octopus.infrastructure.teamcity.client.dto.locator.ProjectLocator
+import org.springframework.stereotype.Component
+import java.time.Duration
+import java.time.Instant
+import java.util.concurrent.ConcurrentHashMap
+import org.octopusden.octopus.infrastructure.teamcity.client.dto.TeamcityProject as ExternalTeamcityProject
+
+/** Fetches one enriched TeamCity project (build configs + steps + properties) by its project id. */
+interface EnrichedTcProjectFetcher {
+    /** The enriched project, or `null` if TeamCity no longer returns it (archived / removed / renamed). */
+    fun fetch(projectId: String): ExternalTeamcityProject?
+
+    fun invalidateAll()
+}
+
+/**
+ * Per-id enriched fetch with a short-TTL cache. By project id (not the `COMPONENT_NAME` locator), so
+ * validation is decoupled from sync and never silently drops a stored project.
+ *
+ * DB-conditional: injects [TeamcityValidationProperties] (registered only with the DB), so it is
+ * absent in no-db mode along with the rest of the validation feature.
+ */
+@ConditionalOnDatabaseEnabled
+@Component
+class CachingEnrichedTcProjectFetcher(
+    private val properties: TeamcityProperties,
+    private val validationProperties: TeamcityValidationProperties,
+) : EnrichedTcProjectFetcher {
+    private val client: TeamcityClassicClient by lazy {
+        TeamcityClassicClient(
+            object : ClientParametersProvider {
+                override fun getApiUrl(): String = properties.baseUrl.trimEnd('/')
+
+                override fun getAuth(): CredentialProvider = StandardBasicCredCredentialProvider(properties.username, properties.password)
+            },
+        )
+    }
+
+    private data class Cached(
+        val project: ExternalTeamcityProject?,
+        val at: Instant,
+    )
+
+    private val cache = ConcurrentHashMap<String, Cached>()
+
+    override fun fetch(projectId: String): ExternalTeamcityProject? {
+        val ttl = Duration.ofMinutes(validationProperties.cacheTtlMinutes)
+        val now = Instant.now()
+        cache[projectId]?.let { if (Duration.between(it.at, now) < ttl) return it.project }
+        val fetched = client.getProjectsWithLocatorAndFields(ProjectLocator(id = projectId), FIELDS).projects.firstOrNull()
+        cache[projectId] = Cached(fetched, now)
+        return fetched
+    }
+
+    override fun invalidateAll() {
+        cache.clear()
+    }
+
+    internal companion object {
+        // Every buildType node must list the DTO's non-nullable fields or Jackson throws on missing
+        // `name`. Mirrors the sync's PROJECT_FIELDS, plus steps.
+        private const val BUILD_TYPE_REQUIRED = "id,name,projectId,projectName,href"
+
+        // ONB-002 (TeamCity checkout layout Diff/Sync): each build type's attached VCS roots and their
+        // checkout rules, so TeamcityCheckoutLayoutDiffService can derive Checkout Directory / Source
+        // Path / Build Working Directory without a second TC call. Additive only — every existing
+        // consumer of this cache (TeamcityValidationService) ignores the extra field. The entry's
+        // `id` and the root's `name`/`href` are non-null on the client DTOs, so they are requested too.
+        private const val VCS_ROOT_ENTRIES =
+            "vcs-root-entries(vcs-root-entry(id,checkout-rules,vcs-root(id,name,href,properties(property(name,value)))))"
+        const val FIELDS =
+            "project(id,name,webUrl,href," +
+                "parameters(property(name,value))," +
+                "buildTypes(buildType($BUILD_TYPE_REQUIRED,paused,templateFlag," +
+                "parameters(property(name,value))," +
+                "template($BUILD_TYPE_REQUIRED),templates(buildType($BUILD_TYPE_REQUIRED))," +
+                "steps(step(id,name,type,disabled,inherited,properties(property(name,value))))," +
+                "$VCS_ROOT_ENTRIES)))"
+    }
+}

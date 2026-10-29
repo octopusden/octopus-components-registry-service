@@ -18,13 +18,13 @@ import kotlin.test.assertTrue
  * crsctl exit-code contract instead of Clikt's own status codes / human-text behaviour.
  */
 class CliMainTest {
-
     private val neverExchange = HttpExchange { error("no HTTP call expected during parse-time tests") }
 
-    private fun cli() = crsctl(
-        configLoader = { CrsctlConfig.EMPTY },
-        clientFactory = CrsClientFactory { target -> CrsClient(target.crsUrl, target.token, neverExchange) },
-    )
+    private fun cli() =
+        crsctl(
+            configLoader = { CrsctlConfig.EMPTY },
+            clientFactory = CrsClientFactory { target -> CrsClient(target.crsUrl, target.token, neverExchange) },
+        )
 
     /** Runs [block] with STDOUT captured; restores the original stream in a finally. */
     private fun captureStdout(block: () -> Int): Pair<Int, String> {

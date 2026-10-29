@@ -16,11 +16,12 @@ import org.octopusden.octopus.components.registry.cli.model.PageComponentSummary
 import org.octopusden.octopus.components.registry.cli.output.Renderer
 
 /** `crsctl components` — parent for component-list operations. */
-class ComponentsCommand : CliktCommand(
-    name = "components",
-    help = "List components in the registry.",
-    invokeWithoutSubcommand = false,
-) {
+class ComponentsCommand :
+    CliktCommand(
+        name = "components",
+        help = "List components in the registry.",
+        invokeWithoutSubcommand = false,
+    ) {
     override fun run() = Unit
 }
 
@@ -28,16 +29,25 @@ class ComponentsCommand : CliktCommand(
  * `crsctl components list` — query the components list with the full filter set, paging, and an
  * optional `--all` auto-paginate that walks every page until the server reports `last == true`.
  */
-class ComponentsListCommand : CliktCommand(
-    name = "list",
-    help = "List components, optionally filtered. Reads are anonymous; no token is required.",
-) {
+class ComponentsListCommand :
+    CliktCommand(
+        name = "list",
+        help = "List components, optionally filtered. Reads are anonymous; no token is required.",
+    ) {
     private val ctx by requireObject<CliContext>()
 
     // --- filters (CLI kebab-case -> v4.json listComponents query param) ---
     private val search by option("--search", help = "Free-text search across name/displayName.")
     private val owner by option("--owner", help = "Filter by component owner (repeatable).").multiple()
     private val system by option("--system", help = "Filter by system code (repeatable).").multiple()
+    private val involves by option(
+        "--involves",
+        help = "Components where this user is owner OR release manager OR security champion (repeatable).",
+    ).multiple()
+    private val involvesRole by option(
+        "--involves-role",
+        help = "Narrow --involves to these roles: owner, releaseManager, securityChampion (repeatable).",
+    ).multiple()
     private val productType by option("--product-type", help = "Filter by product type.")
     private val buildSystem by option("--build-system", help = "Filter by build system (repeatable).").multiple()
     private val label by option("--label", help = "Filter by label (repeatable).").multiple()
@@ -56,6 +66,8 @@ class ComponentsListCommand : CliktCommand(
     ).multiple()
     private val groupKey by option("--group-key", help = "Filter by group key (repeatable).").multiple()
     private val archived by option("--archived", help = "Filter archived components (true|false).").boolean()
+    private val testComponent by option("--test-component", help = "Filter test components (true|false).").boolean()
+    private val autoRelease by option("--auto-release", help = "Filter auto-release components (true|false).").boolean()
     private val canBeParent by option("--can-be-parent", help = "Filter components that can be parents (true|false).").boolean()
     private val distributionExplicit by option(
         "--distribution-explicit",
@@ -75,21 +87,25 @@ class ComponentsListCommand : CliktCommand(
         help = "Fetch every page (ignores --page; loops until the last page).",
     ).flag()
 
-    override fun run() = runCommand {
-        val client = ctx.client()
-        val rows = if (all) fetchAll(client) else fetchOnePage(client)
-        render(
-            ctx,
-            json = { Renderer.renderJson(rows, ListSerializer(ComponentSummaryResponse.serializer())) },
-            table = { renderTable(rows) },
-        )
-    }
+    override fun run() =
+        runCommand {
+            val client = ctx.client()
+            val rows = if (all) fetchAll(client) else fetchOnePage(client)
+            render(
+                ctx,
+                json = { Renderer.renderJson(rows, ListSerializer(ComponentSummaryResponse.serializer())) },
+                table = { renderTable(rows) },
+            )
+        }
 
     private fun baseFilters(): QueryParams.Builder =
-        QueryParams.builder()
+        QueryParams
+            .builder()
             .add("search", search)
             .addAll("owner", owner.ifEmpty { null })
             .addAll("system", system.ifEmpty { null })
+            .addAll("involves", involves.ifEmpty { null })
+            .addAll("involvesRoles", involvesRole.ifEmpty { null })
             .add("productType", productType)
             .addAll("buildSystem", buildSystem.ifEmpty { null })
             .addAll("labels", label.ifEmpty { null })
@@ -102,6 +118,8 @@ class ComponentsListCommand : CliktCommand(
             .addAll("parentComponentName", parent.ifEmpty { null })
             .addAll("groupKey", groupKey.ifEmpty { null })
             .add("archived", archived)
+            .add("testComponent", testComponent)
+            .add("autoRelease", autoRelease)
             .add("canBeParent", canBeParent)
             .add("distributionExplicit", distributionExplicit)
             .add("distributionExternal", distributionExternal)

@@ -17,7 +17,6 @@ internal data class OwnershipClaim(
     val tokens: Set<String>,
 )
 
-
 /**
  * Mode-aware cross-component ownership uniqueness (restores legacy #24/#25 for the groupId/artifactId
  * ownership mapping, now decided deterministically from stored modes — no probe/regex heuristics).
@@ -49,11 +48,17 @@ internal fun computeOwnershipCollisions(
 ): List<String> {
     val violations = mutableListOf<String>()
 
-    fun shadowed(claim: OwnershipClaim, otherRange: String): Boolean =
+    fun shadowed(
+        claim: OwnershipClaim,
+        otherRange: String,
+    ): Boolean =
         claim.versionRange == OWNERSHIP_ALL_VERSIONS &&
             otherRange in shadowRangesByComponent[claim.componentKey].orEmpty()
 
-    fun check(a: OwnershipClaim, b: OwnershipClaim) {
+    fun check(
+        a: OwnershipClaim,
+        b: OwnershipClaim,
+    ) {
         if (a.componentKey == b.componentKey) return
         val sharedGroup = a.groupTokens.firstOrNull { it in b.groupTokens } ?: return
         if (!rangesIntersect(a.versionRange, b.versionRange)) return
@@ -70,8 +75,8 @@ internal fun computeOwnershipCollisions(
         if (!conflict) return
         violations +=
             "uniqueness violation: groupId/artifactId ownership of component '${a.componentKey}' " +
-                "(group '$sharedGroup', ${a.mode}) duplicates component '${b.componentKey}' " +
-                "(${b.mode}) in intersecting version ranges '${a.versionRange}' ∩ '${b.versionRange}'"
+            "(group '$sharedGroup', ${a.mode}) duplicates component '${b.componentKey}' " +
+            "(${b.mode}) in intersecting version ranges '${a.versionRange}' ∩ '${b.versionRange}'"
     }
 
     for (i in newClaims.indices) {
@@ -83,4 +88,8 @@ internal fun computeOwnershipCollisions(
 
 /** Split a comma group-list into exact-match group tokens (mirrors `MavenArtifactMatcher.groupIdMatches`). */
 internal fun groupTokensOf(groupPattern: String): Set<String> =
-    groupPattern.split(',').map { it.trim() }.filter { it.isNotEmpty() }.toSet()
+    groupPattern
+        .split(',')
+        .map { it.trim() }
+        .filter { it.isNotEmpty() }
+        .toSet()

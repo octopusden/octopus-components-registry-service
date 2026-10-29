@@ -40,4 +40,17 @@ class EmployeeServiceProperties(
     val password: String = "",
     /** Feign retry budget in milliseconds (mirrors the legacy task's 5000 ms). */
     val retryTimeMillis: Int = 5000,
+    /**
+     * Connect timeout in milliseconds. `EmployeeServiceClientParametersProvider`'s
+     * default (300_000 ms) is unsafe on this bean: `canEditComponent` calls the
+     * client synchronously inside `@PreAuthorize` and inside the per-response
+     * `canEdit` stamping, on every detail GET — a degraded employee-service would
+     * otherwise pin servlet threads for up to 5 minutes per request. Mirrors the
+     * legacy CI validation task's override.
+     */
+    val connectTimeoutMillis: Int = 5000,
+    /** Read timeout in milliseconds. See [connectTimeoutMillis] for why the library default is unsafe here. */
+    val readTimeoutMillis: Int = 10000,
+    /** Connection TTL in milliseconds. See [connectTimeoutMillis]. */
+    val connectionTtlMillis: Int = 300000,
 )

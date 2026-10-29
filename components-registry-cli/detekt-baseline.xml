@@ -1,0 +1,24 @@
+<?xml version="1.0" ?>
+<SmellBaseline>
+  <ManuallySuppressedIssues/>
+  <CurrentIssues>
+    <ID>LoopWithTooManyJumpStatements:ComponentsCommand.kt$ComponentsListCommand$while</ID>
+    <ID>MatchingDeclarationName:Audit.kt$AuditLogResponse</ID>
+    <ID>MatchingDeclarationName:Error.kt$ErrorResponse</ID>
+    <ID>MatchingDeclarationName:Main.kt$Crsctl : CliktCommand</ID>
+    <ID>SwallowedException:CliContext.kt$CliContext$e: AuthRequiredException</ID>
+    <ID>SwallowedException:CliContext.kt$CliContext$e: ConfigResolutionException</ID>
+    <ID>SwallowedException:CrsClient.kt$CrsClient$e: SerializationException</ID>
+    <ID>SwallowedException:DeviceFlowClient.kt$DeviceFlowClient$e: SerializationException</ID>
+    <ID>SwallowedException:Main.kt$e: Abort</ID>
+    <ID>SwallowedException:TargetResolver.kt$TargetResolver$e: IllegalArgumentException</ID>
+    <ID>SwallowedException:TargetResolver.kt$TargetResolver$e: URISyntaxException</ID>
+    <ID>SwallowedException:WhoamiCommand.kt$WhoamiCommand$e: AuthRequiredException</ID>
+    <ID>SwallowedException:WhoamiCommand.kt$WhoamiCommand$e: ConfigResolutionException</ID>
+    <ID>ThrowsCount:DeviceFlowClient.kt$DeviceFlowClient$fun pollToken( issuer: String, clientId: String, deviceCode: String, interval: Int, expiresInSeconds: Long, ): TokenResponse</ID>
+    <ID>ThrowsCount:TargetResolver.kt$TargetResolver$private fun validate(rawUrl: String): String</ID>
+    <ID>TooGenericExceptionCaught:CommandSupport.kt$t: Throwable</ID>
+    <ID>TooGenericExceptionCaught:LogoutCommand.kt$LogoutCommand$e: Exception</ID>
+    <ID>TooManyFunctions:DeviceFlowClient.kt$DeviceFlowClient</ID>
+  </CurrentIssues>
+</SmellBaseline>

@@ -23,14 +23,18 @@ import org.springframework.context.annotation.Configuration
 class OpenApiV4Config {
     @Bean
     fun v4OpenApiGroup(): GroupedOpenApi =
-        GroupedOpenApi.builder()
+        GroupedOpenApi
+            .builder()
             .group("v4")
             .pathsToMatch(
                 "/rest/api/4/components/**",
                 // AuditControllerV4 is mapped at /rest/api/4/audit (NOT /audit-log).
                 "/rest/api/4/audit/**",
-                // Covers AdminControllerV4 and ConfigControllerV4's PUTs under /admin/config/**.
+                // Covers AdminControllerV4, ConfigControllerV4's PUTs, ServiceEvent + Feedback
+                // admin controllers — everything under /admin/**.
                 "/rest/api/4/admin/**",
+                // FeedbackControllerV4 submit endpoint (the admin side is under /admin/** above).
+                "/rest/api/4/feedback/**",
                 // ConfigControllerV4 GETs under /config/**.
                 "/rest/api/4/config/**",
                 // HealthControllerV4 — registry health statistics (SYS-057).
@@ -41,6 +45,10 @@ class OpenApiV4Config {
                 "/rest/api/4/migration-status",
                 // VersionsControllerV4 — stateless version-format preview (SYS-059).
                 "/rest/api/4/versions/**",
+                // ComponentProfileControllerV4 — the Create component start-page profiles.
+                "/rest/api/4/component-profiles",
+                // ComponentTemplateControllerV4 — describe a template, dry run and create from it.
+                "/rest/api/4/component-templates/**",
                 // AuthController at /auth/me — outside /rest/api/4.
                 "/auth/**",
             )
@@ -58,6 +66,5 @@ class OpenApiV4Config {
                                 "Generated from the v4 controllers (TD-003); v1/v2/v3 are separate stable read contracts.",
                         ),
                 )
-            }
-            .build()
+            }.build()
 }

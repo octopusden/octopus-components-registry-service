@@ -37,8 +37,10 @@ data class ResolverInputs(
  * from the config is also an error.
  */
 object TargetResolver {
-
-    fun resolve(inputs: ResolverInputs, config: CrsctlConfig): EffectiveTarget {
+    fun resolve(
+        inputs: ResolverInputs,
+        config: CrsctlConfig,
+    ): EffectiveTarget {
         val token = firstNonBlank(inputs.tokenFlag, inputs.tokenEnv)
 
         firstNonBlank(inputs.crsUrlFlag)?.let { url ->
@@ -96,8 +98,13 @@ object TargetResolver {
     }
 
     private fun knownProfiles(config: CrsctlConfig): String =
-        if (config.profiles.isEmpty()) "(none)" else config.profiles.keys.sorted().joinToString(", ")
+        if (config.profiles.isEmpty()) {
+            "(none)"
+        } else {
+            config.profiles.keys
+                .sorted()
+                .joinToString(", ")
+        }
 
-    private fun firstNonBlank(vararg values: String?): String? =
-        values.firstOrNull { !it.isNullOrBlank() }
+    private fun firstNonBlank(vararg values: String?): String? = values.firstOrNull { !it.isNullOrBlank() }
 }

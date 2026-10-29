@@ -11,9 +11,13 @@ on:
     # Mondays 05:00 UTC. Reports a perf regression; does not gate any branch.
     - cron: '0 5 * * 1'
 
+permissions:
+  contents: read
+
 jobs:
   perf-test:
     runs-on: ubuntu-latest
+    timeout-minutes: 10
     steps:
       - uses: actions/checkout@v4
 

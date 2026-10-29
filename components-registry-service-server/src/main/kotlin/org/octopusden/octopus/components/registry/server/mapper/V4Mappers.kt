@@ -2,7 +2,6 @@
 
 package org.octopusden.octopus.components.registry.server.mapper
 
-import org.octopusden.octopus.components.registry.server.entity.ComponentArtifactMappingEntity
 import org.octopusden.octopus.components.registry.server.dto.v4.ArtifactIdResponse
 import org.octopusden.octopus.components.registry.server.dto.v4.AuditLogResponse
 import org.octopusden.octopus.components.registry.server.dto.v4.BuildAspectResponse
@@ -14,11 +13,15 @@ import org.octopusden.octopus.components.registry.server.dto.v4.ComponentGroupRe
 import org.octopusden.octopus.components.registry.server.dto.v4.ComponentGroupRole
 import org.octopusden.octopus.components.registry.server.dto.v4.ComponentSummaryResponse
 import org.octopusden.octopus.components.registry.server.dto.v4.ConfigurationRowType
-import org.octopusden.octopus.components.registry.server.dto.v4.DockerImageResponse
 import org.octopusden.octopus.components.registry.server.dto.v4.DocLinkResponse
+import org.octopusden.octopus.components.registry.server.dto.v4.DockerImageRequest
+import org.octopusden.octopus.components.registry.server.dto.v4.DockerImageResponse
 import org.octopusden.octopus.components.registry.server.dto.v4.EscrowAspectResponse
 import org.octopusden.octopus.components.registry.server.dto.v4.FieldOverrideResponse
+import org.octopusden.octopus.components.registry.server.dto.v4.FileUrlArtifactRequest
 import org.octopusden.octopus.components.registry.server.dto.v4.FileUrlArtifactResponse
+import org.octopusden.octopus.components.registry.server.dto.v4.GenericArtifactRequest
+import org.octopusden.octopus.components.registry.server.dto.v4.GenericArtifactResponse
 import org.octopusden.octopus.components.registry.server.dto.v4.JiraAspectResponse
 import org.octopusden.octopus.components.registry.server.dto.v4.MarkerChildrenPayload
 import org.octopusden.octopus.components.registry.server.dto.v4.MavenArtifactRequest
@@ -29,12 +32,15 @@ import org.octopusden.octopus.components.registry.server.dto.v4.SecurityGroupRes
 import org.octopusden.octopus.components.registry.server.dto.v4.TeamcityProjectResponse
 import org.octopusden.octopus.components.registry.server.dto.v4.VcsEntryRequest
 import org.octopusden.octopus.components.registry.server.dto.v4.VcsEntryResponse
-import org.octopusden.octopus.components.registry.server.dto.v4.DockerImageRequest
-import org.octopusden.octopus.components.registry.server.dto.v4.FileUrlArtifactRequest
 import org.octopusden.octopus.components.registry.server.entity.AuditLogEntity
+import org.octopusden.octopus.components.registry.server.entity.ComponentArtifactMappingEntity
 import org.octopusden.octopus.components.registry.server.entity.ComponentBuildToolBeanEntity
 import org.octopusden.octopus.components.registry.server.entity.ComponentConfigurationEntity
 import org.octopusden.octopus.components.registry.server.entity.ComponentEntity
+import org.octopusden.octopus.components.registry.server.entity.DistributionFileUrlArtifactEntity
+import org.octopusden.octopus.components.registry.server.entity.DistributionGenericArtifactEntity
+import org.octopusden.octopus.components.registry.server.service.rms.ComponentBuildRanges
+import org.octopusden.octopus.components.registry.server.service.rms.RegisteredBuildParametersMapper
 
 /**
  * Maps a fully-loaded `ComponentEntity` (with `configurations` + per-component
@@ -54,6 +60,8 @@ fun ComponentEntity.toDetailResponse(teamcityBaseUrl: String? = null): Component
         systems = this.systemJunctions.map { it.systemCode }.toSet(),
         clientCode = this.clientCode,
         archived = this.archived,
+        testComponent = this.testComponent,
+        autoRelease = this.autoRelease,
         solution = this.solution,
         parentComponentName = this.parentComponent?.componentKey,
         canBeParent = this.canBeParent,
@@ -76,14 +84,15 @@ fun ComponentEntity.toDetailResponse(teamcityBaseUrl: String? = null): Component
         artifactIds = this.artifactMappings.sortedWith(ARTIFACT_MAPPING_ORDER).map { it.toResponse() },
         securityGroups = this.securityGroups.map { it.toResponse() },
         teamcityProjects =
-            this.teamcityProjects
-                .sortedBy { it.sortOrder }
-                .map { tc ->
+            this.versionLines
+                .sortedBy { it.teamcityProject.projectId }
+                .mapIndexed { index, vl ->
                     TeamcityProjectResponse(
-                        id = tc.id!!,
-                        projectId = tc.projectId,
-                        projectUrl = composeTeamcityProjectUrl(teamcityBaseUrl, tc.projectId),
-                        sortOrder = tc.sortOrder,
+                        id = vl.id!!,
+                        projectId = vl.teamcityProject.projectId,
+                        projectUrl = composeTeamcityProjectUrl(teamcityBaseUrl, vl.teamcityProject.projectId),
+                        projectVersion = vl.version,
+                        sortOrder = index,
                     )
                 },
         configurations =
@@ -93,15 +102,18 @@ fun ComponentEntity.toDetailResponse(teamcityBaseUrl: String? = null): Component
     )
 
 /**
- * Compact list-view projection. SYS-040 fields (`buildSystem`, `jiraProjectKey`,
- * `vcsPath`, `teamcityProjectId`, `teamcityProjectUrl`) are derived from the
- * BASE configuration row (`row_type = 'BASE'`) and the first child
+ * Compact list-view projection. SYS-040 fields (`buildSystem`, `javaVersion`,
+ * `jiraProjectKey`, `vcsPath`, `teamcityProjectId`, `teamcityProjectUrl`) are
+ * derived from the BASE configuration row (`row_type = 'BASE'`) and the first child
  * (`sort_order = 0`) so multi-VCS / multi-TC components render their primary
  * link the same way single-target components do. Blank strings → null.
  */
-fun ComponentEntity.toSummaryResponse(teamcityBaseUrl: String? = null): ComponentSummaryResponse {
+fun ComponentEntity.toSummaryResponse(
+    teamcityBaseUrl: String? = null,
+    rmsRanges: ComponentBuildRanges? = null,
+): ComponentSummaryResponse {
     val base = this.configurations.firstOrNull { it.rowType == "BASE" }
-    val firstTcProject = this.teamcityProjects.minByOrNull { it.sortOrder }
+    val firstTcProject = this.versionLines.minByOrNull { it.teamcityProject.projectId }
     val firstVcsEntry = base?.vcsEntries?.minByOrNull { it.sortOrder }
     return ComponentSummaryResponse(
         id = this.id!!,
@@ -111,16 +123,19 @@ fun ComponentEntity.toSummaryResponse(teamcityBaseUrl: String? = null): Componen
         systems = this.systemJunctions.map { it.systemCode }.toSet(),
         productType = this.productType,
         archived = this.archived,
+        testComponent = this.testComponent,
+        autoRelease = this.autoRelease,
         canBeParent = this.canBeParent,
         updatedAt = this.updatedAt,
         labels = this.labelJunctions.map { it.labelCode },
         releaseManagers = this.releaseManagerUsernames(),
         securityChampions = this.securityChampionUsernames(),
         buildSystem = base?.buildSystem?.takeIf { it.isNotBlank() },
+        javaVersion = RegisteredBuildParametersMapper.effectiveJavaVersion(base?.javaVersion, rmsRanges?.javaRanges.orEmpty()),
         jiraProjectKey = base?.jiraProjectKey?.takeIf { it.isNotBlank() },
         vcsPath = firstVcsEntry?.vcsPath?.takeIf { it.isNotBlank() }?.sshUrlToProjectRepo(),
-        teamcityProjectId = firstTcProject?.projectId,
-        teamcityProjectUrl = firstTcProject?.let { composeTeamcityProjectUrl(teamcityBaseUrl, it.projectId) },
+        teamcityProjectId = firstTcProject?.teamcityProject?.projectId,
+        teamcityProjectUrl = firstTcProject?.let { composeTeamcityProjectUrl(teamcityBaseUrl, it.teamcityProject.projectId) },
     )
 }
 
@@ -158,6 +173,9 @@ fun ComponentConfigurationEntity.toConfigurationResponse(): ComponentConfigurati
     val packages = pickChildRows(rowType, MarkerAttributes.DISTRIBUTION_PACKAGES) {
         this.packages.sortedBy { it.sortOrder }.map { it.toResponse() }
     }
+    val generic = pickChildRows(rowType, MarkerAttributes.DISTRIBUTION_GENERIC) {
+        genericArtifacts.sortedBy { it.sortOrder }.map { it.toResponse() }
+    }
     val tools = pickChildRows(rowType, MarkerAttributes.BUILD_REQUIRED_TOOLS) { requiredToolJunctions.map { it.toolName } }
     val buildBeans = pickChildRows(rowType, MarkerAttributes.BUILD_TOOLS) {
         buildToolBeans.sortedBy { it.sortOrder }.map { it.toBuildToolBeanResponse() }
@@ -177,8 +195,10 @@ fun ComponentConfigurationEntity.toConfigurationResponse(): ComponentConfigurati
         fileUrlArtifacts = fileUrl,
         dockerImages = docker,
         packages = packages,
+        genericArtifacts = generic,
         requiredTools = tools,
         buildToolBeans = buildBeans,
+        buildWorkingDirectory = this.buildWorkingDirectory,
     )
 }
 
@@ -232,8 +252,7 @@ fun AuditLogEntity.toResponse(componentKey: String? = null): AuditLogResponse =
 // Internal: row classification and per-aspect/per-child helpers
 // ============================================================
 
-private fun ComponentConfigurationEntity.classifyRowType(): ConfigurationRowType =
-    ConfigurationRowType.valueOf(this.rowType)
+private fun ComponentConfigurationEntity.classifyRowType(): ConfigurationRowType = ConfigurationRowType.valueOf(this.rowType)
 
 private fun ComponentConfigurationEntity.shouldEmitBuildAspect(rowType: ConfigurationRowType): Boolean =
     rowType == ConfigurationRowType.BASE ||
@@ -311,8 +330,11 @@ private fun ComponentConfigurationEntity.toMarkerChildrenPayload(): MarkerChildr
                             tag = e.tag,
                             hotfixBranch = e.hotfixBranch,
                             repositoryType = e.repositoryType,
+                            sourcePath = e.sourcePath,
+                            checkoutDirectory = e.checkoutDirectory,
                         )
                     },
+                buildWorkingDirectory = buildWorkingDirectory,
             )
 
         MarkerAttributes.DISTRIBUTION_MAVEN,
@@ -369,6 +391,14 @@ private fun ComponentConfigurationEntity.toMarkerChildrenPayload(): MarkerChildr
                     },
             )
 
+        MarkerAttributes.DISTRIBUTION_GENERIC ->
+            MarkerChildrenPayload(
+                genericArtifacts =
+                    genericArtifacts.sortedBy { it.sortOrder }.map { e ->
+                        GenericArtifactRequest(path = e.path)
+                    },
+            )
+
         MarkerAttributes.BUILD_REQUIRED_TOOLS ->
             MarkerChildrenPayload(requiredTools = requiredToolJunctions.map { it.toolName })
 
@@ -395,6 +425,8 @@ private fun org.octopusden.octopus.components.registry.server.entity.VcsSettings
         hotfixBranch = this.hotfixBranch,
         repositoryType = this.repositoryType,
         sortOrder = this.sortOrder,
+        sourcePath = this.sourcePath,
+        checkoutDirectory = this.checkoutDirectory,
     )
 
 private fun org.octopusden.octopus.components.registry.server.entity.DistributionMavenArtifactEntity.toResponse(): MavenArtifactResponse =
@@ -407,7 +439,7 @@ private fun org.octopusden.octopus.components.registry.server.entity.Distributio
         sortOrder = this.sortOrder,
     )
 
-private fun org.octopusden.octopus.components.registry.server.entity.DistributionFileUrlArtifactEntity.toResponse(): FileUrlArtifactResponse =
+private fun DistributionFileUrlArtifactEntity.toResponse(): FileUrlArtifactResponse =
     FileUrlArtifactResponse(
         id = this.id!!,
         url = this.url,
@@ -421,6 +453,13 @@ private fun org.octopusden.octopus.components.registry.server.entity.Distributio
         id = this.id!!,
         imageName = this.imageName,
         flavor = this.flavor,
+        sortOrder = this.sortOrder,
+    )
+
+private fun DistributionGenericArtifactEntity.toResponse(): GenericArtifactResponse =
+    GenericArtifactResponse(
+        id = this.id!!,
+        path = this.path,
         sortOrder = this.sortOrder,
     )
 
@@ -454,7 +493,8 @@ internal val ARTIFACT_MAPPING_ORDER: Comparator<ComponentArtifactMappingEntity> 
     )
 
 private fun org.octopusden.octopus.components.registry.server.entity.ComponentArtifactMappingEntity.toResponse(): ArtifactIdResponse {
-    val mode = org.octopusden.octopus.components.registry.server.entity.ArtifactIdMode.valueOf(this.artifactIdMode)
+    val mode = org.octopusden.octopus.components.registry.server.entity.ArtifactIdMode
+        .valueOf(this.artifactIdMode)
     val tokens = this.tokens.sortedBy { it.sortOrder }.map { it.artifactPattern }
     return ArtifactIdResponse(
         id = this.id!!,

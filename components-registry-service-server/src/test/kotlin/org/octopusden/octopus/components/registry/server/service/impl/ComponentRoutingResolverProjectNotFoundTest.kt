@@ -1,6 +1,5 @@
 package org.octopusden.octopus.components.registry.server.service.impl
 
-import java.util.concurrent.TimeUnit
 import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.Assertions.assertThrows
 import org.junit.jupiter.api.BeforeEach
@@ -14,6 +13,7 @@ import org.octopusden.octopus.components.registry.core.exceptions.NotFoundExcept
 import org.octopusden.octopus.components.registry.server.service.ComponentSourceRegistry
 import org.octopusden.octopus.escrow.config.JiraComponentVersionRange
 import org.octopusden.octopus.escrow.model.Distribution
+import java.util.concurrent.TimeUnit
 
 /**
  * MIG-049: V2 project endpoints return 200 instead of 404 for unknown projects.
@@ -36,7 +36,6 @@ import org.octopusden.octopus.escrow.model.Distribution
  */
 @Timeout(10, unit = TimeUnit.SECONDS)
 class ComponentRoutingResolverProjectNotFoundTest {
-
     private lateinit var gitResolver: ComponentRegistryResolverImpl
     private lateinit var dbResolver: DatabaseComponentRegistryResolver
     private lateinit var sourceRegistry: ComponentSourceRegistry
@@ -65,9 +64,11 @@ class ComponentRoutingResolverProjectNotFoundTest {
     fun mig049_001_jiraComponentsByProject_bothNotFound_reThrows() {
         val projectKey = "alpha-project"
         doThrow(NotFoundException("Project '$projectKey' is not found"))
-            .`when`(gitResolver).getJiraComponentsByProject(projectKey)
+            .`when`(gitResolver)
+            .getJiraComponentsByProject(projectKey)
         doThrow(NotFoundException("Project '$projectKey' is not found"))
-            .`when`(dbResolver).getJiraComponentsByProject(projectKey)
+            .`when`(dbResolver)
+            .getJiraComponentsByProject(projectKey)
 
         val ex =
             assertThrows(NotFoundException::class.java) {
@@ -131,9 +132,11 @@ class ComponentRoutingResolverProjectNotFoundTest {
     fun mig049_002_jiraVersionRangesByProject_bothNotFound_reThrows() {
         val projectKey = "epsilon-project"
         doThrow(NotFoundException("Project '$projectKey' is not found"))
-            .`when`(gitResolver).getJiraComponentVersionRangesByProject(projectKey)
+            .`when`(gitResolver)
+            .getJiraComponentVersionRangesByProject(projectKey)
         doThrow(NotFoundException("Project '$projectKey' is not found"))
-            .`when`(dbResolver).getJiraComponentVersionRangesByProject(projectKey)
+            .`when`(dbResolver)
+            .getJiraComponentVersionRangesByProject(projectKey)
 
         val ex =
             assertThrows(NotFoundException::class.java) {
@@ -155,7 +158,8 @@ class ComponentRoutingResolverProjectNotFoundTest {
         val dbRange = mock(JiraComponentVersionRange::class.java)
         doReturn("db-routed-comp").`when`(dbRange).componentName
         doThrow(NotFoundException("not in git"))
-            .`when`(gitResolver).getJiraComponentVersionRangesByProject(projectKey)
+            .`when`(gitResolver)
+            .getJiraComponentVersionRangesByProject(projectKey)
         doReturn(setOf(dbRange)).`when`(dbResolver).getJiraComponentVersionRangesByProject(projectKey)
 
         val result = routing.getJiraComponentVersionRangesByProject(projectKey)
@@ -172,7 +176,8 @@ class ComponentRoutingResolverProjectNotFoundTest {
         doReturn("legacy-comp").`when`(gitRange).componentName
         doReturn(setOf(gitRange)).`when`(gitResolver).getJiraComponentVersionRangesByProject(projectKey)
         doThrow(NotFoundException("not in db"))
-            .`when`(dbResolver).getJiraComponentVersionRangesByProject(projectKey)
+            .`when`(dbResolver)
+            .getJiraComponentVersionRangesByProject(projectKey)
 
         val result = routing.getJiraComponentVersionRangesByProject(projectKey)
         assertEquals(setOf(gitRange), result)
@@ -195,9 +200,11 @@ class ComponentRoutingResolverProjectNotFoundTest {
         // sourceRegistry.getDbComponentNames() de-dup in the union-merge code path.
         doReturn(setOf("shared-db-comp")).`when`(sourceRegistry).getDbComponentNames()
         doReturn(setOf(gitGitOnly, gitShared))
-            .`when`(gitResolver).getJiraComponentVersionRangesByProject(projectKey)
+            .`when`(gitResolver)
+            .getJiraComponentVersionRangesByProject(projectKey)
         doReturn(setOf(dbRange))
-            .`when`(dbResolver).getJiraComponentVersionRangesByProject(projectKey)
+            .`when`(dbResolver)
+            .getJiraComponentVersionRangesByProject(projectKey)
 
         val result = routing.getJiraComponentVersionRangesByProject(projectKey)
         assertEquals(setOf(gitGitOnly, dbRange), result)
@@ -215,9 +222,11 @@ class ComponentRoutingResolverProjectNotFoundTest {
     fun mig049_003_componentsDistributionByJiraProject_bothNotFound_reThrows() {
         val projectKey = "theta-project"
         doThrow(NotFoundException("Project '$projectKey' is not found"))
-            .`when`(gitResolver).getComponentsDistributionByJiraProject(projectKey)
+            .`when`(gitResolver)
+            .getComponentsDistributionByJiraProject(projectKey)
         doThrow(NotFoundException("Project '$projectKey' is not found"))
-            .`when`(dbResolver).getComponentsDistributionByJiraProject(projectKey)
+            .`when`(dbResolver)
+            .getComponentsDistributionByJiraProject(projectKey)
 
         val ex =
             assertThrows(NotFoundException::class.java) {
@@ -237,9 +246,11 @@ class ComponentRoutingResolverProjectNotFoundTest {
         val projectKey = "iota-project"
         val dbDistribution = mock(Distribution::class.java)
         doThrow(NotFoundException("not in git"))
-            .`when`(gitResolver).getComponentsDistributionByJiraProject(projectKey)
+            .`when`(gitResolver)
+            .getComponentsDistributionByJiraProject(projectKey)
         doReturn(mapOf("db-routed-comp" to dbDistribution))
-            .`when`(dbResolver).getComponentsDistributionByJiraProject(projectKey)
+            .`when`(dbResolver)
+            .getComponentsDistributionByJiraProject(projectKey)
 
         val result = routing.getComponentsDistributionByJiraProject(projectKey)
         assertEquals(mapOf("db-routed-comp" to dbDistribution), result)
@@ -253,9 +264,11 @@ class ComponentRoutingResolverProjectNotFoundTest {
         val projectKey = "kappa-project"
         val gitDistribution = mock(Distribution::class.java)
         doReturn(mapOf("legacy-comp" to gitDistribution))
-            .`when`(gitResolver).getComponentsDistributionByJiraProject(projectKey)
+            .`when`(gitResolver)
+            .getComponentsDistributionByJiraProject(projectKey)
         doThrow(NotFoundException("not in db"))
-            .`when`(dbResolver).getComponentsDistributionByJiraProject(projectKey)
+            .`when`(dbResolver)
+            .getComponentsDistributionByJiraProject(projectKey)
 
         val result = routing.getComponentsDistributionByJiraProject(projectKey)
         assertEquals(mapOf("legacy-comp" to gitDistribution), result)
@@ -275,9 +288,11 @@ class ComponentRoutingResolverProjectNotFoundTest {
         // existing dbComponentNames de-dup in the union-merge code path.
         doReturn(setOf("shared-db-comp")).`when`(sourceRegistry).getDbComponentNames()
         doReturn(mapOf("git-only-comp" to gitOnlyDistribution, "shared-db-comp" to gitStaleDistribution))
-            .`when`(gitResolver).getComponentsDistributionByJiraProject(projectKey)
+            .`when`(gitResolver)
+            .getComponentsDistributionByJiraProject(projectKey)
         doReturn(mapOf("shared-db-comp" to dbDistribution))
-            .`when`(dbResolver).getComponentsDistributionByJiraProject(projectKey)
+            .`when`(dbResolver)
+            .getComponentsDistributionByJiraProject(projectKey)
 
         val result = routing.getComponentsDistributionByJiraProject(projectKey)
         assertEquals(

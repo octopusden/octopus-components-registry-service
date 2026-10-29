@@ -93,7 +93,8 @@ class OpenApiV4SpecTest {
     fun `v4 openapi spec is generated and matches committed`() {
         // Decode the response bytes as UTF-8 explicitly rather than via contentAsString (which uses
         // the response's charset) so the gate is not host/charset-sensitive.
-        val raw = mvc.perform(get("/v3/api-docs/v4"))
+        val raw = mvc
+            .perform(get("/v3/api-docs/v4"))
             .andExpect(status().isOk)
             .andReturn()
             .response
@@ -115,6 +116,7 @@ class OpenApiV4SpecTest {
             "/rest/api/4/components",
             "/rest/api/4/audit",
             "/rest/api/4/admin",
+            "/rest/api/4/component-templates",
             "/rest/api/4/config",
             "/rest/api/4/health",
             "/rest/api/4/info",

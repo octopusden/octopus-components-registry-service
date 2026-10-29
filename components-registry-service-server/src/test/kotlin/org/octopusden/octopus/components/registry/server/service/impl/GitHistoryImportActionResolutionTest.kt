@@ -1,11 +1,11 @@
 package org.octopusden.octopus.components.registry.server.service.impl
 
-import java.util.concurrent.TimeUnit
 import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.Assertions.assertNull
 import org.junit.jupiter.api.DisplayName
 import org.junit.jupiter.api.Test
 import org.junit.jupiter.api.Timeout
+import java.util.concurrent.TimeUnit
 
 /**
  * SYS-049: the git-history backfill records each component's first appearance

@@ -20,6 +20,7 @@ object ExecutionLogger {
     private val writeLock = Any()
     private var counter = 0
     private var diffCounter = 0
+
     // Per-worker JVM counter; combine across workers in `compatibilityReporter` for
     // a cross-fork total. The progress line below is best-effort visibility for the
     // TC log, not a hard count for the operator (use execution-log.md for that).
@@ -80,22 +81,32 @@ object ExecutionLogger {
         val workerCanon = runCatching { workerFileObj.canonicalPath }.getOrElse { "(canon failed: ${it.message})" }
         val parentExists = workerFile.parent?.let { Files.exists(it) } ?: false
         val parentDir = workerFile.parent?.toString() ?: "(no parent)"
-        val parentDirCanon = workerFile.parent?.let { runCatching { it.toFile().canonicalPath }.getOrElse { e -> "(canon failed: ${e.message})" } } ?: "(no parent)"
+        val parentDirCanon =
+            workerFile.parent?.let { runCatching { it.toFile().canonicalPath }.getOrElse { e -> "(canon failed: ${e.message})" } }
+                ?: "(no parent)"
         val osCwdCanon = runCatching { java.io.File(".").canonicalPath }.getOrElse { "(canon failed: ${it.message})" }
-        val propIsAbsolute = runCatching { java.nio.file.Path.of(propValue).isAbsolute }.getOrElse { false }
-        val osCwdAbsViaFileApi = runCatching { java.io.File("").absoluteFile.path }.getOrElse { "(abs failed: ${it.message})" }
+        val propIsAbsolute = runCatching {
+            java.nio.file.Path
+                .of(propValue)
+                .isAbsolute
+        }.getOrElse { false }
+        val osCwdAbsViaFileApi = runCatching {
+            java.io
+                .File("")
+                .absoluteFile.path
+        }.getOrElse { "(abs failed: ${it.message})" }
         // Quote-wrap the strings so any trailing whitespace, hidden control
         // characters, or TC-log-stripped prefixes become visible.
         System.out.println("[compat-exec] === ExecutionLogger init diagnostic ===")
-        System.out.println("[compat-exec]   compat.report-dir (raw)   = >>>${propValue}<<<")
+        System.out.println("[compat-exec]   compat.report-dir (raw)   = >>>$propValue<<<")
         System.out.println("[compat-exec]   compat.report-dir absolute? = $propIsAbsolute  (Path.of(raw).isAbsolute)")
-        System.out.println("[compat-exec]   user.dir (sysprop)        = >>>${cwd}<<<")
-        System.out.println("[compat-exec]   OS-level CWD (canonical)  = >>>${osCwdCanon}<<<")
-        System.out.println("[compat-exec]   OS-level CWD (File(\"\").absoluteFile.path) = >>>${osCwdAbsViaFileApi}<<<")
-        System.out.println("[compat-exec]   workerFile.toAbsolutePath = >>>${workerAbs}<<<")
-        System.out.println("[compat-exec]   workerFile.canonicalPath  = >>>${workerCanon}<<<")
-        System.out.println("[compat-exec]   parent dir                = >>>${parentDir}<<<")
-        System.out.println("[compat-exec]   parent dir canonical      = >>>${parentDirCanon}<<<")
+        System.out.println("[compat-exec]   user.dir (sysprop)        = >>>$cwd<<<")
+        System.out.println("[compat-exec]   OS-level CWD (canonical)  = >>>$osCwdCanon<<<")
+        System.out.println("[compat-exec]   OS-level CWD (File(\"\").absoluteFile.path) = >>>$osCwdAbsViaFileApi<<<")
+        System.out.println("[compat-exec]   workerFile.toAbsolutePath = >>>$workerAbs<<<")
+        System.out.println("[compat-exec]   workerFile.canonicalPath  = >>>$workerCanon<<<")
+        System.out.println("[compat-exec]   parent dir                = >>>$parentDir<<<")
+        System.out.println("[compat-exec]   parent dir canonical      = >>>$parentDirCanon<<<")
         System.out.println("[compat-exec]   parent dir exists         = $parentExists")
         System.out.println("[compat-exec] === /diagnostic ===")
         System.out.flush()
@@ -105,31 +116,35 @@ object ExecutionLogger {
             StandardOpenOption.CREATE,
             StandardOpenOption.APPEND,
         )
-        Runtime.getRuntime().addShutdownHook(Thread {
-            synchronized(writeLock) {
-                runCatching { w.flush() }
-                runCatching { w.close() }
-                System.out.println("[compat-exec] worker pid=${ProcessHandle.current().pid()} totals: $counter requests ($diffCounter with diffs)")
-                // INFRA-WORKAROUND: copy the per-worker ndjson to a stable
-                // /tmp location AFTER close, as a redundant copy that no
-                // Gradle output-tracking touches. id17 #3642 confirmed that
-                // files written to `build/reports/compat/` are
-                // non-deterministically removed between the `test` task's
-                // JVM exit and the `compatibilityReporter` task's doLast —
-                // most likely Gradle's stale-output cleanup acting on
-                // reportDir despite the `outputs.dir` declaration being
-                // removed (cleanup metadata persists from prior builds).
-                // The reporter falls back to this /tmp path when its
-                // primary reportDir is empty.
-                runCatching {
-                    val backupDir = Path.of(System.getProperty("java.io.tmpdir"), "crs-compat-backup")
-                    Files.createDirectories(backupDir)
-                    val dst = backupDir.resolve(workerFile.fileName)
-                    Files.copy(workerFile, dst, java.nio.file.StandardCopyOption.REPLACE_EXISTING)
-                    System.out.println("[compat-exec] copied $workerFile -> $dst")
+        Runtime.getRuntime().addShutdownHook(
+            Thread {
+                synchronized(writeLock) {
+                    runCatching { w.flush() }
+                    runCatching { w.close() }
+                    System.out.println(
+                        "[compat-exec] worker pid=${ProcessHandle.current().pid()} totals: $counter requests ($diffCounter with diffs)",
+                    )
+                    // INFRA-WORKAROUND: copy the per-worker ndjson to a stable
+                    // /tmp location AFTER close, as a redundant copy that no
+                    // Gradle output-tracking touches. id17 #3642 confirmed that
+                    // files written to `build/reports/compat/` are
+                    // non-deterministically removed between the `test` task's
+                    // JVM exit and the `compatibilityReporter` task's doLast —
+                    // most likely Gradle's stale-output cleanup acting on
+                    // reportDir despite the `outputs.dir` declaration being
+                    // removed (cleanup metadata persists from prior builds).
+                    // The reporter falls back to this /tmp path when its
+                    // primary reportDir is empty.
+                    runCatching {
+                        val backupDir = Path.of(System.getProperty("java.io.tmpdir"), "crs-compat-backup")
+                        Files.createDirectories(backupDir)
+                        val dst = backupDir.resolve(workerFile.fileName)
+                        Files.copy(workerFile, dst, java.nio.file.StandardCopyOption.REPLACE_EXISTING)
+                        System.out.println("[compat-exec] copied $workerFile -> $dst")
+                    }
                 }
-            }
-        })
+            },
+        )
         w
     }
 

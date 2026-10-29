@@ -6,12 +6,12 @@ import com.fasterxml.jackson.annotation.JsonProperty
 
 @JsonIgnoreProperties(ignoreUnknown = true)
 @JsonInclude(JsonInclude.Include.NON_NULL)
-data class DetailedComponentVersion (
+data class DetailedComponentVersion(
     @JsonProperty("component") val component: String,
     @JsonProperty("minorVersion") val minorVersion: ComponentRegistryVersion,
     @JsonProperty("lineVersion") val lineVersion: ComponentRegistryVersion,
     @JsonProperty("buildVersion") val buildVersion: ComponentRegistryVersion,
     @JsonProperty("rcVersion") val rcVersion: ComponentRegistryVersion,
     @JsonProperty("releaseVersion") val releaseVersion: ComponentRegistryVersion,
-    @JsonProperty("hotfixVersion") val hotfixVersion: ComponentRegistryVersion?
+    @JsonProperty("hotfixVersion") val hotfixVersion: ComponentRegistryVersion?,
 )

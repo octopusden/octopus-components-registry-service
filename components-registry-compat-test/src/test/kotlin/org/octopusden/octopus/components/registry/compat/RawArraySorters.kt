@@ -132,7 +132,10 @@ object RawArraySorters {
      * The unit tests `unregisteredEndpoint_passthrough` and `nonArrayRoot_passthrough`
      * pin the identity contract.
      */
-    fun stableSorted(endpoint: String, root: JsonNode?): JsonNode? {
+    fun stableSorted(
+        endpoint: String,
+        root: JsonNode?,
+    ): JsonNode? {
         if (root == null) return null
         // Fold the RAW trace-replay spelling onto the templated registry key —
         // without this the per-project endpoints fell through the exact-match
@@ -146,7 +149,10 @@ object RawArraySorters {
             if (root !is ArrayNode) root else sortedCopy(root, keyOf)
         }
 
-    private fun nestedArraySort(field: String, keyOf: (JsonNode) -> String): Transform =
+    private fun nestedArraySort(
+        field: String,
+        keyOf: (JsonNode) -> String,
+    ): Transform =
         Transform { root ->
             if (root !is ObjectNode) return@Transform root
             val inner = root.get(field) as? ArrayNode ?: return@Transform root
@@ -159,7 +165,10 @@ object RawArraySorters {
             out
         }
 
-    private fun sortedCopy(arr: ArrayNode, keyOf: (JsonNode) -> String): ArrayNode {
+    private fun sortedCopy(
+        arr: ArrayNode,
+        keyOf: (JsonNode) -> String,
+    ): ArrayNode {
         // Preserve the original sort order ("stable") within equal keys: Kotlin's
         // `sortedBy` delegates to a stable JDK sort. `arrayNode(int)` is an
         // ArrayList capacity hint, not a fixed-size initialisation — we still
@@ -185,7 +194,10 @@ object RawArraySorters {
         return sb.toString()
     }
 
-    private fun appendCanonical(node: JsonNode, sb: StringBuilder) {
+    private fun appendCanonical(
+        node: JsonNode,
+        sb: StringBuilder,
+    ) {
         when {
             node.isObject -> {
                 sb.append('{')
@@ -193,7 +205,11 @@ object RawArraySorters {
                 node.fieldNames().asSequence().sorted().forEach { name ->
                     if (!first) sb.append(',')
                     first = false
-                    sb.append('"').append(name).append('"').append(':')
+                    sb
+                        .append('"')
+                        .append(name)
+                        .append('"')
+                        .append(':')
                     appendCanonical(node.get(name), sb)
                 }
                 sb.append('}')

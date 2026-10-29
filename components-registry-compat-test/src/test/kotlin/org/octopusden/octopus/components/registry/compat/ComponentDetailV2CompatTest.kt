@@ -20,7 +20,6 @@ import java.util.stream.Stream
  */
 @TestInstance(TestInstance.Lifecycle.PER_CLASS)
 class ComponentDetailV2CompatTest : CompatibilityTestBase() {
-
     private val mapper = jacksonObjectMapper()
 
     @ParameterizedTest(name = "GET /rest/api/2/components/{0}")

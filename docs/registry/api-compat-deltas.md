@@ -18,6 +18,69 @@ The compat-test exercises **API contracts**:
 - `PUT /rest/api/2/components-registry/service/updateCache` — **phase-aware** contract: returns **200** + the Git-refresh duration (ms) while any component is still served from Git (migration-status `git > 0`), and **410 Gone** only once fully migrated to the DB (`git == 0`). A fully-migrated db-mode candidate returns 410 → suppressed via `known-deltas-db.json`; a git-mode (no-migration) candidate returns 200 and matches baseline → no delta. See "Per-mode known-deltas" below.
 - `GET /components` list / `GET /components/{c}` detail / `GET /components/{c}/distribution` (v1/v2/v3) — the **component-level** `Component.distribution` and `escrow` fields report the **OPEN-UPPER (newest) block's** values (ADR-018 base-row amendment, 2026-07), not the top-level/oldest block's. Confirmed intentional by the domain owner 2026-07-01 over all 11 affected components; suppressed via the "ADR-018 base-row amendment" `known-deltas-db.json` entries until this release becomes the baseline. Per-VERSION endpoints are byte-identical (unaffected). The standalone `{c}/distribution` endpoint is deprecated (zero recorded prod traffic).
 
+- **Jira display name** (`ADR-021`, 2026-09) — `JiraComponent.displayName` resolves
+  `jiraDisplayName ?: displayName` instead of `jiraDisplayName` alone, so the 518 components that
+  declare only a `componentDisplayName` now render their own name where the baseline rendered
+  `null` (518 of 998 in the QA snapshot this was sized against; the prod figure will differ
+  slightly). Surfaces carrying the embedded `component.displayName`: `.../versions/{v}/jira-component`,
+  `projects/{p}/versions/{v}`, `components/{c}/versions/{v}` (the `DetailedComponent` endpoint, which
+  carries it under `jiraComponentVersion.`) and both `jira-component-version-ranges` endpoints. Note
+  `components/{c}` is **not** among them — `ComponentV2` has no jira block. Plus
+  `DetailedComponentVersion.component` on `.../detailed-version` and the batch `detailed-versions`
+  (it already read `displayName ?: componentName`, so it follows the same rule and flips from the key
+  to the label for those components).
+  On both `jira-component-version-ranges` endpoints the Set's element COUNT also rises: TD-022
+  (`JiraComponentVersionRange.equals/hashCode` omit `componentName`) collapsed components whose
+  payload was identical, and the resolved name separates them again. Accepted only when
+  `Adr021RangeRecovery` confirms the collapse story element by element — see ADR-021.
+  Neutralised at **field granularity only**: raw-layer `known-deltas-db.json` entries pinned to the
+  `component.displayName` JSON path, and typed-layer field comparators (`*.displayName`, plus
+  `component` scoped to the detailed-version endpoints). No ADR-021 entry uses `messagePattern`, so
+  no whole typed record is suppressed and a co-occurring regression on the same payload still
+  surfaces — pinned by the negative tests in `Adr021DisplayNameCompatTest`. **`known-deltas-git.json` stays
+  empty for ADR-021**: the fallback is applied only on the DB resolver path, so a no-migration git-mode
+  candidate is still byte-identical to the baseline and the deploy-without-migration invariant is
+  untouched. The legacy `$.name` and every write-back surface are excluded from the rule by design
+  — see the ADR — so this delta does not spread beyond the Jira-facing payloads.
+
+- **VCS entry checkout layout and Build Working Directory** (ONB-001 rev. 3, 2026-09) — VCS roots carry
+  `sourcePath` and `checkoutDirectory`, and the VCS settings carry `buildWorkingDirectory`, all
+  omitted when empty. `V8__` and the DSL import set `checkoutDirectory = name` after the first root
+  of multi-root rows; the checkout layout import and the Portal may set either field on any root, `[0]`
+  included, and a Build Working Directory on the row (`V9__`). A migrated candidate therefore adds
+  these fields on `components/{c}/versions/{v}/vcs-settings`, `projects/{p}/versions/{v}/vcs-settings`,
+  both `jira-component-version-ranges` endpoints and `components/{c}/versions/{v}` (the
+  `DetailedComponent`, under `vcsSettings.`); the baseline has none. Raw layer:
+  STRUCTURAL_DIFF `known-deltas-db.json` entries pinned to
+  `\.versionControlSystemRoots\[\d+\]\.(checkoutDirectory|sourcePath)$` and
+  `(^\$|\.vcsSettings)\.buildWorkingDirectory$`; they match only an added field, so a changed value
+  (a VALUE_DIFF) still surfaces. Two `endpointPattern` twins match the same fields on trace-replay
+  records, whose paths carry literal component keys (the V8 back-fill reaches production data, so
+  replays hit it). Typed layer: a field comparator in `Comparators.buildAssertion`
+  forgives exactly baseline-null → value on those fields; a changed or dropped value is still a
+  VALUE_DIFF. Regression tests: `GitVsDbValidationTest` VAL-003a and `VcsCheckoutLayoutKnownDeltaTest`.
+  `known-deltas-git.json` stays empty: Git mode has no checkout layout and no Build Working Directory.
+
+- **`testComponent` flag** (SYS-099, 2026-10) — the v1/v2/v3 `Component` DTO (and its
+  `VersionedComponent` / `DetailedComponent` subclasses) always serializes `testComponent`: for a
+  DB-sourced component the stored flag (`true` for the components `V11__` flagged from the
+  `test-component` label), for a Git-sourced one — and in no-db mode — `true` when its DSL carries
+  that label. Both give the same answer on today's data. Every component payload therefore
+  gains the key — component list and detail (v1, v2, v3 `component.`), the `DetailedComponent`, and
+  find-by-artifact (`VersionedComponent`). This is the first additive delta that also reaches
+  **git mode**, by decision: the key is new API surface, not a resolver change. Raw layer: one
+  STRUCTURAL_DIFF entry in **both** `known-deltas-db.json` and `known-deltas-git.json`, pinned to
+  `\.testComponent$` and `KEY_MISSING_BASELINE`, matching templated and literal paths; a dropped key
+  is not suppressed. Typed layer: both sides deserialize into the same DTO (absent = false), and
+  `Comparators.buildAssertion` forgives exactly baseline-false → true. Regression test:
+  `TestComponentKnownDeltaTest` (both files). Released clients are unaffected: the concrete DTOs
+  the Feign client decodes (`ComponentV1`, `ComponentV2`, `ComponentV3`, `VersionedComponent`,
+  `DetailedComponent`) carry `@JsonIgnoreProperties(ignoreUnknown = true)` in the released
+  versions (e.g. 2.0.83, 3.0.2, 3.0.4), so they skip the new key even with the client's default
+  mapper, and the light client's DTOs ignore unknown properties too. A plain deploy is the rollout;
+  no feature flag is needed. The abstract `Component` base class carries the same annotation as
+  well, for any future subclass.
+
 **Operational metadata endpoints are explicitly excluded** from the compat surface:
 
 - `GET /rest/api/2/components-registry/service/status` — read **only** by

@@ -974,13 +974,13 @@ Component-to-dictionary relationships via M:N junctions (`component_labels`, `co
 
 ---
 
-### MIG-033: Distribution split into four specialized child tables
+### MIG-033: Distribution split into five specialized child tables
 
 **Priority:** Medium
 **Test layer:** unit-test
-**Status:** ❌ Not tested
+**Status:** ✅ Partially tested (maven, file-URL, docker, generic; packages pending)
 
-DSL `distribution { GAV, docker, DEB, RPM, securityGroups }` decomposes into four child tables of `component_configurations` plus `distribution_security_groups` on `components`. Per-family `sort_order` preserves DSL CSV order within each family; mapper concatenates families canonically (Maven, then file-URL) for v1-v3 responses.
+DSL `distribution { GAV, docker, DEB, RPM, generic, securityGroups }` decomposes into five child tables of `component_configurations` plus `distribution_security_groups` on `components`. Per-family `sort_order` preserves DSL CSV order within each family; mapper concatenates families canonically (Maven, then file-URL) for v1-v3 responses. `generic` was added in V10 migration (SYS-098).
 
 **Acceptance criteria:**
 1. DSL `GAV = "g:a:ext:cls, file://url?artifactId=X"` produces 1 row in `distribution_maven_artifacts` (sort_order=0) and 1 in `distribution_file_url_artifacts` (sort_order=0).
@@ -1033,7 +1033,7 @@ DSL nested `components { ... }` block creates a `component_groups` row. Detectio
 > was `top-level ⊕ Defaults`; see [ADR-018 §2 amendment](adr/018-decoupled-version-model.md)), with the
 > OLDER blocks kept as overrides. There is **no synthetic-bounded base**. Overrides
 > may be **open-upper** (`[X,)`) and apply by **containment**, not exact range match (TD-010). See
-> ADR-018 and the case matrix M1–M8 in `version-model-spec-DRAFT.md`.
+> ADR-018 and the case matrix M1–M8 in `version-model-spec.md`.
 
 DSL version-range blocks produce a `RANGE_PRESENCE` coverage row plus override rows on `component_configurations`. Each scalar attribute change (relative to the `ALL_VERSIONS` base) is a separate row (`overridden_attribute = 'aspect.field'`); each child-collection replacement is a marker row.
 

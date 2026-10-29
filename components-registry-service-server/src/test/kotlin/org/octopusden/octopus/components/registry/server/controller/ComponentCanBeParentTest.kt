@@ -69,7 +69,7 @@ class ComponentCanBeParentTest {
         System.setProperty("COMPONENTS_REGISTRY_SERVICE_TEST_DATA_DIR", testResourcesPath.toString())
     }
 
-    private fun uniqueName(prefix: String) = "${prefix}_${UUID.randomUUID().toString().take(8)}"
+    private fun uniqueName(prefix: String) = "${prefix.lowercase().replace('_', '-')}-${UUID.randomUUID().toString().take(8)}"
 
     /**
      * POST a component; returns its id. Expects 201. The body still carries a `group`
@@ -103,9 +103,11 @@ class ComponentCanBeParentTest {
 
     private fun getJson(id: String) =
         objectMapper.readTree(
-            mvc.perform(get("/rest/api/4/components/$id").with(adminJwt()))
+            mvc
+                .perform(get("/rest/api/4/components/$id").with(adminJwt()))
                 .andExpect(status().isOk)
-                .andReturn().response.contentAsString,
+                .andReturn()
+                .response.contentAsString,
         )
 
     private fun version(id: String): Long = getJson(id)["version"].asLong()
@@ -144,7 +146,8 @@ class ComponentCanBeParentTest {
                         .param("canBeParent", "true")
                         .param("size", "200"),
                 ).andExpect(status().isOk)
-                .andReturn().response.contentAsString
+                .andReturn()
+                .response.contentAsString
         val content = objectMapper.readTree(body)["content"]
         val names = content.map { it["name"].asText() }.toSet()
         assert(names.contains(parent)) { "expected $parent in $names" }

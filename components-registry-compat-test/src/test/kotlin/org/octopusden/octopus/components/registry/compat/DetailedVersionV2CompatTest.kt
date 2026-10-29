@@ -18,12 +18,14 @@ import java.util.stream.Stream
  */
 @TestInstance(TestInstance.Lifecycle.PER_CLASS)
 class DetailedVersionV2CompatTest : CompatibilityTestBase() {
-
     private val mapper = jacksonObjectMapper()
 
     @ParameterizedTest(name = "GET /rest/api/2/components/{0}/versions/{1}/detailed-version")
     @MethodSource("componentVersionPairs")
-    fun `GET v2 detailed version must match per component-version`(componentName: String, version: String) {
+    fun `GET v2 detailed version must match per component-version`(
+        componentName: String,
+        version: String,
+    ) {
         skipIfNoSmokeConfig(componentName, version)
         val endpoint = "GET /rest/api/2/components/{component}/versions/{version}/detailed-version"
         val params = mapOf("component" to componentName, "version" to version)

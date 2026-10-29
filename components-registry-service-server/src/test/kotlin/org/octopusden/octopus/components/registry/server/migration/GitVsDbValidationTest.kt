@@ -2,12 +2,12 @@ package org.octopusden.octopus.components.registry.server.migration
 
 import com.fasterxml.jackson.databind.ObjectMapper
 import com.fasterxml.jackson.module.kotlin.readValue
-import org.junit.jupiter.api.Tag
 import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.Assertions.assertTrue
 import org.junit.jupiter.api.Assertions.fail
 import org.junit.jupiter.api.BeforeAll
 import org.junit.jupiter.api.DisplayName
+import org.junit.jupiter.api.Tag
 import org.junit.jupiter.api.Test
 import org.junit.jupiter.api.TestInstance
 import org.octopusden.cloud.commons.security.client.AuthServerClient
@@ -15,8 +15,10 @@ import org.octopusden.octopus.components.registry.server.ComponentRegistryServic
 import org.octopusden.octopus.components.registry.server.service.BatchMigrationResult
 import org.octopusden.octopus.components.registry.server.service.ComponentSourceRegistry
 import org.octopusden.octopus.components.registry.server.support.adminJwt
+import org.skyscreamer.jsonassert.Customization
 import org.skyscreamer.jsonassert.JSONAssert
 import org.skyscreamer.jsonassert.JSONCompareMode
+import org.skyscreamer.jsonassert.comparator.CustomComparator
 import org.springframework.beans.factory.annotation.Autowired
 import org.springframework.boot.test.autoconfigure.web.servlet.AutoConfigureMockMvc
 import org.springframework.boot.test.context.SpringBootTest
@@ -94,6 +96,17 @@ class GitVsDbValidationTest {
             "archived-aggregator", // ESCROW_NOT_SUPPORTED, fake range (0,2)
         )
 
+    /**
+     * ADR-021: the effective Jira display name resolves `jiraDisplayName ?: displayName` on the DB
+     * path only — the Groovy loader is deliberately left alone, because `known-deltas-git.json` is
+     * empty by design and encodes the deploy-without-migration no-op invariant. So these two fields
+     * diverge between Git and DB BY DESIGN. They are excluded from the parity compare here and
+     * pinned positively by [`VAL-011`] instead; every other field on the same payload keeps being
+     * compared.
+     */
+    private val adr021DivergentPaths =
+        listOf("component.displayName", "jiraComponentVersion.component.displayName", "detailedComponentVersion.component")
+
     private fun versionFor(name: String): String = versionMap.getOrDefault(name, "1.0.0")
 
     // -------------------------------------------------------------------------
@@ -149,6 +162,7 @@ class GitVsDbValidationTest {
     private fun compareEndpoint(
         componentName: String,
         path: String,
+        ignoredJsonPaths: List<String> = emptyList(),
     ): String? {
         // Git response
         sourceRegistry.setComponentSource(componentName, "git")
@@ -171,7 +185,18 @@ class GitVsDbValidationTest {
         val dbJson = dbResponse.contentAsString
 
         return try {
-            JSONAssert.assertEquals(gitJson, dbJson, JSONCompareMode.LENIENT)
+            if (ignoredJsonPaths.isEmpty()) {
+                JSONAssert.assertEquals(gitJson, dbJson, JSONCompareMode.LENIENT)
+            } else {
+                JSONAssert.assertEquals(
+                    gitJson,
+                    dbJson,
+                    CustomComparator(
+                        JSONCompareMode.LENIENT,
+                        *ignoredJsonPaths.map { Customization(it) { _, _ -> true } }.toTypedArray(),
+                    ),
+                )
+            }
             null
         } catch (e: AssertionError) {
             e.message
@@ -185,9 +210,10 @@ class GitVsDbValidationTest {
     private fun safeCompareEndpoint(
         componentName: String,
         path: String,
+        ignoredJsonPaths: List<String> = emptyList(),
     ): String? =
         try {
-            compareEndpoint(componentName, path)
+            compareEndpoint(componentName, path, ignoredJsonPaths)
         } catch (e: Exception) {
             "Exception: ${e.javaClass.simpleName}: ${e.message?.take(200)}"
         } finally {
@@ -243,7 +269,7 @@ class GitVsDbValidationTest {
         val failures = mutableListOf<String>()
         for (name in sampleComponents) {
             val ver = versionFor(name)
-            val diff = safeCompareEndpoint(name, "/rest/api/2/components/$name/versions/$ver")
+            val diff = safeCompareEndpoint(name, "/rest/api/2/components/$name/versions/$ver", adr021DivergentPaths)
             if (diff != null) failures.add("[$name@$ver] $diff")
         }
         if (failures.isNotEmpty()) {
@@ -282,6 +308,41 @@ class GitVsDbValidationTest {
         }
     }
 
+    /**
+     * ONB-001 known difference: the Groovy DSL has no VCS checkout layout, while the import back-fills
+     * `checkoutDirectory = name` on the secondary roots of a multi-root component. The DB response
+     * carries that extra field (VAL-003 compares LENIENT, so an added field passes); everything else is equal.
+     * The import never sets a Build Working Directory, so right after import there is none on either side;
+     * one set later through v4 is the same kind of DB-only addition.
+     */
+    @Test
+    @DisplayName("VAL-003a: multi-root vcs-settings differ only by checkoutDirectory on DB secondary roots")
+    fun `VAL-003a multi-root checkout layout is the known difference`() {
+        val path = "/rest/api/2/components/multi-root-service/versions/${versionFor("multi-root-service")}/vcs-settings"
+
+        fun roots(source: String): List<Map<String, Any?>> {
+            sourceRegistry.setComponentSource("multi-root-service", source)
+            val body = mvc
+                .perform(get(path).accept(APPLICATION_JSON))
+                .andExpect(status().isOk)
+                .andReturn()
+                .response.contentAsString
+            return objectMapper.readValue<Map<String, Any?>>(body)["versionControlSystemRoots"].let {
+                @Suppress("UNCHECKED_CAST")
+                it as List<Map<String, Any?>>
+            }
+        }
+        try {
+            val git = roots("git")
+            val db = roots("db")
+            assertEquals(listOf(null, null), git.map { it["checkoutDirectory"] })
+            assertEquals(listOf(null, "secondary"), db.map { it["checkoutDirectory"] })
+            assertEquals(git, db.map { it - "checkoutDirectory" })
+        } finally {
+            sourceRegistry.setComponentSource("multi-root-service", "db")
+        }
+    }
+
     // -------------------------------------------------------------------------
     // VAL-004: GET .../versions/{ver}/jira-component
     // -------------------------------------------------------------------------
@@ -305,6 +366,7 @@ class GitVsDbValidationTest {
                 safeCompareEndpoint(
                     name,
                     "/rest/api/2/components/$name/versions/$ver/jira-component",
+                    adr021DivergentPaths,
                 )
             if (diff != null) failures.add("[$name@$ver] $diff")
         }
@@ -374,6 +436,59 @@ class GitVsDbValidationTest {
         if (failures.isNotEmpty()) {
             fail<Unit>("VAL-006 failures:\n${failures.joinToString("\n")}")
         }
+    }
+
+    // -------------------------------------------------------------------------
+    // VAL-011: ADR-021 — the ONE intended Git/DB divergence
+    // -------------------------------------------------------------------------
+
+    /**
+     * The three paths in [adr021DivergentPaths] are excluded from the VAL-002/VAL-004 parity
+     * compare, so something has to prove the divergence is the intended one and not silence.
+     *
+     * Asserts the actual contract: Git still serves `null` (the opt-in `jira.displayName` is
+     * unset for these components), the DB path serves the component's own display name, and
+     * that name is exactly the `componentDisplayName` the legacy `$.name` reports — which is
+     * itself identical on both sources (ADR-021 exclusion 1). Nothing is hardcoded.
+     */
+    @Test
+    @DisplayName("VAL-011: ADR-021 — Jira display name falls back on DB, stays null on Git")
+    fun `VAL-011 adr021 divergence is the intended one`() {
+        val sampleComponents = listOf("payment-gateway", "auth-service", "cache-service")
+        val failures = mutableListOf<String>()
+
+        for (name in sampleComponents) {
+            val ver = versionFor(name)
+            val path = "/rest/api/2/components/$name/versions/$ver/jira-component"
+
+            sourceRegistry.setComponentSource(name, "git")
+            val gitName = jsonAt(mvc.perform(get(path).accept(APPLICATION_JSON)), "component", "displayName")
+
+            sourceRegistry.setComponentSource(name, "db")
+            val dbName = jsonAt(mvc.perform(get(path).accept(APPLICATION_JSON)), "component", "displayName")
+
+            // componentDisplayName is NOT resolved (exclusion 1), so it is the same on both sources.
+            val componentDisplayName =
+                jsonAt(mvc.perform(get("/rest/api/2/components/$name").accept(APPLICATION_JSON)), "name")
+
+            if (!gitName.isNullOrEmpty()) failures.add("[$name] git jira displayName expected null, got '$gitName'")
+            if (dbName != componentDisplayName) {
+                failures.add("[$name] db jira displayName '$dbName' != componentDisplayName '$componentDisplayName'")
+            }
+        }
+
+        if (failures.isNotEmpty()) {
+            fail<Unit>("VAL-011 failures:\n${failures.joinToString("\n")}")
+        }
+    }
+
+    private fun jsonAt(
+        result: org.springframework.test.web.servlet.ResultActions,
+        vararg path: String,
+    ): String? {
+        var node = objectMapper.readTree(result.andReturn().response.contentAsString)
+        for (p in path) node = node.path(p)
+        return if (node.isNull || node.isMissingNode) null else node.asText()
     }
 
     // -------------------------------------------------------------------------
@@ -529,17 +644,27 @@ class GitVsDbValidationTest {
             val gitBody =
                 mvc
                     .perform(get("/rest/api/2/components/$name/versions/$version").accept(APPLICATION_JSON))
-                    .andReturn().response.contentAsString
+                    .andReturn()
+                    .response.contentAsString
             val gitTools =
-                objectMapper.readTree(gitBody).path("buildParameters").path("tools").map { it.path("name").asText() }
+                objectMapper
+                    .readTree(gitBody)
+                    .path("buildParameters")
+                    .path("tools")
+                    .map { it.path("name").asText() }
 
             sourceRegistry.setComponentSource(name, "db")
             val dbBody =
                 mvc
                     .perform(get("/rest/api/2/components/$name/versions/$version").accept(APPLICATION_JSON))
-                    .andReturn().response.contentAsString
+                    .andReturn()
+                    .response.contentAsString
             val dbTools =
-                objectMapper.readTree(dbBody).path("buildParameters").path("tools").map { it.path("name").asText() }
+                objectMapper
+                    .readTree(dbBody)
+                    .path("buildParameters")
+                    .path("tools")
+                    .map { it.path("name").asText() }
 
             if (gitTools.toSet() != dbTools.toSet()) {
                 failures.add("[$name@$version] git=$gitTools db=$dbTools")
@@ -586,13 +711,17 @@ class GitVsDbValidationTest {
         val a = "cache-service"
         val b = "auth-service"
 
-        fun groupPatternTokens(component: String, source: String): Set<String> {
+        fun groupPatternTokens(
+            component: String,
+            source: String,
+        ): Set<String> {
             sourceRegistry.setComponentSource(component, source)
             val body =
                 mvc
                     .perform(get("/rest/api/2/components/$component/maven-artifacts").accept(APPLICATION_JSON))
                     .andExpect(status().isOk)
-                    .andReturn().response.contentAsString
+                    .andReturn()
+                    .response.contentAsString
             val tree = objectMapper.readTree(body)
             // groupPattern is a comma-separated list of Maven groupIds. Split into
             // individual tokens so isolation can be checked as a set operation rather
@@ -600,8 +729,13 @@ class GitVsDbValidationTest {
             return tree
                 .fields()
                 .asSequence()
-                .flatMap { (_, cfg) -> cfg.path("groupPattern").asText("").split(",").asSequence() }
-                .map { it.trim() }
+                .flatMap { (_, cfg) ->
+                    cfg
+                        .path("groupPattern")
+                        .asText("")
+                        .split(",")
+                        .asSequence()
+                }.map { it.trim() }
                 .filter { it.isNotEmpty() }
                 .toSet()
         }
@@ -622,7 +756,8 @@ class GitVsDbValidationTest {
             }
             val shared = tokensA intersect tokensB
             if (shared.isNotEmpty()) {
-                failures += "[$source] cross-contamination: components '$a' and '$b' share groupPattern tokens $shared (tokensA=$tokensA, tokensB=$tokensB)"
+                failures +=
+                    "[$source] cross-contamination: components '$a' and '$b' share groupPattern tokens $shared (tokensA=$tokensA, tokensB=$tokensB)"
             }
         }
         if (failures.isNotEmpty()) {
