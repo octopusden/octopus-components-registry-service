@@ -9,7 +9,6 @@ import kotlin.test.assertSame
 import kotlin.test.assertTrue
 
 class ConfigLoaderTest {
-
     @Test
     fun `missing config file is tolerated`() {
         val absent = Files.createTempDirectory("crsctl-cfg").resolve("does-not-exist.json")

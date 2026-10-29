@@ -20,13 +20,10 @@ class ComponentSourceEntity(
     @Id
     @Column(name = "component_key", length = 255)
     var componentKey: String = "",
-
     @Column(name = "source", nullable = false, length = 10)
     var source: String = "git",
-
     @Column(name = "migrated_at")
     var migratedAt: Instant? = null,
-
     @Column(name = "migrated_by")
     var migratedBy: String? = null,
 )

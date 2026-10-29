@@ -6,11 +6,19 @@ on:
 
 jobs:
   build:
-    uses: octopusden/octopus-base/.github/workflows/common-java-gradle-release.yml@feature/common-quality-gates
+    uses: octopusden/octopus-base/.github/workflows/common-java-gradle-release.yml@v3.2.0
+    permissions:
+      contents: write
+      packages: write
     with:
       flow-type: hybrid
       java-version: '21'
       commit-hash: ${{ github.event.client_payload.commit }}
       build-version: ${{ github.event.client_payload.project_version }}
+      # Central refuses a version it already holds, so a half-published release can only be
+      # finished by resuming — never by re-dispatching.
+      resume-deployment-id: ${{ github.event.client_payload.resume_deployment_id }}
       docker-image: components-registry-service
+      github-packages-publications: ":components-registry-automation:mavenJava"
+      github-packages-repository: octopusden/octopus-maven-packages
     secrets: inherit

@@ -7,7 +7,6 @@ import kotlin.test.assertFailsWith
 import kotlin.test.assertNull
 
 class TargetResolverTest {
-
     private val config = CrsctlConfig(
         defaultProfile = "qa",
         profiles = mapOf(

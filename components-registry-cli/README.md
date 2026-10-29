@@ -16,6 +16,7 @@ stderr, and a small, pinned set of process exit codes.
 | Anonymous reads — `components`, `component`, `meta` (except `meta employees`), `whoami` | **Works out of the box.** No login or token required. |
 | `login` / `logout` / `audit` / `meta employees` | **Gated.** These need an authenticated identity. The device-flow `login` depends on a pending Keycloak **public device-flow client** (Part C spike) that does not exist yet, so the auth path is **not usable end-to-end** today. |
 | Release / Homebrew tap / macOS notarization | **Separate follow-up.** Not part of this module yet. |
+| Prebuilt download | **Not available yet — build locally (below).** This module is not published to Maven Central: a Maven coordinate is the wrong channel for a CLI. The intended channel is a GitHub Release asset attached to the release the pipeline already creates; until that exists, build the jar locally. |
 
 Anonymous read commands are fully functional now. Everything under the "Auth (gated)" heading below
 is implemented in the CLI but blocked on the OIDC client provisioning.
@@ -31,7 +32,7 @@ Produce the fat jar:
 ```
 
 The runnable fat jar uses the `all` classifier (the thin `…-<version>.jar` is the plain library
-jar, kept for the repo's release tooling and Maven publication):
+jar, kept for the repo's release tooling):
 
 ```
 components-registry-cli/build/libs/components-registry-cli-1.0-SNAPSHOT-all.jar
@@ -130,6 +131,10 @@ Filters (repeatable ones may be passed multiple times):
 | `--parent <name>` | yes | Parent component name. |
 | `--group-key <key>` | yes | |
 | `--archived <true\|false>` | | |
+| `--involves <user>` | yes | Owner OR release manager OR security champion. |
+| `--involves-role <role>` | yes | Narrow `--involves`: `owner`, `releaseManager`, `securityChampion`. |
+| `--test-component <true\|false>` | | Without it, test components are listed. |
+| `--auto-release <true\|false>` | | Exact match on the `autoRelease` flag. |
 | `--can-be-parent <true\|false>` | | |
 | `--distribution-explicit <true\|false>` | | |
 | `--distribution-external <true\|false>` | | |
@@ -155,6 +160,26 @@ Fetch a component's full detail by id (UUID) or name. Anonymous.
 
 Print the component's as-code (Groovy-style) source verbatim. Output is raw `text/plain`; the
 `-o` format is not applied.
+
+### `search <QUERY>`
+
+Search the as-code text of **every** component (SYS-100) — the replacement for grepping the old
+Groovy DSL files: artifact/group patterns, version ranges, VCS URLs, Jira keys, docker images,
+people, … Case-insensitive substring; `--regex` treats the query as a case-insensitive regular
+expression in RE2 syntax (no lookarounds or backreferences). Options: `--archived <true|false>` (default: both), `--limit <n>` (components, server
+default 100), `--max-matches <n>` (lines per component, server default 20). Anonymous.
+
+Table output is grep-shaped, one line per match, with the enclosing block path when the match is
+nested (e.g. inside a version range):
+
+```
+my-component:12: groupId = "org.example.foo"
+my-component:31: projectKey = "FOO"  ["[2.0,)" > jira]
+my-component: ... 3 more
+```
+
+`-o json` emits a **JSON array** of `{id, componentKey, archived, matchCount, matches:[{line, text, path, ranges}]}`.
+When more components matched than `--limit`, a warning goes to STDERR.
 
 ### `component overrides <ID_OR_NAME>`
 
@@ -214,7 +239,7 @@ a named, possibly nested command — e.g. `crsctl help components list`, `crsctl
 `crsctl` is built to be driven by scripts and AI agents.
 
 - **stdout** carries the result. With `-o json` it is stable, parseable JSON: a JSON **array** for
-  list-shaped commands (`components list`, `component overrides`, `meta *`, `audit *`), a single
+  list-shaped commands (`components list`, `component overrides`, `search`, `meta *`, `audit *`), a single
   JSON object for `component get` and `whoami` (with a token), and raw text for `component as-code`.
 - **stderr** carries a structured error object on failure, with a fixed shape:
 

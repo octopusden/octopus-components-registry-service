@@ -21,7 +21,11 @@ import java.util.concurrent.atomic.AtomicInteger
  * build #3841 instead of re-running the full [1.7] gate.
  */
 class ResidualReplayCompatTest : CompatibilityTestBase() {
-    private data class ResidualEntry(val count: Long, val method: String, val path: String)
+    private data class ResidualEntry(
+        val count: Long,
+        val method: String,
+        val path: String,
+    )
 
     @Test
     fun `replay residual failing requests from prior compat run`() {

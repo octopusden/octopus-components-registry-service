@@ -6,7 +6,14 @@ import org.octopusden.octopus.components.registry.core.exceptions.BaseComponents
 import org.octopusden.octopus.components.registry.core.exceptions.ComponentNameConflictException
 import org.octopusden.octopus.components.registry.core.exceptions.CrossComponentConflictException
 import org.octopusden.octopus.components.registry.core.exceptions.NotFoundException
+import org.octopusden.octopus.components.registry.core.exceptions.RMSRegisteredValueConflictException
+import org.octopusden.octopus.components.registry.core.exceptions.RMSUnavailableException
 import org.octopusden.octopus.components.registry.core.exceptions.RepositoryNotPreparedException
+import org.octopusden.octopus.components.registry.server.config.PayloadTooLargeException
+import org.octopusden.octopus.components.registry.server.dto.v4.MigrationConflictResponse
+import org.octopusden.octopus.components.registry.server.service.MigrationConflictException
+import org.octopusden.octopus.components.registry.server.service.MigrationLifecycleGate
+import org.octopusden.octopus.components.registry.server.teamcity.checkoutlayout.CheckoutLayoutDiffStaleException
 import org.slf4j.Logger
 import org.slf4j.LoggerFactory
 import org.springframework.http.HttpEntity
@@ -63,6 +70,20 @@ class ControllerExceptionHandler {
         )
     }
 
+    /**
+     * A pessimistic row lock could not be taken — in practice a deadlock between two writes that lock
+     * each other's component rows (SYS-099 reference check, technical-design §6.8). The losing
+     * transaction is rolled back with nothing changed, so the same request can simply be retried.
+     */
+    @ExceptionHandler(org.springframework.dao.PessimisticLockingFailureException::class)
+    @ResponseStatus(HttpStatus.CONFLICT)
+    fun pessimisticLockingFailureHandler(e: org.springframework.dao.PessimisticLockingFailureException): HttpEntity<ErrorResponse> {
+        log.warn("Lock conflict: {}", e.localizedMessage)
+        return HttpEntity(
+            ErrorResponse("Concurrent update of a related component; nothing was changed — retry the request", ErrorCodes.LOCK_CONFLICT),
+        )
+    }
+
     @ExceptionHandler(org.springframework.dao.DataIntegrityViolationException::class)
     @ResponseStatus(HttpStatus.CONFLICT)
     fun dataIntegrityViolationExceptionHandler(e: org.springframework.dao.DataIntegrityViolationException): HttpEntity<ErrorResponse> {
@@ -110,6 +131,59 @@ class ControllerExceptionHandler {
         return HttpEntity(ErrorResponse(e.localizedMessage, ErrorCodes.UNIQUENESS_VIOLATION))
     }
 
+    /** A Sync named a replaced (or never-completed) Diff: 409 with a machine-readable code. */
+    @ExceptionHandler(CheckoutLayoutDiffStaleException::class)
+    @ResponseStatus(HttpStatus.CONFLICT)
+    fun checkoutLayoutDiffStaleExceptionHandler(e: CheckoutLayoutDiffStaleException): HttpEntity<ErrorResponse> {
+        log.warn(e.localizedMessage)
+        return HttpEntity(ErrorResponse(e.localizedMessage, CheckoutLayoutDiffStaleException.ERROR_CODE))
+    }
+
+    /**
+     * Cross-kind admin-job gate conflicts (`MigrationLifecycleGate`) — global so it covers every
+     * controller whose jobs share the gate (components/history migration, TeamCity resync/
+     * validation, TeamCity checkout layout Diff/Sync), not just the one that happened to throw. A
+     * same-kind conflict is NOT routed through an exception at all — `startAsync` returns
+     * `isNewlyStarted=false` with the existing job state so the SPA can attach.
+     */
+    @ExceptionHandler(MigrationConflictException::class)
+    fun migrationConflictExceptionHandler(e: MigrationConflictException): ResponseEntity<MigrationConflictResponse> {
+        val code =
+            when (e.active.kind) {
+                MigrationLifecycleGate.JobKind.COMPONENTS -> "components-migration-running"
+                MigrationLifecycleGate.JobKind.HISTORY -> "history-migration-running"
+                MigrationLifecycleGate.JobKind.TC_RESYNC -> "tc-resync-running"
+                MigrationLifecycleGate.JobKind.TC_VALIDATION -> "tc-validation-running"
+                MigrationLifecycleGate.JobKind.TC_CHECKOUT_LAYOUT_DIFF -> "tc-checkout-layout-diff-running"
+                MigrationLifecycleGate.JobKind.TC_CHECKOUT_LAYOUT_SYNC -> "tc-checkout-layout-sync-running"
+            }
+        log.warn(e.localizedMessage)
+        return ResponseEntity.status(HttpStatus.CONFLICT).body(
+            MigrationConflictResponse(
+                code = code,
+                message = e.message ?: "Cross-kind migration conflict",
+                activeKind = e.active.kind.name,
+                activeJobId = e.active.jobId,
+            ),
+        )
+    }
+
+    /** A build parameters write disagrees with RMS's registered ACTUAL value — 409, same family as the other conflict handlers above. */
+    @ExceptionHandler(RMSRegisteredValueConflictException::class)
+    @ResponseStatus(HttpStatus.CONFLICT)
+    fun rmsRegisteredValueConflictExceptionHandler(e: RMSRegisteredValueConflictException): HttpEntity<ErrorResponse> {
+        log.warn(e.localizedMessage)
+        return HttpEntity(ErrorResponse(e.localizedMessage, ErrorCodes.RMS_REGISTERED_VALUE_CONFLICT))
+    }
+
+    /** The live RMS check for a build parameters write failed, timed out, or was ambiguous. */
+    @ExceptionHandler(RMSUnavailableException::class)
+    @ResponseStatus(HttpStatus.SERVICE_UNAVAILABLE)
+    fun rmsUnavailableExceptionHandler(e: RMSUnavailableException): HttpEntity<ErrorResponse> {
+        log.warn(e.localizedMessage)
+        return HttpEntity(ErrorResponse(e.localizedMessage, ErrorCodes.RMS_UNAVAILABLE))
+    }
+
     /**
      * Schema-v2 transitional: `ImportServiceImpl.migrateComponent` /
      * `migrateAllComponents` / `validateMigration` throw this until MIG-039
@@ -136,9 +210,7 @@ class ControllerExceptionHandler {
      */
     @ExceptionHandler(org.springframework.data.mapping.PropertyReferenceException::class)
     @ResponseStatus(HttpStatus.BAD_REQUEST)
-    fun propertyReferenceExceptionHandler(
-        e: org.springframework.data.mapping.PropertyReferenceException,
-    ): HttpEntity<ErrorResponse> {
+    fun propertyReferenceExceptionHandler(e: org.springframework.data.mapping.PropertyReferenceException): HttpEntity<ErrorResponse> {
         log.warn("Unknown property in sort/filter: {}", e.localizedMessage)
         return HttpEntity(ErrorResponse("Unknown sort/filter property: '${e.propertyName}'"))
     }
@@ -150,10 +222,29 @@ class ControllerExceptionHandler {
      * see the same shape regardless of who detected the bad input.
      */
     @ExceptionHandler(HttpMessageNotReadableException::class)
-    @ResponseStatus(HttpStatus.BAD_REQUEST)
-    fun httpMessageNotReadableExceptionHandler(e: HttpMessageNotReadableException): HttpEntity<ErrorResponse> {
+    fun httpMessageNotReadableExceptionHandler(e: HttpMessageNotReadableException): ResponseEntity<ErrorResponse> {
+        // SYS-062: the feedback body-size guard throws PayloadTooLargeException while the
+        // body is being read, so Spring surfaces it wrapped here. Unwrap the cause chain
+        // and preserve the 413 rather than mislabeling an over-cap upload as 400.
+        var cause: Throwable? = e
+        while (cause != null) {
+            if (cause is PayloadTooLargeException) {
+                log.warn("Request body exceeded size cap: {}", cause.localizedMessage)
+                return ResponseEntity
+                    .status(HttpStatus.PAYLOAD_TOO_LARGE)
+                    .body(ErrorResponse(cause.localizedMessage ?: "Payload too large"))
+            }
+            cause = cause.cause
+        }
         log.warn("Malformed request body: {}", e.localizedMessage)
-        return HttpEntity(ErrorResponse("Malformed request body"))
+        return ResponseEntity.badRequest().body(ErrorResponse("Malformed request body"))
+    }
+
+    @ExceptionHandler(PayloadTooLargeException::class)
+    @ResponseStatus(HttpStatus.PAYLOAD_TOO_LARGE)
+    fun payloadTooLargeExceptionHandler(e: PayloadTooLargeException): HttpEntity<ErrorResponse> {
+        log.warn("Request body exceeded size cap: {}", e.localizedMessage)
+        return HttpEntity(ErrorResponse(e.localizedMessage ?: "Payload too large"))
     }
 
     /**

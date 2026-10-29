@@ -14,10 +14,11 @@ import com.github.ajalt.clikt.parameters.arguments.multiple
  * and keeps exit codes consistent (0 for help). This class exists so `help` is listed under
  * Commands and has its own usage line; its [run] is a safety net that is normally never reached.
  */
-class HelpCommand : CliktCommand(
-    name = "help",
-    help = "Show help for crsctl or a specific command (e.g. `help components list`).",
-) {
+class HelpCommand :
+    CliktCommand(
+        name = "help",
+        help = "Show help for crsctl or a specific command (e.g. `help components list`).",
+    ) {
     private val command by argument(
         name = "command",
         help = "Command path to show help for; omit for top-level help.",

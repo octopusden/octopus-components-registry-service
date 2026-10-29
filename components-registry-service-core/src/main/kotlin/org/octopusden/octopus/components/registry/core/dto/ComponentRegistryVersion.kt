@@ -7,5 +7,5 @@ import com.fasterxml.jackson.annotation.JsonProperty
 data class ComponentRegistryVersion(
     @JsonProperty("type") val type: ComponentVersionType,
     @JsonProperty("version") val version: String,
-    @JsonProperty("jiraVersion") val jiraVersion: String
+    @JsonProperty("jiraVersion") val jiraVersion: String,
 )

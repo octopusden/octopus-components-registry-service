@@ -2,11 +2,10 @@ package org.octopusden.octopus.components.registry.core.dto
 
 enum class ServiceMode {
     FS,
-    VCS;
+    VCS,
+    ;
 
     companion object {
-        fun byVcsEnabled(vcsEnabled: Boolean): ServiceMode {
-            return if (vcsEnabled) VCS else FS
-        }
+        fun byVcsEnabled(vcsEnabled: Boolean): ServiceMode = if (vcsEnabled) VCS else FS
     }
 }

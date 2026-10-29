@@ -31,14 +31,18 @@ class VersionSamplerLoaderTest {
     }
 
     @Test
-    fun `directory at path returns empty map`(@TempDir tmp: Path) {
+    fun `directory at path returns empty map`(
+        @TempDir tmp: Path,
+    ) {
         // canRead() may return true on a directory; isFile() must reject it.
         val out = loadVersionsFile(tmp.toString(), mapper)
         assertThat(out).isEqualTo(emptyMap<String, List<String>>())
     }
 
     @Test
-    fun `unparseable JSON returns empty map and logs warning`(@TempDir tmp: Path) {
+    fun `unparseable JSON returns empty map and logs warning`(
+        @TempDir tmp: Path,
+    ) {
         val f = tmp.resolve("bad.json")
         f.writeText("{not json")
         val warnings = mutableListOf<String>()
@@ -48,7 +52,9 @@ class VersionSamplerLoaderTest {
     }
 
     @Test
-    fun `non-object JSON (array root) returns empty map`(@TempDir tmp: Path) {
+    fun `non-object JSON (array root) returns empty map`(
+        @TempDir tmp: Path,
+    ) {
         val f = tmp.resolve("array.json")
         f.writeText("""["a", "b"]""")
         val out = loadVersionsFile(f.toString(), mapper)
@@ -56,7 +62,9 @@ class VersionSamplerLoaderTest {
     }
 
     @Test
-    fun `happy path — JSON object of string arrays loaded into map`(@TempDir tmp: Path) {
+    fun `happy path — JSON object of string arrays loaded into map`(
+        @TempDir tmp: Path,
+    ) {
         val f = tmp.resolve("ok.json")
         f.writeText("""{"comp-a": ["1.0.0", "0.9.0"], "comp-b": ["2.1.5"]}""")
         val out = loadVersionsFile(f.toString(), mapper)
@@ -66,7 +74,9 @@ class VersionSamplerLoaderTest {
     }
 
     @Test
-    fun `non-array entry values are skipped — partial files don't crash`(@TempDir tmp: Path) {
+    fun `non-array entry values are skipped — partial files don't crash`(
+        @TempDir tmp: Path,
+    ) {
         val f = tmp.resolve("mixed.json")
         f.writeText("""{"comp-a": ["1.0"], "comp-b": "not-an-array", "comp-c": null, "comp-d": []}""")
         val out = loadVersionsFile(f.toString(), mapper)
@@ -77,7 +87,9 @@ class VersionSamplerLoaderTest {
     }
 
     @Test
-    fun `array elements that are not non-blank strings are filtered out`(@TempDir tmp: Path) {
+    fun `array elements that are not non-blank strings are filtered out`(
+        @TempDir tmp: Path,
+    ) {
         val f = tmp.resolve("dirty.json")
         f.writeText("""{"comp": ["1.0", "", "   ", null, 42, "2.0", true]}""")
         val out = loadVersionsFile(f.toString(), mapper)
@@ -85,7 +97,9 @@ class VersionSamplerLoaderTest {
     }
 
     @Test
-    fun `info logger receives the count of loaded components on success`(@TempDir tmp: Path) {
+    fun `info logger receives the count of loaded components on success`(
+        @TempDir tmp: Path,
+    ) {
         val f = tmp.resolve("ok.json")
         f.writeText("""{"a": ["1"], "b": ["2"], "c": ["3"]}""")
         val infos = mutableListOf<String>()

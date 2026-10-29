@@ -1,7 +1,7 @@
 # Non-Functional Specification: Components Registry DB Migration
 
 ## Status
-**Living document** | Last updated: 2026-04-29 (was Draft 2026-03-08)
+**Living document**
 
 ---
 
@@ -163,35 +163,43 @@ For each component:
 
 ### 5.3 Architecture Fitness Functions (ArchUnit)
 
-```java
-// Layering: controllers never access repositories directly
-@ArchTest
-noClasses().that().resideInAPackage("..controller..")
-    .should().accessClassesThat().resideInAPackage("..repository..")
+**Implemented** in `components-registry-service-server` as JUnit 5 `@ArchTest` rules —
+`server/architecture/ArchitectureFitnessTest.kt` — analyzing the `...server` package. The rules run
+inside the fast `test` gate (no Spring context, no DB). Dependency: `archunit-junit5`
+(`archunit.version` in `gradle.properties`). Scope is deliberately **structural** (package
+architecture); runtime/framework policy is out of scope here (see *Deferred* below).
 
-// Security: all v4 endpoints require authorization
-@ArchTest
-methods().that().areDeclaredInClassesThat().resideInAPackage("..controller.v4..")
-    .and().areAnnotatedWith(RequestMapping.class)
-    .should().beAnnotatedWith(PreAuthorize.class)
+#### Active rules
 
-// No new Groovy code
-@ArchTest
-noClasses().that().resideInAPackage("..db..")
-    .should().dependOnClassesThat().haveNameMatching(".*groovy.*")
+| # | Rule | Kind |
+|---|------|------|
+| 1 | Controllers (`..controller..`) must not access Spring Data repositories directly — targets classes **assignable to `org.springframework.data.repository.Repository`** (every `JpaRepository`) or annotated `@Repository`, so query PROJECTION types living in the repository package (e.g. `NameCountRow`) are **not** flagged | **Frozen ratchet** — 15 baselined pre-existing accesses (mostly `ComponentControllerV4` dictionary/count queries); baselined accesses are allowed, NEW ones fail |
+| 2 | `@RestController` beans reside in `..controller..` | Active (whole module) |
+| 3 | `@Repository` beans reside in `..repository..` | Active |
+| 4 | `@Entity` types reside in `..entity..` | Active |
+| 5 | `@Service` beans reside in `..service..` or `..teamcity..` | Active |
 
-// No cyclic package dependencies
-@ArchTest
-slices().matching("org.octopusden.octopus.components.registry.(*)..")
-    .should().beFreeOfCycles()
-```
+The frozen rule's accepted violations are recorded in `archunit_violation_store/` (committed to VCS,
+the ArchUnit analogue of `detekt-baseline.xml`), configured via `src/test/resources/archunit.properties`.
+It is a **ratchet**, not a burndown queue: `freeze.refreeze=false` makes new breaches fail; the store
+is **immutable in normal runs** (`allowStoreUpdate=false`) — updating the baseline is a deliberate,
+reviewed action (regenerate with the flags flipped, then inspect the diff), which also prevents a
+rule-text change from silently re-recording a fresh baseline.
+
+#### Deferred architecture goals (tracked as tech-debt, not active gates)
+
+| Goal | Why deferred | TD |
+|------|--------------|----|
+| **v4 endpoint authorization policy** | Authorization is hybrid (`@PreAuthorize` + filter-chain + intentionally-public + shared-secret + anonymous-permission). A static "must have `@PreAuthorize`" rule mis-classifies deliberate mechanisms and would need to re-implement Spring's request-mapping resolution — it belongs in a Spring-context test that reads real mappings and asserts an explicit per-endpoint policy classification | **TD-017** |
+| **No cyclic package dependencies** | The module is currently one large cycle (`config → dto → service → …`); a frozen baseline would be ~586 KB and break on any import reshuffle. Enable **unfrozen** after a decoupling effort | **TD-016** |
+| **DB-source must not depend on legacy Groovy** | No real boundary exists yet: the DB read path (`service.impl.DatabaseComponentRegistryResolver`) intentionally depends on the escrow model for wire-compatibility. Define the boundary (ADR) before guarding it — do not key a rule on a placeholder `..db..` package | **TD-019** |
 
 ### 5.4 Database Reliability
 
 | Fitness Function | Where | How |
 |-----------------|-------|-----|
 | Flyway migrations are valid | CI | Testcontainers: fresh DB → apply all migrations → verify schema |
-| Flyway migrations are forward-only | CI | No deleted/modified migration files (checksum validation) |
+| Flyway migrations are append-only and ordered | CI (`migrations/append-only`, required by `gate/merge`) | `scripts/ci/check-migrations-append-only.sh` compares the PR merge commit with main, the merge commit's first parent, over every `V*.sql` (and lowercase `v*.sql`, which Flyway would skip); every one in the merged tree must have a supported name under `db/migration/` at any depth. An existing migration may not be modified, removed or renamed. An added one must be named `V<n>__<lowercase_description>.sql` with no leading zero, and its version must be above every version on main. No version may appear twice. Production runs Flyway validate, which refuses to start on a changed checksum or a missing applied version. The merge commit is a snapshot taken when the PR event fired, and the event does not re-fire when main moves. The `policy/checks-common` ruleset requires `gate/merge` without strict, so a branch need not be up to date with main to merge. Two PRs that each add a migration can then both pass and both merge even when one version is not above the other (the same version, or a lower one merged second), and Flyway then refuses to start. Turning strict on for `gate/merge` closes that gap. Repeatable `R__` and Java/Kotlin migrations are out of scope; none exist |
 | No schema drift | CI | Compare actual schema vs expected DDL (Flyway validate) |
 | Optimistic locking works | CI | Concurrent update test → one succeeds, one gets `OptimisticLockException` |
 | Foreign keys consistent | CI | Orphan record checks after import |
@@ -275,7 +283,7 @@ Rollback is per-component. There is no global "switch to Git" flag.
 | Level | Mechanism | Time to recover |
 |-------|-----------|----------------|
 | Single component (pre-edit) | Flip `component_source` to `git` | Seconds |
-| DB schema | Flyway rollback migration | Minutes |
+| DB schema | No undo migrations. Redeploy the previous release: an additive migration leaves it starting on the newer schema (Flyway accepts applied future migrations, `ddl-auto: validate` ignores extra columns). Where that release loses data the newer one wrote, a per-migration runbook in [`deployment/`](deployment/README.md) gives the snapshot and repair steps | Minutes |
 | Full system | Redeploy previous version (Git resolver still available during migration) | Minutes |
 
 ### 5.10 CI Pipeline Fitness Gates
@@ -288,13 +296,80 @@ Every PR must pass:
 4. Integration tests                (DB queries, transactions)
 5. Contract tests                   (Feign client compatibility)
 6. API snapshot tests               (v1/v2/v3 response structure)
+7. Coverage floors                  (aggregate LINE/BRANCH + per-module LINE/BRANCH)
 ```
+
+Non-gating, reported separately: mutation testing (`mutation.yml`) and the perf SLA guard
+(`perf-test.yml`).
+
+**Coverage as a fitness function.** Coverage is gated in `qualityCoverage` (the GitHub `quality` job)
+over the `test` + `dbTest` exec set — deliberately not in `check`, so TeamCity `[1.0]` stays a
+compile/correctness gate:
+
+| Gate | Task | Rule |
+|---|---|---|
+| Aggregate | `jacocoOverallCoverageVerification` | LINE and BRANCH floors across all coverage modules |
+| Per module (strict) | `<module>:jacocoCoverageFloor` | per-module LINE floor plus an optional BRANCH floor, each set a little below the measured value |
+| Per module (lenient) | `<module>:jacocoTestCoverageVerification` | the convention plugin's own low floor, kept underneath |
+
+The thresholds themselves are not repeated here: they live in `build.gradle` — the aggregate minimums in
+`jacocoOverallCoverageVerification`'s violation rules, the per-module ones in `moduleCoverageFloors` — so
+this section describes the mechanism and stays correct when a floor is raised.
+
+Both new gates are **floors**: they encode the coverage already achieved so a change cannot quietly
+erode it. They are floors and not ratchets, and the naming says so deliberately — nothing in the build
+prevents lowering a number, so monotonicity rests on the threshold being visible in the diff and on the
+rule that lowering one is stated in the PR. Enforcing it mechanically means comparing against the target
+branch, which belongs in a coverage service rather than in hand-rolled Git plumbing inside a build script.
+A companion `verifyCoverageFloorsPolicy` task validates the map itself: every module that owns tests has a
+floor or a stated exemption, every entry declares a required `line` and an optional `branch` in (0, 1],
+no unknown keys, and no module is both floored and exempt. BRANCH is gated alongside LINE because a fully line-covered conditional taken only on one path
+still reports 100% LINE — BRANCH distinguishes "one branch ran" from "both branches ran". Neither counter
+says anything about whether an outcome was **asserted**: a test with no assertions at all can reach 100% on
+both. That is a different question, and no coverage counter can gate it. The measured values, the snapshot
+they were taken from, and the re-measure recipe live in [`quality-baseline.md`](quality-baseline.md).
+
+**Mutation testing as a fitness function.** Coverage counters answer "did this line run"; they cannot
+answer "would any test have noticed it behaving differently". PIT answers the second question by mutating
+bytecode and re-running the covering tests, which makes it the only check here that can surface a test
+exercising code without checking the result.
+
+Read the asymmetry carefully: a **surviving** mutant is solid evidence that nothing noticed the change,
+while a **killed** mutant only means something noticed — possibly an incidental exception rather than a
+deliberate assertion. PIT does not inspect tests for assertions, so the score is a signal to act on, not a
+proof of assertion quality, and the survivor list matters more than the percentage.
+
+| Property | Value |
+|---|---|
+| Scope | `..server.util..`, `..server.mapper..` (pure logic; a wrong result is a wrong *answer*, not wrong wiring) |
+| Task | `:components-registry-service-server:pitest` |
+| Where (signal) | GitHub `mutation.yml` — a **check, not a gate**: it reports on the PR but is absent from `gate-merge.needs`, so a red run does not block a merge. Promoting it into the merge gate is the deliberate next step, not the current state |
+| Where (analytics) | TeamCity `[1.1] Mutation Testing` — weekly on the default branch, outside the build chain: browsable HTML report plus a score chart via `buildStatisticValue` |
+| Thresholds | `mutationThreshold` and `coverageThreshold`, both **floors** rather than ratchets: nothing in the build stops a lowered number, so holding them is a review property. The values live in the `pitest {}` block; they are not repeated here |
+| Tests used | the `test` source set only, with the `integration`/`performance` tags excluded |
+
+Controllers, services, repositories, config and entities are **not** targeted: their behaviour is Spring
+wiring and DB interaction, where mutants are largely equivalent or killed only by the heavy suites, at a
+cost PIT cannot amortise (it re-runs tests once per mutant).
+
+The threshold is a floor to raise, not a target that has been met. Two distinct kinds of work raise it:
+killing surviving mutants (assertions that do not check the result) and giving unit tests to the paths in
+these packages that only the integration suite reaches today (`NO_COVERAGE` mutants). Promote the workflow
+into `merge-gate.yml` once the threshold has held for a few weeks.
+
+The two homes are complementary, not redundant. The GitHub run is the per-change check (reporting, not
+blocking); the TeamCity run
+covers a blind spot it structurally has — that workflow only triggers on changes to the server module and
+the build files, so a change elsewhere (say in `component-resolver-core`, which the mappers call) can move
+the score without ever running it. The weekly build on the default branch catches that drift. A release
+gate on the score is deliberately NOT added: releases are cut from the default branch, every commit there
+passed the PR gate, and test quality is fixed in review rather than on the release path.
 
 Production deployment additionally runs:
 ```
-7. Smoke test: health check + basic read
-8. Canary: 10% traffic → monitor error rate for 10 min
-9. Full rollout if error rate < 0.1%
+8. Smoke test: health check + basic read
+9. Canary: 10% traffic → monitor error rate for 10 min
+10. Full rollout if error rate < 0.1%
 ```
 
 ## 6. Observability

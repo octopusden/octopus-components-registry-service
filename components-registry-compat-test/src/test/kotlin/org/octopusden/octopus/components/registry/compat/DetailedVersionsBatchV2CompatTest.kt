@@ -22,12 +22,14 @@ import java.util.stream.Stream
  */
 @TestInstance(TestInstance.Lifecycle.PER_CLASS)
 class DetailedVersionsBatchV2CompatTest : CompatibilityTestBase() {
-
     private val mapper = jacksonObjectMapper()
 
     @ParameterizedTest(name = "POST /rest/api/2/components/{0}/detailed-versions versions={1}")
     @MethodSource("smokeComponentsArgs")
-    fun `POST v2 detailed-versions must match per component`(componentName: String, versions: List<String>) {
+    fun `POST v2 detailed-versions must match per component`(
+        componentName: String,
+        versions: List<String>,
+    ) {
         skipIfNoSmokeConfig(componentName)
         val endpoint = "POST /rest/api/2/components/{component}/detailed-versions"
         val params = mapOf("component" to componentName)

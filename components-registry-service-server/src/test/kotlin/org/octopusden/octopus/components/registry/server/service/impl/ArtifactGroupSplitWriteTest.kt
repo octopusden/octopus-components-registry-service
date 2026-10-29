@@ -1,8 +1,5 @@
 package org.octopusden.octopus.components.registry.server.service.impl
 
-import java.lang.reflect.Method
-import java.util.UUID
-import java.util.concurrent.TimeUnit
 import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.Assertions.assertTrue
 import org.junit.jupiter.api.BeforeEach
@@ -25,6 +22,7 @@ import org.octopusden.octopus.components.registry.server.repository.Distribution
 import org.octopusden.octopus.components.registry.server.repository.DistributionMavenArtifactRepository
 import org.octopusden.octopus.components.registry.server.repository.LabelRepository
 import org.octopusden.octopus.components.registry.server.repository.SystemRepository
+import org.octopusden.octopus.components.registry.server.repository.TeamcityProjectRepository
 import org.octopusden.octopus.components.registry.server.repository.ToolRepository
 import org.octopusden.octopus.components.registry.server.security.CurrentUserResolver
 import org.octopusden.octopus.components.registry.server.security.PermissionEvaluator
@@ -36,6 +34,10 @@ import org.octopusden.releng.versions.VersionNames
 import org.octopusden.releng.versions.VersionRangeFactory
 import org.springframework.context.ApplicationEventPublisher
 import org.springframework.core.env.Environment
+import org.springframework.transaction.PlatformTransactionManager
+import java.lang.reflect.Method
+import java.util.UUID
+import java.util.concurrent.TimeUnit
 
 /**
  * ARTGRP write-side canonicalization: the v4 create/update `artifactIds` path must split a comma
@@ -46,7 +48,6 @@ import org.springframework.core.env.Environment
  */
 @Timeout(30, unit = TimeUnit.SECONDS)
 class ArtifactGroupSplitWriteTest {
-
     private lateinit var service: ComponentManagementServiceImpl
     private lateinit var addArtifactIds: Method
 
@@ -67,6 +68,7 @@ class ArtifactGroupSplitWriteTest {
             dockerImageRepository = mock(DistributionDockerImageRepository::class.java),
             labelRepository = mock(LabelRepository::class.java),
             systemRepository = mock(SystemRepository::class.java),
+            teamcityProjectRepository = mock(TeamcityProjectRepository::class.java),
             toolRepository = mock(ToolRepository::class.java),
             sourceRegistry = mock(ComponentSourceRegistry::class.java),
             applicationEventPublisher = mock(ApplicationEventPublisher::class.java),
@@ -79,17 +81,22 @@ class ArtifactGroupSplitWriteTest {
             environment = mock(Environment::class.java),
             componentCodeRenderer = mock(ComponentCodeRenderer::class.java),
             employeeDirectory = mock(EmployeeDirectoryService::class.java),
+            transactionManager = mock(PlatformTransactionManager::class.java),
         )
-        addArtifactIds = ComponentManagementServiceImpl::class.java.getDeclaredMethod(
-            "addArtifactIds",
-            ComponentEntity::class.java,
-            List::class.java,
-        ).apply { isAccessible = true }
+        addArtifactIds = ComponentManagementServiceImpl::class.java
+            .getDeclaredMethod(
+                "addArtifactIds",
+                ComponentEntity::class.java,
+                List::class.java,
+            ).apply { isAccessible = true }
     }
 
     private fun component() = ComponentEntity(id = UUID.randomUUID(), componentKey = "artgrp-write-fixture")
 
-    private fun apply(component: ComponentEntity, vararg requests: ArtifactIdRequest) {
+    private fun apply(
+        component: ComponentEntity,
+        vararg requests: ArtifactIdRequest,
+    ) {
         addArtifactIds.invoke(service, component, requests.toList())
     }
 

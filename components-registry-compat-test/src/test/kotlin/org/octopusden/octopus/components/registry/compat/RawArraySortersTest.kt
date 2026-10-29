@@ -30,7 +30,11 @@ class RawArraySortersTest {
      * field used in the prod responses (and the one the compat report shows
      * STRUCTURAL_DIFFs against).
      */
-    private fun rangeEntry(componentName: String, versionRange: String, displayName: String? = null): JsonNode {
+    private fun rangeEntry(
+        componentName: String,
+        versionRange: String,
+        displayName: String? = null,
+    ): JsonNode {
         val obj = factory.objectNode()
         obj.put("componentName", componentName)
         obj.put("versionRange", versionRange)
@@ -46,7 +50,10 @@ class RawArraySortersTest {
      * `name` is optional in the wire response — use it as the structural-shape
      * variable so tests can demonstrate that alignment actually happened.
      */
-    private fun v3Entry(componentId: String, name: String? = null): JsonNode {
+    private fun v3Entry(
+        componentId: String,
+        name: String? = null,
+    ): JsonNode {
         val obj = factory.objectNode()
         val component = factory.objectNode()
         component.put("id", componentId)
@@ -67,7 +74,10 @@ class RawArraySortersTest {
      * surface KEY_MISSING on `$.components[*].releaseManager`; after alignment,
      * each row lands at its proper index and the diff disappears.
      */
-    private fun v12Entry(componentId: String, releaseManager: String? = null): JsonNode {
+    private fun v12Entry(
+        componentId: String,
+        releaseManager: String? = null,
+    ): JsonNode {
         val obj = factory.objectNode()
         obj.put("id", componentId)
         if (releaseManager != null) obj.put("releaseManager", releaseManager)
@@ -271,7 +281,11 @@ class RawArraySortersTest {
      * zero-diff assertion).
      */
     private fun firstComponentId(sorted: JsonNode?): String =
-        sorted?.path("components")?.get(0)?.path("id")?.asText("") ?: ""
+        sorted
+            ?.path("components")
+            ?.get(0)
+            ?.path("id")
+            ?.asText("") ?: ""
 
     @Test
     @DisplayName(

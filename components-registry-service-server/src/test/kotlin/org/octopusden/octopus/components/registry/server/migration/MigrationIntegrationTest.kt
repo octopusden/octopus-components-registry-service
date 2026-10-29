@@ -1,12 +1,14 @@
 package org.octopusden.octopus.components.registry.server.migration
 
-import org.junit.jupiter.api.Tag
+import jakarta.persistence.EntityManager
+import jakarta.persistence.PersistenceContext
 import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.Assertions.assertFalse
 import org.junit.jupiter.api.Assertions.assertNotNull
 import org.junit.jupiter.api.Assertions.assertNull
 import org.junit.jupiter.api.Assertions.assertTrue
 import org.junit.jupiter.api.DisplayName
+import org.junit.jupiter.api.Tag
 import org.junit.jupiter.api.Test
 import org.junit.jupiter.api.Timeout
 import org.octopusden.cloud.commons.security.client.AuthServerClient
@@ -15,6 +17,7 @@ import org.octopusden.octopus.components.registry.server.dto.v4.ComponentFilter
 import org.octopusden.octopus.components.registry.server.entity.ComponentConfigurationEntity
 import org.octopusden.octopus.components.registry.server.entity.ComponentEntity
 import org.octopusden.octopus.components.registry.server.entity.ComponentGroupEntity
+import org.octopusden.octopus.components.registry.server.entity.DistributionGenericArtifactEntity
 import org.octopusden.octopus.components.registry.server.mapper.ALL_VERSIONS
 import org.octopusden.octopus.components.registry.server.mapper.MarkerAttributes
 import org.octopusden.octopus.components.registry.server.repository.ComponentConfigurationRepository
@@ -83,6 +86,9 @@ class MigrationIntegrationTest {
 
     @Autowired
     private lateinit var componentManagementService: ComponentManagementService
+
+    @PersistenceContext
+    private lateinit var em: EntityManager
 
     init {
         val testResourcesPath =
@@ -236,6 +242,38 @@ class MigrationIntegrationTest {
         )
     }
 
+    @Test
+    @Transactional
+    @DisplayName(
+        "SYS-098 / V10: MARKER row with overridden_attribute='distribution.generic' " +
+            "satisfies the V10 taxonomy constraint; generic artifact row is persisted and readable",
+    )
+    fun `SYS-098 V10 migration constraint accepts distribution generic marker`() {
+        val component = componentRepository.save(
+            ComponentEntity(componentKey = "test-sys-094-v10-generic"),
+        )
+        val marker = configurationRepository.save(
+            ComponentConfigurationEntity(
+                component = component,
+                versionRange = ALL_VERSIONS,
+                rowType = "MARKER",
+                overriddenAttribute = MarkerAttributes.DISTRIBUTION_GENERIC,
+            ),
+        )
+        em.persist(
+            DistributionGenericArtifactEntity(
+                componentConfiguration = marker,
+                path = "releases/demo-tool/1.0.0/demo-tool.tar.gz",
+                sortOrder = 0,
+            ),
+        )
+        em.flush()
+        assertEquals(
+            MarkerAttributes.DISTRIBUTION_GENERIC,
+            configurationRepository.findById(marker.id!!).orElseThrow().overriddenAttribute,
+        )
+    }
+
     // =========================================================================
     // MIG-036: Per-attribute version-range overrides (Model A').
     // =========================================================================
@@ -260,7 +298,8 @@ class MigrationIntegrationTest {
         val baseRow = configurationRepository.findBaseByComponentId(component.id!!)
         assertNotNull(baseRow, "TEST_COMPONENT3 must have a base row")
         assertEquals(
-            "\$major.\$minor.\$service-\$fix", baseRow!!.jiraReleaseVersionFormat,
+            "\$major.\$minor.\$service-\$fix",
+            baseRow!!.jiraReleaseVersionFormat,
             "BASE must carry the open-upper [1.0.107,) releaseVersionFormat (newest value = base default)",
         )
 
@@ -287,7 +326,8 @@ class MigrationIntegrationTest {
                 "Found: ${allRows.map { "${it.versionRange}/${it.rowType}/${it.overriddenAttribute}" }}",
         )
         assertEquals(
-            "\$major.\$minor.\$service", releaseOverride!!.jiraReleaseVersionFormat,
+            "\$major.\$minor.\$service",
+            releaseOverride!!.jiraReleaseVersionFormat,
             "The (,1.0.107) override must carry the older (Defaults) release format, NOT the newer base value",
         )
         // A marker (vcs.settings) override also follows base: the older block keeps the top-level tag
@@ -462,34 +502,47 @@ class MigrationIntegrationTest {
         // contiguous, so their union is a single bounded coverage [1.0,) → exactly one presence row.
         val presenceRows = allRows.filter { it.rowType == "RANGE_PRESENCE" }
         assertEquals(
-            1, presenceRows.size,
+            1,
+            presenceRows.size,
             "Must have exactly one merged RANGE_PRESENCE row; found rows: " +
                 "${allRows.map { "${it.versionRange}/${it.rowType}" }}",
         )
         val presence = presenceRows.single()
         assertEquals(
-            "[1.0,)", presence.versionRange,
+            "[1.0,)",
+            presence.versionRange,
             "The merged coverage row must be [1.0,) (union of [1.0,2.0) and [2.0,))",
         )
         assertNull(presence.overriddenAttribute, "RANGE_PRESENCE row must have NULL overridden_attribute")
         assertFalse(presence.isSyntheticBase, "RANGE_PRESENCE row must not be marked synthetic")
         // All 28 typed scalar columns must be NULL on a presence row.
         assertNull(presence.buildSystem)
-        assertNull(presence.javaVersion); assertNull(presence.mavenVersion)
-        assertNull(presence.gradleVersion); assertNull(presence.buildFilePath)
-        assertNull(presence.deprecated); assertNull(presence.requiredProject)
-        assertNull(presence.projectVersion); assertNull(presence.systemProperties)
-        assertNull(presence.buildTasks); assertNull(presence.escrowBuildTask)
-        assertNull(presence.escrowProvidedDependencies); assertNull(presence.escrowReusable)
-        assertNull(presence.escrowGeneration); assertNull(presence.escrowDiskSpace)
+        assertNull(presence.javaVersion)
+        assertNull(presence.mavenVersion)
+        assertNull(presence.gradleVersion)
+        assertNull(presence.buildFilePath)
+        assertNull(presence.deprecated)
+        assertNull(presence.requiredProject)
+        assertNull(presence.projectVersion)
+        assertNull(presence.systemProperties)
+        assertNull(presence.buildTasks)
+        assertNull(presence.escrowBuildTask)
+        assertNull(presence.escrowProvidedDependencies)
+        assertNull(presence.escrowReusable)
+        assertNull(presence.escrowGeneration)
+        assertNull(presence.escrowDiskSpace)
         assertNull(presence.escrowAdditionalSources)
         assertNull(presence.escrowGradleIncludeConfigurations)
         assertNull(presence.escrowGradleExcludeConfigurations)
         assertNull(presence.escrowGradleIncludeTestConfigurations)
-        assertNull(presence.jiraProjectKey); assertNull(presence.jiraTechnical)
-        assertNull(presence.jiraMinorVersionFormat); assertNull(presence.jiraReleaseVersionFormat)
-        assertNull(presence.jiraBuildVersionFormat); assertNull(presence.jiraLineVersionFormat)
-        assertNull(presence.jiraVersionPrefix); assertNull(presence.jiraVersionFormat)
+        assertNull(presence.jiraProjectKey)
+        assertNull(presence.jiraTechnical)
+        assertNull(presence.jiraMinorVersionFormat)
+        assertNull(presence.jiraReleaseVersionFormat)
+        assertNull(presence.jiraBuildVersionFormat)
+        assertNull(presence.jiraLineVersionFormat)
+        assertNull(presence.jiraVersionPrefix)
+        assertNull(presence.jiraVersionFormat)
         assertNull(presence.jiraHotfixVersionFormat)
 
         // The base row sits at ALL_VERSIONS (the effective default), never a bounded block range,
@@ -498,11 +551,13 @@ class MigrationIntegrationTest {
         assertEquals(1, baseRows.size, "Exactly one BASE row")
         val baseRow = baseRows.single()
         assertEquals(
-            ALL_VERSIONS, baseRow.versionRange,
+            ALL_VERSIONS,
+            baseRow.versionRange,
             "BASE row must be at ALL_VERSIONS (decoupled effective default)",
         )
         assertEquals(
-            "\$major.\$minor.\$service-\$fix-\$build", baseRow.jiraHotfixVersionFormat,
+            "\$major.\$minor.\$service-\$fix-\$build",
+            baseRow.jiraHotfixVersionFormat,
             "BASE must carry the OPEN-UPPER [2.0,) hotfix format (newest value = base default, ADR-018)",
         )
 
@@ -511,12 +566,14 @@ class MigrationIntegrationTest {
         // re-splits the enumeration at READ time into [1.0,2.0) (older format) and [2.0,) (= base).
         val overrideRows = allRows.filter { it.versionRange == "[1.0,2.0)" && it.rowType == "SCALAR_OVERRIDE" }
         assertEquals(
-            1, overrideRows.size,
+            1,
+            overrideRows.size,
             "The older [1.0,2.0) block must survive as one SCALAR_OVERRIDE. " +
                 "Found: ${allRows.map { "${it.versionRange}/${it.rowType}" }}",
         )
         assertEquals(
-            "\$major.\$minor.\$service-\$fix", overrideRows.single().jiraHotfixVersionFormat,
+            "\$major.\$minor.\$service-\$fix",
+            overrideRows.single().jiraHotfixVersionFormat,
             "The [1.0,2.0) override must carry the older (top-level) hotfix format",
         )
         // The OPEN-UPPER [2.0,) block is now the base itself — it leaves no standalone override row.
@@ -553,7 +610,8 @@ class MigrationIntegrationTest {
         // ((,2.0) and [2.0,3.0)) would be the unmerged regression shape.
         val javaOverrides = allRows.filter { it.rowType == "SCALAR_OVERRIDE" && it.overriddenAttribute == "build.javaVersion" }
         assertEquals(
-            1, javaOverrides.size,
+            1,
+            javaOverrides.size,
             "Adjacent same-value javaVersion overrides must merge into one row. " +
                 "Found: ${javaOverrides.map { "${it.versionRange}=${it.javaVersion}" }}",
         )
@@ -564,7 +622,8 @@ class MigrationIntegrationTest {
         // range and must NOT be widened by the javaVersion merge.
         val mavenOverrides = allRows.filter { it.rowType == "SCALAR_OVERRIDE" && it.overriddenAttribute == "build.mavenVersion" }
         assertEquals(
-            listOf("(,2.0)"), mavenOverrides.map { it.versionRange },
+            listOf("(,2.0)"),
+            mavenOverrides.map { it.versionRange },
             "mavenVersion override must stay on its own declared range",
         )
         assertEquals("3.6.3", mavenOverrides.single().mavenVersion)
@@ -577,7 +636,8 @@ class MigrationIntegrationTest {
             .filter { it.rowType == "SCALAR_OVERRIDE" && it.overriddenAttribute == "jira.versionPrefix" }
             .sortedBy { it.versionRange }
         assertEquals(
-            listOf("(,2.0)", "[2.0,3.0)"), prefixOverrides.map { it.versionRange },
+            listOf("(,2.0)", "[2.0,3.0)"),
+            prefixOverrides.map { it.versionRange },
             "jira.versionPrefix rows must stay verbatim per block (uniqueness-pair attr, never merged)",
         )
         assertTrue(

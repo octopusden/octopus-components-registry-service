@@ -66,19 +66,16 @@ class RealBodyReplayParseTest {
     fun `rejects a bare-array (non-object) line`() = assertNull(parse("""[1,2,3]"""))
 
     @Test
-    fun `rejects missing method`() =
-        assertNull(parse("""{"path":"/rest/api/3/components/find-by-artifacts","body":[]}"""))
+    fun `rejects missing method`() = assertNull(parse("""{"path":"/rest/api/3/components/find-by-artifacts","body":[]}"""))
 
     @Test
     fun `rejects missing path`() = assertNull(parse("""{"method":"POST","body":[]}"""))
 
     @Test
-    fun `rejects path not starting with slash`() =
-        assertNull(parse("""{"method":"POST","path":"rest/api/3/x","body":[]}"""))
+    fun `rejects path not starting with slash`() = assertNull(parse("""{"method":"POST","path":"rest/api/3/x","body":[]}"""))
 
     @Test
-    fun `rejects missing body`() =
-        assertNull(parse("""{"method":"POST","path":"/rest/api/3/components/find-by-artifacts"}"""))
+    fun `rejects missing body`() = assertNull(parse("""{"method":"POST","path":"/rest/api/3/components/find-by-artifacts"}"""))
 
     @Test
     fun `rejects explicit null body`() =

@@ -11,7 +11,6 @@ import org.octopusden.octopus.components.registry.server.entity.ArtifactIdMode
  * decided deterministically from stored modes.
  */
 class OwnershipCollisionMatrixTest {
-
     private val always: (String, String) -> Boolean = { _, _ -> true }
     private val base = "(,0),[0,)"
 
@@ -23,54 +22,92 @@ class OwnershipCollisionMatrixTest {
         range: String = base,
     ) = OwnershipClaim(key, range, groupTokensOf(group), mode, tokens)
 
-    private fun collides(a: OwnershipClaim, b: OwnershipClaim) =
-        computeOwnershipCollisions(listOf(a), listOf(b), always).isNotEmpty()
+    private fun collides(
+        a: OwnershipClaim,
+        b: OwnershipClaim,
+    ) = computeOwnershipCollisions(listOf(a), listOf(b), always).isNotEmpty()
 
     @Test
     @DisplayName("EXPLICIT × EXPLICIT collides iff token sets intersect")
     fun explicitExplicit() {
-        assertTrue(collides(claim("a", mode = ArtifactIdMode.EXPLICIT, tokens = setOf("x", "y")),
-            claim("b", mode = ArtifactIdMode.EXPLICIT, tokens = setOf("y"))))
-        assertEquals(false, collides(claim("a", mode = ArtifactIdMode.EXPLICIT, tokens = setOf("x")),
-            claim("b", mode = ArtifactIdMode.EXPLICIT, tokens = setOf("z"))))
+        assertTrue(
+            collides(
+                claim("a", mode = ArtifactIdMode.EXPLICIT, tokens = setOf("x", "y")),
+                claim("b", mode = ArtifactIdMode.EXPLICIT, tokens = setOf("y")),
+            ),
+        )
+        assertEquals(
+            false,
+            collides(
+                claim("a", mode = ArtifactIdMode.EXPLICIT, tokens = setOf("x")),
+                claim("b", mode = ArtifactIdMode.EXPLICIT, tokens = setOf("z")),
+            ),
+        )
     }
 
     @Test
     @DisplayName("EXPLICIT × ALL_EXCEPT_CLAIMED never collides (catch-all yields)")
     fun explicitAllExcept() {
-        assertEquals(false, collides(claim("a", mode = ArtifactIdMode.EXPLICIT, tokens = setOf("x")),
-            claim("b", mode = ArtifactIdMode.ALL_EXCEPT_CLAIMED)))
+        assertEquals(
+            false,
+            collides(
+                claim("a", mode = ArtifactIdMode.EXPLICIT, tokens = setOf("x")),
+                claim("b", mode = ArtifactIdMode.ALL_EXCEPT_CLAIMED),
+            ),
+        )
     }
 
     @Test
     @DisplayName("ALL_EXCEPT_CLAIMED × ALL_EXCEPT_CLAIMED collides (two fallback owners)")
     fun allExceptAllExcept() {
-        assertTrue(collides(claim("a", mode = ArtifactIdMode.ALL_EXCEPT_CLAIMED),
-            claim("b", mode = ArtifactIdMode.ALL_EXCEPT_CLAIMED)))
+        assertTrue(
+            collides(
+                claim("a", mode = ArtifactIdMode.ALL_EXCEPT_CLAIMED),
+                claim("b", mode = ArtifactIdMode.ALL_EXCEPT_CLAIMED),
+            ),
+        )
     }
 
     @Test
     @DisplayName("ALL × anything collides (incl. ALL × ALL and ALL × EXPLICIT)")
     fun allVsAnything() {
         assertTrue(collides(claim("a", mode = ArtifactIdMode.ALL), claim("b", mode = ArtifactIdMode.ALL)))
-        assertTrue(collides(claim("a", mode = ArtifactIdMode.ALL),
-            claim("b", mode = ArtifactIdMode.EXPLICIT, tokens = setOf("x"))))
-        assertTrue(collides(claim("a", mode = ArtifactIdMode.ALL),
-            claim("b", mode = ArtifactIdMode.ALL_EXCEPT_CLAIMED)))
+        assertTrue(
+            collides(
+                claim("a", mode = ArtifactIdMode.ALL),
+                claim("b", mode = ArtifactIdMode.EXPLICIT, tokens = setOf("x")),
+            ),
+        )
+        assertTrue(
+            collides(
+                claim("a", mode = ArtifactIdMode.ALL),
+                claim("b", mode = ArtifactIdMode.ALL_EXCEPT_CLAIMED),
+            ),
+        )
     }
 
     @Test
     @DisplayName("no shared group token ⇒ no collision")
     fun disjointGroups() {
-        assertEquals(false, collides(claim("a", group = "org.a", mode = ArtifactIdMode.ALL),
-            claim("b", group = "org.b", mode = ArtifactIdMode.ALL)))
+        assertEquals(
+            false,
+            collides(
+                claim("a", group = "org.a", mode = ArtifactIdMode.ALL),
+                claim("b", group = "org.b", mode = ArtifactIdMode.ALL),
+            ),
+        )
     }
 
     @Test
     @DisplayName("ALL_EXCEPT_CLAIMED × ALL_EXCEPT_CLAIMED on DISJOINT groups ⇒ no collision")
     fun allExceptAllExceptDisjointGroups() {
-        assertEquals(false, collides(claim("a", group = "org.a", mode = ArtifactIdMode.ALL_EXCEPT_CLAIMED),
-            claim("b", group = "org.b", mode = ArtifactIdMode.ALL_EXCEPT_CLAIMED)))
+        assertEquals(
+            false,
+            collides(
+                claim("a", group = "org.a", mode = ArtifactIdMode.ALL_EXCEPT_CLAIMED),
+                claim("b", group = "org.b", mode = ArtifactIdMode.ALL_EXCEPT_CLAIMED),
+            ),
+        )
     }
 
     @Test

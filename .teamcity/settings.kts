@@ -3,10 +3,13 @@ import jetbrains.buildServer.configs.kotlin.buildFeatures.XmlReport
 import jetbrains.buildServer.configs.kotlin.buildFeatures.dockerSupport
 import jetbrains.buildServer.configs.kotlin.buildFeatures.swabra
 import jetbrains.buildServer.configs.kotlin.buildFeatures.xmlReport
+import jetbrains.buildServer.configs.kotlin.buildSteps.ScriptBuildStep
 import jetbrains.buildServer.configs.kotlin.buildSteps.gradle
 import jetbrains.buildServer.configs.kotlin.buildSteps.kotlinFile
 import jetbrains.buildServer.configs.kotlin.buildSteps.script
+import jetbrains.buildServer.configs.kotlin.triggers.ScheduleTrigger
 import jetbrains.buildServer.configs.kotlin.triggers.finishBuildTrigger
+import jetbrains.buildServer.configs.kotlin.triggers.schedule
 import jetbrains.buildServer.configs.kotlin.vcs.GitVcsRoot
 
 version = "2025.03"
@@ -20,7 +23,17 @@ project {
 
     params {
         param("JDK_VERSION", "11")
-        param("LAST_RELEASE_VERSION", "2.0.88")
+        // Mutable release state: the actual value lives on the parent `Octopus`
+        // project (UI-managed, REST-writable) — this project is read-only under
+        // versioned settings, so post-processing cannot write a param here.
+        param("LAST_RELEASE_VERSION", "%LAST_RELEASE_VERSION_COMPONENTS_REGISTRY_SERVICE%")
+        // Compat baseline = the FROZEN last-2.x prod byte-compat oracle, pinned
+        // in code (NOT tracking `LAST_RELEASE_VERSION`, which follows the latest
+        // 3.x release — comparing a v3 candidate against a v3 baseline is a
+        // tautology, and the released 3.0.1 image cannot even boot in the
+        // harness's V1 mode because its `registry_config` startup read trips
+        // H2's reserved `key`). Bump this ONLY on a deliberate re-baseline.
+        param("COMPAT_BASELINE_VERSION", "2.0.88")
         param("PROJECT_VERSION", "")
         param("COMPONENTS_REGISTRY_BRANCH", "master")
         param("OCTOPUS_MODULE_NAME", "octopus-components-registry-service")
@@ -47,31 +60,40 @@ project {
 
     buildType(id10CompileUtAuto)
     buildType(id12IntegrationDbTestsAuto)
+    buildType(id11MutationTestingAuto)
     buildType(id15CompatManual)
     buildType(id16CompatTraceReplayManual)
     buildType(id17CompatLocalStandManual)
     buildType(id18CompatLocalStandGitModeAuto)
     buildType(id20ValidateComponentsRegistryProductionDataAuto)
     buildType(id30DeployToOkdQaDevAuto)
+    buildType(id30Step2AggregateAuto)
     buildType(id40ReleaseManual)
     buildType(id50ReleasePostProcessingAuto)
     buildType(id60DeployToOkdQaGhAuto)
     buildType(id70DeployToOkdProdManual_2)
+    buildType(id80RecreateQaDbFromProdManual)
     buildType(WL_Validation_id)
 
+    // Display order mirrors the numbering: [1.0] first, then [1.1] (off-chain, scheduled), then the two
+    // on-demand manual compat builds ([1.5]/[1.6]), then the AUTO fan-out that all triggers
+    // in parallel off [1.0] ([2.0]–[2.4]), then the release chain ([4.0]+).
     buildTypesOrder = arrayListOf(
         id10CompileUtAuto,
-        id12IntegrationDbTestsAuto,
+        id11MutationTestingAuto,
         id15CompatManual,
         id16CompatTraceReplayManual,
+        id20ValidateComponentsRegistryProductionDataAuto,
+        id12IntegrationDbTestsAuto,
         id17CompatLocalStandManual,
         id18CompatLocalStandGitModeAuto,
-        id20ValidateComponentsRegistryProductionDataAuto,
         id30DeployToOkdQaDevAuto,
+        id30Step2AggregateAuto,
         id40ReleaseManual,
         id50ReleasePostProcessingAuto,
         id60DeployToOkdQaGhAuto,
         id70DeployToOkdProdManual_2,
+        id80RecreateQaDbFromProdManual,
         WL_Validation_id
     )
 }
@@ -147,13 +169,15 @@ object id10CompileUtAuto : BuildType({
             -Pokd.cluster-domain=%OKD_APPS_DOMAIN_DEV%
             -Pokd.project=%OKD_F1_TEST_PROJECT%
         """.trimIndent())
-        // [1.0] compiles, runs unit + H2/MOCK smoke + static quality, publishes artifacts and
-        // pushes the image — one step, so the image carries [1.0]'s OWN version (no cross-config
-        // propagation). `build` also runs the fat-jar FT (dockerPushImage depends on it, so it
-        // gates the push) and :…-automation:test (depends on ocCreate -> dockerPushImage, so it
-        // deploys the just-pushed image). Only the heavy @Tag("integration") DB suite is split
-        // out, to [1.2] (excluded from build/check by the gradle tag filter).
-        param("GRADLE_TASK", "clean build publish dockerPushImage")
+        // [1.0] compiles, runs unit + H2/MOCK smoke + static quality and pushes the image — one
+        // step, so the image carries [1.0]'s OWN version (no cross-config propagation). It
+        // publishes no Maven artifacts: the active downstream configs take the docker image.
+        // (Add `publishAllPublicationsToArtifactoryRepository` to upload them for [2.0].)
+        // `build` also runs the fat-jar FT (dockerPushImage depends on it, so it gates the push)
+        // and :…-automation:test (depends on ocCreate -> dockerPushImage, so it deploys the
+        // just-pushed image). Only the heavy @Tag("integration") DB suite is split out, to [2.1]
+        // (excluded from build/check by the gradle tag filter).
+        param("GRADLE_TASK", "clean build dockerPushImage")
         param("COMPONENTS_REGISTRY_BRANCH", "master")
     }
 
@@ -189,7 +213,7 @@ object id10CompileUtAuto : BuildType({
     }
 
     failureConditions {
-        executionTimeoutMin = 240
+        executionTimeoutMin = 35
     }
 
     features {
@@ -231,17 +255,37 @@ object id10CompileUtAuto : BuildType({
     requirements {
         doesNotContain("env.OS_TYPE", "WIN", "RQ_2875")
     }
+
+    triggers {
+        // Weekly heartbeat, MAIN ONLY. The inherited Schedule trigger (TRIGGER_1006,
+        // Sundays 10:00 UTC) fired on EVERY active branch, rebuilding the whole
+        // [2.x] fan-out on weekends. It is disabled below and replaced by this
+        // schedule scoped to the default branch; downstream AUTO configs reach main
+        // through their finishBuildTrigger off [1.0]. (TRIGGER_1003, the per-commit
+        // VCS trigger, stays — normal per-branch CI on check-in.)
+        schedule {
+            schedulingPolicy = weekly {
+                timezone = "UTC"
+                dayOfWeek = ScheduleTrigger.DAY.Sunday
+                hour = 10
+            }
+            branchFilter = "+:<default>"
+            triggerBuild = always()
+        }
+    }
+
+    disableSettings("TRIGGER_1006")
 })
 
-// [1.2] Integration & DB Tests — runs the heavy @Tag("integration") DB suite (Postgres
+// [2.1] Integration & DB Tests — runs the heavy @Tag("integration") DB suite (Postgres
 // Testcontainers / full Spring context, across server/client/light-client), triggered off
-// id10 alongside the compat/validate chain. This is the ONLY thing split out of [1.0]
-// (tagged out of `build`/`check`); it gates the deploy via id30's snapshot below.
+// id10 alongside the compat/validate fan-out. This is the ONLY thing split out of [1.0]
+// (tagged out of `build`/`check`); it is a release gate via id40's snapshot below.
 // automation:test runs in [1.0] (it transitively triggers dockerPushImage), NOT here.
 object id12IntegrationDbTestsAuto : BuildType({
     templates(AbsoluteId("Octopus_OctopusGradleBuild"))
     id("12IntegrationDbTestsAuto")
-    name = "[1.2] Integration & DB Tests [AUTO]"
+    name = "[2.1] Integration & DB Tests [AUTO]"
 
     buildNumberPattern = "%BUILD_NUMBER%"
 
@@ -298,11 +342,25 @@ object id12IntegrationDbTestsAuto : BuildType({
             dockerRunParameters = "--userns=keep-id -e JAVA_HOME=/opt/java/openjdk -v %env.BUILD_ENV%:/opt/BUILD_ENV -v %teamcity.build.checkoutDir%:/home/tcagent/work -v %teamcity.agent.jvm.user.home%:/home/tcagent -w /home/tcagent/work -e TZ=Europe/Brussels"
             param("org.jfrog.artifactory.selectedDeployableServer.defaultModuleVersionConfiguration", "GLOBAL")
         }
-        stepsOrder = arrayListOf("Login_to_the_OKD_cluster", "RUNNER_1720", "RUNNER_1768")
+        // Re-pin the build number to the upstream [1.0] chain number as the LAST
+        // step (point 6). The template's "Calculate build parameters" meta-runner
+        // (RUNNER_1720) emits `##teamcity[buildNumber '<ver>-%build.counter%']` at
+        // runtime, which OVERRIDES this config's `buildNumberPattern = "%BUILD_NUMBER%"`
+        // and made [2.1] show its OWN counter (e.g. 3.0.4-451) instead of the chain
+        // number every sibling shows (3.0.4-4287). We keep RUNNER_1720 enabled (it also
+        // computes PROJECT_VERSION / CURRENT_COMMIT that the gradle step may rely on)
+        // and simply emit a LATER buildNumber service message — TeamCity honours the
+        // last one — so [2.1] ends up tagged with %BUILD_NUMBER% (= [1.0]'s build.number).
+        script {
+            name = "Pin chain build number"
+            id = "PIN_BUILD_NUMBER"
+            scriptContent = "echo \"##teamcity[buildNumber '%BUILD_NUMBER%']\""
+        }
+        stepsOrder = arrayListOf("Login_to_the_OKD_cluster", "RUNNER_1720", "RUNNER_1768", "PIN_BUILD_NUMBER")
     }
 
     failureConditions {
-        executionTimeoutMin = 240
+        executionTimeoutMin = 45
     }
 
     features {
@@ -328,8 +386,170 @@ object id12IntegrationDbTestsAuto : BuildType({
     dependencies {
         snapshot(id10CompileUtAuto) {
             onDependencyFailure = FailureAction.FAIL_TO_START
+            // Reuse a suitable successful [1.0] instead of forcing a fresh one
+            // ("Do not run new build if there is a suitable one").
+            reuseBuilds = ReuseBuilds.SUCCESSFUL
         }
     }
+
+    // Disable the inherited triggers from Octopus_OctopusGradleBuild:
+    //   TRIGGER_1003 — VCS Trigger (fires on every commit on every branch)
+    //   TRIGGER_1006 — Schedule Trigger (weekly, Sundays 10:00 UTC, all branches)
+    // [2.1] is driven by the finishBuildTrigger off [1.0] above; a VCS-check-in
+    // trigger here only double-runs the heavy DB suite (once off the commit,
+    // once off [1.0] finishing). The Schedule trigger is dropped too — the weekend
+    // run is now MAIN-ONLY via [1.0]'s schedule → this config's finishBuildTrigger.
+    // (The build-number override is handled by the PIN_BUILD_NUMBER step above,
+    // not by disabling RUNNER_1720.)
+    disableSettings("TRIGGER_1003", "TRIGGER_1006")
+})
+
+// [1.1] Mutation Testing — PIT over the server's pure-logic packages (`..server.util..`,
+// `..server.mapper..`; scope and thresholds in components-registry-service-server/build.gradle).
+//
+// DELIBERATELY OUTSIDE THE CHAIN. No snapshot dependency in either direction, no finishBuildTrigger:
+// nothing waits for it and it waits for nothing, so it cannot delay or block [2.4] deploy or [4.0]
+// release. That is the point — the mutation score says how well the tests would notice a regression,
+// which is a review concern, not a "is this build shippable" concern.
+//
+// Limit of that guarantee, stated because it is easy to assume otherwise: this config uses the shared
+// template, and TeamCity does not allow a build type to drop an inherited setting — snapshot
+// dependencies in particular cannot be overridden. An empty `dependencies {}` block would generate
+// nothing and neutralise nothing, so none is written here. What holds instead: the template declares no
+// dependencies (verified via REST), and were it ever to gain one, EVERY config using it inherits it —
+// [1.0] and the whole [2.x] fan-out included — which makes that a project-wide, visible change rather
+// than a silent capture of this one build. A hard local invariant would mean not using the template,
+// paying for it by re-implementing %WORK_DIR%, %GRADLE_STANDARD_PARAMETERS%, %JDK_CMDLINE_PARAMETERS%,
+// the docker wiring and the RUNNER_1720 meta-runner; not worth it for that trade.
+//
+// Division of labour with GitHub, which also runs this analysis (.github/workflows/mutation.yml):
+//   - GitHub, every PR touching the targeted paths — the per-change SIGNAL: fast feedback on the diff.
+//     Not a gate today: the job is absent from `gate-merge.needs`, so a red run is visible but does not
+//     block a merge. Adding it there is what would make the threshold blocking.
+//   - here, weekly on the default branch — the ANALYTICS: a browsable HTML report in the artifact tree
+//     (a GitHub Actions artifact is a zip you must download and unpack) and, via the stats step below,
+//     a mutation-score chart across builds, which GitHub Actions has no equivalent for.
+//     It also covers a blind spot of the GitHub trigger: that workflow only fires on changes to the
+//     server module and the build files, so a change ELSEWHERE that weakens a mutant's fate (e.g. in
+//     component-resolver-core, which the mappers call) does not run it. This weekly build catches that
+//     drift on main.
+object id11MutationTestingAuto : BuildType({
+    templates(AbsoluteId("Octopus_OctopusGradleBuild"))
+    id("11MutationTestingAuto")
+    name = "[1.1] Mutation Testing [AUTO]"
+
+    // Scoped to the PIT output only: this config produces no test-results, logs or diagnostics worth
+    // keeping, and publishing `**/build/reports/**` wholesale would drag in every other module's
+    // unrelated reports. The HTML report is published as a directory so it is browsable in place.
+    //
+    // The LEADING wildcard is deliberate. TeamCity drops the static part of the path before the first
+    // wildcard, so `components-registry-service-server/build/reports/pitest/** => reports/pitest` would
+    // flatten to `reports/pitest/index.html` — while `qualityReportsIndex` links reports by their
+    // REPO-RELATIVE path (`../pitest/components-registry-service-server/build/reports/pitest/index.html`),
+    // leaving a dead link. Starting the pattern with `**` preserves the whole relative structure, which is
+    // also why [1.0] publishes `**/build/reports/** => reports` rather than a static prefix.
+    artifactRules = """
+        **/build/reports/pitest/** => reports/pitest
+        build/reports/quality/** => reports/quality
+    """.trimIndent()
+
+    params {
+        param("GRADLE_TASK", ":components-registry-service-server:pitest")
+        param("COMPONENTS_REGISTRY_BRANCH", "master")
+    }
+
+    steps {
+        gradle {
+            name = "Gradle Mutation Testing"
+            id = "RUNNER_1768"
+            tasks = "%GRADLE_TASK%"
+            workingDir = "%WORK_DIR%"
+            gradleParams = """
+                --info
+                %GRADLE_STANDARD_PARAMETERS%
+            """.trimIndent()
+            enableStacktrace = true
+            jdkHome = "%env.JAVA_HOME%"
+            jvmArgs = "%JDK_CMDLINE_PARAMETERS%"
+            dockerRunParameters = "--userns=keep-id -e JAVA_HOME=/opt/java/openjdk -v %env.BUILD_ENV%:/opt/BUILD_ENV -v %teamcity.build.checkoutDir%:/home/tcagent/work -v %teamcity.agent.jvm.user.home%:/home/tcagent -w /home/tcagent/work -e TZ=Europe/Brussels"
+            param("org.jfrog.artifactory.selectedDeployableServer.defaultModuleVersionConfiguration", "GLOBAL")
+        }
+        // Regenerates build/reports/quality/index.html so the published report set has its documented
+        // single entry point (AGENTS.md §Reports). A separate step rather than an extra task on the line
+        // above: Gradle gives no ordering guarantee between two independent requested tasks, and the index
+        // must be written AFTER the PIT report exists or its section is silently omitted.
+        //
+        // ALWAYS, for the same reason as the stats step below: a threshold failure is exactly when someone
+        // wants to open the report.
+        gradle {
+            name = "Quality reports index"
+            id = "RUNNER_QUALITY_INDEX"
+            executionMode = BuildStep.ExecutionMode.ALWAYS
+            tasks = "qualityReportsIndex"
+            workingDir = "%WORK_DIR%"
+            gradleParams = """
+                --info
+                %GRADLE_STANDARD_PARAMETERS%
+            """.trimIndent()
+            enableStacktrace = true
+            jdkHome = "%env.JAVA_HOME%"
+            jvmArgs = "%JDK_CMDLINE_PARAMETERS%"
+            dockerRunParameters = "--userns=keep-id -e JAVA_HOME=/opt/java/openjdk -v %env.BUILD_ENV%:/opt/BUILD_ENV -v %teamcity.build.checkoutDir%:/home/tcagent/work -v %teamcity.agent.jvm.user.home%:/home/tcagent -w /home/tcagent/work -e TZ=Europe/Brussels"
+        }
+        // Turns the score into a tracked TeamCity statistic (charted per build) and puts the headline on
+        // the build overview. Reporting only — the pass/fail verdict stays with the `pitest` task, which
+        // owns mutationThreshold/coverageThreshold.
+        //
+        // ALWAYS is load-bearing, not defensive: `pitest` FAILS the build when the score drops below
+        // mutationThreshold, and with the default execution mode TeamCity would skip this step precisely
+        // then — so the one score that most needs to land on the chart and in the build status would be
+        // the one that never does. The script tolerates a missing report and never fails the build.
+        script {
+            name = "Report mutation statistics"
+            id = "REPORT_MUTATION_STATS"
+            executionMode = BuildStep.ExecutionMode.ALWAYS
+            scriptContent = "scripts/teamcity/report-mutation-stats.sh"
+        }
+        stepsOrder = arrayListOf("RUNNER_1720", "RUNNER_1768", "RUNNER_QUALITY_INDEX", "REPORT_MUTATION_STATS")
+    }
+
+    failureConditions {
+        // A cold run (no PIT history) took ~8 min on a GitHub runner; 60 min is a generous ceiling that
+        // still fails a hung analysis rather than occupying an agent indefinitely.
+        executionTimeoutMin = 60
+    }
+
+    requirements {
+        doesNotContain("env.OS_TYPE", "WIN", "RQ_2875")
+    }
+
+    triggers {
+        // Weekly, DEFAULT BRANCH ONLY — same shape as [1.0]'s heartbeat, one hour later so the two never
+        // contend for an agent ([1.0]'s Sunday run fans out into the whole [2.x] chain). Per-branch runs
+        // are deliberately absent: per-PR feedback is GitHub's job. Run this config manually to inspect a
+        // specific branch.
+        //
+        // This schedule is why the name carries [AUTO] rather than [MANUAL] despite the config sitting
+        // outside the chain: [AUTO] in this project means "fires by itself" (like [1.0]'s VCS+schedule and
+        // the [2.x] finishBuildTriggers), while the [1.5]/[1.6] compat pair is [MANUAL] precisely because
+        // their inherited schedule is disabled and only an operator starts them. Dropping this trigger
+        // would leave the score chart empty unless somebody remembered to press the button, which is the
+        // one thing this config exists to avoid.
+        schedule {
+            schedulingPolicy = weekly {
+                timezone = "UTC"
+                dayOfWeek = ScheduleTrigger.DAY.Sunday
+                hour = 11
+            }
+            branchFilter = "+:<default>"
+            triggerBuild = always()
+        }
+    }
+
+    // Disable the inherited triggers from Octopus_OctopusGradleBuild:
+    //   TRIGGER_1003 — VCS Trigger (would run the analysis on every commit on every branch)
+    //   TRIGGER_1006 — Schedule Trigger (weekly on ALL branches; replaced by the main-only one above)
+    disableSettings("TRIGGER_1003", "TRIGGER_1006")
 })
 
 // Compat — HTTP (two pre-deployed URLs) — manual, on-demand. Runs the compat-
@@ -595,11 +815,11 @@ object id16CompatTraceReplayManual : BuildType({
 })
 
 // Compat — Local Stand (baseline + candidate JARs) — auto-fires after id10
-// succeeds on non-main branches (see `triggers { finishBuildTrigger }` below)
-// AND has a snapshot dep on id10. Operator can still Run manually from any
-// branch — manual run from `main` is a tautological V1-vs-V1 measurement and
-// is skipped server-side. Spins TWO CRS instances side-by-side
-// on the agent: baseline (released `%LAST_RELEASE_VERSION%`, docker
+// succeeds on EVERY branch, `main` included (see `triggers { finishBuildTrigger }`
+// below) AND has a snapshot dep on id10. A run from `main` is now a real
+// regression gate — the frozen 2.0.88 baseline vs the v3 trunk — not the old
+// tautological V1-vs-V1 self-comparison. Spins TWO CRS instances side-by-side
+// on the agent: baseline (frozen `%COMPAT_BASELINE_VERSION%`, docker
 // image from corp registry) and candidate (current chain's image
 // pushed by id10), both pointed at the production Components-Registry
 // DSL + service-config. Then runs the compat-test module's full
@@ -624,7 +844,7 @@ object id16CompatTraceReplayManual : BuildType({
 // `scripts/local-stands/TEAMCITY.md`.
 object id17CompatLocalStandManual : BuildType({
     id("17CompatLocalStandManual")
-    name = "[1.7] Compat — Local Stand (baseline + candidate JARs) [AUTO]"
+    name = "[2.2] Compat — Local Stand (baseline + candidate JARs) [AUTO]"
 
     // Mirror id20's pattern: surface the upstream id10 build number as id17's
     // own build number so the TC dashboard / build chain UI shows the SAME
@@ -681,10 +901,9 @@ object id17CompatLocalStandManual : BuildType({
         // / VCS-refresh-cycle signal that disappears under sequential
         // execution). Lower values trade run time for determinism.
         text("COMPAT_PARALLELISM", "8", allowEmpty = false, display = ParameterDisplay.PROMPT)
-        // Baseline version is the project-level `LAST_RELEASE_VERSION` (e.g.
-        // `2.0.88`); pinned, not prompted — operator updates the project
-        // param when a new release lands.
-        param("COMPAT_BASELINE_VERSION", "%LAST_RELEASE_VERSION%")
+        // Baseline version = the project-level `COMPAT_BASELINE_VERSION`
+        // (frozen 2.x byte-compat oracle, pinned in code — see its definition
+        // in the project `params` block). Inherited, not overridden here.
         // Candidate image tag = the build number of the upstream id10 chain
         // step that just pushed it via `dockerPushImage`. Also reused as
         // %BUILD_NUMBER% so id17's own build number (set above via
@@ -749,15 +968,17 @@ object id17CompatLocalStandManual : BuildType({
             // so there is no port / Postgres collision between them.
             scriptContent = """
                 set -euo pipefail
-                # Green-skip when the compat-test infra isn't in this checkout. [1.7]/[1.8]
-                # auto-fire on [1.0] success for ANY branch; if a build resolves to `main`
-                # (the legacy V1 trunk) — or a deleted feature branch falls back to the
-                # default branch — `scripts/local-stands/` is absent and the wrapper below
-                # would exit 127. Mirror id15/id16: succeed with a clear status, not a red 127.
+                # Green-skip when the compat-test infra isn't in this checkout. [2.2]/[2.3]
+                # auto-fire on [1.0] success for ANY branch, `main` included — which now
+                # carries the compat infra (post v3→main cutover), so this normally proceeds.
+                # The skip only trips on a legacy pre-v3 branch, or a deleted feature branch
+                # that falls back to a default without `scripts/local-stands/`, where the
+                # wrapper below would exit 127. Mirror id15/id16: succeed with a clear
+                # status, not a red 127.
                 if [ ! -f scripts/local-stands/teamcity-run.sh ]; then
                     echo "::: scripts/local-stands/teamcity-run.sh not present in this checkout."
-                    echo "::: [1.7] is only meaningful on v3-family branches that carry the compat-test infra."
-                    echo "##teamcity[buildStatus status='SUCCESS' text='Skipped: compat-test infra absent on this branch (likely main); run from v3 family instead.']"
+                    echo "::: [2.2] is only meaningful on branches carrying the compat-test infra (v3 family + post-cutover main)."
+                    echo "##teamcity[buildStatus status='SUCCESS' text='Skipped: compat-test infra absent on this branch (legacy/pre-v3 checkout).']"
                     exit 0
                 fi
                 WORK_DIR="/tmp/crs-id17-%teamcity.build.id%"
@@ -866,7 +1087,7 @@ object id17CompatLocalStandManual : BuildType({
                 echo "Bodies file:     ${'$'}BODIES_FILE_PATH"
                 # Deduplicated production trace (latest-top.txt) replayed by
                 # TraceReplayCompatTest. Cap the replay at the top-200000 tuples so the
-                # AUTO gate [1.7]/[1.8] exercises the FULL enriched trace — including the
+                # AUTO gate [2.2]/[2.3] exercises the FULL enriched trace — including the
                 # client-release-notes generation surface (per-version jira-component /
                 # vcs-settings + detailed-versions; ~130k tuples as of the 2026-06-25
                 # capture). File is ranked desc; id16 replays it unlimited. NOTE: this is
@@ -896,11 +1117,8 @@ object id17CompatLocalStandManual : BuildType({
     }
 
     failureConditions {
-        // Full sweep budget. With `components/all.txt` (~475 IDs) and
-        // COMPAT_FULL=true the per-test-class matrix is ~30-50 min after
-        // cold-pull + postgres + auto-migrate (~5-7 min upfront). Headroom
-        // for slow agents or congested registry → cap at 120 min.
-        executionTimeoutMin = 120
+        // Scales with COMPAT_COMPONENTS_FILE and COMPAT_TRACE_LIMIT; revisit when either grows.
+        executionTimeoutMin = 85
     }
 
     features {
@@ -945,24 +1163,25 @@ object id17CompatLocalStandManual : BuildType({
     }
 
     triggers {
-        // Auto-fire id17 after id10 (Compile&UT) succeeds on non-main branches.
-        // The former [1.9] cluster-50 pre-gate (id19) was removed — the full
-        // matrix here is the authoritative compat gate. Manual Run from any
-        // branch still works; a run from `main` is a tautological V1-vs-V1
-        // measurement and is skipped server-side.
+        // Auto-fire id17 after id10 (Compile&UT) succeeds on EVERY branch,
+        // `main` included. The former [1.9] cluster-50 pre-gate (id19) was
+        // removed — the full matrix here is the authoritative compat gate.
+        // `main` is no longer excluded: the baseline is now the FROZEN 2.0.88
+        // oracle (see `COMPAT_BASELINE_VERSION`), so a run from `main` compares
+        // the v3 trunk against last-2.x prod — a real regression gate, not the
+        // old tautological V1-vs-V1 self-comparison.
         finishBuildTrigger {
             buildType = "${id10CompileUtAuto.id}"
             successfulOnly = true
-            branchFilter = """
-                +:*
-                -:main
-            """.trimIndent()
+            branchFilter = "+:*"
         }
     }
 
     dependencies {
         snapshot(id10CompileUtAuto) {
             onDependencyFailure = FailureAction.CANCEL
+            // Reuse a suitable successful [1.0] rather than forcing a fresh one.
+            reuseBuilds = ReuseBuilds.SUCCESSFUL
         }
     }
 })
@@ -982,7 +1201,7 @@ object id17CompatLocalStandManual : BuildType({
 // default ports (4567/4568) don't collide.
 object id18CompatLocalStandGitModeAuto : BuildType({
     id("18CompatLocalStandGitModeAuto")
-    name = "[1.8] Compat — Local Stand (no DB migration, git-mode) [AUTO]"
+    name = "[2.3] Compat — Local Stand (no DB migration, git-mode) [AUTO]"
 
     // Surface the upstream id10 build number as id18's own (chain view shows the
     // SAME version tag across id10 = id18 = …), mirroring id17.
@@ -1010,7 +1229,8 @@ object id18CompatLocalStandGitModeAuto : BuildType({
         text("COMPAT_COMPONENTS_FILE", "components/all.txt", allowEmpty = false, display = ParameterDisplay.PROMPT)
         text("COMPAT_FULL", "true", allowEmpty = false, display = ParameterDisplay.PROMPT)
         text("COMPAT_PARALLELISM", "8", allowEmpty = false, display = ParameterDisplay.PROMPT)
-        param("COMPAT_BASELINE_VERSION", "%LAST_RELEASE_VERSION%")
+        // Baseline version inherited from the project-level
+        // `COMPAT_BASELINE_VERSION` (frozen 2.x byte-compat oracle).
         param("BUILD_NUMBER", "${id10CompileUtAuto.depParamRefs.buildNumber}")
         param("COMPAT_CANDIDATE_VERSION", "%BUILD_NUMBER%")
         param("DOCKER_REGISTRY_INTERNAL", "%DOCKER_REGISTRY%")
@@ -1054,15 +1274,17 @@ object id18CompatLocalStandGitModeAuto : BuildType({
             // Runs on a separate agent from id17 so the shared default ports don't collide.
             scriptContent = """
                 set -euo pipefail
-                # Green-skip when the compat-test infra isn't in this checkout. [1.7]/[1.8]
-                # auto-fire on [1.0] success for ANY branch; if a build resolves to `main`
-                # (the legacy V1 trunk) — or a deleted feature branch falls back to the
-                # default branch — `scripts/local-stands/` is absent and the wrapper below
-                # would exit 127. Mirror id15/id16: succeed with a clear status, not a red 127.
+                # Green-skip when the compat-test infra isn't in this checkout. [2.2]/[2.3]
+                # auto-fire on [1.0] success for ANY branch, `main` included — which now
+                # carries the compat infra (post v3→main cutover), so this normally proceeds.
+                # The skip only trips on a legacy pre-v3 branch, or a deleted feature branch
+                # that falls back to a default without `scripts/local-stands/`, where the
+                # wrapper below would exit 127. Mirror id15/id16: succeed with a clear
+                # status, not a red 127.
                 if [ ! -f scripts/local-stands/teamcity-run.sh ]; then
                     echo "::: scripts/local-stands/teamcity-run.sh not present in this checkout."
-                    echo "::: [1.8] is only meaningful on v3-family branches that carry the compat-test infra."
-                    echo "##teamcity[buildStatus status='SUCCESS' text='Skipped: compat-test infra absent on this branch (likely main); run from v3 family instead.']"
+                    echo "::: [2.3] is only meaningful on branches carrying the compat-test infra (v3 family + post-cutover main)."
+                    echo "##teamcity[buildStatus status='SUCCESS' text='Skipped: compat-test infra absent on this branch (legacy/pre-v3 checkout).']"
                     exit 0
                 fi
                 WORK_DIR="/tmp/crs-id18-%teamcity.build.id%"
@@ -1142,7 +1364,7 @@ object id18CompatLocalStandGitModeAuto : BuildType({
                 echo "Bodies file:     ${'$'}BODIES_FILE_PATH"
                 # Deduplicated production trace (latest-top.txt) replayed by
                 # TraceReplayCompatTest. Cap the replay at the top-200000 tuples so the
-                # AUTO gate [1.7]/[1.8] exercises the FULL enriched trace — including the
+                # AUTO gate [2.2]/[2.3] exercises the FULL enriched trace — including the
                 # client-release-notes generation surface (per-version jira-component /
                 # vcs-settings + detailed-versions; ~130k tuples as of the 2026-06-25
                 # capture). File is ranked desc; id16 replays it unlimited. NOTE: this is
@@ -1170,9 +1392,8 @@ object id18CompatLocalStandGitModeAuto : BuildType({
     }
 
     failureConditions {
-        // Git-mode skips auto-migrate AND Postgres, so the candidate comes up faster
-        // than id17; keep a generous cap for cold image pulls + two stand boots.
-        executionTimeoutMin = 120
+        // Scales with COMPAT_COMPONENTS_FILE and COMPAT_TRACE_LIMIT; revisit when either grows.
+        executionTimeoutMin = 50
     }
 
     features {
@@ -1195,30 +1416,34 @@ object id18CompatLocalStandGitModeAuto : BuildType({
     }
 
     triggers {
-        // Auto-fire alongside id17 whenever id10 finishes on a non-main branch.
-        // git-mode has signal on every branch (it guards the no-op invariant),
-        // but mirror id17's main exclusion to avoid burning agent minutes on the
-        // release trunk; Manual Run from any branch still works.
+        // Auto-fire alongside id17 whenever id10 finishes on EVERY branch,
+        // `main` included (mirrors id17). git-mode has signal on every branch
+        // (it guards the no-op invariant), and against the frozen 2.0.88
+        // baseline a `main` run is a real regression gate, so no reason to
+        // exclude the release trunk any more.
         finishBuildTrigger {
             buildType = "${id10CompileUtAuto.id}"
             successfulOnly = true
-            branchFilter = """
-                +:*
-                -:main
-            """.trimIndent()
+            branchFilter = "+:*"
         }
     }
 
     dependencies {
         snapshot(id10CompileUtAuto) {
             onDependencyFailure = FailureAction.CANCEL
+            // Reuse a suitable successful [1.0] rather than forcing a fresh one.
+            reuseBuilds = ReuseBuilds.SUCCESSFUL
         }
     }
 })
 
 object id20ValidateComponentsRegistryProductionDataAuto : BuildType({
     id("20ValidateComponentsRegistryProductionDataAuto")
-    name = "[2.0] Validate Production Data [AUTO]"
+    name = "[2.0] Validate Git-based Components Registry [AUTO]"
+
+    // Resolves the [1.0] candidate (components-registry-service.version=%BUILD_NUMBER%) from the
+    // dev repository; this project's [1.0] does not upload it (see its GRADLE_TASK).
+    paused = true
 
     artifactRules = "%COMPONENTS_REGISTRY_CHECKOUT_DIR% => %COMPONENTS_REGISTRY_CHECKOUT_DIR%"
     buildNumberPattern = "%BUILD_NUMBER%"
@@ -1269,6 +1494,8 @@ object id20ValidateComponentsRegistryProductionDataAuto : BuildType({
     dependencies {
         snapshot(id10CompileUtAuto) {
             onDependencyFailure = FailureAction.FAIL_TO_START
+            // Reuse a suitable successful [1.0] rather than forcing a fresh one.
+            reuseBuilds = ReuseBuilds.SUCCESSFUL
         }
         artifacts(AbsoluteId("bt774")) {
             buildRule = lastSuccessful()
@@ -1280,7 +1507,7 @@ object id20ValidateComponentsRegistryProductionDataAuto : BuildType({
 object id30DeployToOkdQaDevAuto : BuildType({
     templates(AbsoluteId("RnDProcessesAutomation_IdpComponentOkdDeploy"))
     id("30DeployToOkdQaDevAuto")
-    name = "[3.0] Deploy to OKD QA DEV [AUTO]"
+    name = "[2.4] Deploy to OKD QA DEV [AUTO]"
 
     params {
         param("OKD_SERVER_URL", "%OKD_SERVER_DEV_URL%")
@@ -1290,21 +1517,71 @@ object id30DeployToOkdQaDevAuto : BuildType({
     }
 
     triggers {
+        // Fire the QA-DEV deploy DIRECTLY off [1.0] Compile&UT, in parallel with
+        // the [2.0]–[2.3] test/validate/compat fan-out — QA availability no longer
+        // waits on Validate or the heavy DB/compat suites. None of them gate the
+        // deploy; they gate the RELEASE instead (see id40's snapshot set). The
+        // deployed image is [1.0]'s (dockerPushImage).
         finishBuildTrigger {
             id = "TRIGGER_1015"
-            buildType = "${id20ValidateComponentsRegistryProductionDataAuto.id}"
+            buildType = "${id10CompileUtAuto.id}"
             successfulOnly = true
         }
     }
 
     dependencies {
-        snapshot(id20ValidateComponentsRegistryProductionDataAuto) {
-        }
-        // The heavy DB/integration suite [1.2] must pass before we deploy (it runs in
-        // parallel off [1.0], so by deploy time it's done). The image comes from [1.0].
-        snapshot(id12IntegrationDbTestsAuto) {
+        snapshot(id10CompileUtAuto) {
             onDependencyFailure = FailureAction.FAIL_TO_START
+            // Reuse a suitable successful [1.0] rather than forcing a fresh one.
+            reuseBuilds = ReuseBuilds.SUCCESSFUL
         }
+    }
+})
+
+object id30Step2AggregateAuto : BuildType({
+    templates(AbsoluteId("RDDepartment_PostGithubStatus"))
+    id("29Step2AggregateAuto")
+    name = "[3.0] Step 2 Aggregate [AUTO]"
+
+    // Surface [1.0]'s build number so the whole chain (id10 = id12 = … = id29)
+    // shows the same version tag in the TC chain view.
+    buildNumberPattern = "%BUILD_NUMBER%"
+
+    params {
+        param("BUILD_NUMBER", "${id10CompileUtAuto.depParamRefs.buildNumber}")
+    }
+
+    triggers {
+        finishBuildTrigger {
+            buildType = "${id10CompileUtAuto.id}"
+            successfulOnly = true
+            branchFilter = "+:*"
+        }
+    }
+
+    dependencies {
+        // [1.0] Compile & UT included so the single "Build Validation" status also
+        // covers compile + unit tests, not just the [2.x] fan-out.
+        snapshot(id10CompileUtAuto) {
+            reuseBuilds = ReuseBuilds.SUCCESSFUL
+            onDependencyFailure = FailureAction.ADD_PROBLEM
+        }
+        snapshot(id12IntegrationDbTestsAuto) {
+            reuseBuilds = ReuseBuilds.SUCCESSFUL
+            onDependencyFailure = FailureAction.ADD_PROBLEM
+        }
+        snapshot(id17CompatLocalStandManual) {
+            reuseBuilds = ReuseBuilds.SUCCESSFUL
+            onDependencyFailure = FailureAction.ADD_PROBLEM
+        }
+        snapshot(id18CompatLocalStandGitModeAuto) {
+            reuseBuilds = ReuseBuilds.SUCCESSFUL
+            onDependencyFailure = FailureAction.ADD_PROBLEM
+        }
+    }
+
+    failureConditions {
+        executionTimeoutMin = 10
     }
 })
 
@@ -1335,9 +1612,29 @@ object id40ReleaseManual : BuildType({
         }
     }
 
+    // A release can only cut when the full quality fan-out passed for the SAME
+    // source revision. [2.4] deploy, [2.1] integration, and the [2.2]/[2.3] compat
+    // gates all snapshot the same [1.0], so TeamCity pins every one of them — and
+    // this release — to a single [1.0] build. Release params still come from [1.0]
+    // (reachable via any of these deps); the extra gates only block, they are not
+    // a source of release parameters. reuseBuilds = SUCCESSFUL so a release reuses
+    // the green fan-out builds already produced for that [1.0] instead of
+    // re-running the heavy compat/DB suites.
     dependencies {
         snapshot(id30DeployToOkdQaDevAuto) {
-            reuseBuilds = ReuseBuilds.NO
+            reuseBuilds = ReuseBuilds.SUCCESSFUL
+            onDependencyFailure = FailureAction.FAIL_TO_START
+        }
+        snapshot(id12IntegrationDbTestsAuto) {
+            reuseBuilds = ReuseBuilds.SUCCESSFUL
+            onDependencyFailure = FailureAction.FAIL_TO_START
+        }
+        snapshot(id17CompatLocalStandManual) {
+            reuseBuilds = ReuseBuilds.SUCCESSFUL
+            onDependencyFailure = FailureAction.FAIL_TO_START
+        }
+        snapshot(id18CompatLocalStandGitModeAuto) {
+            reuseBuilds = ReuseBuilds.SUCCESSFUL
             onDependencyFailure = FailureAction.FAIL_TO_START
         }
     }
@@ -1350,6 +1647,11 @@ object id50ReleasePostProcessingAuto : BuildType({
 
     params {
         param("env.JAVA_HOME", "%env.JDK_ZULU_17_x64%")
+        // Redirect the template's "Update latest release version" step to the
+        // parent `Octopus` project: this project is read-only (versioned
+        // settings), so a REST PUT against it gets 500 ReadOnlyEntityException.
+        param("TEAMCITY_UPDATE_PROJECT_IDS", "Octopus")
+        param("TEAMCITY_UPDATE_PARAMETER_NAME", "LAST_RELEASE_VERSION_COMPONENTS_REGISTRY_SERVICE")
     }
 })
 
@@ -1376,6 +1678,7 @@ object id60DeployToOkdQaGhAuto : BuildType({
     dependencies {
         snapshot(id50ReleasePostProcessingAuto) {
             onDependencyFailure = FailureAction.FAIL_TO_START
+            reuseBuilds = ReuseBuilds.SUCCESSFUL
         }
     }
 })
@@ -1435,9 +1738,8 @@ object id70DeployToOkdProdManual_2 : BuildType({
             name = "Publish documentation on wiki"
             id = "RUNNER_869"
             tasks = "adocPublishToWiki"
-            buildFile = "build.gradle"
             workingDir = "octopus-%COMPONENT_NAME%"
-            gradleParams = """-Pdocker.registry=%DOCKER_REGISTRY% -Pwiki.url=%WIKI_URL% -Pwiki.username=%WIKI_USER% -Pwiki.password=%WIKI_PASSWORD% -Pwiki.space-key=%WIKI_SPACE_KEY% -Pwiki.page-id=%WIKI_PAGE_ID% -Padoc.glossary-component-link=%GLOSSARY_COMPONENT_LINK% -Padoc.components-registry-link=%COMPONENTS_REGISTRY_LINK% -Padoc.release-management-automation-link=%RELEASE_MANAGEMENT_AUTOMATION_LINK% -Padoc.escrow-automation-tool-link=%ESCROW_AUTOMATION_TOOL_LINK% -Padoc.components-registry-validation-link=%COMPONENTS_REGISTRY_VALIDATION_LINK% -Padoc.service-desk-link=%SERVICE_DESK_LINK% "-Padoc.header=%WIKI_PAGE_HEADER%""""
+            gradleParams = """-Pdocker.registry=%DOCKER_REGISTRY% -Pwiki.url=%WIKI_URL% -Pwiki.username=%WIKI_USER% -Pwiki.password=%WIKI_PASSWORD% -Pwiki.space-key=%WIKI_SPACE_KEY% -Pwiki.page-id=%WIKI_PAGE_ID% -Padoc.glossary-component-link=%GLOSSARY_COMPONENT_LINK% -Padoc.components-registry-portal-link=%COMPONENTS_REGISTRY_PORTAL_LINK% -Padoc.components-registry-swagger-link=%COMPONENTS_REGISTRY_SWAGGER_LINK% -Padoc.release-management-automation-link=%RELEASE_MANAGEMENT_AUTOMATION_LINK% -Padoc.escrow-automation-tool-link=%ESCROW_AUTOMATION_TOOL_LINK% -Padoc.components-registry-validation-link=%COMPONENTS_REGISTRY_VALIDATION_LINK% -Padoc.service-desk-link=%SERVICE_DESK_LINK% "-Padoc.header=%WIKI_PAGE_HEADER%""""
             enableStacktrace = true
             jdkHome = "%env.JAVA_HOME%"
             jvmArgs = "-Duser.home=%teamcity.agent.jvm.user.home%"
@@ -1449,6 +1751,86 @@ object id70DeployToOkdProdManual_2 : BuildType({
     dependencies {
         snapshot(id60DeployToOkdQaGhAuto) {
             onDependencyFailure = FailureAction.FAIL_TO_START
+            reuseBuilds = ReuseBuilds.SUCCESSFUL
+        }
+    }
+})
+
+// Replaces the QA database's CRS schema with a copy of production. Production is only read: see the
+// header of scripts/teamcity/recreate-qa-db-from-prod.sh for the guards. The QA application is not
+// restarted and no migrations run; whoever presses the button redeploys the QA version they need.
+// Runbook: docs/registry/deployment/qa-db-refresh.md.
+//
+// Hosts are UI parameters on the parent project (CRS_PROD_DB_HOST, CRS_QA_DB_HOST); credentials come
+// from Vault through the inherited HashiCorp Vault connection. The env.* params are read-only, so a
+// custom run cannot edit them; the parent-project parameters they reference can still be overridden by
+// a custom run, which the script's cluster-identity check and the SELECT-only production role contain
+// (see the runbook).
+object id80RecreateQaDbFromProdManual : BuildType({
+    id("80RecreateQaDbFromProdManual")
+    name = "[8.0] Recreate QA DB from PROD [MANUAL]"
+    description = "Copies the production CRS schema over QA; the previous QA schema is kept as an artifact"
+
+    // One run at a time: two concurrent copies would race on the same QA schema.
+    maxRunningBuilds = 1
+
+    artifactRules = "qa-backup/qa-before-recreate.sql.gz"
+
+    params {
+        // Vault references cannot be composed from other parameters, so the mount is spelled out in each
+        // one. The config-server mount is KV v2 (octopus-config-server: kv-version 2), hence "/data/".
+        // The part after "!/" is a JsonPath: a key containing dots needs the bracket form, or it is read
+        // as a nested path and does not resolve.
+        text("env.SRC_HOST", "%CRS_PROD_DB_HOST%", readOnly = true, allowEmpty = false)
+        text("env.SRC_PORT", "5432", readOnly = true, allowEmpty = false)
+        text("env.SRC_DB", "components-registry", readOnly = true, allowEmpty = false)
+        // A role holding only pg_read_all_data.
+        text("env.SRC_USER", "%vault:f1-config-server/data/teamcity-crs-qa-refresh!/prod_readonly_username%", readOnly = true, allowEmpty = false)
+        password("env.SRC_PASSWORD", "%vault:f1-config-server/data/teamcity-crs-qa-refresh!/prod_readonly_password%", readOnly = true)
+
+        text("env.DST_HOST", "%CRS_QA_DB_HOST%", readOnly = true, allowEmpty = false)
+        text("env.DST_PORT", "5432", readOnly = true, allowEmpty = false)
+        text("env.DST_DB", "components-registry", readOnly = true, allowEmpty = false)
+        // The QA application's own datasource credentials (the profile-less secret; production overrides
+        // them from -cloud-prod), so a password rotation needs no change here.
+        text("env.DST_USER", "%vault:f1-config-server/data/components-registry-service!/['spring.datasource.username']%", readOnly = true, allowEmpty = false)
+        password("env.DST_PASSWORD", "%vault:f1-config-server/data/components-registry-service!/['spring.datasource.password']%", readOnly = true)
+
+        text("env.DB_SCHEMA", "components-registry", readOnly = true, allowEmpty = false)
+        text("env.QA_BACKUP_FILE", "qa-backup/qa-before-recreate.sql.gz", readOnly = true, allowEmpty = false)
+    }
+
+    vcs {
+        root(DslContext.settingsRoot)
+        // The step runs the script from the checkout with the production credential in its environment,
+        // so it must only ever run the reviewed script on the default branch.
+        branchFilter = "+:<default>"
+    }
+
+    steps {
+        script {
+            name = "Copy the production schema over QA"
+            id = "COPY_PROD_TO_QA"
+            scriptContent = "bash scripts/teamcity/recreate-qa-db-from-prod.sh"
+            // Client major version >= both servers (production 16, QA 17). Pulled through the corporate
+            // mirror, like the local-stand builds, to avoid the Docker Hub rate limit.
+            dockerImage = "%DOCKER_REGISTRY%/postgres:17"
+            dockerImagePlatform = ScriptBuildStep.ImagePlatform.Linux
+        }
+    }
+
+    failureConditions {
+        // The copy is a few MB and takes seconds.
+        executionTimeoutMin = 15
+    }
+
+    features {
+        // The postgres image comes through the corporate registry, which needs a login (as in id17).
+        dockerSupport {
+            id = "DockerSupport"
+            loginToRegistry = on {
+                dockerRegistryId = "PROJECT_EXT_177,PROJECT_EXT_350,PROJECT_EXT_351"
+            }
         }
     }
 })

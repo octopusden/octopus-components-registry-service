@@ -1,6 +1,5 @@
 package org.octopusden.octopus.components.registry.dsl.test
 
-import org.octopusden.octopus.components.registry.dsl.component
 import org.assertj.core.api.Assertions.assertThat
 import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.Assertions.assertFalse
@@ -13,16 +12,19 @@ import org.junit.jupiter.api.parallel.ResourceLock
 import org.junit.jupiter.params.ParameterizedTest
 import org.junit.jupiter.params.provider.Arguments
 import org.junit.jupiter.params.provider.MethodSource
+import org.octopusden.octopus.components.registry.dsl.component
 import java.lang.IllegalStateException
 import java.util.stream.Stream
 
 @Execution(ExecutionMode.SAME_THREAD)
 @ResourceLock(value = "DSL")
 class EscrowDslTest {
-
     @ParameterizedTest
     @MethodSource("multipliers")
-    fun testDiskspaceRequirementMultiplier(diskspaceRequirement: String, bytes: Long) {
+    fun testDiskspaceRequirementMultiplier(
+        diskspaceRequirement: String,
+        bytes: Long,
+    ) {
         var components = registryDsl {
             component("FC Barcelona") {
                 escrow {
@@ -30,7 +32,13 @@ class EscrowDslTest {
                 }
             }
         }
-        assertEquals(bytes, components.getValue("FC Barcelona").escrow.diskSpaceRequirement.orElseThrow { IllegalStateException() })
+        assertEquals(
+            bytes,
+            components
+                .getValue("FC Barcelona")
+                .escrow.diskSpaceRequirement
+                .orElseThrow { IllegalStateException() },
+        )
     }
 
     @Test
@@ -48,9 +56,23 @@ class EscrowDslTest {
                 }
             }
         }
-        assertEquals(32, components.getValue("manager").escrow.diskSpaceRequirement.orElseThrow { IllegalStateException() })
-        assertFalse(components.getValue("component_commons").escrow.diskSpaceRequirement.isPresent)
-        assertFalse(components.getValue("octopusweb").escrow.diskSpaceRequirement.isPresent)
+        assertEquals(
+            32,
+            components
+                .getValue("manager")
+                .escrow.diskSpaceRequirement
+                .orElseThrow { IllegalStateException() },
+        )
+        assertFalse(
+            components
+                .getValue("component_commons")
+                .escrow.diskSpaceRequirement.isPresent,
+        )
+        assertFalse(
+            components
+                .getValue("octopusweb")
+                .escrow.diskSpaceRequirement.isPresent,
+        )
     }
 
     @Test
@@ -72,9 +94,21 @@ class EscrowDslTest {
                 }
             }
         }
-        assertTrue(components.getValue("manager").escrow.gradle.includeTestConfigurations)
-        assertFalse(components.getValue("component_commons").escrow.gradle.includeTestConfigurations)
-        assertFalse(components.getValue("octopusweb").escrow.gradle.includeTestConfigurations)
+        assertTrue(
+            components
+                .getValue("manager")
+                .escrow.gradle.includeTestConfigurations,
+        )
+        assertFalse(
+            components
+                .getValue("component_commons")
+                .escrow.gradle.includeTestConfigurations,
+        )
+        assertFalse(
+            components
+                .getValue("octopusweb")
+                .escrow.gradle.includeTestConfigurations,
+        )
 
         components = registryDsl {
             component("manager") {
@@ -93,9 +127,21 @@ class EscrowDslTest {
                 }
             }
         }
-        assertFalse(components.getValue("manager").escrow.gradle.includeTestConfigurations)
-        assertTrue(components.getValue("component_commons").escrow.gradle.includeTestConfigurations)
-        assertFalse(components.getValue("octopusweb").escrow.gradle.includeTestConfigurations)
+        assertFalse(
+            components
+                .getValue("manager")
+                .escrow.gradle.includeTestConfigurations,
+        )
+        assertTrue(
+            components
+                .getValue("component_commons")
+                .escrow.gradle.includeTestConfigurations,
+        )
+        assertFalse(
+            components
+                .getValue("octopusweb")
+                .escrow.gradle.includeTestConfigurations,
+        )
 
         components = registryDsl {
             component("manager") {
@@ -114,9 +160,21 @@ class EscrowDslTest {
                 }
             }
         }
-        assertFalse(components.getValue("manager").escrow.gradle.includeTestConfigurations)
-        assertFalse(components.getValue("component_commons").escrow.gradle.includeTestConfigurations)
-        assertTrue(components.getValue("octopusweb").escrow.gradle.includeTestConfigurations)
+        assertFalse(
+            components
+                .getValue("manager")
+                .escrow.gradle.includeTestConfigurations,
+        )
+        assertFalse(
+            components
+                .getValue("component_commons")
+                .escrow.gradle.includeTestConfigurations,
+        )
+        assertTrue(
+            components
+                .getValue("octopusweb")
+                .escrow.gradle.includeTestConfigurations,
+        )
     }
 
     @Test
@@ -143,16 +201,37 @@ class EscrowDslTest {
                 }
             }
         }
-        assertTrue(components.getValue("component_commons").escrow.gradle.includeTestConfigurations)
-        assertTrue(components.getValue("component_commons").versions.getValue("[0, 2]").escrow.gradle.includeTestConfigurations)
-        assertFalse(components.getValue("component_commons").versions.getValue("(2,)").escrow.gradle.includeTestConfigurations)
-        assertFalse(components.getValue("component_commons").subComponents.getValue("octopusweb").escrow.gradle.includeTestConfigurations)
+        assertTrue(
+            components
+                .getValue("component_commons")
+                .escrow.gradle.includeTestConfigurations,
+        )
+        assertTrue(
+            components
+                .getValue("component_commons")
+                .versions
+                .getValue("[0, 2]")
+                .escrow.gradle.includeTestConfigurations,
+        )
+        assertFalse(
+            components
+                .getValue("component_commons")
+                .versions
+                .getValue("(2,)")
+                .escrow.gradle.includeTestConfigurations,
+        )
+        assertFalse(
+            components
+                .getValue("component_commons")
+                .subComponents
+                .getValue("octopusweb")
+                .escrow.gradle.includeTestConfigurations,
+        )
     }
 
     @Test
     fun testEscrowPropertiesPropagation() {
         val components = registryDsl {
-
             component("component_commons") {
                 escrow {
                     gradle {
@@ -183,10 +262,32 @@ class EscrowDslTest {
                 }
             }
         }
-        assertThat(components.getValue("component_commons").escrow.gradle.includeConfigurations).containsExactly("1", "2")
-        assertThat(components.getValue("component_commons").versions.getValue("(0,1)").escrow.gradle.includeConfigurations).containsExactly("1", "2", "3")
-        assertThat(components.getValue("component_commons").versions.getValue("(1,2)").escrow.gradle.includeConfigurations).containsExactly("4")
-        assertThat(components.getValue("component_commons").versions.getValue("(2,3)").escrow.gradle.includeConfigurations).containsExactly("5", "6")
+        assertThat(
+            components
+                .getValue("component_commons")
+                .escrow.gradle.includeConfigurations,
+        ).containsExactly("1", "2")
+        assertThat(
+            components
+                .getValue("component_commons")
+                .versions
+                .getValue("(0,1)")
+                .escrow.gradle.includeConfigurations,
+        ).containsExactly("1", "2", "3")
+        assertThat(
+            components
+                .getValue("component_commons")
+                .versions
+                .getValue("(1,2)")
+                .escrow.gradle.includeConfigurations,
+        ).containsExactly("4")
+        assertThat(
+            components
+                .getValue("component_commons")
+                .versions
+                .getValue("(2,3)")
+                .escrow.gradle.includeConfigurations,
+        ).containsExactly("5", "6")
     }
 
     @Test
@@ -221,11 +322,41 @@ class EscrowDslTest {
             }
         }
         assertThat(components.getValue("component_commons").escrow.providedDependencies).containsExactly("a:b:v1")
-        assertThat(components.getValue("component_commons").versions.getValue("(0,1)").escrow.providedDependencies).containsExactly("a:b:v1", "a:b:v2")
-        assertThat(components.getValue("component_commons").versions.getValue("(1,2)").escrow.providedDependencies).containsExactly("a:b:v1")
-        assertThat(components.getValue("component_commons").versions.getValue("(2,3)").escrow.providedDependencies).containsExactly("a:b:v3")
-        assertThat(components.getValue("component_commons").versions.getValue("(3,4)").escrow.providedDependencies).containsExactly("a:b:v1", "a:b:v4", "a:b:v5")
-        assertThat(components.getValue("component_commons").versions.getValue("(4,5)").escrow.providedDependencies).isEmpty()
+        assertThat(
+            components
+                .getValue("component_commons")
+                .versions
+                .getValue("(0,1)")
+                .escrow.providedDependencies,
+        ).containsExactly("a:b:v1", "a:b:v2")
+        assertThat(
+            components
+                .getValue("component_commons")
+                .versions
+                .getValue("(1,2)")
+                .escrow.providedDependencies,
+        ).containsExactly("a:b:v1")
+        assertThat(
+            components
+                .getValue("component_commons")
+                .versions
+                .getValue("(2,3)")
+                .escrow.providedDependencies,
+        ).containsExactly("a:b:v3")
+        assertThat(
+            components
+                .getValue("component_commons")
+                .versions
+                .getValue("(3,4)")
+                .escrow.providedDependencies,
+        ).containsExactly("a:b:v1", "a:b:v4", "a:b:v5")
+        assertThat(
+            components
+                .getValue("component_commons")
+                .versions
+                .getValue("(4,5)")
+                .escrow.providedDependencies,
+        ).isEmpty()
     }
 
     @Test
@@ -263,16 +394,15 @@ class EscrowDslTest {
 
     companion object {
         @JvmStatic
-        fun multipliers(): Stream<Arguments> {
-            return Stream.of(
+        fun multipliers(): Stream<Arguments> =
+            Stream.of(
                 Arguments.of("24G", 24 * 1024 * 1024 * 1024L),
                 Arguments.of("24GB", 24 * 1024 * 1024 * 1024L),
                 Arguments.of("2M", 2 * 1024 * 1024L),
                 Arguments.of("2MB", 2 * 1024 * 1024L),
                 Arguments.of("16K", 16 * 1024L),
                 Arguments.of("16KB", 16 * 1024L),
-                Arguments.of("512", 512L)
+                Arguments.of("512", 512L),
             )
-        }
     }
 }

@@ -5,7 +5,6 @@ import kotlin.test.assertEquals
 import kotlin.test.assertFailsWith
 
 class TokenManagerTest {
-
     private val issuer = "https://kc.example/realms/crs"
     private val clientId = "crsctl-public"
 

@@ -1,8 +1,5 @@
 package org.octopusden.octopus.components.registry.server.service.impl
 
-import java.lang.reflect.Method
-import java.util.UUID
-import java.util.concurrent.TimeUnit
 import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.Assertions.assertTrue
 import org.junit.jupiter.api.BeforeEach
@@ -32,6 +29,9 @@ import org.octopusden.octopus.escrow.configuration.loader.EscrowConfigurationLoa
 import org.octopusden.releng.versions.NumericVersionFactory
 import org.octopusden.releng.versions.VersionNames
 import org.octopusden.releng.versions.VersionRangeFactory
+import java.lang.reflect.Method
+import java.util.UUID
+import java.util.concurrent.TimeUnit
 
 /**
  * ARTGRP import-side canonicalization: `buildOwnershipMappings` must split a comma group-list
@@ -42,7 +42,6 @@ import org.octopusden.releng.versions.VersionRangeFactory
  */
 @Timeout(30, unit = TimeUnit.SECONDS)
 class ArtifactGroupSplitImportTest {
-
     private lateinit var service: ImportServiceImpl
     private lateinit var buildOwnershipMappings: Method
 
@@ -74,14 +73,15 @@ class ArtifactGroupSplitImportTest {
             versionRangeFactory = VersionRangeFactory(versionNames),
             numericVersionFactory = NumericVersionFactory(versionNames),
         )
-        buildOwnershipMappings = ImportServiceImpl::class.java.getDeclaredMethod(
-            "buildOwnershipMappings",
-            ComponentEntity::class.java,
-            String::class.java,
-            String::class.java,
-            String::class.java,
-            Int::class.javaPrimitiveType,
-        ).apply { isAccessible = true }
+        buildOwnershipMappings = ImportServiceImpl::class.java
+            .getDeclaredMethod(
+                "buildOwnershipMappings",
+                ComponentEntity::class.java,
+                String::class.java,
+                String::class.java,
+                String::class.java,
+                Int::class.javaPrimitiveType,
+            ).apply { isAccessible = true }
     }
 
     @Suppress("UNCHECKED_CAST")

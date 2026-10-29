@@ -1,6 +1,5 @@
 package org.octopusden.octopus.components.registry.automation
 
-import kotlin.test.assertNotEquals
 import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.Assertions.assertTrue
 import org.junit.jupiter.params.ParameterizedTest
@@ -13,9 +12,9 @@ import org.octopusden.octopus.components.registry.automation.ComponentsRegistryD
 import java.io.File
 import java.nio.file.Paths
 import java.util.stream.Stream
+import kotlin.test.assertNotEquals
 
 class ApplicationTest {
-
     private val jar = System.getProperty("jar")
         ?: throw IllegalStateException("System property 'jar' must be provided")
 
@@ -75,20 +74,21 @@ class ApplicationTest {
 
     private fun getDownloadedFileContent(): String = copyrightFile.readText(Charsets.UTF_8)
 
-    private fun execute(name: String, vararg commands: String) = ProcessBuilder("java", "-jar", jar, *commands)
+    private fun execute(
+        name: String,
+        vararg commands: String,
+    ) = ProcessBuilder("java", "-jar", jar, *commands)
         .redirectErrorStream(true)
         .redirectOutput(
             File("")
                 .resolve("build")
                 .resolve("logs")
                 .resolve("$name.log")
-                .also { it.parentFile.mkdirs() }
-        )
-        .start()
+                .also { it.parentFile.mkdirs() },
+        ).start()
         .waitFor()
 
     companion object {
-
         private const val CORRECT_EXIT_CODE = 0
         private const val INCORRECT_COMMAND_EXIT_CODE = 1
         private const val TEST_TARGET_PATH = "downloaded_copyrights/COPYRIGHT"

@@ -61,7 +61,7 @@ class ListComponentsOwnerFilterTest {
         System.setProperty("COMPONENTS_REGISTRY_SERVICE_TEST_DATA_DIR", testResourcesPath.toString())
     }
 
-    private fun uniqueName(prefix: String) = "${prefix}_${UUID.randomUUID().toString().take(8)}"
+    private fun uniqueName(prefix: String) = "${prefix.lowercase().replace('_', '-')}-${UUID.randomUUID().toString().take(8)}"
 
     private fun createComponent(
         name: String,
@@ -398,9 +398,9 @@ class ListComponentsOwnerFilterTest {
         val alice = uniqueName("sys043pg_alice")
         val bob = uniqueName("sys043pg_bob")
         val suffix = UUID.randomUUID().toString().take(6)
-        val first = "ownpg_aaa_$suffix"
-        val second = "ownpg_bbb_$suffix"
-        val third = "ownpg_ccc_$suffix"
+        val first = "ownpg-aaa-$suffix"
+        val second = "ownpg-bbb-$suffix"
+        val third = "ownpg-ccc-$suffix"
         // Reverse insertion order so a sort regression is visibly wrong.
         createComponent(third, bob)
         createComponent(second, alice)
@@ -415,7 +415,8 @@ class ListComponentsOwnerFilterTest {
                         .param("size", "1")
                         .param("sort", "componentKey,asc"),
                 ).andExpect(status().isOk)
-                .andReturn().response.contentAsString
+                .andReturn()
+                .response.contentAsString
         val pageJson = objectMapper.readTree(pageBody)
         assert(pageJson["content"].size() == 1) {
             "expected page size 1; got ${pageJson["content"].size()}: ${pageBody.take(400)}"
@@ -433,9 +434,10 @@ class ListComponentsOwnerFilterTest {
                         .param("size", "10")
                         .param("sort", "componentKey,asc"),
                 ).andExpect(status().isOk)
-                .andReturn().response.contentAsString
+                .andReturn()
+                .response.contentAsString
         val returnedNames = objectMapper.readTree(fullBody)["content"].map { it["name"].asText() }
-        val seededNames = returnedNames.filter { it.endsWith("_$suffix") }
+        val seededNames = returnedNames.filter { it.endsWith("-$suffix") }
         assert(seededNames == listOf(first, second, third)) {
             "expected components returned sorted by componentKey ASC ($first, $second, $third); got $seededNames"
         }

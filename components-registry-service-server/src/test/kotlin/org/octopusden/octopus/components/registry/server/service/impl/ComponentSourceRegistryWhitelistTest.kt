@@ -1,7 +1,5 @@
 package org.octopusden.octopus.components.registry.server.service.impl
 
-import java.util.Optional
-import java.util.concurrent.TimeUnit
 import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.Assertions.assertThrows
 import org.junit.jupiter.api.BeforeEach
@@ -16,6 +14,8 @@ import org.mockito.Mockito.verify
 import org.octopusden.octopus.components.registry.server.config.ComponentsRegistryProperties
 import org.octopusden.octopus.components.registry.server.entity.ComponentSourceEntity
 import org.octopusden.octopus.components.registry.server.repository.ComponentSourceRepository
+import java.util.Optional
+import java.util.concurrent.TimeUnit
 
 /**
  * PR #192 review fixup 3.5: `setComponentSource` must case-normalize and

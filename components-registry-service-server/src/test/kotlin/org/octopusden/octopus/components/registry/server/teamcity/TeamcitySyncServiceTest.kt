@@ -1,16 +1,29 @@
 package org.octopusden.octopus.components.registry.server.teamcity
 
 import org.junit.jupiter.api.Assertions.assertEquals
+import org.junit.jupiter.api.Assertions.assertFalse
 import org.junit.jupiter.api.Assertions.assertTrue
 import org.junit.jupiter.api.DisplayName
 import org.junit.jupiter.api.Test
 import org.junit.jupiter.api.assertThrows
+import org.mockito.kotlin.any
+import org.mockito.kotlin.eq
+import org.mockito.kotlin.mock
+import org.mockito.kotlin.whenever
 import org.octopusden.octopus.components.registry.server.entity.ComponentEntity
-import org.octopusden.octopus.components.registry.server.entity.ComponentTeamcityProjectEntity
+import org.octopusden.octopus.components.registry.server.entity.TeamcityProjectEntity
+import org.octopusden.octopus.components.registry.server.entity.VersionLineEntity
 import org.octopusden.octopus.components.registry.server.event.AuditEvent
+import org.octopusden.octopus.components.registry.server.repository.AuditLogRepository
+import org.octopusden.octopus.components.registry.server.repository.ComponentChangeStampRow
 import org.octopusden.octopus.components.registry.server.repository.ComponentRepository
-import org.octopusden.octopus.components.registry.server.repository.ComponentTeamcityProjectRepository
-import org.octopusden.octopus.components.registry.server.security.CurrentUserResolver
+import org.octopusden.octopus.components.registry.server.repository.TeamcityProjectRepository
+import org.octopusden.octopus.components.registry.server.repository.VersionLineRepository
+import org.octopusden.octopus.components.registry.server.teamcity.TeamcityProperties
+import org.octopusden.octopus.components.registry.server.teamcity.sync.TcProject
+import org.octopusden.octopus.components.registry.server.teamcity.sync.TcProjectFetcher
+import org.octopusden.octopus.components.registry.server.teamcity.sync.TeamcitySyncScheduler
+import org.octopusden.octopus.components.registry.server.teamcity.sync.TeamcitySyncService
 import org.springframework.context.ApplicationEvent
 import org.springframework.context.ApplicationEventPublisher
 import org.springframework.data.domain.Example
@@ -28,25 +41,34 @@ import java.util.UUID
 import java.util.function.Function
 
 /**
- * Unit tests for [TeamcitySyncService] against the v2 multi-row schema.
+ * Unit tests for [org.octopusden.octopus.components.registry.server.teamcity.sync.TeamcitySyncService]
+ * against the version_line / teamcity_project schema.
  *
- * All dependencies are hand-rolled in-memory stubs — no Spring context, no
- * Mockito, no DB. [TcProjectFetcher] is a SAM interface so a single lambda is
- * enough for most stubs. [StubTcProjectRepository] owns the per-component TC
- * row state, replacing the old `teamcityProjectId`/`teamcityProjectUrl` scalar
- * columns that lived on `ComponentEntity` in schema v1–v3.
+ * All dependencies are hand-rolled in-memory stubs — no Spring context, no Mockito, no DB.
+ * [org.octopusden.octopus.components.registry.server.teamcity.sync.TcProjectFetcher] is a SAM interface.
+ * [StubVersionLineRepository] owns the per-component
+ * link rows; [StubTeamcityProjectRepository] holds the deduplicated TeamCity projects.
  */
 class TeamcitySyncServiceTest {
     private val alice = UUID.fromString("11111111-1111-1111-1111-111111111111")
-    private val bob   = UUID.fromString("22222222-2222-2222-2222-222222222222")
+    private val bob = UUID.fromString("22222222-2222-2222-2222-222222222222")
     private val carol = UUID.fromString("33333333-3333-3333-3333-333333333333")
 
-    /**
-     * v2: `ComponentEntity` uses `componentKey` instead of `name`; the old
-     * `teamcityProjectId` / `teamcityProjectUrl` scalar fields are gone —
-     * TC association is kept in [StubTcProjectRepository].
-     */
-    private fun component(id: UUID, key: String) = ComponentEntity(id = id, componentKey = key)
+    private fun component(
+        id: UUID,
+        key: String,
+    ) = ComponentEntity(id = id, componentKey = key)
+
+    /** Build a persisted-style version_line for pre-seeding. */
+    private fun versionLine(
+        component: ComponentEntity,
+        projectId: String,
+        version: String? = null,
+    ) = VersionLineEntity(
+        component = component,
+        version = version,
+        teamcityProject = TeamcityProjectEntity(id = UUID.randomUUID(), projectId = projectId),
+    )
 
     private fun stubFetcher(matchesByKey: Map<String, List<TcProject>>): TcProjectFetcher =
         TcProjectFetcher { componentsByName ->
@@ -54,44 +76,55 @@ class TeamcitySyncServiceTest {
                 .mapNotNull { (key, uuid) ->
                     val projects = matchesByKey[key] ?: return@mapNotNull null
                     uuid to projects
-                }
-                .toMap()
+                }.toMap()
         }
 
     private fun service(
         repo: ComponentRepository,
-        tcRepo: StubTcProjectRepository,
+        versionLineRepo: StubVersionLineRepository,
+        teamcityProjectRepo: StubTeamcityProjectRepository,
         fetcher: TcProjectFetcher,
         publisher: ApplicationEventPublisher,
-        user: CurrentUserResolver,
         properties: TeamcityProperties = configuredProperties(),
-    ) = TeamcitySyncService(repo, tcRepo, fetcher, publisher, user, inlineTx(), properties)
+        auditLogRepository: AuditLogRepository = auditHistory(),
+    ) = TeamcitySyncService(
+        repo,
+        versionLineRepo,
+        teamcityProjectRepo,
+        fetcher,
+        publisher,
+        inlineTx(),
+        properties,
+        auditLogRepository,
+    )
+
+    /** An audit history in which someone has (or has not) changed `autoRelease` of every component. */
+    private fun auditHistory(autoReleaseChanged: Boolean = false): AuditLogRepository =
+        mock<AuditLogRepository>().also {
+            whenever(it.existsAutoReleaseChange(any())).thenReturn(autoReleaseChanged)
+        }
 
     private fun configuredProperties() = TeamcityProperties(baseUrl = "https://teamcity.example.com")
+
+    private fun projectIds(
+        repo: StubVersionLineRepository,
+        componentId: UUID,
+    ): List<String> = repo.findByComponentId(componentId).map { it.teamcityProject.projectId }.sorted()
 
     // ---------- Tests --------------------------------------------------------
 
     @Test
-    @DisplayName("SYS-051 happy path: writes TC row; counts updated; NO audit event")
+    @DisplayName("SYS-051 happy path: writes version_line; counts updated; NO audit event")
     fun happyPath() {
         val components = listOf(component(alice, "alpha"))
-        val fetcher = stubFetcher(
-            mapOf(
-                "alpha" to listOf(
-                    TcProject(
-                        "Alpha_Build",
-                        "https://teamcity.example.com/project/Alpha_Build",
-                        hasCdReleaseBuild = false,
-                    ),
-                ),
-            ),
-        )
+        val fetcher = stubFetcher(mapOf("alpha" to listOf(TcProject("Alpha_Build", hasCdReleaseBuild = false))))
         val repo = StubComponentRepository(components)
-        val tcRepo = StubTcProjectRepository()
+        val vlRepo = StubVersionLineRepository()
+        val tpRepo = StubTeamcityProjectRepository()
         val publisher = RecordingPublisher()
-        val svc = service(repo, tcRepo, fetcher, publisher, fixedUser("admin"))
+        val svc = service(repo, vlRepo, tpRepo, fetcher, publisher)
 
-        val result = svc.resync()
+        val result = svc.resync("admin")
 
         assertEquals(1, result.scanned)
         assertEquals(1, result.updated)
@@ -99,50 +132,39 @@ class TeamcitySyncServiceTest {
         assertEquals(0, result.skippedNoMatch)
         assertEquals(0, result.skippedAmbiguous)
         assertTrue(result.errors.isEmpty())
-
-        // v2: TC project written to child table, not to entity scalar fields.
-        assertEquals("Alpha_Build", tcRepo.findByComponentId(alice).single().projectId)
-
-        // SYS-051: TeamCity sync is an automated reconciliation (changedBy=system) and
-        // must NOT write audit rows — that noise was cluttering the component history.
+        assertEquals(
+            "Alpha_Build",
+            vlRepo
+                .findByComponentId(alice)
+                .single()
+                .teamcityProject.projectId,
+        )
         assertTrue(
             publisher.events.filterIsInstance<AuditEvent>().isEmpty(),
-            "TeamCity sync must not publish an AuditEvent even when it writes/updates the TC row (SYS-051)",
+            "TeamCity sync must not publish an AuditEvent (SYS-051)",
         )
     }
 
     @Test
-    @DisplayName("unchanged: existing TC row already matches — no audit event, no save, count unchanged")
+    @DisplayName("unchanged: existing line already matches — no audit event, no save, count unchanged")
     fun unchangedNoAudit() {
         val alphaComponent = component(alice, "alpha")
-        val components = listOf(alphaComponent)
-        val fetcher = stubFetcher(
-            mapOf(
-                "alpha" to listOf(
-                    TcProject(
-                        "Alpha_Build",
-                        "https://teamcity.example.com/project/Alpha_Build",
-                        hasCdReleaseBuild = false,
-                    ),
-                ),
-            ),
-        )
-        val repo = StubComponentRepository(components)
-        val tcRepo = StubTcProjectRepository()
-        // Pre-seed: alpha already has the correct TC row in the child table.
-        tcRepo.preload(
-            ComponentTeamcityProjectEntity(component = alphaComponent, projectId = "Alpha_Build", sortOrder = 0),
-        )
+        val fetcher = stubFetcher(mapOf("alpha" to listOf(TcProject("Alpha_Build", hasCdReleaseBuild = false))))
+        val repo = StubComponentRepository(listOf(alphaComponent))
+        val vlRepo = StubVersionLineRepository()
+        val tpRepo = StubTeamcityProjectRepository()
+        // Pre-seed: alpha already has the correct link (version null).
+        vlRepo.preload(versionLine(alphaComponent, "Alpha_Build"))
         val publisher = RecordingPublisher()
-        val svc = service(repo, tcRepo, fetcher, publisher, fixedUser("admin"))
+        val svc = service(repo, vlRepo, tpRepo, fetcher, publisher)
 
-        val result = svc.resync()
+        val result = svc.resync("admin")
 
         assertEquals(1, result.scanned)
         assertEquals(0, result.updated)
         assertEquals(1, result.unchanged)
-        assertTrue(publisher.events.isEmpty(), "no audit events when projectId unchanged")
-        assertTrue(tcRepo.saveCalls.isEmpty(), "no save when projectId unchanged")
+        assertTrue(publisher.events.isEmpty(), "no audit events when unchanged")
+        assertTrue(vlRepo.saveCalls.isEmpty(), "no save when unchanged")
     }
 
     @Test
@@ -152,24 +174,27 @@ class TeamcitySyncServiceTest {
         val fetcher = stubFetcher(
             mapOf(
                 "alpha" to listOf(
-                    TcProject("Project_A", "https://teamcity.example.com/project/A", hasCdReleaseBuild = false),
-                    TcProject("Project_B", "https://teamcity.example.com/project/B", hasCdReleaseBuild = false),
+                    TcProject("Project_A", hasCdReleaseBuild = false),
+                    TcProject("Project_B", hasCdReleaseBuild = false),
                 ),
             ),
         )
         val repo = StubComponentRepository(components)
-        val tcRepo = StubTcProjectRepository()
+        val vlRepo = StubVersionLineRepository()
+        val tpRepo = StubTeamcityProjectRepository()
         val publisher = RecordingPublisher()
-        val svc = service(repo, tcRepo, fetcher, publisher, fixedUser("admin"))
+        val svc = service(repo, vlRepo, tpRepo, fetcher, publisher)
 
-        val result = svc.resync()
+        val result = svc.resync("admin")
 
         assertEquals(1, result.scanned)
         assertEquals(0, result.updated)
         assertEquals(0, result.unchanged)
         assertEquals(1, result.skippedAmbiguous)
         assertEquals(0, result.ambiguousAutoResolved)
-        assertTrue(tcRepo.findByComponentId(alice).isEmpty(), "ambiguous + no CDRelease → no TC row written")
+        // Fully-skipped component: reflected in skippedAmbiguous, NOT droppedLines.
+        assertEquals(0, result.droppedLines)
+        assertTrue(vlRepo.findByComponentId(alice).isEmpty(), "ambiguous + no CDRelease → no line written")
         assertTrue(publisher.events.isEmpty())
     }
 
@@ -180,84 +205,64 @@ class TeamcitySyncServiceTest {
         val fetcher = stubFetcher(
             mapOf(
                 "alpha" to listOf(
-                    TcProject("Project_A_NoRelease", "https://tc/a", hasCdReleaseBuild = false),
-                    TcProject("Project_B_Release", "https://tc/b", hasCdReleaseBuild = true),
+                    TcProject("Project_A_NoRelease", hasCdReleaseBuild = false),
+                    TcProject("Project_B_Release", hasCdReleaseBuild = true),
                 ),
             ),
         )
         val repo = StubComponentRepository(components)
-        val tcRepo = StubTcProjectRepository()
+        val vlRepo = StubVersionLineRepository()
+        val tpRepo = StubTeamcityProjectRepository()
         val publisher = RecordingPublisher()
-        val svc = service(repo, tcRepo, fetcher, publisher, fixedUser("admin"))
+        val svc = service(repo, vlRepo, tpRepo, fetcher, publisher)
 
-        val result = svc.resync()
+        val result = svc.resync("admin")
 
         assertEquals(1, result.scanned)
         assertEquals(1, result.updated)
         assertEquals(0, result.skippedAmbiguous)
         assertEquals(1, result.ambiguousAutoResolved)
-        // v2: TC row stores only the projectId; URL is derived at read-time via composeTeamcityProjectUrl.
-        assertEquals("Project_B_Release", tcRepo.findByComponentId(alice).single().projectId)
-        assertTrue(
-            publisher.events.filterIsInstance<AuditEvent>().isEmpty(),
-            "TeamCity sync must not publish an AuditEvent (SYS-051)",
+        assertEquals(
+            "Project_B_Release",
+            vlRepo
+                .findByComponentId(alice)
+                .single()
+                .teamcityProject.projectId,
         )
+        assertTrue(publisher.events.filterIsInstance<AuditEvent>().isEmpty(), "no AuditEvent (SYS-051)")
     }
 
     @Test
     @DisplayName("ambiguous + multiple CDRelease candidates → pick lexicographically smallest by id")
     fun ambiguousMultipleCdReleasePickFirstById() {
         val components = listOf(component(alice, "alpha"))
-        // "Project_A_Release" < "Project_B_Release"; list order is inverted to prove
-        // the tie-break is by id, not by input order.
+        // Input order inverted to prove tie-break is by id, not input order.
         val fetcher = stubFetcher(
             mapOf(
                 "alpha" to listOf(
-                    TcProject("Project_B_Release", "https://tc/b", hasCdReleaseBuild = true),
-                    TcProject("Project_A_Release", "https://tc/a", hasCdReleaseBuild = true),
+                    TcProject("Project_B_Release", hasCdReleaseBuild = true),
+                    TcProject("Project_A_Release", hasCdReleaseBuild = true),
                 ),
             ),
         )
         val repo = StubComponentRepository(components)
-        val tcRepo = StubTcProjectRepository()
+        val vlRepo = StubVersionLineRepository()
+        val tpRepo = StubTeamcityProjectRepository()
         val publisher = RecordingPublisher()
-        val svc = service(repo, tcRepo, fetcher, publisher, fixedUser("admin"))
+        val svc = service(repo, vlRepo, tpRepo, fetcher, publisher)
 
-        val result = svc.resync()
+        val result = svc.resync("admin")
 
         assertEquals(1, result.updated)
         assertEquals(0, result.skippedAmbiguous)
         assertEquals(1, result.ambiguousAutoResolved)
-        assertEquals("Project_A_Release", tcRepo.findByComponentId(alice).single().projectId)
-    }
-
-    @Test
-    @DisplayName("ambiguous tie-break to CDRelease project with blank webUrl → no-match, ambiguousAutoResolved stays 0")
-    fun ambiguousTieBreakBlankUrlIsNoMatch() {
-        val components = listOf(component(alice, "alpha"))
-        val fetcher = stubFetcher(
-            mapOf(
-                "alpha" to listOf(
-                    TcProject("Project_NoUrl", "", hasCdReleaseBuild = true),
-                    TcProject("Project_Other", "https://tc/other", hasCdReleaseBuild = false),
-                ),
-            ),
+        assertEquals(
+            "Project_A_Release",
+            vlRepo
+                .findByComponentId(alice)
+                .single()
+                .teamcityProject.projectId,
         )
-        val repo = StubComponentRepository(components)
-        val tcRepo = StubTcProjectRepository()
-        val publisher = RecordingPublisher()
-        val svc = service(repo, tcRepo, fetcher, publisher, fixedUser("admin"))
-
-        val result = svc.resync()
-
-        // Tie-break selected the CDRelease project but its webUrl is blank → counted as no-match.
-        // ambiguousAutoResolved is a sub-counter of updated+unchanged per the result KDoc, so it
-        // must NOT increment for rows that fall through to skippedNoMatch.
-        assertEquals(1, result.skippedNoMatch)
-        assertEquals(0, result.updated)
-        assertEquals(0, result.skippedAmbiguous)
-        assertEquals(0, result.ambiguousAutoResolved)
-        assertTrue(tcRepo.findByComponentId(alice).isEmpty(), "no TC row written when webUrl unusable")
     }
 
     @Test
@@ -266,60 +271,32 @@ class TeamcitySyncServiceTest {
         val components = listOf(component(alice, "alpha"))
         val fetcher = stubFetcher(emptyMap())
         val repo = StubComponentRepository(components)
-        val tcRepo = StubTcProjectRepository()
+        val vlRepo = StubVersionLineRepository()
+        val tpRepo = StubTeamcityProjectRepository()
         val publisher = RecordingPublisher()
-        val svc = service(repo, tcRepo, fetcher, publisher, fixedUser("admin"))
+        val svc = service(repo, vlRepo, tpRepo, fetcher, publisher)
 
-        val result = svc.resync()
+        val result = svc.resync("admin")
 
         assertEquals(1, result.scanned)
         assertEquals(0, result.updated)
         assertEquals(1, result.skippedNoMatch)
-        assertTrue(tcRepo.findByComponentId(alice).isEmpty(), "no TC row for no-match component")
-    }
-
-    @Test
-    @DisplayName("blank webUrl: treated as no-match")
-    fun blankWebUrlIsNoMatch() {
-        val components = listOf(component(alice, "alpha"))
-        val fetcher = stubFetcher(
-            mapOf("alpha" to listOf(TcProject("Project_A", "", hasCdReleaseBuild = false))),
-        )
-        val repo = StubComponentRepository(components)
-        val tcRepo = StubTcProjectRepository()
-        val publisher = RecordingPublisher()
-        val svc = service(repo, tcRepo, fetcher, publisher, fixedUser("admin"))
-
-        val result = svc.resync()
-
-        assertEquals(1, result.skippedNoMatch)
-        assertEquals(0, result.updated)
-        assertTrue(tcRepo.findByComponentId(alice).isEmpty())
+        assertTrue(vlRepo.findByComponentId(alice).isEmpty(), "no line for no-match component")
     }
 
     @Test
     @DisplayName("null-id component: counted in scanned but silently skipped, no error counter")
     fun nullIdComponentSkipped() {
-        // null-id components are filtered from the name→id map and skipped in the loop via `continue`.
         val nullIdComponent = ComponentEntity(id = null, componentKey = "no-id")
         val components = listOf(component(alice, "alpha"), nullIdComponent)
-        val fetcher = stubFetcher(
-            mapOf(
-                "alpha" to listOf(
-                    TcProject(
-                        "Alpha_Build",
-                        "https://teamcity.example.com/project/Alpha_Build",
-                        hasCdReleaseBuild = false,
-                    ),
-                ),
-            ),
-        )
+        val fetcher = stubFetcher(mapOf("alpha" to listOf(TcProject("Alpha_Build", hasCdReleaseBuild = false))))
         val repo = StubComponentRepository(components)
-        val tcRepo = StubTcProjectRepository()
+        val vlRepo = StubVersionLineRepository()
+        val tpRepo = StubTeamcityProjectRepository()
         val publisher = RecordingPublisher()
-        val svc = service(repo, tcRepo, fetcher, publisher, fixedUser("admin"))
+        val svc = service(repo, vlRepo, tpRepo, fetcher, publisher)
 
-        val result = svc.resync()
+        val result = svc.resync("admin")
 
         assertEquals(2, result.scanned)
         assertEquals(1, result.updated)
@@ -334,24 +311,26 @@ class TeamcitySyncServiceTest {
         val components = listOf(component(alice, "alpha"))
         val fetcher = TcProjectFetcher { _ -> emptyMap() }
         val repo = StubComponentRepository(components)
-        val tcRepo = StubTcProjectRepository()
+        val vlRepo = StubVersionLineRepository()
+        val tpRepo = StubTeamcityProjectRepository()
         val publisher = RecordingPublisher()
-        val svc = service(repo, tcRepo, fetcher, publisher, fixedUser("admin"), TeamcityProperties())
+        val svc = service(repo, vlRepo, tpRepo, fetcher, publisher, TeamcityProperties())
 
-        val ex = assertThrows<IllegalStateException> { svc.resync() }
+        val ex = assertThrows<IllegalStateException> { svc.resync("admin") }
         assertTrue(ex.message!!.contains("teamcity.base-url"), "message should mention the config property")
     }
 
     @Test
-    @DisplayName("blank base-url: throws even when registry is empty (no silent scanned=0 on misconfiguration)")
+    @DisplayName("blank base-url: throws even when registry is empty")
     fun blankBaseUrlThrowsOnEmptyRegistry() {
         val fetcher = TcProjectFetcher { _ -> emptyMap() }
         val repo = StubComponentRepository(emptyList())
-        val tcRepo = StubTcProjectRepository()
+        val vlRepo = StubVersionLineRepository()
+        val tpRepo = StubTeamcityProjectRepository()
         val publisher = RecordingPublisher()
-        val svc = service(repo, tcRepo, fetcher, publisher, fixedUser("admin"), TeamcityProperties())
+        val svc = service(repo, vlRepo, tpRepo, fetcher, publisher, TeamcityProperties())
 
-        val ex = assertThrows<IllegalStateException> { svc.resync() }
+        val ex = assertThrows<IllegalStateException> { svc.resync("admin") }
         assertTrue(ex.message!!.contains("teamcity.base-url"), "message should mention the config property")
     }
 
@@ -361,175 +340,598 @@ class TeamcitySyncServiceTest {
         val components = listOf(component(alice, "alpha"))
         val fetcher = TcProjectFetcher { _ -> throw RuntimeException("TC unavailable") }
         val repo = StubComponentRepository(components)
-        val tcRepo = StubTcProjectRepository()
+        val vlRepo = StubVersionLineRepository()
+        val tpRepo = StubTeamcityProjectRepository()
         val publisher = RecordingPublisher()
-        val svc = service(repo, tcRepo, fetcher, publisher, fixedUser("admin"))
+        val svc = service(repo, vlRepo, tpRepo, fetcher, publisher)
 
-        val ex = assertThrows<RuntimeException> { svc.resync() }
+        val ex = assertThrows<RuntimeException> { svc.resync("admin") }
         assertEquals("TC unavailable", ex.message)
+    }
+
+    @Test
+    fun `SYS-104 resync turns autoRelease on`() {
+        val auto = component(alice, "alpha")
+        val manual = component(bob, "beta")
+        val fetcher = stubFetcher(
+            mapOf(
+                "alpha" to listOf(TcProject("Alpha_Build", hasCdReleaseBuild = true, hasAutoReleaseTrigger = true)),
+                "beta" to listOf(TcProject("Beta_Build", hasCdReleaseBuild = true)),
+            ),
+        )
+        val publisher = RecordingPublisher()
+        val svc = service(
+            StubComponentRepository(listOf(auto, manual)),
+            StubVersionLineRepository(),
+            StubTeamcityProjectRepository(),
+            fetcher,
+            publisher,
+        )
+
+        val result = svc.resync("admin")
+
+        assertTrue(auto.autoRelease)
+        assertFalse(manual.autoRelease)
+        assertEquals(1, result.autoReleaseEnabled)
+        val audit = publisher.events.filterIsInstance<AuditEvent>().single()
+        assertEquals(alice.toString(), audit.entityId)
+        assertEquals(mapOf("autoRelease" to false), audit.oldValue)
+        assertEquals(mapOf("autoRelease" to true), audit.newValue)
+        assertEquals("admin", audit.changedBy)
+    }
+
+    @Test
+    fun `SYS-104 resync never turns autoRelease off`() {
+        val alpha = component(alice, "alpha").apply { autoRelease = true }
+        val fetcher = stubFetcher(mapOf("alpha" to listOf(TcProject("Alpha_Build", hasCdReleaseBuild = true))))
+        val svc = service(
+            StubComponentRepository(listOf(alpha)),
+            StubVersionLineRepository(),
+            StubTeamcityProjectRepository(),
+            fetcher,
+            RecordingPublisher(),
+        )
+
+        val result = svc.resync("admin")
+
+        assertTrue(alpha.autoRelease)
+        assertEquals(0, result.autoReleaseEnabled)
+    }
+
+    @Test
+    fun `SYS-104 a failure on one component is an error, not a rollback`() {
+        val alpha = component(alice, "alpha")
+        val beta = component(bob, "beta")
+        val withTrigger = { id: String -> listOf(TcProject(id, hasCdReleaseBuild = true, hasAutoReleaseTrigger = true)) }
+        val fetcher = stubFetcher(mapOf("alpha" to withTrigger("Alpha_Build"), "beta" to withTrigger("Beta_Build")))
+        val audit = auditHistory()
+        whenever(audit.existsAutoReleaseChange(eq(bob.toString())))
+            .thenThrow(IllegalStateException("conflict"))
+        val vlRepo = StubVersionLineRepository()
+        val svc = service(
+            StubComponentRepository(listOf(alpha, beta)),
+            vlRepo,
+            StubTeamcityProjectRepository(),
+            fetcher,
+            RecordingPublisher(),
+            auditLogRepository = audit,
+        )
+
+        val result = svc.resync("admin")
+
+        assertTrue(alpha.autoRelease)
+        assertFalse(beta.autoRelease)
+        assertEquals(1, result.autoReleaseEnabled)
+        assertEquals(1, result.errors.size)
+        assertEquals(2, result.updated)
+        assertEquals(listOf("Beta_Build"), projectIds(vlRepo, bob))
+    }
+
+    @Test
+    fun `SYS-104 resync keeps a manual off`() {
+        val alpha = component(alice, "alpha")
+        val project = TcProject("Alpha_Build", hasCdReleaseBuild = true, hasAutoReleaseTrigger = true)
+        val fetcher = stubFetcher(mapOf("alpha" to listOf(project)))
+        val svc = service(
+            StubComponentRepository(listOf(alpha)),
+            StubVersionLineRepository(),
+            StubTeamcityProjectRepository(),
+            fetcher,
+            RecordingPublisher(),
+            auditLogRepository = auditHistory(autoReleaseChanged = true),
+        )
+
+        val result = svc.resync("admin")
+
+        assertFalse(alpha.autoRelease)
+        assertEquals(0, result.autoReleaseEnabled)
+    }
+
+    @Test
+    fun `SYS-104 the weekly cron leaves autoRelease alone by default`() {
+        val alpha = component(alice, "alpha")
+        val project = TcProject("Alpha_Build", hasCdReleaseBuild = true, hasAutoReleaseTrigger = true)
+        val svc = service(
+            StubComponentRepository(listOf(alpha)),
+            StubVersionLineRepository(),
+            StubTeamcityProjectRepository(),
+            stubFetcher(mapOf("alpha" to listOf(project))),
+            RecordingPublisher(),
+        )
+
+        val result = svc.resync(TeamcitySyncScheduler.TRIGGERED_BY_SCHEDULER)
+
+        assertFalse(alpha.autoRelease)
+        assertEquals(0, result.autoReleaseEnabled)
+    }
+
+    @Test
+    fun `SYS-104 the weekly cron turns autoRelease on when enabled`() {
+        val alpha = component(alice, "alpha")
+        val project = TcProject("Alpha_Build", hasCdReleaseBuild = true, hasAutoReleaseTrigger = true)
+        val svc = service(
+            StubComponentRepository(listOf(alpha)),
+            StubVersionLineRepository(),
+            StubTeamcityProjectRepository(),
+            stubFetcher(mapOf("alpha" to listOf(project))),
+            RecordingPublisher(),
+            TeamcityProperties(
+                baseUrl = "https://teamcity.example.com",
+                sync = TeamcityProperties.SyncProperties(autoReleaseOnCron = true),
+            ),
+        )
+
+        val result = svc.resync(TeamcitySyncScheduler.TRIGGERED_BY_SCHEDULER)
+
+        assertTrue(alpha.autoRelease)
+        assertEquals(1, result.autoReleaseEnabled)
+    }
+
+    @Test
+    fun `SYS-104 resync needs the trigger on every linked line`() {
+        val alpha = component(alice, "alpha")
+        val fetcher = stubFetcher(
+            mapOf(
+                "alpha" to listOf(
+                    TcProject("Alpha_13", hasCdReleaseBuild = true, projectVersion = "1.3"),
+                    TcProject("Alpha_14", hasCdReleaseBuild = true, projectVersion = "1.4", hasAutoReleaseTrigger = true),
+                ),
+            ),
+        )
+        val svc = service(
+            StubComponentRepository(listOf(alpha)),
+            StubVersionLineRepository(),
+            StubTeamcityProjectRepository(),
+            fetcher,
+            RecordingPublisher(),
+        )
+
+        val result = svc.resync("admin")
+
+        assertFalse(alpha.autoRelease)
+        assertEquals(0, result.autoReleaseEnabled)
+    }
+
+    @Test
+    fun `SYS-104 a release line left unresolved keeps autoRelease off`() {
+        val alpha = component(alice, "alpha")
+        val fetcher = stubFetcher(
+            mapOf(
+                "alpha" to listOf(
+                    TcProject("Alpha_13a", hasCdReleaseBuild = false, projectVersion = "1.3"),
+                    TcProject("Alpha_13b", hasCdReleaseBuild = false, projectVersion = "1.3"),
+                    TcProject("Alpha_14", hasCdReleaseBuild = true, projectVersion = "1.4", hasAutoReleaseTrigger = true),
+                ),
+            ),
+        )
+        val svc = service(
+            StubComponentRepository(listOf(alpha)),
+            StubVersionLineRepository(),
+            StubTeamcityProjectRepository(),
+            fetcher,
+            RecordingPublisher(),
+        )
+
+        val result = svc.resync("admin")
+
+        assertEquals(1, result.droppedLines)
+        assertFalse(alpha.autoRelease)
+        assertEquals(0, result.autoReleaseEnabled)
     }
 
     @Test
     @DisplayName("mixed batch: counts every category in one pass")
     fun mixedBatch() {
         val alphaComponent = component(alice, "alpha")
-        val betaComponent  = component(bob, "beta")
+        val betaComponent = component(bob, "beta")
         val gammaComponent = component(carol, "gamma")
         val components = listOf(alphaComponent, betaComponent, gammaComponent)
 
         val fetcher = stubFetcher(
             mapOf(
-                "alpha" to listOf(
-                    TcProject("Alpha_Build", "https://teamcity.example.com/project/Alpha_Build", hasCdReleaseBuild = false),
-                ),
-                "beta" to listOf(
-                    TcProject("Beta_Build", "https://teamcity.example.com/project/Beta_Build", hasCdReleaseBuild = false),
-                ),
+                "alpha" to listOf(TcProject("Alpha_Build", hasCdReleaseBuild = false)),
+                "beta" to listOf(TcProject("Beta_Build", hasCdReleaseBuild = false)),
                 // gamma has no TC match → skippedNoMatch
             ),
         )
         val repo = StubComponentRepository(components)
-        val tcRepo = StubTcProjectRepository()
+        val vlRepo = StubVersionLineRepository()
+        val tpRepo = StubTeamcityProjectRepository()
         // Pre-seed beta as already correct so it counts as unchanged.
-        tcRepo.preload(
-            ComponentTeamcityProjectEntity(component = betaComponent, projectId = "Beta_Build", sortOrder = 0),
-        )
+        vlRepo.preload(versionLine(betaComponent, "Beta_Build"))
         val publisher = RecordingPublisher()
-        val svc = service(repo, tcRepo, fetcher, publisher, fixedUser("alice"))
+        val svc = service(repo, vlRepo, tpRepo, fetcher, publisher)
 
-        val result = svc.resync()
+        val result = svc.resync("admin")
 
         assertEquals(3, result.scanned)
-        assertEquals(1, result.updated)       // alpha newly written
-        assertEquals(1, result.unchanged)     // beta already correct
+        assertEquals(1, result.updated) // alpha newly written
+        assertEquals(1, result.unchanged) // beta already correct
         assertEquals(1, result.skippedNoMatch) // gamma
         assertEquals(0, result.skippedAmbiguous)
         assertTrue(result.errors.isEmpty())
-        assertTrue(
-            publisher.events.filterIsInstance<AuditEvent>().isEmpty(),
-            "TeamCity sync must not publish an AuditEvent for any synced component (SYS-051)",
+        assertTrue(publisher.events.filterIsInstance<AuditEvent>().isEmpty(), "no AuditEvent (SYS-051)")
+    }
+
+    @Test
+    @DisplayName("multiple PROJECT_VERSION lines: keeps one project per version, writes one row each")
+    fun multipleVersionsKeepOnePerLine() {
+        val components = listOf(component(alice, "alpha"))
+        val fetcher = stubFetcher(
+            mapOf(
+                "alpha" to listOf(
+                    TcProject("Alpha_1x", hasCdReleaseBuild = false, projectVersion = "1.x"),
+                    TcProject("Alpha_2x", hasCdReleaseBuild = false, projectVersion = "2.x"),
+                ),
+            ),
         )
+        val repo = StubComponentRepository(components)
+        val vlRepo = StubVersionLineRepository()
+        val tpRepo = StubTeamcityProjectRepository()
+        val publisher = RecordingPublisher()
+        val svc = service(repo, vlRepo, tpRepo, fetcher, publisher)
+
+        val result = svc.resync("admin")
+
+        assertEquals(1, result.updated)
+        assertEquals(0, result.skippedAmbiguous)
+        assertEquals(0, result.ambiguousAutoResolved) // each line had a single candidate
+        val rows = vlRepo.findByComponentId(alice).sortedBy { it.teamcityProject.projectId }
+        assertEquals(listOf("Alpha_1x", "Alpha_2x"), rows.map { it.teamcityProject.projectId })
+        assertEquals(listOf("1.x", "2.x"), rows.map { it.version })
+    }
+
+    @Test
+    @DisplayName("tie-break is per PROJECT_VERSION: one line resolves trivially, the other via CDRelease")
+    fun sameVersionTieBreakWithinLine() {
+        val components = listOf(component(alice, "alpha"))
+        val fetcher = stubFetcher(
+            mapOf(
+                "alpha" to listOf(
+                    TcProject("Alpha_2x_A", hasCdReleaseBuild = false, projectVersion = "2.x"),
+                    TcProject("Alpha_2x_B", hasCdReleaseBuild = true, projectVersion = "2.x"),
+                    TcProject("Alpha_1x", hasCdReleaseBuild = false, projectVersion = "1.x"),
+                ),
+            ),
+        )
+        val repo = StubComponentRepository(components)
+        val vlRepo = StubVersionLineRepository()
+        val tpRepo = StubTeamcityProjectRepository()
+        val publisher = RecordingPublisher()
+        val svc = service(repo, vlRepo, tpRepo, fetcher, publisher)
+
+        val result = svc.resync("admin")
+
+        assertEquals(1, result.updated)
+        assertEquals(0, result.skippedAmbiguous)
+        assertEquals(1, result.ambiguousAutoResolved) // the 2.x line needed a tie-break
+        val rows = vlRepo.findByComponentId(alice).sortedBy { it.teamcityProject.projectId }
+        assertEquals(listOf("Alpha_1x", "Alpha_2x_B"), rows.map { it.teamcityProject.projectId })
+        assertEquals(listOf("1.x", "2.x"), rows.map { it.version })
+    }
+
+    @Test
+    @DisplayName("one line resolves, another is ambiguous-unresolved: usable winner still written, no skippedAmbiguous")
+    fun mixedResolvableAndAmbiguousLines() {
+        val components = listOf(component(alice, "alpha"))
+        val fetcher = stubFetcher(
+            mapOf(
+                "alpha" to listOf(
+                    // 1.x resolves trivially
+                    TcProject("Alpha_1x", hasCdReleaseBuild = false, projectVersion = "1.x"),
+                    // 2.x is ambiguous with no CDRelease → that line is dropped
+                    TcProject("Alpha_2x_A", hasCdReleaseBuild = false, projectVersion = "2.x"),
+                    TcProject("Alpha_2x_B", hasCdReleaseBuild = false, projectVersion = "2.x"),
+                ),
+            ),
+        )
+        val repo = StubComponentRepository(components)
+        val vlRepo = StubVersionLineRepository()
+        val tpRepo = StubTeamcityProjectRepository()
+        val publisher = RecordingPublisher()
+        val svc = service(repo, vlRepo, tpRepo, fetcher, publisher)
+
+        val result = svc.resync("admin")
+
+        // Component counts as updated because at least one line produced a winner.
+        assertEquals(1, result.updated)
+        assertEquals(0, result.skippedAmbiguous)
+        // The dropped 2.x line is invisible to skippedAmbiguous but counted here (partial failure).
+        assertEquals(1, result.droppedLines)
+        assertEquals(listOf("Alpha_1x"), projectIds(vlRepo, alice))
+    }
+
+    @Test
+    @DisplayName("null-version candidate is discarded when another candidate declares a version")
+    fun nullVersionDiscardedWhenVersionedPresent() {
+        val components = listOf(component(alice, "alpha"))
+        val fetcher = stubFetcher(
+            mapOf(
+                "alpha" to listOf(
+                    TcProject("Alpha_NoVer", hasCdReleaseBuild = false, projectVersion = null),
+                    TcProject("Alpha_2x", hasCdReleaseBuild = false, projectVersion = "2.x"),
+                    TcProject("Alpha_3x", hasCdReleaseBuild = false, projectVersion = "3.x"),
+                ),
+            ),
+        )
+        val repo = StubComponentRepository(components)
+        val vlRepo = StubVersionLineRepository()
+        val tpRepo = StubTeamcityProjectRepository()
+        val publisher = RecordingPublisher()
+        val svc = service(repo, vlRepo, tpRepo, fetcher, publisher)
+
+        val result = svc.resync("admin")
+
+        assertEquals(1, result.updated)
+        val rows = vlRepo.findByComponentId(alice).sortedBy { it.teamcityProject.projectId }
+        // The null-version project is dropped; only the versioned lines survive.
+        assertEquals(listOf("Alpha_2x", "Alpha_3x"), rows.map { it.teamcityProject.projectId })
+        assertEquals(listOf("2.x", "3.x"), rows.map { it.version })
+    }
+
+    @Test
+    @DisplayName("all-null candidates keep default behavior (collapse to one line)")
+    fun allNullKeepsDefaultBehavior() {
+        val components = listOf(component(alice, "alpha"))
+        val fetcher = stubFetcher(
+            mapOf(
+                "alpha" to listOf(
+                    TcProject("Alpha_A", hasCdReleaseBuild = false, projectVersion = null),
+                    TcProject("Alpha_B", hasCdReleaseBuild = true, projectVersion = null),
+                ),
+            ),
+        )
+        val repo = StubComponentRepository(components)
+        val vlRepo = StubVersionLineRepository()
+        val tpRepo = StubTeamcityProjectRepository()
+        val publisher = RecordingPublisher()
+        val svc = service(repo, vlRepo, tpRepo, fetcher, publisher)
+
+        val result = svc.resync("admin")
+
+        // Both null → single null group → CDRelease tie-break picks one row.
+        assertEquals(1, result.updated)
+        assertEquals(1, result.ambiguousAutoResolved)
+        val rows = vlRepo.findByComponentId(alice)
+        assertEquals(listOf("Alpha_B"), rows.map { it.teamcityProject.projectId })
+        assertEquals(listOf<String?>(null), rows.map { it.version })
     }
 
     // -- Test doubles ---------------------------------------------------------
 
-    private fun fixedUser(name: String): CurrentUserResolver =
-        object : CurrentUserResolver() {
-            override fun currentUsername(): String = name
-        }
-
-    /**
-     * No-op [TransactionTemplate] that runs the callback inline.
-     * In-memory stubs have no JPA transaction semantics so a real manager
-     * would only add ceremony.
-     */
+    /** No-op [TransactionTemplate] that runs the callback inline. */
     private fun inlineTx(): TransactionTemplate =
         object : TransactionTemplate() {
-            override fun <T> execute(action: TransactionCallback<T>): T? =
-                action.doInTransaction(SimpleTransactionStatus())
+            override fun <T> execute(action: TransactionCallback<T>): T? = action.doInTransaction(SimpleTransactionStatus())
         }
 
     private class RecordingPublisher : ApplicationEventPublisher {
         val events = mutableListOf<Any>()
-        override fun publishEvent(event: Any) { events.add(event) }
-        override fun publishEvent(event: ApplicationEvent) { events.add(event) }
+
+        override fun publishEvent(event: Any) {
+            events.add(event)
+        }
+
+        override fun publishEvent(event: ApplicationEvent) {
+            events.add(event)
+        }
     }
 
     /**
-     * In-memory stub for [ComponentTeamcityProjectRepository].
-     *
-     * Stores entities in a mutable list. [preload] seeds pre-existing rows
-     * before the sync run. [saveCalls] lets tests assert that no write
-     * happened when idempotency is expected.
+     * In-memory stub for [VersionLineRepository]. [preload] seeds pre-existing rows;
+     * [saveCalls] lets tests assert no write happened when idempotency is expected.
      */
-    private class StubTcProjectRepository : ComponentTeamcityProjectRepository {
-        private val store = mutableListOf<ComponentTeamcityProjectEntity>()
-        val saveCalls = mutableListOf<ComponentTeamcityProjectEntity>()
+    private class StubVersionLineRepository : VersionLineRepository {
+        private val store = mutableListOf<VersionLineEntity>()
+        val saveCalls = mutableListOf<VersionLineEntity>()
 
-        /** Seed a row as already-persisted before the sync run. */
-        fun preload(entity: ComponentTeamcityProjectEntity) { store.add(entity) }
+        fun preload(entity: VersionLineEntity) {
+            store.add(entity)
+        }
 
-        override fun findByComponentId(componentId: UUID): List<ComponentTeamcityProjectEntity> =
-            store.filter { it.component.id == componentId }
+        override fun findByComponentId(componentId: UUID): List<VersionLineEntity> = store.filter { it.component.id == componentId }
 
-        override fun findByProjectId(projectId: String): List<ComponentTeamcityProjectEntity> =
-            store.filter { it.projectId == projectId }
+        override fun findByProjectIdsWithComponent(projectIds: Collection<String>): List<VersionLineEntity> =
+            store.filter { it.teamcityProject.projectId in projectIds }
 
-        override fun <S : ComponentTeamcityProjectEntity> save(entity: S): S {
+        override fun findDistinctLinkedProjectIds(): List<String> = store.map { it.teamcityProject.projectId }.distinct()
+
+        override fun findDistinctTeamcityProjectIdsByComponentId(componentId: UUID): List<String> =
+            store.filter { it.component.id == componentId }.map { it.teamcityProject.projectId }.distinct()
+
+        override fun <S : VersionLineEntity> save(entity: S): S {
             store.add(entity)
             saveCalls.add(entity)
             return entity
         }
 
-        override fun deleteAllInBatch(entities: Iterable<ComponentTeamcityProjectEntity>) {
+        override fun deleteAllInBatch(entities: Iterable<VersionLineEntity>) {
             store.removeAll(entities.toList())
         }
 
-        // Unused standard JPA methods — throw to surface accidental call-sites during refactors.
+        override fun <S : VersionLineEntity> saveAll(entities: Iterable<S>): List<S> = unsupported()
 
-        override fun <S : ComponentTeamcityProjectEntity> saveAll(entities: Iterable<S>): List<S> = unsupported()
-        override fun <S : ComponentTeamcityProjectEntity> saveAndFlush(entity: S): S = unsupported()
-        override fun <S : ComponentTeamcityProjectEntity> saveAllAndFlush(entities: Iterable<S>): List<S> = unsupported()
-        override fun findById(id: UUID): Optional<ComponentTeamcityProjectEntity> =
-            Optional.ofNullable(store.firstOrNull { it.id == id })
+        override fun <S : VersionLineEntity> saveAndFlush(entity: S): S = unsupported()
+
+        override fun <S : VersionLineEntity> saveAllAndFlush(entities: Iterable<S>): List<S> = unsupported()
+
+        override fun findById(id: UUID): Optional<VersionLineEntity> = Optional.ofNullable(store.firstOrNull { it.id == id })
+
         override fun existsById(id: UUID): Boolean = store.any { it.id == id }
-        override fun findAll(): List<ComponentTeamcityProjectEntity> = store.toList()
-        override fun findAllById(ids: Iterable<UUID>): List<ComponentTeamcityProjectEntity> = unsupported()
+
+        override fun findAll(): List<VersionLineEntity> = store.toList()
+
+        override fun findAllById(ids: Iterable<UUID>): List<VersionLineEntity> = unsupported()
+
         override fun count(): Long = store.size.toLong()
-        override fun deleteById(id: UUID) { unsupported() }
-        override fun delete(entity: ComponentTeamcityProjectEntity) { unsupported() }
-        override fun deleteAllById(ids: Iterable<UUID>) { unsupported() }
-        override fun deleteAll(entities: Iterable<ComponentTeamcityProjectEntity>) { unsupported() }
-        override fun deleteAll() { unsupported() }
-        override fun deleteAllInBatch() { unsupported() }
-        override fun deleteAllByIdInBatch(ids: Iterable<UUID>) { unsupported() }
-        override fun getOne(id: UUID): ComponentTeamcityProjectEntity = unsupported()
+
+        override fun deleteById(id: UUID) = unsupported()
+
+        override fun delete(entity: VersionLineEntity) = unsupported()
+
+        override fun deleteAllById(ids: Iterable<UUID>) = unsupported()
+
+        override fun deleteAll(entities: Iterable<VersionLineEntity>) = unsupported()
+
+        override fun deleteAll() = unsupported()
+
+        override fun deleteAllInBatch() = unsupported()
+
+        override fun deleteAllByIdInBatch(ids: Iterable<UUID>) = unsupported()
+
+        override fun getOne(id: UUID): VersionLineEntity = unsupported()
 
         @Suppress("DEPRECATION")
-        override fun getById(id: UUID): ComponentTeamcityProjectEntity = unsupported()
-        override fun getReferenceById(id: UUID): ComponentTeamcityProjectEntity = unsupported()
-        override fun flush() { unsupported() }
-        override fun findAll(sort: Sort): List<ComponentTeamcityProjectEntity> = store.toList()
-        override fun findAll(pageable: Pageable): Page<ComponentTeamcityProjectEntity> =
-            PageImpl(store, pageable, store.size.toLong())
-        override fun <S : ComponentTeamcityProjectEntity> findOne(example: Example<S>): Optional<S> = Optional.empty()
-        override fun <S : ComponentTeamcityProjectEntity> findAll(example: Example<S>): List<S> = unsupported()
-        override fun <S : ComponentTeamcityProjectEntity> findAll(example: Example<S>, sort: Sort): List<S> =
-            unsupported()
-        override fun <S : ComponentTeamcityProjectEntity> findAll(
+        override fun getById(id: UUID): VersionLineEntity = unsupported()
+
+        override fun getReferenceById(id: UUID): VersionLineEntity = unsupported()
+
+        override fun flush() = unsupported()
+
+        override fun findAll(sort: Sort): List<VersionLineEntity> = store.toList()
+
+        override fun findAll(pageable: Pageable): Page<VersionLineEntity> = PageImpl(store, pageable, store.size.toLong())
+
+        override fun <S : VersionLineEntity> findOne(example: Example<S>): Optional<S> = Optional.empty()
+
+        override fun <S : VersionLineEntity> findAll(example: Example<S>): List<S> = unsupported()
+
+        override fun <S : VersionLineEntity> findAll(
+            example: Example<S>,
+            sort: Sort,
+        ): List<S> = unsupported()
+
+        override fun <S : VersionLineEntity> findAll(
             example: Example<S>,
             pageable: Pageable,
         ): Page<S> = unsupported()
-        override fun <S : ComponentTeamcityProjectEntity> count(example: Example<S>): Long = 0L
-        override fun <S : ComponentTeamcityProjectEntity> exists(example: Example<S>): Boolean = false
-        override fun <S : ComponentTeamcityProjectEntity, R : Any?> findBy(
+
+        override fun <S : VersionLineEntity> count(example: Example<S>): Long = 0L
+
+        override fun <S : VersionLineEntity> exists(example: Example<S>): Boolean = false
+
+        override fun <S : VersionLineEntity, R : Any?> findBy(
             example: Example<S>,
             queryFunction: Function<FluentQuery.FetchableFluentQuery<S>, R>,
         ): R = unsupported()
 
-        private fun unsupported(): Nothing =
-            throw UnsupportedOperationException("not used by TeamcitySyncService")
+        private fun unsupported(): Nothing = throw UnsupportedOperationException("not used by TeamcitySyncService")
+    }
+
+    /** In-memory stub for [TeamcityProjectRepository] with find-or-create-by-projectId dedup. */
+    private class StubTeamcityProjectRepository : TeamcityProjectRepository {
+        private val store = mutableListOf<TeamcityProjectEntity>()
+
+        override fun findByProjectId(projectId: String): TeamcityProjectEntity? = store.firstOrNull { it.projectId == projectId }
+
+        override fun findDistinctProjectIds(): List<String> = store.map { it.projectId }.distinct()
+
+        override fun <S : TeamcityProjectEntity> save(entity: S): S {
+            if (entity.id == null) entity.id = UUID.randomUUID()
+            store.add(entity)
+            return entity
+        }
+
+        override fun <S : TeamcityProjectEntity> saveAll(entities: Iterable<S>): List<S> = unsupported()
+
+        override fun <S : TeamcityProjectEntity> saveAndFlush(entity: S): S = unsupported()
+
+        override fun <S : TeamcityProjectEntity> saveAllAndFlush(entities: Iterable<S>): List<S> = unsupported()
+
+        override fun findById(id: UUID): Optional<TeamcityProjectEntity> = Optional.ofNullable(store.firstOrNull { it.id == id })
+
+        override fun existsById(id: UUID): Boolean = store.any { it.id == id }
+
+        override fun findAll(): List<TeamcityProjectEntity> = store.toList()
+
+        override fun findAllById(ids: Iterable<UUID>): List<TeamcityProjectEntity> = unsupported()
+
+        override fun count(): Long = store.size.toLong()
+
+        override fun deleteById(id: UUID) = unsupported()
+
+        override fun delete(entity: TeamcityProjectEntity) = unsupported()
+
+        override fun deleteAllById(ids: Iterable<UUID>) = unsupported()
+
+        override fun deleteAll(entities: Iterable<TeamcityProjectEntity>) = unsupported()
+
+        override fun deleteAll() = unsupported()
+
+        override fun deleteAllInBatch() = unsupported()
+
+        override fun deleteAllInBatch(entities: Iterable<TeamcityProjectEntity>) = unsupported()
+
+        override fun deleteAllByIdInBatch(ids: Iterable<UUID>) = unsupported()
+
+        override fun getOne(id: UUID): TeamcityProjectEntity = unsupported()
+
+        @Suppress("DEPRECATION")
+        override fun getById(id: UUID): TeamcityProjectEntity = unsupported()
+
+        override fun getReferenceById(id: UUID): TeamcityProjectEntity = unsupported()
+
+        override fun flush() = unsupported()
+
+        override fun findAll(sort: Sort): List<TeamcityProjectEntity> = store.toList()
+
+        override fun findAll(pageable: Pageable): Page<TeamcityProjectEntity> = PageImpl(store, pageable, store.size.toLong())
+
+        override fun <S : TeamcityProjectEntity> findOne(example: Example<S>): Optional<S> = Optional.empty()
+
+        override fun <S : TeamcityProjectEntity> findAll(example: Example<S>): List<S> = unsupported()
+
+        override fun <S : TeamcityProjectEntity> findAll(
+            example: Example<S>,
+            sort: Sort,
+        ): List<S> = unsupported()
+
+        override fun <S : TeamcityProjectEntity> findAll(
+            example: Example<S>,
+            pageable: Pageable,
+        ): Page<S> = unsupported()
+
+        override fun <S : TeamcityProjectEntity> count(example: Example<S>): Long = 0L
+
+        override fun <S : TeamcityProjectEntity> exists(example: Example<S>): Boolean = false
+
+        override fun <S : TeamcityProjectEntity, R : Any?> findBy(
+            example: Example<S>,
+            queryFunction: Function<FluentQuery.FetchableFluentQuery<S>, R>,
+        ): R = unsupported()
+
+        private fun unsupported(): Nothing = throw UnsupportedOperationException("not used by TeamcitySyncService")
     }
 
     /**
-     * Hand-rolled [ComponentRepository] stub.
-     *
-     * Implements only the methods the sync service uses. All other calls throw
-     * so any accidental new call-site is caught immediately during refactors.
-     *
-     * v2 diff from the pre-stub version:
-     *  - `findByName` / `existsByName` removed (v1 methods, gone from interface).
-     *  - `findByNameWithVersions` / `findByNameWithAllRelations` / `findByIdWithAllRelations` removed.
-     *  - `findByArchivedFalse(Pageable)` removed (not declared in v2 interface).
-     *  - `findByComponentKey` / `findByComponentKeyAndArchivedFalse` / `existsByComponentKey` added.
-     *  - `savedIds` tracking removed; TC writes are now tracked by [StubTcProjectRepository.saveCalls].
+     * Hand-rolled [ComponentRepository] stub — implements only the methods the sync uses;
+     * all other calls throw to surface accidental new call-sites during refactors.
      */
     @Suppress("TooManyFunctions")
     private class StubComponentRepository(
         private val components: List<ComponentEntity>,
     ) : ComponentRepository {
-        override fun findByComponentKey(componentKey: String): ComponentEntity? =
-            components.firstOrNull { it.componentKey == componentKey }
+        override fun findByComponentKey(componentKey: String): ComponentEntity? = components.firstOrNull { it.componentKey == componentKey }
 
         override fun findByComponentKeyIn(componentKeys: Collection<String>): List<ComponentEntity> =
             components.filter { it.componentKey in componentKeys }
@@ -539,14 +941,14 @@ class TeamcitySyncServiceTest {
 
         override fun findByArchivedFalse(): List<ComponentEntity> = components.filter { !it.archived }
 
-        override fun existsByComponentKey(componentKey: String): Boolean =
-            components.any { it.componentKey == componentKey }
+        override fun existsByComponentKey(componentKey: String): Boolean = components.any { it.componentKey == componentKey }
 
-        override fun existsByDisplayName(displayName: String): Boolean =
-            components.any { it.displayName == displayName }
+        override fun existsByDisplayName(displayName: String): Boolean = components.any { it.displayName == displayName }
 
-        override fun existsByDisplayNameAndIdNot(displayName: String, id: UUID): Boolean =
-            components.any { it.displayName == displayName && it.id != id }
+        override fun existsByDisplayNameAndIdNot(
+            displayName: String,
+            id: UUID,
+        ): Boolean = components.any { it.displayName == displayName && it.id != id }
 
         override fun findAllDisplayNamePairs(): List<org.octopusden.octopus.components.registry.server.repository.DisplayNamePairRow> =
             components.mapNotNull { c ->
@@ -558,11 +960,28 @@ class TeamcitySyncServiceTest {
                 }
             }
 
-        override fun findDistinctOwners(): List<String> =
-            components.mapNotNull { it.componentOwner }.distinct().sorted()
+        override fun findDistinctOwners(): List<String> = components.mapNotNull { it.componentOwner }.distinct().sorted()
+
+        override fun findDistinctReleaseManagers(): List<String> =
+            components
+                .flatMap { it.releaseManagerUsernames() }
+                .filter { it.isNotBlank() }
+                .distinct()
+                .sorted()
+
+        override fun findDistinctSecurityChampions(): List<String> =
+            components
+                .flatMap { it.securityChampionUsernames() }
+                .filter { it.isNotBlank() }
+                .distinct()
+                .sorted()
 
         override fun findDistinctClientCodes(): List<String> =
-            components.mapNotNull { it.clientCode }.filter { it.isNotBlank() }.distinct().sorted()
+            components
+                .mapNotNull { it.clientCode }
+                .filter { it.isNotBlank() }
+                .distinct()
+                .sorted()
 
         override fun findDistinctJiraProjectKeys(): List<String> =
             components
@@ -574,20 +993,49 @@ class TeamcitySyncServiceTest {
                 .sorted()
 
         override fun findDistinctParentComponentNames(): List<String> =
-            components.mapNotNull { it.parentComponent?.componentKey }.filter { it.isNotBlank() }.distinct().sorted()
+            components
+                .mapNotNull { it.parentComponent?.componentKey }
+                .filter { it.isNotBlank() }
+                .distinct()
+                .sorted()
 
-        override fun existsByParentComponentId(parentId: UUID): Boolean =
-            components.any { it.parentComponent?.id == parentId }
+        override fun existsByParentComponentId(parentId: UUID): Boolean = components.any { it.parentComponent?.id == parentId }
 
-        override fun findByComponentGroupId(groupId: UUID): List<ComponentEntity> =
-            components.filter { it.componentGroup?.id == groupId }
+        override fun findTestComponentKeys(): List<String> = components.filter { it.testComponent }.map { it.componentKey }
 
-        // Edit-ownership projections. Safe to read the entity accessors here: these are
-        // plain in-memory test entities (no Hibernate proxy), so touching the RM/SC lists
-        // can't raise LazyInitializationException — the production code uses scalar
-        // projection queries precisely to avoid that outside a session.
-        override fun findComponentOwnerById(id: UUID): String? =
-            components.firstOrNull { it.id == id }?.componentOwner
+        override fun lockByComponentKeys(keys: Collection<String>): List<String> =
+            components.map { it.componentKey }.filter { it in keys }.sorted()
+
+        override fun findTestComponentKeysIn(keys: Collection<String>): List<String> =
+            components.filter { it.testComponent && it.componentKey in keys }.map { it.componentKey }
+
+        override fun findNonTestChildKeys(parentId: UUID): List<String> =
+            components.filter { it.parentComponent?.id == parentId && !it.testComponent }.map { it.componentKey }
+
+        override fun findNonTestDocReferrerKeys(
+            docComponentKey: String,
+            excludeComponentId: UUID,
+        ): List<String> =
+            components
+                .filter { c -> c.id != excludeComponentId && !c.testComponent && c.docLinks.any { it.docComponentKey == docComponentKey } }
+                .map { it.componentKey }
+
+        override fun findByComponentGroupId(groupId: UUID): List<ComponentEntity> = components.filter { it.componentGroup?.id == groupId }
+
+        override fun findNonArchivedComponentVcsPaths(
+            excludeComponentId: UUID,
+        ): List<org.octopusden.octopus.components.registry.server.repository.ComponentVcsPathRow> =
+            components
+                .filter { !it.archived && it.id != excludeComponentId }
+                .flatMap { c -> c.configurations.flatMap { it.vcsEntries }.map { entry -> c.componentKey to entry.vcsPath } }
+                .map { (key, path) ->
+                    object : org.octopusden.octopus.components.registry.server.repository.ComponentVcsPathRow {
+                        override val componentKey: String = key
+                        override val vcsPath: String = path
+                    }
+                }
+
+        override fun findComponentOwnerById(id: UUID): String? = components.firstOrNull { it.id == id }?.componentOwner
 
         override fun findReleaseManagerUsernames(id: UUID): List<String> =
             components.firstOrNull { it.id == id }?.releaseManagerUsernames() ?: emptyList()
@@ -595,14 +1043,11 @@ class TeamcitySyncServiceTest {
         override fun findSecurityChampionUsernames(id: UUID): List<String> =
             components.firstOrNull { it.id == id }?.securityChampionUsernames() ?: emptyList()
 
-        // Health-statistics aggregations (SYS-057). In-memory equivalents of the GROUP BY
-        // queries, applying the same FAKE-aggregator exclusion as production.
         private fun isFakeAggregator(c: ComponentEntity): Boolean =
             c.componentGroup?.let { it.isFake && it.groupKey == c.componentKey } ?: false
 
-        private fun regularComponents(): List<ComponentEntity> = components.filterNot(::isFakeAggregator)
+        private fun regularComponents(): List<ComponentEntity> = components.filterNot { isFakeAggregator(it) || it.testComponent }
 
-        // People breakdowns count ACTIVE (non-archived) regular components only (SYS-057).
         private fun activeRegularComponents(): List<ComponentEntity> = regularComponents().filterNot { it.archived }
 
         override fun countRegularComponents(): Long = regularComponents().size.toLong()
@@ -642,59 +1087,103 @@ class TeamcitySyncServiceTest {
                     .eachCount(),
             )
 
+        override fun findChangeStamp(): ComponentChangeStampRow = throw UnsupportedOperationException()
+
         override fun <S : ComponentEntity> save(entity: S): S = entity
+
         override fun <S : ComponentEntity> saveAll(entities: Iterable<S>): List<S> = unsupported()
+
         override fun <S : ComponentEntity> saveAndFlush(entity: S): S = entity
+
         override fun <S : ComponentEntity> saveAllAndFlush(entities: Iterable<S>): List<S> = unsupported()
-        override fun findById(id: UUID): Optional<ComponentEntity> =
-            Optional.ofNullable(components.firstOrNull { it.id == id })
+
+        override fun findById(id: UUID): Optional<ComponentEntity> = Optional.ofNullable(components.firstOrNull { it.id == id })
+
         override fun existsById(id: UUID): Boolean = components.any { it.id == id }
+
         override fun findAll(): List<ComponentEntity> = components
+
         override fun findAllById(ids: Iterable<UUID>): List<ComponentEntity> = unsupported()
+
         override fun count(): Long = components.size.toLong()
-        override fun deleteById(id: UUID) { unsupported() }
-        override fun delete(entity: ComponentEntity) { unsupported() }
-        override fun deleteAllById(ids: Iterable<UUID>) { unsupported() }
-        override fun deleteAll(entities: Iterable<ComponentEntity>) { unsupported() }
-        override fun deleteAll() { unsupported() }
-        override fun deleteAllInBatch() { unsupported() }
-        override fun deleteAllByIdInBatch(ids: Iterable<UUID>) { unsupported() }
-        override fun deleteAllInBatch(entities: Iterable<ComponentEntity>) { unsupported() }
+
+        override fun deleteById(id: UUID) = unsupported()
+
+        override fun delete(entity: ComponentEntity) = unsupported()
+
+        override fun deleteAllById(ids: Iterable<UUID>) = unsupported()
+
+        override fun deleteAll(entities: Iterable<ComponentEntity>) = unsupported()
+
+        override fun deleteAll() = unsupported()
+
+        override fun deleteAllInBatch() = unsupported()
+
+        override fun deleteAllByIdInBatch(ids: Iterable<UUID>) = unsupported()
+
+        override fun deleteAllInBatch(entities: Iterable<ComponentEntity>) = unsupported()
+
         override fun getOne(id: UUID): ComponentEntity = unsupported()
 
         @Suppress("DEPRECATION")
         override fun getById(id: UUID): ComponentEntity = unsupported()
+
         override fun getReferenceById(id: UUID): ComponentEntity = unsupported()
-        override fun flush() { unsupported() }
+
+        override fun flush() = unsupported()
+
         override fun findAll(sort: Sort): List<ComponentEntity> = components
-        override fun findAll(pageable: Pageable): Page<ComponentEntity> =
-            PageImpl(components, pageable, components.size.toLong())
+
+        override fun findAll(pageable: Pageable): Page<ComponentEntity> = PageImpl(components, pageable, components.size.toLong())
+
         override fun findAll(spec: Specification<ComponentEntity>): List<ComponentEntity> = components
+
         override fun findAll(
             spec: Specification<ComponentEntity>,
             pageable: Pageable,
         ): Page<ComponentEntity> = PageImpl(components, pageable, components.size.toLong())
-        override fun findAll(spec: Specification<ComponentEntity>, sort: Sort): List<ComponentEntity> = components
+
+        override fun findAll(
+            spec: Specification<ComponentEntity>,
+            sort: Sort,
+        ): List<ComponentEntity> = components
+
         override fun findOne(spec: Specification<ComponentEntity>): Optional<ComponentEntity> = Optional.empty()
+
         override fun count(spec: Specification<ComponentEntity>): Long = components.size.toLong()
+
         override fun exists(spec: Specification<ComponentEntity>): Boolean = false
+
         override fun delete(spec: Specification<ComponentEntity>): Long = unsupported()
+
         override fun <S : ComponentEntity, R : Any?> findBy(
             spec: Specification<ComponentEntity>,
             queryFunction: Function<FluentQuery.FetchableFluentQuery<S>, R>,
         ): R = unsupported()
+
         override fun <S : ComponentEntity> findOne(example: Example<S>): Optional<S> = Optional.empty()
+
         override fun <S : ComponentEntity> findAll(example: Example<S>): List<S> = unsupported()
-        override fun <S : ComponentEntity> findAll(example: Example<S>, sort: Sort): List<S> = unsupported()
-        override fun <S : ComponentEntity> findAll(example: Example<S>, pageable: Pageable): Page<S> = unsupported()
+
+        override fun <S : ComponentEntity> findAll(
+            example: Example<S>,
+            sort: Sort,
+        ): List<S> = unsupported()
+
+        override fun <S : ComponentEntity> findAll(
+            example: Example<S>,
+            pageable: Pageable,
+        ): Page<S> = unsupported()
+
         override fun <S : ComponentEntity> count(example: Example<S>): Long = 0L
+
         override fun <S : ComponentEntity> exists(example: Example<S>): Boolean = false
+
         override fun <S : ComponentEntity, R : Any?> findBy(
             example: Example<S>,
             queryFunction: Function<FluentQuery.FetchableFluentQuery<S>, R>,
         ): R = unsupported()
 
-        private fun unsupported(): Nothing =
-            throw UnsupportedOperationException("not used by TeamcitySyncService")
+        private fun unsupported(): Nothing = throw UnsupportedOperationException("not used by TeamcitySyncService")
     }
 }

@@ -4,6 +4,7 @@ import org.junit.jupiter.api.BeforeAll
 import org.junit.jupiter.api.DisplayName
 import org.junit.jupiter.api.Tag
 import org.junit.jupiter.api.Test
+import org.mockito.ArgumentMatchers.anyString
 import org.mockito.Mockito.never
 import org.mockito.Mockito.times
 import org.mockito.Mockito.verify
@@ -15,10 +16,10 @@ import org.octopusden.octopus.components.registry.server.service.MigrationConfli
 import org.octopusden.octopus.components.registry.server.service.MigrationLifecycleGate
 import org.octopusden.octopus.components.registry.server.support.adminJwt
 import org.octopusden.octopus.components.registry.server.support.editorJwt
-import org.octopusden.octopus.components.registry.server.teamcity.StartTeamcitySyncResult
-import org.octopusden.octopus.components.registry.server.teamcity.TeamcitySyncJobService
-import org.octopusden.octopus.components.registry.server.teamcity.TeamcitySyncJobState
-import org.octopusden.octopus.components.registry.server.teamcity.TeamcitySyncResult
+import org.octopusden.octopus.components.registry.server.teamcity.sync.StartTeamcitySyncResult
+import org.octopusden.octopus.components.registry.server.teamcity.sync.TeamcitySyncJobService
+import org.octopusden.octopus.components.registry.server.teamcity.sync.TeamcitySyncJobState
+import org.octopusden.octopus.components.registry.server.teamcity.sync.TeamcitySyncResult
 import org.springframework.beans.factory.annotation.Autowired
 import org.springframework.boot.test.autoconfigure.web.servlet.AutoConfigureMockMvc
 import org.springframework.boot.test.context.SpringBootTest
@@ -46,8 +47,8 @@ import java.time.Instant
  * TeamcityClient bean wiring (which would attempt outbound HTTP if base-url
  * were ever set). Asserts cover 202/409 attach + 409 cross-kind envelope on
  * POST, and 200/404 polling on GET, including the snake_case
- * `skipped_no_match` / `skipped_ambiguous` / `ambiguous_auto_resolved` keys in
- * the COMPLETED `result`.
+ * `skipped_no_match` / `skipped_ambiguous` / `ambiguous_auto_resolved` /
+ * `dropped_lines` keys in the COMPLETED `result`.
  *
  * Other migration job services are @MockBean'd to keep this test scoped to
  * the resync paths — same convention as AdminControllerV4SecurityTest.
@@ -89,7 +90,7 @@ class TeamcityResyncControllerTest {
             .perform(post("/rest/api/4/admin/teamcity-project-ids/sync"))
             .andExpect(status().isUnauthorized)
 
-        verify(teamcitySyncJobService, never()).startAsync()
+        verify(teamcitySyncJobService, never()).startAsync(anyString())
     }
 
     @Test
@@ -99,13 +100,13 @@ class TeamcityResyncControllerTest {
             .perform(post("/rest/api/4/admin/teamcity-project-ids/sync").with(editorJwt()))
             .andExpect(status().isForbidden)
 
-        verify(teamcitySyncJobService, never()).startAsync()
+        verify(teamcitySyncJobService, never()).startAsync(anyString())
     }
 
     @Test
     @DisplayName("admin POST /admin/teamcity-project-ids/sync newly-started → 202 with kind=job body")
     fun syncAdminFreshReturns202() {
-        `when`(teamcitySyncJobService.startAsync())
+        `when`(teamcitySyncJobService.startAsync(anyString()))
             .thenReturn(StartTeamcitySyncResult(runningState("job-1"), isNewlyStarted = true))
 
         mvc
@@ -116,13 +117,13 @@ class TeamcityResyncControllerTest {
             .andExpect(jsonPath("$.kind").value("job"))
             .andExpect(jsonPath("$.result").doesNotExist())
 
-        verify(teamcitySyncJobService, times(1)).startAsync()
+        verify(teamcitySyncJobService, times(1)).startAsync(anyString())
     }
 
     @Test
     @DisplayName("admin POST /admin/teamcity-project-ids/sync same-kind RUNNING → 409 with same job body")
     fun syncAdminSameKindAttachReturns409() {
-        `when`(teamcitySyncJobService.startAsync())
+        `when`(teamcitySyncJobService.startAsync(anyString()))
             .thenReturn(StartTeamcitySyncResult(runningState("job-existing"), isNewlyStarted = false))
 
         mvc
@@ -136,7 +137,7 @@ class TeamcityResyncControllerTest {
     @Test
     @DisplayName("admin POST /admin/teamcity-project-ids/sync cross-kind COMPONENTS → 409 with conflict envelope")
     fun syncAdminCrossKindComponentsReturns409Conflict() {
-        `when`(teamcitySyncJobService.startAsync())
+        `when`(teamcitySyncJobService.startAsync(anyString()))
             .thenThrow(
                 MigrationConflictException(
                     MigrationLifecycleGate.ActiveJob(MigrationLifecycleGate.JobKind.COMPONENTS, "components-1"),
@@ -158,7 +159,7 @@ class TeamcityResyncControllerTest {
     @Test
     @DisplayName("admin POST /admin/teamcity-project-ids/sync cross-kind HISTORY → 409 with conflict envelope")
     fun syncAdminCrossKindHistoryReturns409Conflict() {
-        `when`(teamcitySyncJobService.startAsync())
+        `when`(teamcitySyncJobService.startAsync(anyString()))
             .thenThrow(
                 MigrationConflictException(
                     MigrationLifecycleGate.ActiveJob(MigrationLifecycleGate.JobKind.HISTORY, "history-1"),
@@ -244,6 +245,7 @@ class TeamcityResyncControllerTest {
                 skippedNoMatch = 0,
                 skippedAmbiguous = 0,
                 ambiguousAutoResolved = 0,
+                droppedLines = 0,
                 errors = emptyList(),
             )
         `when`(teamcitySyncJobService.current())
@@ -269,6 +271,7 @@ class TeamcityResyncControllerTest {
             .andExpect(jsonPath("$.result.skipped_no_match").value(0))
             .andExpect(jsonPath("$.result.skipped_ambiguous").value(0))
             .andExpect(jsonPath("$.result.ambiguous_auto_resolved").value(0))
+            .andExpect(jsonPath("$.result.dropped_lines").value(0))
     }
 
     private fun runningState(jobId: String) =

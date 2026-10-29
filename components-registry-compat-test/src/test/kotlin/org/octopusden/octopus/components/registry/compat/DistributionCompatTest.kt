@@ -24,7 +24,6 @@ import java.util.stream.Stream
  */
 @TestInstance(TestInstance.Lifecycle.PER_CLASS)
 class DistributionCompatTest : CompatibilityTestBase() {
-
     private val mapper = jacksonObjectMapper()
 
     @ParameterizedTest(name = "GET /rest/api/1/components/{0}/distribution")
@@ -51,7 +50,10 @@ class DistributionCompatTest : CompatibilityTestBase() {
 
     @ParameterizedTest(name = "GET /rest/api/2/components/{0}/versions/{1}/distribution")
     @MethodSource("componentVersionPairs")
-    fun `GET v2 per-version distribution must match`(componentName: String, version: String) {
+    fun `GET v2 per-version distribution must match`(
+        componentName: String,
+        version: String,
+    ) {
         skipIfNoSmokeConfig(componentName, version)
         runDistribution(
             endpoint = "GET /rest/api/2/components/{component}/versions/{version}/distribution",
@@ -60,7 +62,11 @@ class DistributionCompatTest : CompatibilityTestBase() {
         )
     }
 
-    private fun runDistribution(endpoint: String, path: String, params: Map<String, String>) {
+    private fun runDistribution(
+        endpoint: String,
+        path: String,
+        params: Map<String, String>,
+    ) {
         val (baseline, candidate) = fetchPair(path)
         val before = DiffCollector.count()
         compareRaw(endpoint, params, baseline, candidate)

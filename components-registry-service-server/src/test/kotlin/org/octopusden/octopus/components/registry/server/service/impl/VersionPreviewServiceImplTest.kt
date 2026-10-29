@@ -284,7 +284,10 @@ class VersionPreviewServiceImplTest {
             service.preview(
                 VersionPreviewRequest(
                     version = "1.0.50",
-                    base = VersionPreviewFormats(minorVersionFormat = "\$major.\$minor", releaseVersionFormat = "\$major.\$minor.\$service"),
+                    base = VersionPreviewFormats(
+                        minorVersionFormat = "\$major.\$minor",
+                        releaseVersionFormat = "\$major.\$minor.\$service",
+                    ),
                     overrides = listOf(VersionPreviewOverride(versionRange = "not-a-range", releaseVersionFormat = "\$major.\$minor")),
                 ),
             )

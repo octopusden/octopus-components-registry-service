@@ -1,10 +1,10 @@
 package org.octopusden.octopus.components.registry.server.controller
 
 import com.fasterxml.jackson.databind.ObjectMapper
-import org.junit.jupiter.api.Tag
 import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.Assertions.assertTrue
 import org.junit.jupiter.api.DisplayName
+import org.junit.jupiter.api.Tag
 import org.junit.jupiter.api.Test
 import org.junit.jupiter.api.Timeout
 import org.octopusden.cloud.commons.security.client.AuthServerClient
@@ -23,7 +23,6 @@ import org.springframework.test.web.servlet.request.MockMvcRequestBuilders.delet
 import org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get
 import org.springframework.test.web.servlet.request.MockMvcRequestBuilders.patch
 import org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post
-import org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath
 import org.springframework.test.web.servlet.result.MockMvcResultMatchers.status
 import java.nio.file.Paths
 import java.util.UUID
@@ -85,8 +84,7 @@ class V4NullScalarOverrideContractTest {
                                 """"group":{"groupKey":"org.example.test","isFake":false},""" +
                                 """"baseConfiguration": {"build": {"buildSystem": "MAVEN"}}}""",
                         ),
-                )
-                .andExpect(status().is2xxSuccessful)
+                ).andExpect(status().is2xxSuccessful)
                 .andReturn()
                 .response.contentAsString
         return objectMapper.readTree(body)["id"].asText()
@@ -250,9 +248,10 @@ class V4NullScalarOverrideContractTest {
         val overrideId = objectMapper.readTree(createBody)["id"].asText()
 
         // DELETE the override
-        mvc.perform(
-            delete("/rest/api/4/components/$compId/field-overrides/$overrideId").with(adminJwt()),
-        ).andExpect(status().is2xxSuccessful)
+        mvc
+            .perform(
+                delete("/rest/api/4/components/$compId/field-overrides/$overrideId").with(adminJwt()),
+            ).andExpect(status().is2xxSuccessful)
 
         // Verify the row is gone
         val remainingOverrides = listFieldOverrides(compId)

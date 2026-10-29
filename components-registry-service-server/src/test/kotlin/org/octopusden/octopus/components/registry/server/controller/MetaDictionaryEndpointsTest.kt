@@ -72,7 +72,7 @@ class MetaDictionaryEndpointsTest {
         System.setProperty("COMPONENTS_REGISTRY_SERVICE_TEST_DATA_DIR", testResourcesPath.toString())
     }
 
-    private fun unique(prefix: String) = "${prefix}_${UUID.randomUUID().toString().take(8)}"
+    private fun unique(prefix: String) = "${prefix.lowercase().replace('_', '-')}-${UUID.randomUUID().toString().take(8)}"
 
     @Test
     @DisplayName("GET /meta/labels/dictionary returns ALL master labels (including orphans), sorted ascending")
@@ -94,7 +94,8 @@ class MetaDictionaryEndpointsTest {
                 .perform(get("/rest/api/4/components/meta/labels/dictionary").with(viewerJwt()))
                 .andExpect(status().isOk)
                 .andExpect(jsonPath("$").isArray)
-                .andReturn().response.contentAsString
+                .andReturn()
+                .response.contentAsString
         val all = objectMapper.readTree(body).map { it.asText() }
         val seeded = all.filter { it == a || it == b || it == g }
         assert(seeded == listOf(a, b, g).sorted()) {
@@ -120,7 +121,8 @@ class MetaDictionaryEndpointsTest {
                 .perform(get("/rest/api/4/components/meta/systems/dictionary").with(viewerJwt()))
                 .andExpect(status().isOk)
                 .andExpect(jsonPath("$").isArray)
-                .andReturn().response.contentAsString
+                .andReturn()
+                .response.contentAsString
         val all = objectMapper.readTree(body).map { it.asText() }
         val seeded = all.filter { it == a || it == b || it == g }
         assert(seeded == listOf(a, b, g).sorted()) {

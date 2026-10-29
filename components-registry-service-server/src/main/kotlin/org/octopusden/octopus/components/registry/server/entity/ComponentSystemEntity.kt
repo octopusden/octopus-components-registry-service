@@ -22,15 +22,12 @@ class ComponentSystemEntity(
     @Id
     @Column(name = "component_id", nullable = false)
     var componentId: UUID = UUID(0, 0),
-
     @Id
     @Column(name = "system_code", length = 50, nullable = false)
     var systemCode: String = "",
-
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "component_id", insertable = false, updatable = false)
     var component: ComponentEntity? = null,
-
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "system_code", insertable = false, updatable = false)
     var system: SystemEntity? = null,

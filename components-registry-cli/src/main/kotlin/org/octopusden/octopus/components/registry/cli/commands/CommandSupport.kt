@@ -17,8 +17,7 @@ import java.nio.charset.StandardCharsets
  * [URLEncoder.encode] is form/application-x-www-form-urlencoded oriented (it emits `+` for a space),
  * so the result is post-processed to turn `+` into `%20` which is the correct path-segment encoding.
  */
-internal fun encodePathSegment(s: String): String =
-    URLEncoder.encode(s, StandardCharsets.UTF_8).replace("+", "%20")
+internal fun encodePathSegment(s: String): String = URLEncoder.encode(s, StandardCharsets.UTF_8).replace("+", "%20")
 
 /**
  * Runs [block], catching any thrown error, writing a structured error to STDERR via

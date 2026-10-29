@@ -9,7 +9,8 @@ class UserTest {
 
     @Test
     fun decodesAuthMe() {
-        val literal = """
+        val literal =
+            """
             {
               "username": "jdoe",
               "groups": ["dev", "release"],
@@ -19,7 +20,7 @@ class UserTest {
               ],
               "extraServerField": true
             }
-        """.trimIndent()
+            """.trimIndent()
 
         val user = json.decodeFromString<User>(literal)
 

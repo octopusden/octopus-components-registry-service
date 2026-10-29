@@ -8,7 +8,6 @@ import kotlin.test.Test
  * public device-flow client exists; the single method stays [Disabled] so the suite is green meanwhile.
  */
 class KeycloakIntegrationTest {
-
     @Test
     @Disabled("gated on Keycloak Part C spike: needs the public device-flow client components-registry-cli")
     fun deviceFlowLoginAgainstRealKeycloak() {

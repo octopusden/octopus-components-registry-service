@@ -63,8 +63,7 @@ class RealBodyReplayCompatTest : CompatibilityTestBase() {
             "/rest/api/2/components-registry/service/updateCache",
         )
 
-    private fun isDiagnostic(path: String): Boolean =
-        path.substringBefore('?') in excludedPaths
+    private fun isDiagnostic(path: String): Boolean = path.substringBefore('?') in excludedPaths
 
     @Test
     fun `replay real captured request bodies`() {
@@ -103,11 +102,14 @@ class RealBodyReplayCompatTest : CompatibilityTestBase() {
                             val e = parseBodyLine(line, mapper)
                             if (e == null) bad++
                             e
-                        }
-                        .filter { e ->
-                            if (isDiagnostic(e.path)) { dropped++; false } else true
-                        }
-                        .filter { it.method == "POST" } // only POST carries a JSON body in this corpus
+                        }.filter { e ->
+                            if (isDiagnostic(e.path)) {
+                                dropped++
+                                false
+                            } else {
+                                true
+                            }
+                        }.filter { it.method == "POST" } // only POST carries a JSON body in this corpus
                         .toList()
                 Triple(parsed, dropped, bad)
             }
@@ -158,7 +160,9 @@ class RealBodyReplayCompatTest : CompatibilityTestBase() {
                 ?.equals("true", ignoreCase = true) == true
 
         val pool = Executors.newFixedThreadPool(config.parallelism)
-        val ts = java.time.Instant.now().toString()
+        val ts = java.time.Instant
+            .now()
+            .toString()
         val processed = AtomicInteger(0)
         val withDiffs = AtomicInteger(0)
         val weightByBucket = ConcurrentHashMap<Pair<String, DiffClassifier>, Long>()
@@ -168,68 +172,69 @@ class RealBodyReplayCompatTest : CompatibilityTestBase() {
         try {
             val futures =
                 entries.map { entry ->
-                    pool.submit {
-                        val diffsBefore = DiffCollector.count()
-                        val (baseline, candidate) =
-                            try {
-                                postJsonPair(entry.path, entry.body)
-                            } catch (e: Exception) {
-                                log.warn("transport failed for ${entry.method} ${entry.path}: ${e.message}")
-                                return@submit
+                    pool
+                        .submit {
+                            val diffsBefore = DiffCollector.count()
+                            val (baseline, candidate) =
+                                try {
+                                    postJsonPair(entry.path, entry.body)
+                                } catch (e: Exception) {
+                                    log.warn("transport failed for ${entry.method} ${entry.path}: ${e.message}")
+                                    return@submit
+                                }
+                            val (pathOnly, parsedQuery) = TraceReplayCompatTest.parsePathAndQuery(entry.path)
+                            val endpoint = "${entry.method} $pathOnly"
+                            val queryParams = parsedQuery + ("_weight" to entry.count.toString())
+                            // Symmetric-failure blind spot (same as TraceReplayCompatTest): if BOTH
+                            // stands return identical 4xx/5xx with identical bodies (e.g. a body
+                            // referencing a since-deleted component), compareRaw records no diff and
+                            // the tuple looks clean. Real prod bodies make this rarer than synthetic
+                            // ones, but it remains a known gap — see TraceReplayCompatTest's
+                            // BOTH_STANDS_ERRORED follow-up sketch.
+                            val cats =
+                                Comparators.compareRaw(
+                                    endpoint = endpoint,
+                                    pathParams = emptyMap(),
+                                    baseline = baseline,
+                                    candidate = candidate,
+                                    queryParams = queryParams,
+                                )
+                            cats.distinct().forEach { cat ->
+                                weightByBucket.merge(endpoint to cat, entry.count) { a, b -> a + b }
                             }
-                        val (pathOnly, parsedQuery) = TraceReplayCompatTest.parsePathAndQuery(entry.path)
-                        val endpoint = "${entry.method} $pathOnly"
-                        val queryParams = parsedQuery + ("_weight" to entry.count.toString())
-                        // Symmetric-failure blind spot (same as TraceReplayCompatTest): if BOTH
-                        // stands return identical 4xx/5xx with identical bodies (e.g. a body
-                        // referencing a since-deleted component), compareRaw records no diff and
-                        // the tuple looks clean. Real prod bodies make this rarer than synthetic
-                        // ones, but it remains a known gap — see TraceReplayCompatTest's
-                        // BOTH_STANDS_ERRORED follow-up sketch.
-                        val cats =
-                            Comparators.compareRaw(
+                            val diffsAfter = DiffCollector.count()
+                            val newDiffs = diffsAfter - diffsBefore
+                            // Record every replayed body in the execution log so the run is
+                            // PROVABLE: the reporter's proof-of-execution guard counts these, and a
+                            // silently-skipped replay (missing sidecar) cannot masquerade as a clean
+                            // run that actually exercised the real bodies.
+                            logExecution(
                                 endpoint = endpoint,
                                 pathParams = emptyMap(),
+                                queryParams = queryParams,
                                 baseline = baseline,
                                 candidate = candidate,
-                                queryParams = queryParams,
+                                layer = "raw-body",
+                                diffsBefore = diffsBefore,
+                                diffsAfter = diffsAfter,
                             )
-                        cats.distinct().forEach { cat ->
-                            weightByBucket.merge(endpoint to cat, entry.count) { a, b -> a + b }
-                        }
-                        val diffsAfter = DiffCollector.count()
-                        val newDiffs = diffsAfter - diffsBefore
-                        // Record every replayed body in the execution log so the run is
-                        // PROVABLE: the reporter's proof-of-execution guard counts these, and a
-                        // silently-skipped replay (missing sidecar) cannot masquerade as a clean
-                        // run that actually exercised the real bodies.
-                        logExecution(
-                            endpoint = endpoint,
-                            pathParams = emptyMap(),
-                            queryParams = queryParams,
-                            baseline = baseline,
-                            candidate = candidate,
-                            layer = "raw-body",
-                            diffsBefore = diffsBefore,
-                            diffsAfter = diffsAfter,
-                        )
-                        if (verbose) {
-                            // SECURITY: body preview includes real group/artifact/version
-                            // triples — gradle stdout is operator-confidential, do not paste
-                            // into the public repo (feedback_redacted_identifiers).
-                            log.info(
-                                "← ${entry.method} ${entry.path} " +
-                                    "b=${baseline.status}/${baseline.bodyBytes.size}B " +
-                                    "c=${candidate.status}/${candidate.bodyBytes.size}B " +
-                                    "diffs=$newDiffs cats=${cats.distinct()}",
-                            )
-                        }
-                        val n = processed.incrementAndGet()
-                        if (newDiffs > 0) withDiffs.incrementAndGet()
-                        if (n % 100 == 0) {
-                            log.info("real-body replay progress: $n / ${entries.size} (${withDiffs.get()} with diffs)")
-                        }
-                    }.also { f -> futureToEntry[f] = entry }
+                            if (verbose) {
+                                // SECURITY: body preview includes real group/artifact/version
+                                // triples — gradle stdout is operator-confidential, do not paste
+                                // into the public repo (feedback_redacted_identifiers).
+                                log.info(
+                                    "← ${entry.method} ${entry.path} " +
+                                        "b=${baseline.status}/${baseline.bodyBytes.size}B " +
+                                        "c=${candidate.status}/${candidate.bodyBytes.size}B " +
+                                        "diffs=$newDiffs cats=${cats.distinct()}",
+                                )
+                            }
+                            val n = processed.incrementAndGet()
+                            if (newDiffs > 0) withDiffs.incrementAndGet()
+                            if (n % 100 == 0) {
+                                log.info("real-body replay progress: $n / ${entries.size} (${withDiffs.get()} with diffs)")
+                            }
+                        }.also { f -> futureToEntry[f] = entry }
                 }
             // NOTE (Copilot review): this walks futures in submission order, so the
             // 90s budget is wall-clock from each get(), not from submission — a
@@ -303,12 +308,19 @@ class RealBodyReplayCompatTest : CompatibilityTestBase() {
          * verbatim, so an empty array/object body (a real edge case clients send)
          * is preserved, not rejected.
          */
-        internal fun parseBodyLine(line: String, mapper: com.fasterxml.jackson.databind.ObjectMapper): BodyEntry? {
+        internal fun parseBodyLine(
+            line: String,
+            mapper: com.fasterxml.jackson.databind.ObjectMapper,
+        ): BodyEntry? {
             val node =
                 runCatching { mapper.readTree(line) }.getOrNull()
                     ?: return null
             if (!node.isObject) return null
-            val method = node.path("method").asText("").trim().uppercase()
+            val method = node
+                .path("method")
+                .asText("")
+                .trim()
+                .uppercase()
             if (method.isEmpty()) return null
             val path = node.path("path").asText("").trim()
             if (path.isEmpty() || !path.startsWith('/')) return null

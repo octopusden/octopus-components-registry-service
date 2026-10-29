@@ -23,7 +23,6 @@ import org.octopusden.octopus.components.registry.core.dto.ComponentV3
  */
 @TestInstance(TestInstance.Lifecycle.PER_CLASS)
 class ComponentsListCompatTest : CompatibilityTestBase() {
-
     @Test
     fun `GET rest_api_3_components — list shape and DTO values must match`() {
         val endpoint = "GET /rest/api/3/components"
@@ -55,7 +54,12 @@ class ComponentsListCompatTest : CompatibilityTestBase() {
             // adjacent-merge / version-form) so the decoupled-model reshaping isn't a diff; values stay
             // typed so compareDto's recursive comparison (ignoringCollectionOrder + normalisers) still
             // compares them and a real per-range change surfaces. See VersionRangeMapCanonicalizer.
-            compareDto(endpoint, perCompParams, baselineById[id]?.let(::canonicaliseVariants), candidateById[id]?.let(::canonicaliseVariants))
+            compareDto(
+                endpoint,
+                perCompParams,
+                baselineById[id]?.let(::canonicaliseVariants),
+                candidateById[id]?.let(::canonicaliseVariants),
+            )
         }
 
         val after = DiffCollector.count()
@@ -87,7 +91,10 @@ class ComponentsListCompatTest : CompatibilityTestBase() {
      * Slice a JSON array to the first [cap] elements sorted by `.component.id` (string compare).
      * Returns null if [cap] is null (no slicing) or if [json] is not an array.
      */
-    private fun sliceJsonArrayByComponentId(json: JsonNode?, cap: Int?): JsonNode? {
+    private fun sliceJsonArrayByComponentId(
+        json: JsonNode?,
+        cap: Int?,
+    ): JsonNode? {
         if (cap == null) return null
         if (json == null || !json.isArray) return null
         val arr = json as ArrayNode
@@ -98,7 +105,10 @@ class ComponentsListCompatTest : CompatibilityTestBase() {
         return out
     }
 
-    private fun sliceDtosByComponentId(dtos: List<ComponentV3>?, cap: Int?): List<ComponentV3>? {
+    private fun sliceDtosByComponentId(
+        dtos: List<ComponentV3>?,
+        cap: Int?,
+    ): List<ComponentV3>? {
         if (dtos == null) return null
         if (cap == null) return dtos
         return dtos.sortedBy { it.component.id }.take(cap)

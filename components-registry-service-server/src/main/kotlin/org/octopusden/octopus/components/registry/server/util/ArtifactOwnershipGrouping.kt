@@ -35,7 +35,6 @@ import org.octopusden.octopus.components.registry.server.entity.ComponentArtifac
  * merged; the single-pair surfaces then keep only the primary run, exactly as before.
  */
 internal object ArtifactOwnershipGrouping {
-
     /**
      * Collapse a version-range's EFFECTIVE ownership mappings into contiguous legacy-pair runs
      * (see class doc). Input order is irrelevant — rows are sorted by `sortOrder` first, so the
@@ -66,7 +65,10 @@ internal object ArtifactOwnershipGrouping {
     private fun tokensOf(mapping: ComponentArtifactMappingEntity): List<String> =
         mapping.tokens.sortedBy { it.sortOrder }.map { it.artifactPattern }
 
-    private fun keyOf(mapping: ComponentArtifactMappingEntity, index: Int): RunKey =
+    private fun keyOf(
+        mapping: ComponentArtifactMappingEntity,
+        index: Int,
+    ): RunKey =
         when (ArtifactIdMode.valueOf(mapping.artifactIdMode)) {
             // Baking the row's position into the key makes it unequal to any neighbour, so an
             // ALL_EXCEPT_CLAIMED row is always its own run (never merged). This is a pure in-memory
@@ -77,5 +79,9 @@ internal object ArtifactOwnershipGrouping {
         }
 
     /** Split-equivalence identity for a mapping; [uniq] is set only for the never-merge modes. */
-    private data class RunKey(val mode: String, val tokens: List<String>, val uniq: Int?)
+    private data class RunKey(
+        val mode: String,
+        val tokens: List<String>,
+        val uniq: Int?,
+    )
 }

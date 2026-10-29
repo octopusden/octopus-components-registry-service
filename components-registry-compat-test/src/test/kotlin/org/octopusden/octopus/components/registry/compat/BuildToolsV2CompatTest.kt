@@ -19,7 +19,6 @@ import java.util.stream.Stream
  */
 @TestInstance(TestInstance.Lifecycle.PER_CLASS)
 class BuildToolsV2CompatTest : CompatibilityTestBase() {
-
     private val mapper = jacksonObjectMapper()
 
     @ParameterizedTest(name = "GET /rest/api/2/components/{0}/versions/{1}/build-tools?ignore-required={2}")

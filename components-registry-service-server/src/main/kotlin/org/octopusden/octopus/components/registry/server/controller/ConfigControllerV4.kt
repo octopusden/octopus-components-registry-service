@@ -52,7 +52,8 @@ class ConfigControllerV4(
     ): ResponseEntity<Map<String, Any?>> = gone("component-defaults")
 
     private fun readConfig(key: String): ResponseEntity<Map<String, Any?>> =
-        registryConfigRepository.findById(key)
+        registryConfigRepository
+            .findById(key)
             .map { ResponseEntity.ok(it.value) }
             .orElse(ResponseEntity.ok(emptyMap()))
 

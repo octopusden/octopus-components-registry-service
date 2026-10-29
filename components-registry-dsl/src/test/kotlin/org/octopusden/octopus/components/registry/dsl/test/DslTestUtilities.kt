@@ -5,10 +5,12 @@ import org.octopusden.octopus.components.registry.api.enums.ProductTypes
 import org.octopusden.octopus.components.registry.dsl.script.ComponentsRegistryScriptRunner
 import java.util.*
 
-fun registryDsl(closure: ()-> Unit): Map<String, Component> {
-    return registryDsl(Collections.emptyMap(), closure)
-}
-fun registryDsl(productTypesMap: Map<String, ProductTypes>, closure: () -> Unit): Map<String, Component> {
+fun registryDsl(closure: () -> Unit): Map<String, Component> = registryDsl(Collections.emptyMap(), closure)
+
+fun registryDsl(
+    productTypesMap: Map<String, ProductTypes>,
+    closure: () -> Unit,
+): Map<String, Component> {
     ComponentsRegistryScriptRunner.getCurrentRegistry().clear()
     ComponentsRegistryScriptRunner.getProductTypeMap().clear()
     ComponentsRegistryScriptRunner.getProductTypeMap().putAll(productTypesMap)

@@ -12,7 +12,6 @@ import org.octopusden.releng.versions.VersionRangeFactory
 
 /** Unit tests for [VersionRangePartition] (ADR-018 redesign: coverage merge + enumeration partition). */
 class VersionRangePartitionTest {
-
     // ── canonical render forms (EXACT strings — these catch rendering regressions locally,
     //    before the stand baseline; the bug we missed was [x] rendered as [x,x]) ─────────────
 

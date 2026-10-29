@@ -50,10 +50,9 @@ import kotlin.system.measureTimeMillis
  */
 @SpringBootTest(classes = [ComponentRegistryServiceApplication::class])
 @ActiveProfiles("common", "test-db")
-@Timeout(600)
+@Timeout(240)
 @Tag("performance")
 class GetComponentsListPerformanceTest {
-
     @MockBean
     @Suppress("UnusedPrivateProperty")
     private lateinit var authServerClient: AuthServerClient
@@ -69,9 +68,10 @@ class GetComponentsListPerformanceTest {
 
     init {
         val testResourcesPath =
-            Paths.get(
-                GetComponentsListPerformanceTest::class.java.getResource("/expected-data")!!.toURI(),
-            ).parent
+            Paths
+                .get(
+                    GetComponentsListPerformanceTest::class.java.getResource("/expected-data")!!.toURI(),
+                ).parent
         System.setProperty("COMPONENTS_REGISTRY_SERVICE_TEST_DATA_DIR", testResourcesPath.toString())
     }
 
@@ -187,7 +187,11 @@ class GetComponentsListPerformanceTest {
 
         log.info(
             "getComponents() perf — components={}, statements={}, iterations={}, elapsedMs={}, medianMs={}",
-            COMPONENT_COUNT, statementCount, MEASURED_ITERATIONS, elapsed.toList(), median,
+            COMPONENT_COUNT,
+            statementCount,
+            MEASURED_ITERATIONS,
+            elapsed.toList(),
+            median,
         )
 
         assertTrue(
@@ -205,10 +209,9 @@ class GetComponentsListPerformanceTest {
         private const val WARMUP_ITERATIONS = 2
         private const val MEASURED_ITERATIONS = 5
 
-        // Generous local-DB ceiling. Calibrate against several CI-like runs before tightening;
-        // this guards against a gross mapper CPU/allocation regression, not remote-DB latency
-        // (which the query-count test covers structurally).
-        private const val MEDIAN_CEILING_MS = 2000L
+        // Guards against a mapper CPU/allocation regression, not remote-DB latency (which the
+        // query-count test covers structurally).
+        private const val MEDIAN_CEILING_MS = 600L
 
         @JvmStatic
         val postgres = PostgreSQLContainer("postgres:16-alpine").apply { start() }

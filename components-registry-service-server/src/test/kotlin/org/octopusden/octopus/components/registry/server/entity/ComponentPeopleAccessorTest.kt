@@ -15,9 +15,7 @@ import java.util.UUID
  * ordered clear/re-add semantics once.
  */
 class ComponentPeopleAccessorTest {
-
-    private fun component(): ComponentEntity =
-        ComponentEntity(id = UUID.randomUUID(), componentKey = "svc")
+    private fun component(): ComponentEntity = ComponentEntity(id = UUID.randomUUID(), componentKey = "svc")
 
     @Test
     @DisplayName("SYS-044: replaceReleaseManagerUsernames preserves order and assigns sortOrder by index")

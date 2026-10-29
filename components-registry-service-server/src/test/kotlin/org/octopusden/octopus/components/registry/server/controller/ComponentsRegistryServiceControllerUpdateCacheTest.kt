@@ -89,7 +89,8 @@ class ComponentsRegistryServiceControllerUpdateCacheTest {
     @Test
     fun `active components migration returns 409 without re-reading or querying status`() {
         doReturn(MigrationLifecycleGate.ActiveJob(MigrationLifecycleGate.JobKind.COMPONENTS, "job-1"))
-            .`when`(migrationLifecycleGate).current()
+            .`when`(migrationLifecycleGate)
+            .current()
 
         val response = controller.updateConfigCache()
 

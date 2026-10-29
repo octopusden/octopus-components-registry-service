@@ -106,7 +106,10 @@ class ComponentSourceRegistryImpl(
          *
          * Either way, Jackson (or any UTF-8 serializer) never sees a half-pair.
          */
-        internal fun truncateRaw(value: String, maxChars: Int): String {
+        internal fun truncateRaw(
+            value: String,
+            maxChars: Int,
+        ): String {
             if (value.length <= maxChars) return value
             val raw = value.substring(0, maxChars)
             if (raw.isEmpty()) return raw

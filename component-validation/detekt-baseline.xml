@@ -1,0 +1,14 @@
+<?xml version="1.0" ?>
+<SmellBaseline>
+  <ManuallySuppressedIssues/>
+  <CurrentIssues>
+    <ID>ClassOrdering:ParameterReferenceResolver.kt$ParameterReferenceResolver$private val REFERENCE = Regex("""%([\w.\-]+)%""")</ID>
+    <ID>LoopWithTooManyJumpStatements:ParameterReferenceResolver.kt$ParameterReferenceResolver$while</ID>
+    <ID>MatchingDeclarationName:RelevantBuildSteps.kt$BuildStepInConfiguration</ID>
+    <ID>MaxLineLength:OldJavaVersionValidator.kt$OldJavaVersionValidator$*</ID>
+    <ID>MaxLineLength:OverridesDefaultBuildStepValidator.kt$OverridesDefaultBuildStepValidator$*</ID>
+    <ID>MaxLineLength:TemplateCatalog.kt$TemplateCatalog$*</ID>
+    <ID>TooGenericExceptionCaught:ValidatorSuite.kt$ValidatorSuite$e: RuntimeException</ID>
+    <ID>UseCheckOrError:ValidatorSuiteTest.kt$ThrowingValidator$throw IllegalStateException("boom")</ID>
+  </CurrentIssues>
+</SmellBaseline>

@@ -1,12 +1,11 @@
 package org.octopusden.octopus.components.registry.core.dto
 
-import com.fasterxml.jackson.annotation.JsonCreator
 import com.fasterxml.jackson.annotation.JsonIgnoreProperties
 import com.fasterxml.jackson.annotation.JsonInclude
 import com.fasterxml.jackson.annotation.JsonProperty
 
 @JsonIgnoreProperties(ignoreUnknown = true)
-data class EscrowDTO @JsonCreator constructor(
+data class EscrowDTO(
     @JsonProperty("buildTask") val buildTask: String? = null,
     @JsonProperty("providedDependencies") val providedDependencies: List<String>? = emptyList(),
     @JsonProperty("diskSpaceRequirement") val diskSpaceRequirement: Long? = null,

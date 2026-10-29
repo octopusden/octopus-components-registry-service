@@ -40,4 +40,7 @@ data class DiffRecord(
     }
 }
 
-data class HeaderPair(val baseline: String?, val candidate: String?)
+data class HeaderPair(
+    val baseline: String?,
+    val candidate: String?,
+)

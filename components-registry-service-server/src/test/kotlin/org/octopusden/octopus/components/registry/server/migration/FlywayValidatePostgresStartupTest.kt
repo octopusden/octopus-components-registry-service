@@ -1,8 +1,8 @@
 package org.octopusden.octopus.components.registry.server.migration
 
-import org.junit.jupiter.api.Tag
 import org.junit.jupiter.api.Assertions.assertNotNull
 import org.junit.jupiter.api.DisplayName
+import org.junit.jupiter.api.Tag
 import org.junit.jupiter.api.Test
 import org.junit.jupiter.api.Timeout
 import org.octopusden.cloud.commons.security.client.AuthServerClient

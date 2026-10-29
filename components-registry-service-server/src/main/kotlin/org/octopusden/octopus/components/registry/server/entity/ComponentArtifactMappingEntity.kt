@@ -35,23 +35,17 @@ class ComponentArtifactMappingEntity(
     @Id
     @GeneratedValue(strategy = GenerationType.UUID)
     var id: UUID? = null,
-
     @ManyToOne(fetch = FetchType.LAZY, optional = false)
     @JoinColumn(name = "component_id", nullable = false)
     var component: ComponentEntity,
-
     @Column(name = "version_range", nullable = false)
     var versionRange: String = "",
-
     @Column(name = "group_pattern", columnDefinition = "TEXT", nullable = false)
     var groupPattern: String = "",
-
     @Column(name = "artifact_id_mode", length = 20, nullable = false)
     var artifactIdMode: String = ArtifactIdMode.ALL.name,
-
     @Column(name = "sort_order", nullable = false)
     var sortOrder: Int = 0,
-
     @OneToMany(mappedBy = "mapping", cascade = [CascadeType.ALL], orphanRemoval = true, fetch = FetchType.LAZY)
     @BatchSize(size = BATCH_FETCH_SIZE)
     var tokens: MutableList<ComponentArtifactMappingTokenEntity> = mutableListOf(),

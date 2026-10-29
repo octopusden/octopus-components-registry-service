@@ -23,13 +23,14 @@ public class TestConfigUtils {
 
     public static final VersionNames VERSION_NAMES = new VersionNames("serviceCBranch", "serviceC", "minorC");
 
-    public static final Map<ProductTypes, String> PRODUCT_TYPES = new EnumMap(ProductTypes.class) {
-        {
-            put(ProductTypes.PT_C, "PT_C");
-            put(ProductTypes.PT_K, "PT_K");
-            put(ProductTypes.PT_D, "PT_D");
-            put(ProductTypes.PT_D_DB, "PT_D_DB");
-        }};
+    public static final Map<ProductTypes, String> PRODUCT_TYPES = new EnumMap<>(ProductTypes.class);
+
+    static {
+        PRODUCT_TYPES.put(ProductTypes.PT_C, "PT_C");
+        PRODUCT_TYPES.put(ProductTypes.PT_K, "PT_K");
+        PRODUCT_TYPES.put(ProductTypes.PT_D, "PT_D");
+        PRODUCT_TYPES.put(ProductTypes.PT_D_DB, "PT_D_DB");
+    }
     public static final VersionRangeFactory VERSION_RANGE_FACTORY = new VersionRangeFactory(VERSION_NAMES);
     public static final NumericVersionFactory NUMERIC_VERSION_FACTORY = new NumericVersionFactory(VERSION_NAMES);
 

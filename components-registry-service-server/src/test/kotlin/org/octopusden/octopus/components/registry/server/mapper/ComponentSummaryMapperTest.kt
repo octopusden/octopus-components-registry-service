@@ -11,8 +11,11 @@ import org.octopusden.octopus.components.registry.server.entity.ComponentConfigu
 import org.octopusden.octopus.components.registry.server.entity.ComponentEntity
 import org.octopusden.octopus.components.registry.server.entity.ComponentLabelEntity
 import org.octopusden.octopus.components.registry.server.entity.ComponentSystemEntity
-import org.octopusden.octopus.components.registry.server.entity.ComponentTeamcityProjectEntity
+import org.octopusden.octopus.components.registry.server.entity.TeamcityProjectEntity
 import org.octopusden.octopus.components.registry.server.entity.VcsSettingsEntryEntity
+import org.octopusden.octopus.components.registry.server.entity.VersionLineEntity
+import org.octopusden.octopus.components.registry.server.service.rms.ComponentBuildRanges
+import org.octopusden.octopus.components.registry.server.util.BuildRangeCollapser
 import java.util.UUID
 
 /**
@@ -30,7 +33,6 @@ import java.util.UUID
  * (base row) and vcs entries are direct children of the config row.
  */
 class ComponentSummaryMapperTest {
-
     // -----------------------------------------------------------------------
     // Fixture builders
     // -----------------------------------------------------------------------
@@ -67,6 +69,7 @@ class ComponentSummaryMapperTest {
         val response = minimalComponent().toSummaryResponse()
 
         assertNull(response.buildSystem)
+        assertNull(response.javaVersion)
         assertNull(response.jiraProjectKey)
         assertNull(response.vcsPath)
         assertNull(response.teamcityProjectId)
@@ -129,7 +132,7 @@ class ComponentSummaryMapperTest {
     }
 
     @Test
-    @DisplayName("no BASE config (only SCALAR_OVERRIDE) → buildSystem null")
+    @DisplayName("no BASE config (only SCALAR_OVERRIDE) → buildSystem null AND javaVersion null (summary reads BASE only)")
     fun noBaseConfig_buildSystemNull() {
         val component = minimalComponent()
         val override = ComponentConfigurationEntity(
@@ -142,7 +145,58 @@ class ComponentSummaryMapperTest {
         )
         component.configurations.add(override)
 
-        assertNull(component.toSummaryResponse().buildSystem)
+        val response = component.toSummaryResponse()
+        assertNull(response.buildSystem)
+        // javaVersion is genuinely overridable — this SCALAR_OVERRIDE row carries
+        // javaVersion="21", but the summary must NOT surface it: the projection
+        // reads the BASE row only, so an override-only value stays absent.
+        assertNull(response.javaVersion)
+    }
+
+    // -----------------------------------------------------------------------
+    // javaVersion — the component's *effective* Java version: RMS's registered
+    // rollup when present, else the BASE config row's configured value.
+    // -----------------------------------------------------------------------
+
+    @Test
+    @DisplayName("no RMS data → javaVersion falls back to the configured BASE value")
+    fun noRmsRanges_javaVersion_fallsBackToBase() {
+        val component = minimalComponent()
+        val cfg = baseConfigFor(component).also { it.javaVersion = "21" }
+        component.configurations.add(cfg)
+
+        assertEquals("21", component.toSummaryResponse(rmsRanges = null).javaVersion)
+    }
+
+    @Test
+    @DisplayName("BASE config with blank javaVersion, no RMS data → null in summary (blank-to-null)")
+    fun baseConfig_blankJavaVersion_normalizedToNull() {
+        val component = minimalComponent()
+        val cfg = baseConfigFor(component).also { it.javaVersion = "   " }
+        component.configurations.add(cfg)
+
+        assertNull(component.toSummaryResponse(rmsRanges = null).javaVersion)
+    }
+
+    @Test
+    @DisplayName("RMS data present → javaVersion uses RMS's rollup, not the configured BASE value")
+    fun rmsRanges_javaVersion_prefersRms() {
+        val component = minimalComponent()
+        val cfg = baseConfigFor(component).also { it.javaVersion = "8" }
+        component.configurations.add(cfg)
+        val rmsRanges = ComponentBuildRanges(javaRanges = listOf(BuildRangeCollapser.Run("[1,)", "21")), mavenRanges = emptyList())
+
+        assertEquals("21", component.toSummaryResponse(rmsRanges = rmsRanges).javaVersion)
+    }
+
+    @Test
+    @DisplayName("RMS data present but empty ranges, no BASE javaVersion → javaVersion is null")
+    fun noRmsRanges_noBaseJavaVersion_javaVersionNull() {
+        val component = minimalComponent()
+        component.configurations.add(baseConfigFor(component))
+        val rmsRanges = ComponentBuildRanges(javaRanges = emptyList(), mavenRanges = emptyList())
+
+        assertNull(component.toSummaryResponse(rmsRanges = rmsRanges).javaVersion)
     }
 
     // -----------------------------------------------------------------------
@@ -227,12 +281,20 @@ class ComponentSummaryMapperTest {
         val cfg = baseConfigFor(component)
         cfg.vcsEntries.add(
             VcsSettingsEntryEntity(
-                id = UUID.randomUUID(), componentConfiguration = cfg, name = "main", vcsPath = "org/repo-b", sortOrder = 2,
+                id = UUID.randomUUID(),
+                componentConfiguration = cfg,
+                name = "main",
+                vcsPath = "org/repo-b",
+                sortOrder = 2,
             ),
         )
         cfg.vcsEntries.add(
             VcsSettingsEntryEntity(
-                id = UUID.randomUUID(), componentConfiguration = cfg, name = "main", vcsPath = "org/repo-a", sortOrder = 1,
+                id = UUID.randomUUID(),
+                componentConfiguration = cfg,
+                name = "main",
+                vcsPath = "org/repo-a",
+                sortOrder = 1,
             ),
         )
         component.configurations.add(cfg)
@@ -275,12 +337,11 @@ class ComponentSummaryMapperTest {
     @DisplayName("TC project propagates id and computed URL to summary")
     fun tcProject_propagatesIdAndUrl() {
         val component = minimalComponent()
-        component.teamcityProjects.add(
-            ComponentTeamcityProjectEntity(
+        component.versionLines.add(
+            VersionLineEntity(
                 id = UUID.randomUUID(),
                 component = component,
-                projectId = "MyProject_Alpha",
-                sortOrder = 0,
+                teamcityProject = TeamcityProjectEntity(id = UUID.randomUUID(), projectId = "MyProject_Alpha"),
             ),
         )
 
@@ -293,9 +354,11 @@ class ComponentSummaryMapperTest {
     @DisplayName("blank TC base URL → teamcityProjectUrl null even when project configured")
     fun tcProject_blankBaseUrl_urlNull() {
         val component = minimalComponent()
-        component.teamcityProjects.add(
-            ComponentTeamcityProjectEntity(
-                id = UUID.randomUUID(), component = component, projectId = "Proj", sortOrder = 0,
+        component.versionLines.add(
+            VersionLineEntity(
+                id = UUID.randomUUID(),
+                component = component,
+                teamcityProject = TeamcityProjectEntity(id = UUID.randomUUID(), projectId = "Proj"),
             ),
         )
 
@@ -306,14 +369,18 @@ class ComponentSummaryMapperTest {
     @DisplayName("multiple TC projects → project with lowest sortOrder is picked")
     fun multipleTcProjects_firstBySortOrderPicked() {
         val component = minimalComponent()
-        component.teamcityProjects.add(
-            ComponentTeamcityProjectEntity(
-                id = UUID.randomUUID(), component = component, projectId = "Proj_B", sortOrder = 2,
+        component.versionLines.add(
+            VersionLineEntity(
+                id = UUID.randomUUID(),
+                component = component,
+                teamcityProject = TeamcityProjectEntity(id = UUID.randomUUID(), projectId = "Proj_B"),
             ),
         )
-        component.teamcityProjects.add(
-            ComponentTeamcityProjectEntity(
-                id = UUID.randomUUID(), component = component, projectId = "Proj_A", sortOrder = 1,
+        component.versionLines.add(
+            VersionLineEntity(
+                id = UUID.randomUUID(),
+                component = component,
+                teamcityProject = TeamcityProjectEntity(id = UUID.randomUUID(), projectId = "Proj_A"),
             ),
         )
 

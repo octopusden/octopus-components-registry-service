@@ -72,8 +72,8 @@ class ErrorHandlingHardeningTest {
     @Test
     @DisplayName("sort=name,asc is translated to componentKey and returns 200")
     fun listComponents_sortByApiFieldName_translatesToComponentKey() {
-        val a = "errhard_a_${UUID.randomUUID().toString().take(8)}"
-        val b = "errhard_b_${UUID.randomUUID().toString().take(8)}"
+        val a = "errhard-a-${UUID.randomUUID().toString().take(8)}"
+        val b = "errhard-b-${UUID.randomUUID().toString().take(8)}"
         createComponent(b)
         createComponent(a)
 
@@ -89,9 +89,10 @@ class ErrorHandlingHardeningTest {
                 .response.contentAsString
 
         val names =
-            objectMapper.readTree(body)["content"]
+            objectMapper
+                .readTree(body)["content"]
                 .map { it["name"].asText() }
-                .filter { it.startsWith("errhard_") }
+                .filter { it.startsWith("errhard-") }
         assert(names.indexOf(a) < names.indexOf(b)) {
             "expected '$a' to come before '$b' under sort=name,asc, got $names"
         }
@@ -164,8 +165,7 @@ class ErrorHandlingHardeningTest {
             ).andExpect(status().isCreated)
     }
 
-    private fun containsSubstring(needle: String) =
-        org.hamcrest.Matchers.containsString(needle)
+    private fun containsSubstring(needle: String) = org.hamcrest.Matchers.containsString(needle)
 
     /**
      * Test-only controller used to drive a `ResponseStatusException` through the
@@ -180,7 +180,6 @@ class ErrorHandlingHardeningTest {
     @RequestMapping("/test-error-helpers")
     class TestThrowingController {
         @GetMapping("/response-status-conflict")
-        fun conflict(): Nothing =
-            throw ResponseStatusException(HttpStatus.CONFLICT, "synthetic conflict for handler test")
+        fun conflict(): Nothing = throw ResponseStatusException(HttpStatus.CONFLICT, "synthetic conflict for handler test")
     }
 }

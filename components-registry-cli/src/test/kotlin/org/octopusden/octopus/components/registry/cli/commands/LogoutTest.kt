@@ -16,18 +16,22 @@ import kotlin.test.assertTrue
  * EMPTY config (so OIDC resolution fails).
  */
 class LogoutTest {
-
     /** Fakes the `security` CLI: load returns a stored token; records whether delete was invoked. */
     private class KeychainRunner : CommandRunner {
         var deleteCalled = false
-        override fun run(args: List<String>, stdin: String?): CommandResult = when {
-            args.contains("find-generic-password") -> CommandResult(0, "stored-refresh-token\n", "")
-            args.contains("delete-generic-password") -> {
-                deleteCalled = true
-                CommandResult(0, "", "")
+
+        override fun run(
+            args: List<String>,
+            stdin: String?,
+        ): CommandResult =
+            when {
+                args.contains("find-generic-password") -> CommandResult(0, "stored-refresh-token\n", "")
+                args.contains("delete-generic-password") -> {
+                    deleteCalled = true
+                    CommandResult(0, "", "")
+                }
+                else -> CommandResult(0, "", "")
             }
-            else -> CommandResult(0, "", "")
-        }
     }
 
     @Test
@@ -47,7 +51,10 @@ class LogoutTest {
     @Test
     fun `logout with no stored token is a clean no-op`() {
         val runner = object : CommandRunner {
-            override fun run(args: List<String>, stdin: String?): CommandResult =
+            override fun run(
+                args: List<String>,
+                stdin: String?,
+            ): CommandResult =
                 // exit 44 = item-not-found -> store.load() returns null.
                 CommandResult(44, "", "not found")
         }

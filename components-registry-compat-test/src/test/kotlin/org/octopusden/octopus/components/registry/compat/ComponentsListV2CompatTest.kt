@@ -23,12 +23,14 @@ import java.util.stream.Stream
  */
 @TestInstance(TestInstance.Lifecycle.PER_CLASS)
 class ComponentsListV2CompatTest : CompatibilityTestBase() {
-
     private val mapper = jacksonObjectMapper()
 
     @ParameterizedTest(name = "GET /rest/api/2/components?{0}")
     @MethodSource("queryVariants")
-    fun `GET v2 components list must match per query variant`(label: String, queryString: String) {
+    fun `GET v2 components list must match per query variant`(
+        label: String,
+        queryString: String,
+    ) {
         val path = if (queryString.isEmpty()) "/rest/api/2/components" else "/rest/api/2/components?$queryString"
         val endpoint = "GET /rest/api/2/components"
         val params = mapOf("query" to label)
@@ -83,7 +85,10 @@ class ComponentsListV2CompatTest : CompatibilityTestBase() {
         ExecutionLogger.close()
     }
 
-    private fun sliceJsonArrayByComponentId(json: JsonNode?, cap: Int?): JsonNode? {
+    private fun sliceJsonArrayByComponentId(
+        json: JsonNode?,
+        cap: Int?,
+    ): JsonNode? {
         if (cap == null) return null
         if (json == null) return null
         // The /components endpoint returns {"components": [...]} wrapper — extract the array.
@@ -100,7 +105,10 @@ class ComponentsListV2CompatTest : CompatibilityTestBase() {
         return out
     }
 
-    private fun sliceDtosByComponentId(dtos: List<ComponentV2>?, cap: Int?): List<ComponentV2>? {
+    private fun sliceDtosByComponentId(
+        dtos: List<ComponentV2>?,
+        cap: Int?,
+    ): List<ComponentV2>? {
         if (dtos == null) return null
         if (cap == null) return dtos
         return dtos.sortedBy { it.id }.take(cap)
@@ -108,37 +116,38 @@ class ComponentsListV2CompatTest : CompatibilityTestBase() {
 
     companion object {
         @JvmStatic
-        fun queryVariants(): Stream<Arguments> = Stream.of(
-            Arguments.of("no-params", ""),
-            // Synthetic (any non-empty value reproduces the bug — see /tmp/crs-prod-report.txt
-            // for real prod queries hitting this endpoint with vcs-path=ssh://git@bitbucket.../...).
-            Arguments.of("vcs-path-synthetic", "vcs-path=ssh%3A%2F%2Fhg%40mercurial"),
-            // Real prod queries observed in the 5-day access log (97 hits each).
-            // Hostnames + project keys + repo names are redacted — the URL-encoded
-            // shape is what matters for the backend's vcs-path parsing; only the
-            // structural shape (depth, separators, escape sequences) is significant.
-            Arguments.of(
-                "vcs-path-prod-shape-a",
-                "vcs-path=ssh%3A%2F%2Fgit%40bitbucket.example.com%2FPROJECT_A%2Fmodule-a.git",
-            ),
-            Arguments.of(
-                "vcs-path-prod-shape-b",
-                "vcs-path=ssh%3A%2F%2Fgit%40bitbucket.example.com%2FPROJECT_B%2Frepo-b.git",
-            ),
-            // Java Hashtable.toString() leak observed in prod (80 hits / 5 days):
-            // a client puts the result of toString() into the query string. Schema-v2 candidate
-            // must tolerate it (baseline returns 200 with empty filter).
-            Arguments.of(
-                "systems-hashtable-leak-1",
-                "systems&serialVersionUID=-7390468764508069838",
-            ),
-            Arguments.of(
-                "systems-hashtable-leak-2",
-                "systems&modCount=0&serialVersionUID=8842843931221139166",
-            ),
-            Arguments.of("build-system-MAVEN", "build-system=MAVEN"),
-            Arguments.of("solution-true", "solution=true"),
-            Arguments.of("solution-false", "solution=false"),
-        )
+        fun queryVariants(): Stream<Arguments> =
+            Stream.of(
+                Arguments.of("no-params", ""),
+                // Synthetic (any non-empty value reproduces the bug — see /tmp/crs-prod-report.txt
+                // for real prod queries hitting this endpoint with vcs-path=ssh://git@bitbucket.../...).
+                Arguments.of("vcs-path-synthetic", "vcs-path=ssh%3A%2F%2Fhg%40mercurial"),
+                // Real prod queries observed in the 5-day access log (97 hits each).
+                // Hostnames + project keys + repo names are redacted — the URL-encoded
+                // shape is what matters for the backend's vcs-path parsing; only the
+                // structural shape (depth, separators, escape sequences) is significant.
+                Arguments.of(
+                    "vcs-path-prod-shape-a",
+                    "vcs-path=ssh%3A%2F%2Fgit%40bitbucket.example.com%2FPROJECT_A%2Fmodule-a.git",
+                ),
+                Arguments.of(
+                    "vcs-path-prod-shape-b",
+                    "vcs-path=ssh%3A%2F%2Fgit%40bitbucket.example.com%2FPROJECT_B%2Frepo-b.git",
+                ),
+                // Java Hashtable.toString() leak observed in prod (80 hits / 5 days):
+                // a client puts the result of toString() into the query string. Schema-v2 candidate
+                // must tolerate it (baseline returns 200 with empty filter).
+                Arguments.of(
+                    "systems-hashtable-leak-1",
+                    "systems&serialVersionUID=-7390468764508069838",
+                ),
+                Arguments.of(
+                    "systems-hashtable-leak-2",
+                    "systems&modCount=0&serialVersionUID=8842843931221139166",
+                ),
+                Arguments.of("build-system-MAVEN", "build-system=MAVEN"),
+                Arguments.of("solution-true", "solution=true"),
+                Arguments.of("solution-false", "solution=false"),
+            )
     }
 }

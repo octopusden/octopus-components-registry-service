@@ -10,7 +10,8 @@ class ComponentSummaryResponseTest {
 
     @Test
     fun decodesPageWithSummaryRows() {
-        val literal = """
+        val literal =
+            """
             {
               "content": [
                 {
@@ -36,7 +37,7 @@ class ComponentSummaryResponseTest {
               "pageable": { "pageNumber": 0, "pageSize": 20, "paged": true },
               "sort": { "empty": true, "sorted": false, "unsorted": true }
             }
-        """.trimIndent()
+            """.trimIndent()
 
         val page = json.decodeFromString<PageComponentSummaryResponse>(literal)
 

@@ -1,21 +1,20 @@
 package org.octopusden.octopus.components.registry.server.service.impl
 
-import java.lang.reflect.Method
 import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.BeforeEach
 import org.junit.jupiter.api.DisplayName
 import org.junit.jupiter.api.Test
 import org.mockito.Mockito.mock
+import org.octopusden.octopus.components.registry.server.repository.ComponentArtifactMappingRepository
 import org.octopusden.octopus.components.registry.server.repository.ComponentBuildToolBeanRepository
 import org.octopusden.octopus.components.registry.server.repository.ComponentConfigurationRepository
 import org.octopusden.octopus.components.registry.server.repository.ComponentGroupRepository
 import org.octopusden.octopus.components.registry.server.repository.ComponentLabelRepository
-import org.octopusden.octopus.components.registry.server.repository.ComponentSystemRepository
 import org.octopusden.octopus.components.registry.server.repository.ComponentRepository
 import org.octopusden.octopus.components.registry.server.repository.ComponentRequiredToolRepository
 import org.octopusden.octopus.components.registry.server.repository.ComponentSourceRepository
+import org.octopusden.octopus.components.registry.server.repository.ComponentSystemRepository
 import org.octopusden.octopus.components.registry.server.repository.DistributionDockerImageRepository
-import org.octopusden.octopus.components.registry.server.repository.ComponentArtifactMappingRepository
 import org.octopusden.octopus.components.registry.server.repository.DistributionMavenArtifactRepository
 import org.octopusden.octopus.components.registry.server.repository.LabelRepository
 import org.octopusden.octopus.components.registry.server.repository.SystemRepository
@@ -25,9 +24,10 @@ import org.octopusden.octopus.escrow.configuration.loader.EscrowConfigurationLoa
 import org.octopusden.octopus.escrow.configuration.model.EscrowModuleConfig
 import org.octopusden.octopus.releng.dto.ComponentInfo
 import org.octopusden.octopus.releng.dto.JiraComponent
-import org.octopusden.releng.versions.VersionNames
 import org.octopusden.releng.versions.NumericVersionFactory
+import org.octopusden.releng.versions.VersionNames
 import org.octopusden.releng.versions.VersionRangeFactory
+import java.lang.reflect.Method
 
 /**
  * `collectDslJiraPairs` must emit ONLY the jira (projectKey, versionPrefix) pairs that
@@ -39,7 +39,6 @@ import org.octopusden.releng.versions.VersionRangeFactory
  * against a component that legitimately owns the override prefix.
  */
 class CollectDslJiraPairsTest {
-
     private lateinit var service: ImportServiceImpl
     private lateinit var collectMethod: Method
 
@@ -74,8 +73,10 @@ class CollectDslJiraPairsTest {
     }
 
     @Suppress("UNCHECKED_CAST")
-    private fun collect(componentKey: String, configs: List<EscrowModuleConfig>): List<UniquenessJiraPair> =
-        collectMethod.invoke(service, componentKey, configs) as List<UniquenessJiraPair>
+    private fun collect(
+        componentKey: String,
+        configs: List<EscrowModuleConfig>,
+    ): List<UniquenessJiraPair> = collectMethod.invoke(service, componentKey, configs) as List<UniquenessJiraPair>
 
     private fun config(
         versionRange: String?,
@@ -84,7 +85,11 @@ class CollectDslJiraPairsTest {
         archived: Boolean = false,
     ): EscrowModuleConfig {
         val cfg = EscrowModuleConfig()
-        fun set(name: String, value: Any?) {
+
+        fun set(
+            name: String,
+            value: Any?,
+        ) {
             val f = EscrowModuleConfig::class.java.getDeclaredField(name)
             f.isAccessible = true
             f.set(cfg, value)

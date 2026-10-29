@@ -27,7 +27,10 @@ object ComponentsRegistryScriptRunner {
      * Load  kotlin DSL Components Registry.
      * For boot jar based application System property 'kotlin.script.classpath' has to be set to DSL libraries before call.
      */
-    fun loadDSL(basePath: Path, products: Map<ProductTypes, String>): Collection<Component> {
+    fun loadDSL(
+        basePath: Path,
+        products: Map<ProductTypes, String>,
+    ): Collection<Component> {
         logger.info("loadDSL from $basePath")
         val registry = ArrayList<Component>()
         val ktsFiles = Files.list(basePath).filter { path -> path.fileName.toString().endsWith(".kts") }.toList()
@@ -39,7 +42,10 @@ object ComponentsRegistryScriptRunner {
         return registry
     }
 
-    fun loadDSLFile(dslFilePath: Path, products: Map<ProductTypes, String>): Collection<Component> {
+    fun loadDSLFile(
+        dslFilePath: Path,
+        products: Map<ProductTypes, String>,
+    ): Collection<Component> {
         logger.info("loadDSLFile $dslFilePath")
 
         if (productTypeMap.isEmpty()) {
@@ -77,8 +83,7 @@ object ComponentsRegistryScriptRunner {
         currentRegistry.add(component)
     }
 
-    fun decodeParameters(name: String): ProductTypes =
-        productTypeMap[name] ?: throw IllegalArgumentException("Unknown product type $name")
+    fun decodeParameters(name: String): ProductTypes = productTypeMap[name] ?: throw IllegalArgumentException("Unknown product type $name")
 
     fun encodeParameters(type: ProductTypes): String =
         productTypeMap.filter { it.value == type }.keys.firstOrNull {
@@ -86,5 +91,6 @@ object ComponentsRegistryScriptRunner {
         } ?: throw IllegalArgumentException("Unknown product type $type")
 
     fun getCurrentRegistry() = currentRegistry
+
     fun getProductTypeMap() = productTypeMap
 }

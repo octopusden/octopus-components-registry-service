@@ -14,9 +14,12 @@ import org.octopusden.octopus.components.registry.server.entity.ComponentConfigu
 import org.octopusden.octopus.components.registry.server.entity.ComponentEntity
 import org.octopusden.octopus.components.registry.server.entity.ComponentRequiredToolEntity
 import org.octopusden.octopus.components.registry.server.entity.DistributionDockerImageEntity
+import org.octopusden.octopus.components.registry.server.entity.DistributionGenericArtifactEntity
 import org.octopusden.octopus.components.registry.server.entity.DistributionSecurityGroupEntity
 import org.octopusden.octopus.components.registry.server.entity.VcsSettingsEntryEntity
 import org.octopusden.octopus.components.registry.server.mapper.MarkerAttributes
+import org.octopusden.octopus.components.registry.server.service.rms.ComponentBuildRanges
+import org.octopusden.octopus.components.registry.server.util.BuildRangeCollapser.Run
 import org.octopusden.releng.versions.NumericVersionFactory
 import org.octopusden.releng.versions.VersionNames
 import org.octopusden.releng.versions.VersionRangeFactory
@@ -40,8 +43,7 @@ class ComponentCodeRendererTest {
     // Fixtures
     // ----------------------------------------------------------------------
 
-    private fun component(key: String = "bcomponent"): ComponentEntity =
-        ComponentEntity(id = UUID.randomUUID(), componentKey = key)
+    private fun component(key: String = "bcomponent"): ComponentEntity = ComponentEntity(id = UUID.randomUUID(), componentKey = key)
 
     private fun base(
         c: ComponentEntity,
@@ -122,6 +124,16 @@ class ComponentCodeRendererTest {
         componentConfiguration = cfg,
         imageName = image,
         flavor = flavor,
+        sortOrder = order,
+    )
+
+    private fun generic(
+        cfg: ComponentConfigurationEntity,
+        path: String,
+        order: Int = 0,
+    ) = DistributionGenericArtifactEntity(
+        componentConfiguration = cfg,
+        path = path,
         sortOrder = order,
     )
 
@@ -378,6 +390,28 @@ class ComponentCodeRendererTest {
     }
 
     @Test
+    @DisplayName("ONB-001: DSL export omits sourcePath, checkoutDirectory and buildWorkingDirectory (Groovy DSL has none)")
+    fun fullMultiVcsCheckoutLayoutOmitted() {
+        fun render(placed: Boolean): String {
+            val c = component()
+            val b = base(c) { buildSystem = "MAVEN" }
+            b.vcsEntries.add(vcs(b, name = "core", path = "org/core", repo = "GIT", order = 0).apply { if (placed) sourcePath = "mapper" })
+            b.vcsEntries.add(
+                vcs(b, name = "ui", path = "org/ui", repo = "GIT", order = 1).apply {
+                    if (placed) {
+                        sourcePath = "data"
+                        checkoutDirectory = "ui"
+                    }
+                },
+            )
+            if (placed) b.buildWorkingDirectory = "ui/app"
+            return renderer.renderFull(c)
+        }
+
+        assertEquals(render(placed = false), render(placed = true))
+    }
+
+    @Test
     @DisplayName("FULL: single unnamed VCS root renders flat (no named sub-block)")
     fun fullSingleVcsFlat() {
         val c = component()
@@ -463,6 +497,36 @@ class ComponentCodeRendererTest {
         assertTrue(out.contains("docker {"), out)
         assertTrue(out.contains("imageName = \"acme/svc\""), out)
         assertTrue(out.contains("flavor = \"slim\""), out)
+    }
+
+    @Test
+    @DisplayName("SYS-098: FULL — distribution generic child renders inside distribution block")
+    fun `SYS-098 full distribution generic child renders inside distribution block`() {
+        val c = component()
+        val b = base(c) { buildSystem = "MAVEN" }
+        b.genericArtifacts.add(generic(b, path = "releases/foo/1.0.0/foo.tar.gz"))
+
+        val out = renderer.renderFull(c)
+        assertTrue(out.contains("distribution {"), out)
+        assertTrue(out.contains("generic {"), out)
+        assertTrue(out.contains("path = \"releases/foo/1.0.0/foo.tar.gz\""), out)
+    }
+
+    @Test
+    @DisplayName("SYS-098: FULL — per-range distribution.generic marker renders a generic block only in the range")
+    fun `SYS-098 full per-range distribution generic marker`() {
+        val c = component()
+        val b = base(c) { buildSystem = "MAVEN" }
+        b.genericArtifacts.add(generic(b, path = "releases/foo/1.0.0/foo.tar.gz"))
+        val m = marker(c, "[2,)", MarkerAttributes.DISTRIBUTION_GENERIC) {}
+        m.genericArtifacts.add(generic(m, path = "releases/foo/2.0.0/foo.tar.gz"))
+
+        val out = renderer.renderFull(c)
+        assertTrue(out.contains("path = \"releases/foo/1.0.0/foo.tar.gz\""), out)
+        val rangeBlock = out.substringAfter("\"[2,)\" {")
+        assertTrue(rangeBlock.contains("generic {"), rangeBlock)
+        assertTrue(rangeBlock.contains("releases/foo/2.0.0/foo.tar.gz"), rangeBlock)
+        assertFalse(rangeBlock.contains("releases/foo/1.0.0/foo.tar.gz"), rangeBlock)
     }
 
     @Test
@@ -716,5 +780,93 @@ class ComponentCodeRendererTest {
         // In-range still resolves.
         val inRange = renderer.renderResolved(c, "1.0.700")
         assertTrue(inRange != null && inRange.contains("javaVersion = \"21\""), "$inRange")
+    }
+
+    // ----------------------------------------------------------------------
+    // RMS ACTUAL data
+    // ----------------------------------------------------------------------
+
+    @Test
+    @DisplayName("FULL: no RMS data -> no trailing section at all, not even the header")
+    fun fullNoRmsDataOmitsSection() {
+        val c = component()
+        base(c) { buildSystem = "MAVEN" }
+        assertFalse(renderer.renderFull(c, rmsRanges = null).contains("RMS registered parameters"))
+        assertFalse(
+            renderer.renderFull(c, rmsRanges = ComponentBuildRanges(emptyList(), emptyList())).contains("RMS registered parameters"),
+        )
+    }
+
+    @Test
+    @DisplayName("FULL: RMS data appends a labeled trailing section, one block per ACTUAL range")
+    fun fullAppendsRmsSection() {
+        val c = component()
+        base(c) { buildSystem = "MAVEN" }
+        val rmsRanges =
+            ComponentBuildRanges(
+                javaRanges = listOf(Run("(1.0,1.3]", "17"), Run("(1.3,)", "21")),
+                mavenRanges = listOf(Run("(2.0,)", "3.3.9")),
+            )
+
+        val out = renderer.renderFull(c, rmsRanges = rmsRanges)
+
+        assertTrue(out.contains("// RMS registered parameters"), out)
+        assertTrue(out.contains("\"(1.0,1.3]\" {"), out)
+        assertTrue(out.contains("javaVersion = \"17\""), out)
+        assertTrue(out.contains("\"(1.3,)\" {"), out)
+        assertTrue(out.contains("javaVersion = \"21\""), out)
+        assertTrue(out.contains("\"(2.0,)\" {"), out)
+        assertTrue(out.contains("mavenVersion = \"3.3.9\""), out)
+        assertTrue(out.contains("    // RMS registered parameters"), out)
+        assertEquals("}", out.trim().lines().last())
+    }
+
+    @Test
+    @DisplayName("RESOLVED: an ACTUAL range covering the requested version wins over the configured merge")
+    fun resolvedPrefersActualWhenCovered() {
+        val c = component()
+        base(c) { javaVersion = "1.8" }
+        scalarOverride(c, "[1.5,)", "build.javaVersion") { javaVersion = "11" }
+        val rmsRanges = ComponentBuildRanges(javaRanges = listOf(Run("[1.5,)", "21")), mavenRanges = emptyList())
+
+        val out = renderer.renderResolved(c, "2.0", rmsRanges = rmsRanges)!!
+
+        assertTrue(out.contains("javaVersion = \"21\""), out)
+        assertFalse(out.contains("javaVersion = \"11\""), out)
+    }
+
+    @Test
+    @DisplayName("RESOLVED: no ACTUAL range covers the requested version -> unchanged, today's merge wins")
+    fun resolvedFallsBackWhenActualDoesNotCover() {
+        val c = component()
+        base(c) { javaVersion = "1.8" }
+        scalarOverride(c, "[1.5,)", "build.javaVersion") { javaVersion = "11" }
+        val rmsRanges = ComponentBuildRanges(javaRanges = listOf(Run("[5,)", "21")), mavenRanges = emptyList())
+
+        val out = renderer.renderResolved(c, "2.0", rmsRanges = rmsRanges)!!
+
+        assertTrue(out.contains("javaVersion = \"11\""), out)
+        assertFalse(out.contains("javaVersion = \"21\""), out)
+    }
+
+    @Test
+    @DisplayName("RESOLVED: Java and Maven can resolve from different sources in the same response")
+    fun resolvedJavaAndMavenCanDifferInSource() {
+        val c = component()
+        base(c) {
+            javaVersion = "1.8"
+            mavenVersion = "3.3.6"
+        }
+        val rmsRanges =
+            ComponentBuildRanges(
+                javaRanges = listOf(Run("[1,)", "21")),
+                mavenRanges = listOf(Run("[5,)", "3.3.9")),
+            )
+
+        val out = renderer.renderResolved(c, "2.0", rmsRanges = rmsRanges)!!
+
+        // Java: covered by ACTUAL -> RMS wins. Maven: not covered ([5,) starts at 5) -> configured stays.
+        assertTrue(out.contains("javaVersion = \"21\""), out)
+        assertTrue(out.contains("mavenVersion = \"3.3.6\""), out)
     }
 }

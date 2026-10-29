@@ -1,12 +1,11 @@
 package org.octopusden.octopus.components.registry.core.dto
 
-import com.fasterxml.jackson.annotation.JsonCreator
 import com.fasterxml.jackson.annotation.JsonIgnoreProperties
 import com.fasterxml.jackson.annotation.JsonProperty
 import org.octopusden.octopus.components.registry.api.build.tools.BuildTool
 
 @JsonIgnoreProperties(ignoreUnknown = true)
-data class BuildParametersDTO @JsonCreator constructor(
+data class BuildParametersDTO(
     @JsonProperty("javaVersion") val javaVersion: String? = null,
     @JsonProperty("mavenVersion") val mavenVersion: String? = null,
     @JsonProperty("gradleVersion") val gradleVersion: String? = null,

@@ -19,7 +19,6 @@ import org.octopusden.octopus.components.registry.server.entity.ArtifactIdMode
  * the time the importer sees it; both the array literal and the resolved forms are accepted.
  */
 object ArtifactOwnershipModeClassifier {
-
     /** Exact catch-all forms that map to [ArtifactIdMode.ALL] (the inherited `ANY_ARTIFACT` default). */
     private val KNOWN_CATCH_ALL = setOf("*", ".*", "[\\w-\\.]+", "[\\w-]+", "\\w+")
 
@@ -27,8 +26,7 @@ object ArtifactOwnershipModeClassifier {
     private val LITERAL_TOKEN = Regex("^[A-Za-z0-9_.-]+$")
 
     /** Split an enumeration on comma OR pipe (both are legacy separators), trimmed, non-empty. */
-    fun splitTokens(pattern: String): List<String> =
-        pattern.split(',', '|').map { it.trim() }.filter { it.isNotEmpty() }
+    fun splitTokens(pattern: String): List<String> = pattern.split(',', '|').map { it.trim() }.filter { it.isNotEmpty() }
 
     /**
      * Split a group-list into its individual Maven groupIds (comma-separated; pipe is NOT a group
@@ -69,8 +67,9 @@ object ArtifactOwnershipModeClassifier {
  * Migration hard-fail: an artifactId pattern is neither a known catch-all, a `(?!…)` exclusion,
  * nor a literal enumeration. There is no raw-regex storage; a human must express it via the modes.
  */
-class UnclassifiableArtifactPatternException(pattern: String) :
-    IllegalStateException(
+class UnclassifiableArtifactPatternException(
+    pattern: String,
+) : IllegalStateException(
         "Cannot classify artifactId pattern '$pattern' into an ownership mode " +
             "(EXPLICIT / ALL_EXCEPT_CLAIMED / ALL). Express it via the modes or fix the DSL.",
     )

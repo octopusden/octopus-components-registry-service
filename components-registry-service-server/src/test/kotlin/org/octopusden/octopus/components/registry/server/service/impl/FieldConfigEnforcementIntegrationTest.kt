@@ -2,11 +2,11 @@ package org.octopusden.octopus.components.registry.server.service.impl
 
 import com.fasterxml.jackson.databind.JsonNode
 import com.fasterxml.jackson.databind.ObjectMapper
-import org.junit.jupiter.api.Tag
 import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.Assertions.assertNotEquals
 import org.junit.jupiter.api.Assertions.assertTrue
 import org.junit.jupiter.api.DisplayName
+import org.junit.jupiter.api.Tag
 import org.junit.jupiter.api.Test
 import org.junit.jupiter.api.Timeout
 import org.octopusden.cloud.commons.security.client.AuthServerClient
@@ -215,8 +215,7 @@ class FieldConfigEnforcementIntegrationTest {
 
     private fun JsonNode.jiraTechnical(): Boolean = baseRow()["jira"]["technical"].asBoolean()
 
-    private fun JsonNode.baseJira(field: String): String? =
-        baseRow()["jira"]?.get(field)?.takeUnless { it.isNull }?.asText()
+    private fun JsonNode.baseJira(field: String): String? = baseRow()["jira"]?.get(field)?.takeUnless { it.isNull }?.asText()
 
     /**
      * Create a component OWNED BY the editor "bob" (so `editorJwt()` passes the
@@ -230,7 +229,7 @@ class FieldConfigEnforcementIntegrationTest {
     ): JsonNode {
         val registryFragment = vcsExternalRegistry?.let { """"vcsExternalRegistry":"$it",""" } ?: ""
         val body =
-            """{"name":"crsB_${UUID.randomUUID().toString().take(8)}","componentOwner":"bob",""" +
+            """{"name":"crsb-${UUID.randomUUID().toString().take(8)}","componentOwner":"bob",""" +
                 registryFragment +
                 """"group":{"groupKey":"org.example.test","isFake":false},""" +
                 """"baseConfiguration":{"build":{"buildSystem":"MAVEN"},""" +
@@ -243,7 +242,8 @@ class FieldConfigEnforcementIntegrationTest {
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(body),
                 ).andExpect(status().isCreated)
-                .andReturn().response.contentAsString
+                .andReturn()
+                .response.contentAsString
         return objectMapper.readTree(response)
     }
 
@@ -378,7 +378,7 @@ class FieldConfigEnforcementIntegrationTest {
     fun create_nonAdminSuppliesAdminOnly_forbidden() {
         withFieldConfig(mapOf("jira" to mapOf("technical" to mapOf("editable" to "adminOnly")))) {
             val body =
-                """{"name":"crsB_create_${UUID.randomUUID().toString().take(8)}","componentOwner":"bob",""" +
+                """{"name":"crsb-create-${UUID.randomUUID().toString().take(8)}","componentOwner":"bob",""" +
                     """"group":{"groupKey":"org.example.test","isFake":false},""" +
                     """"baseConfiguration":{"build":{"buildSystem":"MAVEN"},""" +
                     """"jira":{"projectKey":"${uniqueProjectKey()}","technical":true}}}"""
@@ -397,7 +397,7 @@ class FieldConfigEnforcementIntegrationTest {
     fun create_nonAdminOmitsAdminOnly_ok() {
         withFieldConfig(mapOf("jira" to mapOf("technical" to mapOf("editable" to "adminOnly")))) {
             val body =
-                """{"name":"crsB_create_${UUID.randomUUID().toString().take(8)}","componentOwner":"bob",""" +
+                """{"name":"crsb-create-${UUID.randomUUID().toString().take(8)}","componentOwner":"bob",""" +
                     """"group":{"groupKey":"org.example.test","isFake":false},""" +
                     """"baseConfiguration":{"build":{"buildSystem":"MAVEN"},""" +
                     """"jira":{"projectKey":"${uniqueProjectKey()}"}}}"""
@@ -453,7 +453,8 @@ class FieldConfigEnforcementIntegrationTest {
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("""{"overriddenAttribute":"jira.technical","versionRange":"[1.0,2.0)","value":true}"""),
                 ).andExpect(status().isCreated)
-                .andReturn().response.contentAsString
+                .andReturn()
+                .response.contentAsString
         val overrideId = objectMapper.readTree(overrideResponse)["id"].asText()
 
         withFieldConfig(mapOf("jira" to mapOf("technical" to mapOf("editable" to "adminOnly")))) {
@@ -531,7 +532,8 @@ class FieldConfigEnforcementIntegrationTest {
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("""{"overriddenAttribute":"jira.technical","versionRange":"[1.0,2.0)","value":true}"""),
                 ).andExpect(status().isCreated)
-                .andReturn().response.contentAsString
+                .andReturn()
+                .response.contentAsString
         val overrideId = objectMapper.readTree(overrideResponse)["id"].asText()
 
         withFieldConfig(mapOf("jira" to mapOf("technical" to mapOf("editable" to "adminOnly")))) {
@@ -548,19 +550,22 @@ class FieldConfigEnforcementIntegrationTest {
 
     // ---- helpers for the aspect/parent/people coverage below ----
 
-    private fun JsonNode.baseScalar(aspect: String, field: String): String? =
-        baseRow()[aspect]?.get(field)?.takeUnless { it.isNull }?.asText()
+    private fun JsonNode.baseScalar(
+        aspect: String,
+        field: String,
+    ): String? = baseRow()[aspect]?.get(field)?.takeUnless { it.isNull }?.asText()
 
     /** POST a bob-owned component with a caller-supplied baseConfiguration (as admin). */
     private fun createBobRaw(baseConfig: String = """{"build":{"buildSystem":"MAVEN"}}"""): JsonNode {
         val body =
-            """{"name":"crsB_${UUID.randomUUID().toString().take(8)}","componentOwner":"bob",""" +
+            """{"name":"crsb-${UUID.randomUUID().toString().take(8)}","componentOwner":"bob",""" +
                 """"group":{"groupKey":"org.example.test","isFake":false},"baseConfiguration":$baseConfig}"""
         return objectMapper.readTree(
             mvc
                 .perform(post("/rest/api/4/components").with(adminJwt()).contentType(MediaType.APPLICATION_JSON).content(body))
                 .andExpect(status().isCreated)
-                .andReturn().response.contentAsString,
+                .andReturn()
+                .response.contentAsString,
         )
     }
 
@@ -576,7 +581,8 @@ class FieldConfigEnforcementIntegrationTest {
     @DisplayName("hidden aspect field (jira.minorVersionFormat): PATCH change silently STRIPPED, not applied, not 4xx")
     fun hiddenAspectField_stripOnPatch() {
         val mvf = "${'$'}major.${'$'}minor"
-        val created = createBobRaw("""{"build":{"buildSystem":"MAVEN"},"jira":{"projectKey":"${uniqueProjectKey()}","minorVersionFormat":"$mvf"}}""")
+        val created =
+            createBobRaw("""{"build":{"buildSystem":"MAVEN"},"jira":{"projectKey":"${uniqueProjectKey()}","minorVersionFormat":"$mvf"}}""")
         val id = created["id"].asText()
         val version = created["version"].asLong()
 
@@ -592,7 +598,9 @@ class FieldConfigEnforcementIntegrationTest {
     fun hiddenAspectField_stripOnCreate() {
         withFieldConfig(mapOf("jira" to mapOf("releaseVersionFormat" to mapOf("visibility" to "hidden")))) {
             val created =
-                createBobRaw("""{"build":{"buildSystem":"MAVEN"},"jira":{"projectKey":"${uniqueProjectKey()}","releaseVersionFormat":"${'$'}foo"}}""")
+                createBobRaw(
+                    """{"build":{"buildSystem":"MAVEN"},"jira":{"projectKey":"${uniqueProjectKey()}","releaseVersionFormat":"${'$'}foo"}}""",
+                )
             assertEquals(null, created.baseScalar("jira", "releaseVersionFormat"), "hidden aspect must be stripped on create")
         }
     }
@@ -670,8 +678,11 @@ class FieldConfigEnforcementIntegrationTest {
 
             val overrides =
                 objectMapper.readTree(
-                    mvc.perform(get("/rest/api/4/components/$id/field-overrides").with(adminJwt()))
-                        .andExpect(status().isOk).andReturn().response.contentAsString,
+                    mvc
+                        .perform(get("/rest/api/4/components/$id/field-overrides").with(adminJwt()))
+                        .andExpect(status().isOk)
+                        .andReturn()
+                        .response.contentAsString,
                 )
             assertTrue(
                 overrides.any { it["overriddenAttribute"].asText() == "jira.technical" },
@@ -687,12 +698,12 @@ class FieldConfigEnforcementIntegrationTest {
     fun create_people_gated() {
         withFieldConfig(mapOf("component" to mapOf("releaseManager" to mapOf("editable" to "adminOnly")))) {
             editorPost(
-                """{"name":"crsB_ppl_${UUID.randomUUID().toString().take(8)}","componentOwner":"bob","releaseManager":["bob"],""" +
+                """{"name":"crsb-ppl-${UUID.randomUUID().toString().take(8)}","componentOwner":"bob","releaseManager":["bob"],""" +
                     """"group":{"groupKey":"org.example.test","isFake":false},"baseConfiguration":{"build":{"buildSystem":"MAVEN"}}}""",
             ).andExpect(status().isForbidden)
 
             editorPost(
-                """{"name":"crsB_ppl_${UUID.randomUUID().toString().take(8)}","componentOwner":"bob",""" +
+                """{"name":"crsb-ppl-${UUID.randomUUID().toString().take(8)}","componentOwner":"bob",""" +
                     """"group":{"groupKey":"org.example.test","isFake":false},"baseConfiguration":{"build":{"buildSystem":"MAVEN"}}}""",
             ).andExpect(status().isCreated)
         }
@@ -716,7 +727,7 @@ class FieldConfigEnforcementIntegrationTest {
     @Test
     @DisplayName("adminOnly parentComponentName: non-admin setting a parent → 403")
     fun adminOnlyParentComponentName_reject() {
-        val parentKey = "crsB_parent_${UUID.randomUUID().toString().take(8)}"
+        val parentKey = "crsb-parent-${UUID.randomUUID().toString().take(8)}"
         adminPost(
             """{"name":"$parentKey","componentOwner":"owner1","canBeParent":true,""" +
                 """"group":{"groupKey":"org.example.test","isFake":false},"baseConfiguration":{"build":{"buildSystem":"MAVEN"}}}""",
@@ -741,7 +752,7 @@ class FieldConfigEnforcementIntegrationTest {
             val created =
                 objectMapper.readTree(
                     adminPost(
-                        """{"name":"crsB_cbp_${UUID.randomUUID().toString().take(8)}","componentOwner":"owner1","canBeParent":true,""" +
+                        """{"name":"crsb-cbp-${UUID.randomUUID().toString().take(8)}","componentOwner":"owner1","canBeParent":true,""" +
                             """"group":{"groupKey":"org.example.test","isFake":false},"baseConfiguration":{"build":{"buildSystem":"MAVEN"}}}""",
                     ).andExpect(status().isCreated).andReturn().response.contentAsString,
                 )
@@ -756,7 +767,9 @@ class FieldConfigEnforcementIntegrationTest {
             val created =
                 objectMapper.readTree(
                     adminPost(
-                        """{"name":"crsB_rm_${UUID.randomUUID().toString().take(8)}","componentOwner":"owner1","releaseManager":["bob"],""" +
+                        """{"name":"crsb-rm-${UUID.randomUUID().toString().take(
+                            8,
+                        )}","componentOwner":"owner1","releaseManager":["bob"],""" +
                             """"group":{"groupKey":"org.example.test","isFake":false},"baseConfiguration":{"build":{"buildSystem":"MAVEN"}}}""",
                     ).andExpect(status().isCreated).andReturn().response.contentAsString,
                 )
@@ -771,7 +784,7 @@ class FieldConfigEnforcementIntegrationTest {
             val g = "org.example.test.${UUID.randomUUID().toString().take(8)}"
             val resp =
                 adminPost(
-                    """{"name":"crsB_ee_${UUID.randomUUID().toString().take(8)}","componentOwner":"owner1",""" +
+                    """{"name":"crsb-ee-${UUID.randomUUID().toString().take(8)}","componentOwner":"owner1",""" +
                         """"releaseManager":["rm1"],"securityChampion":["sc1"],""" +
                         """"displayName":"Should Be Stripped","distributionExplicit":true,"distributionExternal":true,""" +
                         """"group":{"groupKey":"org.example.test","isFake":false},""" +
@@ -826,7 +839,7 @@ class FieldConfigEnforcementIntegrationTest {
             // "NOT_A_TYPE" is not a valid productType — validateProductType would 400 if it ran
             // first. The editability gate must win: a non-admin may not supply this field at all.
             val body =
-                """{"name":"crsB_create_${UUID.randomUUID().toString().take(8)}","componentOwner":"bob","productType":"NOT_A_TYPE",""" +
+                """{"name":"crsb-create-${UUID.randomUUID().toString().take(8)}","componentOwner":"bob","productType":"NOT_A_TYPE",""" +
                     """"group":{"groupKey":"org.example.test","isFake":false},""" +
                     """"baseConfiguration":{"build":{"buildSystem":"MAVEN"},"jira":{"projectKey":"${uniqueProjectKey()}"}}}"""
             editorPost(body).andExpect(status().isForbidden)
@@ -848,7 +861,8 @@ class FieldConfigEnforcementIntegrationTest {
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("""{"overriddenAttribute":"escrow.generation","versionRange":"[1.0,2.0)","value":"MANUAL"}"""),
                 ).andExpect(status().isCreated)
-                .andReturn().response.contentAsString
+                .andReturn()
+                .response.contentAsString
         val overrideId = objectMapper.readTree(overrideResponse)["id"].asText()
 
         withFieldConfig(mapOf("escrow" to mapOf("generation" to mapOf("editable" to "adminOnly")))) {
@@ -877,7 +891,8 @@ class FieldConfigEnforcementIntegrationTest {
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("""{"overriddenAttribute":"escrow.generation","versionRange":"[1.0,2.0)","value":"MANUAL"}"""),
                 ).andExpect(status().isCreated)
-                .andReturn().response.contentAsString
+                .andReturn()
+                .response.contentAsString
         val overrideId = objectMapper.readTree(overrideResponse)["id"].asText()
 
         withFieldConfig(mapOf("escrow" to mapOf("generation" to mapOf("editable" to "adminOnly")))) {

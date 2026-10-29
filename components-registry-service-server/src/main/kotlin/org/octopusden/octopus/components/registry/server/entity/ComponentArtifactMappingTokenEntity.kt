@@ -23,14 +23,11 @@ class ComponentArtifactMappingTokenEntity(
     @Id
     @GeneratedValue(strategy = GenerationType.UUID)
     var id: UUID? = null,
-
     @ManyToOne(fetch = FetchType.LAZY, optional = false)
     @JoinColumn(name = "mapping_id", nullable = false)
     var mapping: ComponentArtifactMappingEntity,
-
     @Column(name = "artifact_pattern", columnDefinition = "TEXT", nullable = false)
     var artifactPattern: String = "",
-
     @Column(name = "sort_order", nullable = false)
     var sortOrder: Int = 0,
 )

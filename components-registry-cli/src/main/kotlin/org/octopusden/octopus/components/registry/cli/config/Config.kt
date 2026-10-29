@@ -1,7 +1,7 @@
 package org.octopusden.octopus.components.registry.cli.config
 
-import kotlinx.serialization.SerializationException
 import kotlinx.serialization.Serializable
+import kotlinx.serialization.SerializationException
 import org.octopusden.octopus.components.registry.cli.client.Json
 import java.nio.file.Files
 import java.nio.file.Path
@@ -45,7 +45,6 @@ data class CrsctlConfig(
  * A missing config file is tolerated and yields [CrsctlConfig.EMPTY].
  */
 object ConfigLoader {
-
     private const val CONFIG_FILE_NAME = "config.json"
 
     /** The single source of truth for the per-OS config directory. */
@@ -90,4 +89,7 @@ object ConfigLoader {
 }
 
 /** Thrown when a present config file cannot be parsed. */
-class ConfigLoadException(message: String, cause: Throwable? = null) : RuntimeException(message, cause)
+class ConfigLoadException(
+    message: String,
+    cause: Throwable? = null,
+) : RuntimeException(message, cause)

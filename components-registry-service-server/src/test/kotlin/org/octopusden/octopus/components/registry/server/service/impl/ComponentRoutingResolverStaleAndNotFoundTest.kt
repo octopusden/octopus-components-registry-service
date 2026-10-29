@@ -1,6 +1,5 @@
 package org.octopusden.octopus.components.registry.server.service.impl
 
-import java.util.concurrent.TimeUnit
 import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.Assertions.assertNull
 import org.junit.jupiter.api.Assertions.assertThrows
@@ -23,6 +22,7 @@ import org.octopusden.octopus.escrow.model.Distribution
 import org.octopusden.octopus.escrow.model.VCSSettings
 import org.octopusden.octopus.releng.dto.ComponentVersion
 import org.octopusden.octopus.releng.dto.JiraComponentVersion
+import java.util.concurrent.TimeUnit
 
 /**
  * Post-#192 review fixups (Group 1): stale-git-fallback guards on
@@ -48,7 +48,6 @@ import org.octopusden.octopus.releng.dto.JiraComponentVersion
  */
 @Timeout(10, unit = TimeUnit.SECONDS)
 class ComponentRoutingResolverStaleAndNotFoundTest {
-
     private lateinit var gitResolver: ComponentRegistryResolverImpl
     private lateinit var dbResolver: DatabaseComponentRegistryResolver
     private lateinit var sourceRegistry: ComponentSourceRegistry
@@ -86,9 +85,11 @@ class ComponentRoutingResolverStaleAndNotFoundTest {
         val migratedComponent = "migrated-widget"
         doReturn(setOf(migratedComponent)).`when`(sourceRegistry).getDbComponentNames()
         doThrow(NotFoundException("not in db"))
-            .`when`(dbResolver).getJiraComponentByProjectAndVersion(projectKey, version)
+            .`when`(dbResolver)
+            .getJiraComponentByProjectAndVersion(projectKey, version)
         doReturn(mockJiraComponentVersion(migratedComponent))
-            .`when`(gitResolver).getJiraComponentByProjectAndVersion(projectKey, version)
+            .`when`(gitResolver)
+            .getJiraComponentByProjectAndVersion(projectKey, version)
 
         assertThrows(NotFoundException::class.java) {
             routing.getJiraComponentByProjectAndVersion(projectKey, version)
@@ -107,9 +108,11 @@ class ComponentRoutingResolverStaleAndNotFoundTest {
         // sourceRegistry.getDbComponentNames() returns empty by default in setUp()
         val gitResult = mockJiraComponentVersion(gitOnlyComponent)
         doThrow(NotFoundException("not in db"))
-            .`when`(dbResolver).getJiraComponentByProjectAndVersion(projectKey, version)
+            .`when`(dbResolver)
+            .getJiraComponentByProjectAndVersion(projectKey, version)
         doReturn(gitResult)
-            .`when`(gitResolver).getJiraComponentByProjectAndVersion(projectKey, version)
+            .`when`(gitResolver)
+            .getJiraComponentByProjectAndVersion(projectKey, version)
 
         val result = routing.getJiraComponentByProjectAndVersion(projectKey, version)
         assertEquals(gitResult, result)
@@ -124,7 +127,8 @@ class ComponentRoutingResolverStaleAndNotFoundTest {
         val version = "2.0.0"
         val dbResult = mockJiraComponentVersion("db-widget")
         doReturn(dbResult)
-            .`when`(dbResolver).getJiraComponentByProjectAndVersion(projectKey, version)
+            .`when`(dbResolver)
+            .getJiraComponentByProjectAndVersion(projectKey, version)
 
         val result = routing.getJiraComponentByProjectAndVersion(projectKey, version)
         assertEquals(dbResult, result)
@@ -143,9 +147,11 @@ class ComponentRoutingResolverStaleAndNotFoundTest {
         val gitResult = mockJiraComponentVersion(migratedComponent)
         doReturn(setOf(migratedComponent)).`when`(sourceRegistry).getDbComponentNames()
         doThrow(RuntimeException("transient db error"))
-            .`when`(dbResolver).getJiraComponentByProjectAndVersion(projectKey, version)
+            .`when`(dbResolver)
+            .getJiraComponentByProjectAndVersion(projectKey, version)
         doReturn(gitResult)
-            .`when`(gitResolver).getJiraComponentByProjectAndVersion(projectKey, version)
+            .`when`(gitResolver)
+            .getJiraComponentByProjectAndVersion(projectKey, version)
 
         val result = routing.getJiraComponentByProjectAndVersion(projectKey, version)
         assertEquals(gitResult, result, "transient db failure falls back to git without stale-guard")
@@ -162,9 +168,11 @@ class ComponentRoutingResolverStaleAndNotFoundTest {
         val gitResult = mock(JiraComponentVersion::class.java)
         doReturn(null).`when`(gitResult).componentVersion
         doThrow(NotFoundException("not in db"))
-            .`when`(dbResolver).getJiraComponentByProjectAndVersion(projectKey, version)
+            .`when`(dbResolver)
+            .getJiraComponentByProjectAndVersion(projectKey, version)
         doReturn(gitResult)
-            .`when`(gitResolver).getJiraComponentByProjectAndVersion(projectKey, version)
+            .`when`(gitResolver)
+            .getJiraComponentByProjectAndVersion(projectKey, version)
 
         // Should not throw NPE — stale-guard cannot evaluate without componentName,
         // so fall through and return gitResult as-is (pre-fix behaviour for this edge).
@@ -180,9 +188,11 @@ class ComponentRoutingResolverStaleAndNotFoundTest {
         val projectKey = "delta-proj"
         val version = "1.0.0"
         doThrow(NotFoundException("not in db"))
-            .`when`(dbResolver).getJiraComponentByProjectAndVersion(projectKey, version)
+            .`when`(dbResolver)
+            .getJiraComponentByProjectAndVersion(projectKey, version)
         doThrow(NotFoundException("not in git"))
-            .`when`(gitResolver).getJiraComponentByProjectAndVersion(projectKey, version)
+            .`when`(gitResolver)
+            .getJiraComponentByProjectAndVersion(projectKey, version)
 
         assertThrows(NotFoundException::class.java) {
             routing.getJiraComponentByProjectAndVersion(projectKey, version)
@@ -209,9 +219,11 @@ class ComponentRoutingResolverStaleAndNotFoundTest {
         val migratedComponent = "migrated-widget"
         doReturn(setOf(migratedComponent)).`when`(sourceRegistry).getDbComponentNames()
         doThrow(NotFoundException("not in db"))
-            .`when`(dbResolver).findComponentByArtifact(artifact)
+            .`when`(dbResolver)
+            .findComponentByArtifact(artifact)
         doReturn(mockVersionedComponent(migratedComponent))
-            .`when`(gitResolver).findComponentByArtifact(artifact)
+            .`when`(gitResolver)
+            .findComponentByArtifact(artifact)
 
         assertThrows(NotFoundException::class.java) {
             routing.findComponentByArtifact(artifact)
@@ -225,9 +237,11 @@ class ComponentRoutingResolverStaleAndNotFoundTest {
     fun pr192_1_4_findComponentByArtifact_bothNotFound_throws() {
         val artifact = ArtifactDependency("org.test", "missing", "1.0.0")
         doThrow(NotFoundException("not in db"))
-            .`when`(dbResolver).findComponentByArtifact(artifact)
+            .`when`(dbResolver)
+            .findComponentByArtifact(artifact)
         doThrow(NotFoundException("not in git"))
-            .`when`(gitResolver).findComponentByArtifact(artifact)
+            .`when`(gitResolver)
+            .findComponentByArtifact(artifact)
 
         assertThrows(NotFoundException::class.java) {
             routing.findComponentByArtifact(artifact)
@@ -245,7 +259,8 @@ class ComponentRoutingResolverStaleAndNotFoundTest {
         val gitResult = mockVersionedComponent(migratedComponent)
         doReturn(setOf(migratedComponent)).`when`(sourceRegistry).getDbComponentNames()
         doThrow(RuntimeException("transient db error"))
-            .`when`(dbResolver).findComponentByArtifact(artifact)
+            .`when`(dbResolver)
+            .findComponentByArtifact(artifact)
         doReturn(gitResult).`when`(gitResolver).findComponentByArtifact(artifact)
 
         val result = routing.findComponentByArtifact(artifact)
@@ -261,7 +276,8 @@ class ComponentRoutingResolverStaleAndNotFoundTest {
         val gitOnlyComponent = "legacy-widget"
         val gitResult = mockVersionedComponent(gitOnlyComponent)
         doThrow(NotFoundException("not in db"))
-            .`when`(dbResolver).findComponentByArtifact(artifact)
+            .`when`(dbResolver)
+            .findComponentByArtifact(artifact)
         doReturn(gitResult).`when`(gitResolver).findComponentByArtifact(artifact)
 
         val result = routing.findComponentByArtifact(artifact)
@@ -285,9 +301,11 @@ class ComponentRoutingResolverStaleAndNotFoundTest {
         val gitStaleResult = mockVersionedComponent(migratedComponent)
         doReturn(setOf(migratedComponent)).`when`(sourceRegistry).getDbComponentNames()
         doReturn(mapOf(artifact to gitStaleResult))
-            .`when`(gitResolver).findComponentsByArtifact(artifacts)
+            .`when`(gitResolver)
+            .findComponentsByArtifact(artifacts)
         doReturn(mapOf(artifact to dbResult))
-            .`when`(dbResolver).findComponentsByArtifact(artifacts)
+            .`when`(dbResolver)
+            .findComponentsByArtifact(artifacts)
 
         val result = routing.findComponentsByArtifact(artifacts)
         assertEquals(dbResult, result[artifact])
@@ -305,9 +323,11 @@ class ComponentRoutingResolverStaleAndNotFoundTest {
         val gitStaleResult = mockVersionedComponent(migratedComponent)
         doReturn(setOf(migratedComponent)).`when`(sourceRegistry).getDbComponentNames()
         doReturn(mapOf(artifact to gitStaleResult))
-            .`when`(gitResolver).findComponentsByArtifact(artifacts)
+            .`when`(gitResolver)
+            .findComponentsByArtifact(artifacts)
         doReturn(emptyMap<ArtifactDependency, VersionedComponent>())
-            .`when`(dbResolver).findComponentsByArtifact(artifacts)
+            .`when`(dbResolver)
+            .findComponentsByArtifact(artifacts)
 
         val result = routing.findComponentsByArtifact(artifacts)
         assertNull(result[artifact])
@@ -331,9 +351,11 @@ class ComponentRoutingResolverStaleAndNotFoundTest {
         val gitStaleOther = mockVersionedComponent(otherDbComponent)
         doReturn(setOf(otherDbComponent)).`when`(sourceRegistry).getDbComponentNames()
         doReturn(mapOf(artifact to gitStaleOther))
-            .`when`(gitResolver).findComponentsByArtifact(artifacts)
+            .`when`(gitResolver)
+            .findComponentsByArtifact(artifacts)
         doReturn(mapOf(artifact to dbResult))
-            .`when`(dbResolver).findComponentsByArtifact(artifacts)
+            .`when`(dbResolver)
+            .findComponentsByArtifact(artifacts)
 
         val result = routing.findComponentsByArtifact(artifacts)
         assertEquals(dbResult, result[artifact], "dbResult must win even when its id is not in dbNames")
@@ -349,9 +371,11 @@ class ComponentRoutingResolverStaleAndNotFoundTest {
         val gitOnlyComponent = "legacy-widget"
         val gitResult = mockVersionedComponent(gitOnlyComponent)
         doReturn(mapOf(artifact to gitResult))
-            .`when`(gitResolver).findComponentsByArtifact(artifacts)
+            .`when`(gitResolver)
+            .findComponentsByArtifact(artifacts)
         doReturn(emptyMap<ArtifactDependency, VersionedComponent>())
-            .`when`(dbResolver).findComponentsByArtifact(artifacts)
+            .`when`(dbResolver)
+            .findComponentsByArtifact(artifacts)
 
         val result = routing.findComponentsByArtifact(artifacts)
         assertEquals(gitResult, result[artifact])
@@ -440,16 +464,20 @@ class ComponentRoutingResolverStaleAndNotFoundTest {
         doReturn(setOf(migratedComponent)).`when`(sourceRegistry).getDbComponentNames()
         // name discovery: db NotFound, git stale-matches the db-sourced component
         doThrow(NotFoundException("not in db"))
-            .`when`(dbResolver).getJiraComponentByProjectAndVersion(projectKey, version)
+            .`when`(dbResolver)
+            .getJiraComponentByProjectAndVersion(projectKey, version)
         doReturn(mockJiraComponentVersion(migratedComponent))
-            .`when`(gitResolver).getJiraComponentByProjectAndVersion(projectKey, version)
+            .`when`(gitResolver)
+            .getJiraComponentByProjectAndVersion(projectKey, version)
         // pre-fix bleed-through path (db throws → git serves a stale VCSSettings as 200): these
         // stubs reproduce the OLD behaviour and are never reached post-fix — the stale-guard in
         // getJiraComponentByProjectAndVersion throws before any VCSSettings fetch.
         doThrow(NotFoundException("not in db"))
-            .`when`(dbResolver).getVCSSettingForProject(projectKey, version)
+            .`when`(dbResolver)
+            .getVCSSettingForProject(projectKey, version)
         doReturn(mock(VCSSettings::class.java))
-            .`when`(gitResolver).getVCSSettingForProject(projectKey, version)
+            .`when`(gitResolver)
+            .getVCSSettingForProject(projectKey, version)
 
         assertThrows(NotFoundException::class.java) {
             routing.getVCSSettingForProject(projectKey, version)
@@ -467,7 +495,8 @@ class ComponentRoutingResolverStaleAndNotFoundTest {
         val dbComponent = "db-widget"
         val dbVcs = mock(VCSSettings::class.java)
         doReturn(mockJiraComponentVersion(dbComponent))
-            .`when`(dbResolver).getJiraComponentByProjectAndVersion(projectKey, version)
+            .`when`(dbResolver)
+            .getJiraComponentByProjectAndVersion(projectKey, version)
         doReturn("db").`when`(sourceRegistry).getSource(dbComponent)
         doReturn(dbVcs).`when`(dbResolver).getVCSSettingForProject(projectKey, version)
 
@@ -487,9 +516,11 @@ class ComponentRoutingResolverStaleAndNotFoundTest {
         val gitVcs = mock(VCSSettings::class.java)
         // name discovery: db NotFound, git returns a fresh non-db-sourced match
         doThrow(NotFoundException("not in db"))
-            .`when`(dbResolver).getJiraComponentByProjectAndVersion(projectKey, version)
+            .`when`(dbResolver)
+            .getJiraComponentByProjectAndVersion(projectKey, version)
         doReturn(mockJiraComponentVersion(gitComponent))
-            .`when`(gitResolver).getJiraComponentByProjectAndVersion(projectKey, version)
+            .`when`(gitResolver)
+            .getJiraComponentByProjectAndVersion(projectKey, version)
         // getSource(gitComponent) is unstubbed → null (≠ "db") → routes to gitResolver
         doReturn(gitVcs).`when`(gitResolver).getVCSSettingForProject(projectKey, version)
 
@@ -511,9 +542,11 @@ class ComponentRoutingResolverStaleAndNotFoundTest {
         val nullInnerJcv = mock(JiraComponentVersion::class.java)
         doReturn(null).`when`(nullInnerJcv).componentVersion
         doThrow(NotFoundException("not in db"))
-            .`when`(dbResolver).getJiraComponentByProjectAndVersion(projectKey, version)
+            .`when`(dbResolver)
+            .getJiraComponentByProjectAndVersion(projectKey, version)
         doReturn(nullInnerJcv)
-            .`when`(gitResolver).getJiraComponentByProjectAndVersion(projectKey, version)
+            .`when`(gitResolver)
+            .getJiraComponentByProjectAndVersion(projectKey, version)
         doReturn(gitVcs).`when`(gitResolver).getVCSSettingForProject(projectKey, version)
 
         // null name → resolverForProject falls back to gitResolver (inherited edge, documented in TD-013)
@@ -533,16 +566,20 @@ class ComponentRoutingResolverStaleAndNotFoundTest {
         doReturn(setOf(migratedComponent)).`when`(sourceRegistry).getDbComponentNames()
         // name discovery: transient (non-NotFound) db error → falls back to git for the NAME (per #245)
         doThrow(RuntimeException("transient db error"))
-            .`when`(dbResolver).getJiraComponentByProjectAndVersion(projectKey, version)
+            .`when`(dbResolver)
+            .getJiraComponentByProjectAndVersion(projectKey, version)
         doReturn(mockJiraComponentVersion(migratedComponent))
-            .`when`(gitResolver).getJiraComponentByProjectAndVersion(projectKey, version)
+            .`when`(gitResolver)
+            .getJiraComponentByProjectAndVersion(projectKey, version)
         // component is db-sourced → fetch routed to dbResolver, which is down → error propagates
         doReturn("db").`when`(sourceRegistry).getSource(migratedComponent)
         doThrow(RuntimeException("db down"))
-            .`when`(dbResolver).getVCSSettingForProject(projectKey, version)
+            .`when`(dbResolver)
+            .getVCSSettingForProject(projectKey, version)
         // git would serve stale data, but must never be reached for a db-sourced component
         doReturn(mock(VCSSettings::class.java))
-            .`when`(gitResolver).getVCSSettingForProject(projectKey, version)
+            .`when`(gitResolver)
+            .getVCSSettingForProject(projectKey, version)
 
         assertThrows(RuntimeException::class.java) {
             routing.getVCSSettingForProject(projectKey, version)
@@ -561,15 +598,19 @@ class ComponentRoutingResolverStaleAndNotFoundTest {
         val migratedComponent = "migrated-widget"
         doReturn(setOf(migratedComponent)).`when`(sourceRegistry).getDbComponentNames()
         doThrow(NotFoundException("not in db"))
-            .`when`(dbResolver).getJiraComponentByProjectAndVersion(projectKey, version)
+            .`when`(dbResolver)
+            .getJiraComponentByProjectAndVersion(projectKey, version)
         doReturn(mockJiraComponentVersion(migratedComponent))
-            .`when`(gitResolver).getJiraComponentByProjectAndVersion(projectKey, version)
+            .`when`(gitResolver)
+            .getJiraComponentByProjectAndVersion(projectKey, version)
         // pre-fix bleed-through path (never reached post-fix — guard throws first); see the
         // VCS counterpart above.
         doThrow(NotFoundException("not in db"))
-            .`when`(dbResolver).getDistributionForProject(projectKey, version)
+            .`when`(dbResolver)
+            .getDistributionForProject(projectKey, version)
         doReturn(mock(Distribution::class.java))
-            .`when`(gitResolver).getDistributionForProject(projectKey, version)
+            .`when`(gitResolver)
+            .getDistributionForProject(projectKey, version)
 
         assertThrows(NotFoundException::class.java) {
             routing.getDistributionForProject(projectKey, version)
@@ -587,7 +628,8 @@ class ComponentRoutingResolverStaleAndNotFoundTest {
         val dbComponent = "db-widget"
         val dbDist = mock(Distribution::class.java)
         doReturn(mockJiraComponentVersion(dbComponent))
-            .`when`(dbResolver).getJiraComponentByProjectAndVersion(projectKey, version)
+            .`when`(dbResolver)
+            .getJiraComponentByProjectAndVersion(projectKey, version)
         doReturn("db").`when`(sourceRegistry).getSource(dbComponent)
         doReturn(dbDist).`when`(dbResolver).getDistributionForProject(projectKey, version)
 
@@ -606,9 +648,11 @@ class ComponentRoutingResolverStaleAndNotFoundTest {
         val gitComponent = "legacy-widget"
         val gitDist = mock(Distribution::class.java)
         doThrow(NotFoundException("not in db"))
-            .`when`(dbResolver).getJiraComponentByProjectAndVersion(projectKey, version)
+            .`when`(dbResolver)
+            .getJiraComponentByProjectAndVersion(projectKey, version)
         doReturn(mockJiraComponentVersion(gitComponent))
-            .`when`(gitResolver).getJiraComponentByProjectAndVersion(projectKey, version)
+            .`when`(gitResolver)
+            .getJiraComponentByProjectAndVersion(projectKey, version)
         doReturn(gitDist).`when`(gitResolver).getDistributionForProject(projectKey, version)
 
         val result = routing.getDistributionForProject(projectKey, version)
@@ -626,14 +670,18 @@ class ComponentRoutingResolverStaleAndNotFoundTest {
         val migratedComponent = "migrated-widget"
         doReturn(setOf(migratedComponent)).`when`(sourceRegistry).getDbComponentNames()
         doThrow(RuntimeException("transient db error"))
-            .`when`(dbResolver).getJiraComponentByProjectAndVersion(projectKey, version)
+            .`when`(dbResolver)
+            .getJiraComponentByProjectAndVersion(projectKey, version)
         doReturn(mockJiraComponentVersion(migratedComponent))
-            .`when`(gitResolver).getJiraComponentByProjectAndVersion(projectKey, version)
+            .`when`(gitResolver)
+            .getJiraComponentByProjectAndVersion(projectKey, version)
         doReturn("db").`when`(sourceRegistry).getSource(migratedComponent)
         doThrow(RuntimeException("db down"))
-            .`when`(dbResolver).getDistributionForProject(projectKey, version)
+            .`when`(dbResolver)
+            .getDistributionForProject(projectKey, version)
         doReturn(mock(Distribution::class.java))
-            .`when`(gitResolver).getDistributionForProject(projectKey, version)
+            .`when`(gitResolver)
+            .getDistributionForProject(projectKey, version)
 
         assertThrows(RuntimeException::class.java) {
             routing.getDistributionForProject(projectKey, version)

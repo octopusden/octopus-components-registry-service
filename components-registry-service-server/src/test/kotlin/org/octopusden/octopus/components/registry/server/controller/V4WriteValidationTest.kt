@@ -8,6 +8,7 @@ import org.junit.jupiter.api.Timeout
 import org.octopusden.cloud.commons.security.client.AuthServerClient
 import org.octopusden.octopus.components.registry.server.ComponentRegistryServiceApplication
 import org.octopusden.octopus.components.registry.server.support.adminJwt
+import org.octopusden.octopus.components.registry.server.support.viewerJwt
 import org.springframework.beans.factory.annotation.Autowired
 import org.springframework.boot.test.autoconfigure.web.servlet.AutoConfigureMockMvc
 import org.springframework.boot.test.context.SpringBootTest
@@ -20,7 +21,6 @@ import org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get
 import org.springframework.test.web.servlet.request.MockMvcRequestBuilders.patch
 import org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post
 import org.springframework.test.web.servlet.result.MockMvcResultMatchers.status
-import org.octopusden.octopus.components.registry.server.support.viewerJwt
 import java.nio.file.Paths
 import java.util.UUID
 
@@ -230,7 +230,8 @@ class V4WriteValidationTest {
         val seedResponse =
             postCreate(validSeedBody("validation-test-comp-mvn-patch"))
                 .andExpect(status().is2xxSuccessful)
-                .andReturn().response.contentAsString
+                .andReturn()
+                .response.contentAsString
         val seed = objectMapper.readTree(seedResponse)
         val id = seed["id"].asText()
         val versionLock = seed["version"].asLong()
@@ -300,7 +301,10 @@ class V4WriteValidationTest {
     fun fieldOverride_rejects_unknownRepositoryTypeInMarker() {
         val createBody = validSeedBody("validation-test-comp-rt-fo")
         val seedResponse =
-            postCreate(createBody).andExpect(status().is2xxSuccessful).andReturn().response.contentAsString
+            postCreate(createBody)
+                .andExpect(status().is2xxSuccessful)
+                .andReturn()
+                .response.contentAsString
         val id = objectMapper.readTree(seedResponse)["id"].asText()
 
         val payload =
@@ -331,7 +335,10 @@ class V4WriteValidationTest {
     fun fieldOverride_rejects_unknownPackageTypeInMarker() {
         val createBody = validSeedBody("validation-test-comp-pkg-fo")
         val seedResponse =
-            postCreate(createBody).andExpect(status().is2xxSuccessful).andReturn().response.contentAsString
+            postCreate(createBody)
+                .andExpect(status().is2xxSuccessful)
+                .andReturn()
+                .response.contentAsString
         val id = objectMapper.readTree(seedResponse)["id"].asText()
 
         val payload =
@@ -463,7 +470,7 @@ class V4WriteValidationTest {
     @DisplayName("SYS-040: CREATE with labels=[\"A \"] persists trimmed \"A\" (write-side trim)")
     fun `SYS-040 create with trailing-space label persists trimmed`() {
         val suffix = uniqueSuffix()
-        val name = "labels_trim_create_$suffix"
+        val name = "labels-trim-create-$suffix"
         val labelRaw = "lblcreate_$suffix" // canonical
         val labelWithSpace = "$labelRaw " // sent by caller
         val body =
@@ -477,7 +484,8 @@ class V4WriteValidationTest {
             mvc
                 .perform(get("/rest/api/4/components/meta/labels").with(viewerJwt()))
                 .andExpect(status().isOk)
-                .andReturn().response.contentAsString
+                .andReturn()
+                .response.contentAsString
         val codes = objectMapper.readTree(metaBody).map { it.asText() }
         assert(codes.contains(labelRaw)) {
             "expected canonical '$labelRaw' in $codes (trim should have applied)"
@@ -490,7 +498,7 @@ class V4WriteValidationTest {
     @Test
     @DisplayName("SYS-040: CREATE with labels=[\" \"] (single blank) returns 400")
     fun `SYS-040 create with single blank label returns 400`() {
-        val name = "labels_blankonly_create_${uniqueSuffix()}"
+        val name = "labels-blankonly-create-${uniqueSuffix()}"
         val body = """{"name":"$name","labels":[" "]}"""
         postCreate(body).andExpect(status().isBadRequest)
     }
@@ -499,7 +507,7 @@ class V4WriteValidationTest {
     @DisplayName("SYS-040: CREATE with labels=[\"A\",\"A\",\" A \"] persists single \"A\" (dedupe after trim)")
     fun `SYS-040 create dedupes labels after trim`() {
         val suffix = uniqueSuffix()
-        val name = "labels_dedupe_create_$suffix"
+        val name = "labels-dedupe-create-$suffix"
         val label = "lbldedupe_$suffix"
         val body =
             """{"name":"$name","componentOwner":"owner1","labels":["$label","$label"," $label "],""" +
@@ -508,7 +516,8 @@ class V4WriteValidationTest {
         val created =
             postCreate(body)
                 .andExpect(status().isCreated)
-                .andReturn().response.contentAsString
+                .andReturn()
+                .response.contentAsString
         // ComponentDetailResponse.labels is a Set<String>; the response
         // should carry exactly one entry for this component after dedupe.
         val labels = objectMapper.readTree(created)["labels"].map { it.asText() }
@@ -521,7 +530,7 @@ class V4WriteValidationTest {
     @DisplayName("SYS-040: PATCH with labels=[\"A \"] persists trimmed \"A\" (write-side trim on update)")
     fun `SYS-040 patch with trailing-space label persists trimmed`() {
         val suffix = uniqueSuffix()
-        val name = "labels_trim_patch_$suffix"
+        val name = "labels-trim-patch-$suffix"
         val labelRaw = "lblpatch_$suffix"
         val labelWithSpace = "$labelRaw "
 
@@ -530,7 +539,8 @@ class V4WriteValidationTest {
         val seedResponse =
             postCreate(seedBody)
                 .andExpect(status().isCreated)
-                .andReturn().response.contentAsString
+                .andReturn()
+                .response.contentAsString
         val seed = objectMapper.readTree(seedResponse)
         val id = seed["id"].asText()
         val versionLock = seed["version"].asLong()
@@ -544,7 +554,8 @@ class V4WriteValidationTest {
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(patchBody),
                 ).andExpect(status().isOk)
-                .andReturn().response.contentAsString
+                .andReturn()
+                .response.contentAsString
         val labels = objectMapper.readTree(patched)["labels"].map { it.asText() }
         assert(labels == listOf(labelRaw)) {
             "expected canonical [$labelRaw] after patch; got $labels"
@@ -555,11 +566,12 @@ class V4WriteValidationTest {
     @DisplayName("SYS-040: PATCH with labels=[\" \"] (single blank) returns 400")
     fun `SYS-040 patch with single blank label returns 400`() {
         val suffix = uniqueSuffix()
-        val seedBody = validSeedBody("labels_blankonly_patch_$suffix")
+        val seedBody = validSeedBody("labels-blankonly-patch-$suffix")
         val seedResponse =
             postCreate(seedBody)
                 .andExpect(status().isCreated)
-                .andReturn().response.contentAsString
+                .andReturn()
+                .response.contentAsString
         val seed = objectMapper.readTree(seedResponse)
         val id = seed["id"].asText()
         val versionLock = seed["version"].asLong()
@@ -596,13 +608,15 @@ class V4WriteValidationTest {
         return objectMapper.readTree(seedResponse)["id"].asText()
     }
 
-    private fun postFieldOverride(componentId: String, body: String) =
-        mvc.perform(
-            post("/rest/api/4/components/$componentId/field-overrides")
-                .with(adminJwt())
-                .contentType(MediaType.APPLICATION_JSON)
-                .content(body),
-        )
+    private fun postFieldOverride(
+        componentId: String,
+        body: String,
+    ) = mvc.perform(
+        post("/rest/api/4/components/$componentId/field-overrides")
+            .with(adminJwt())
+            .contentType(MediaType.APPLICATION_JSON)
+            .content(body),
+    )
 
     @Test
     @DisplayName("R3: POST /field-overrides rejects a range partially overlapping a sibling on the same attribute")
@@ -717,6 +731,68 @@ class V4WriteValidationTest {
     }
 
     @Test
+    @DisplayName("EXACT: POST /field-overrides accepts an exact-version range [X] (single Maven hard version)")
+    fun fieldOverride_accepts_exactVersionRange() {
+        // Reported QA case: an exact-version override
+        // range `[1.0.49]` — a valid single Maven segment (hard version, lo == hi,
+        // both inclusive) — was rejected as "composite". parseSimpleSegment only
+        // recognised the two-bound `[X,Y)` form, but a hard version is the SIMPLEST
+        // single segment and must be accepted on POST/PATCH.
+        val id = seedComponentForOverlap("exact-${uniqueSuffix()}")
+        postFieldOverride(
+            id,
+            """{"overriddenAttribute":"build.javaVersion","versionRange":"[1.0.49]","value":"1.8"}""",
+        ).andExpect(status().isCreated)
+    }
+
+    @Test
+    @DisplayName("EXACT: POST /field-overrides accepts two disjoint exact-version ranges on one attribute")
+    fun fieldOverride_accepts_disjointExactVersions() {
+        val id = seedComponentForOverlap("exact-disjoint-${uniqueSuffix()}")
+        postFieldOverride(
+            id,
+            """{"overriddenAttribute":"build.javaVersion","versionRange":"[1.0.49]","value":"1.8"}""",
+        ).andExpect(status().isCreated)
+        // [1.0.50] pins a different single version → disjoint from [1.0.49] → accepted.
+        postFieldOverride(
+            id,
+            """{"overriddenAttribute":"build.javaVersion","versionRange":"[1.0.50]","value":"11"}""",
+        ).andExpect(status().isCreated)
+    }
+
+    @Test
+    @DisplayName("EXACT: POST /field-overrides rejects a duplicate exact-version range (semantic equal)")
+    fun fieldOverride_rejects_duplicateExactVersion() {
+        val id = seedComponentForOverlap("exact-dup-${uniqueSuffix()}")
+        postFieldOverride(
+            id,
+            """{"overriddenAttribute":"build.javaVersion","versionRange":"[1.0.49]","value":"1.8"}""",
+        ).andExpect(status().isCreated)
+        // Same exact version again → the two point-overrides intersect (both match
+        // 1.0.49) → ambiguous duplicate → 400. Guards that intersection detection
+        // still works once hard versions are parsed as simple segments.
+        postFieldOverride(
+            id,
+            """{"overriddenAttribute":"build.javaVersion","versionRange":"[1.0.49]","value":"11"}""",
+        ).andExpect(status().isBadRequest)
+    }
+
+    @Test
+    @DisplayName("EXACT: POST /field-overrides rejects an exact-version range inside an existing sibling range")
+    fun fieldOverride_rejects_exactVersionInsideSibling() {
+        val id = seedComponentForOverlap("exact-inside-${uniqueSuffix()}")
+        postFieldOverride(
+            id,
+            """{"overriddenAttribute":"build.javaVersion","versionRange":"[1.0,2.0)","value":"11"}""",
+        ).andExpect(status().isCreated)
+        // 1.0.49 falls inside [1.0,2.0) → the point override would match both → reject.
+        postFieldOverride(
+            id,
+            """{"overriddenAttribute":"build.javaVersion","versionRange":"[1.0.49]","value":"1.8"}""",
+        ).andExpect(status().isBadRequest)
+    }
+
+    @Test
     @DisplayName("R3: PATCH /field-overrides/{id} rejects a range update that overlaps a sibling")
     fun fieldOverride_patch_rejects_partialOverlap() {
         val id = seedComponentForOverlap("patch-ov-${uniqueSuffix()}")
@@ -731,7 +807,8 @@ class V4WriteValidationTest {
                 id,
                 """{"overriddenAttribute":"build.javaVersion","versionRange":"[5.0,6.0)","value":"17"}""",
             ).andExpect(status().isCreated)
-                .andReturn().response.contentAsString
+                .andReturn()
+                .response.contentAsString
         val bId = objectMapper.readTree(bCreate)["id"].asText()
         // Now PATCH B's range to overlap A — must be rejected; excludeOverrideId
         // means the walk skips B against itself, so the failure is purely the
@@ -758,7 +835,8 @@ class V4WriteValidationTest {
                 id,
                 """{"overriddenAttribute":"build.javaVersion","versionRange":"[5.0,6.0)","value":"17"}""",
             ).andExpect(status().isCreated)
-                .andReturn().response.contentAsString
+                .andReturn()
+                .response.contentAsString
         val bId = objectMapper.readTree(bCreate)["id"].asText()
         // PATCH B to a whitespace-different version of A's range — semantic-
         // equal → 400. Confirms PATCH-side normalisation + duplicate check.
@@ -786,7 +864,8 @@ class V4WriteValidationTest {
                 id,
                 """{"overriddenAttribute":"build.javaVersion","versionRange":"[8.0,9.0)","value":"17"}""",
             ).andExpect(status().isCreated)
-                .andReturn().response.contentAsString
+                .andReturn()
+                .response.contentAsString
         val bId = objectMapper.readTree(bCreate)["id"].asText()
         // PATCH B to [1.0,5.0) which fully contains A's [2.0,3.0) → reject.
         mvc
@@ -807,7 +886,8 @@ class V4WriteValidationTest {
                 id,
                 """{"overriddenAttribute":"build.javaVersion","versionRange":"[1.0,2.0)","value":"11"}""",
             ).andExpect(status().isCreated)
-                .andReturn().response.contentAsString
+                .andReturn()
+                .response.contentAsString
         val oid = objectMapper.readTree(created)["id"].asText()
         // Submitting the same range back must NOT trip the semantic-equal
         // check — excludeOverrideId excludes the row from its own walk.
@@ -817,6 +897,30 @@ class V4WriteValidationTest {
                     .with(adminJwt())
                     .contentType(MediaType.APPLICATION_JSON)
                     .content("""{"versionRange":"[1.0,2.0)","value":"17"}"""),
+            ).andExpect(status().is2xxSuccessful)
+    }
+
+    @Test
+    @DisplayName("EXACT: PATCH /field-overrides/{id} accepts an exact-version range update")
+    fun fieldOverride_patch_accepts_exactVersionRange() {
+        val id = seedComponentForOverlap("exact-patch-${uniqueSuffix()}")
+        val created =
+            postFieldOverride(
+                id,
+                """{"overriddenAttribute":"build.javaVersion","versionRange":"[5.0,6.0)","value":"17"}""",
+            ).andExpect(status().isCreated)
+                .andReturn()
+                .response.contentAsString
+        val oid = objectMapper.readTree(created)["id"].asText()
+        // Repoint the range to an exact-version pin — a valid single segment, so
+        // the PATCH path (validateFieldOverrideRange with excludeOverrideId) must
+        // accept it just like POST does.
+        mvc
+            .perform(
+                patch("/rest/api/4/components/$id/field-overrides/$oid")
+                    .with(adminJwt())
+                    .contentType(MediaType.APPLICATION_JSON)
+                    .content("""{"versionRange":"[1.0.49]"}"""),
             ).andExpect(status().is2xxSuccessful)
     }
 

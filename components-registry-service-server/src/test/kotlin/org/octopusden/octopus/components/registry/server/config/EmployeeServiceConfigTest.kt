@@ -45,8 +45,7 @@ class EmployeeServiceConfigTest {
             .withPropertyValues(
                 "employee-service.enabled=true",
                 "employee-service.url=https://\${api-gateway.hostname}/employee-service",
-            )
-            .run { context ->
+            ).run { context ->
                 assertEquals(null, context.startupFailure)
                 assertEquals(false, context.containsBean("employeeServiceClient"))
             }
@@ -65,8 +64,7 @@ class EmployeeServiceConfigTest {
             .withPropertyValues(
                 "employee-service.enabled=true",
                 "employee-service.url=https://\${api-gateway.hostname}/employee-service",
-            )
-            .run { context ->
+            ).run { context ->
                 assertEquals(null, context.startupFailure)
                 assertEquals(false, context.containsBean("employeeServiceClient"))
             }

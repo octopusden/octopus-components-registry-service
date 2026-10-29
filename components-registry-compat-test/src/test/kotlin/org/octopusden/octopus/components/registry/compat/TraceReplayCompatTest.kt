@@ -26,8 +26,10 @@ internal fun parseTraceLimit(raw: String?): Int? = raw?.trim()?.toIntOrNull()?.t
  * (the [1.7]/[1.8] auto gate caps at 30k). A null limit, or one >= the list size,
  * returns the list unchanged (full replay — e.g. the id16 manual tier).
  */
-internal fun <T> applyTraceLimit(entries: List<T>, limit: Int?): List<T> =
-    if (limit != null && entries.size > limit) entries.take(limit) else entries
+internal fun <T> applyTraceLimit(
+    entries: List<T>,
+    limit: Int?,
+): List<T> = if (limit != null && entries.size > limit) entries.take(limit) else entries
 
 /**
  * True when the segment after `/components/` is an ACTION, not a component id, and
@@ -49,7 +51,10 @@ private fun isComponentsAction(segment: String): Boolean = segment.startsWith("f
  * `{version}`. Query string is dropped. Used to guarantee endpoint coverage of the
  * capped replay slice (see [ensureEndpointCoverage]).
  */
-internal fun endpointTemplate(method: String, rawPath: String): String {
+internal fun endpointTemplate(
+    method: String,
+    rawPath: String,
+): String {
     val segs = rawPath.substringBefore('?').split('/').toMutableList()
     for (i in 1 until segs.size) {
         if (segs[i].isEmpty()) continue
@@ -70,7 +75,11 @@ internal fun endpointTemplate(method: String, rawPath: String): String {
  * [1.7]/[1.8] auto gate exercising all business endpoints, not only high-traffic
  * ones, while adding only a handful of low-frequency tuples on top of the cap.
  */
-internal fun <T> ensureEndpointCoverage(capped: List<T>, all: List<T>, keyOf: (T) -> String): List<T> {
+internal fun <T> ensureEndpointCoverage(
+    capped: List<T>,
+    all: List<T>,
+    keyOf: (T) -> String,
+): List<T> {
     if (capped.size >= all.size) return capped
     // Seed with the capped keys; `seen.add` is true only on the FIRST occurrence of a
     // not-yet-covered key. `all` is rank-ordered (desc count), so that first occurrence is
@@ -114,7 +123,11 @@ internal fun <T> ensureEndpointCoverage(capped: List<T>, all: List<T>, keyOf: (T
  * `endpoint` parameter. Endpoint = path template; query = data.
  */
 class TraceReplayCompatTest : CompatibilityTestBase() {
-    private data class TraceEntry(val count: Long, val method: String, val path: String)
+    private data class TraceEntry(
+        val count: Long,
+        val method: String,
+        val path: String,
+    )
 
     /**
      * Diagnostic / operational endpoints that are NOT part of the strict v1/v2/v3
@@ -203,7 +216,11 @@ class TraceReplayCompatTest : CompatibilityTestBase() {
                     val id = c.path("id").asText("").takeIf { it.isNotBlank() } ?: return@mapNotNull null
                     val gavCsv = c.path("distribution").path("GAV").asText("")
                     if (gavCsv.isBlank()) return@mapNotNull null
-                    val firstGav = gavCsv.split(',').firstOrNull()?.trim().orEmpty()
+                    val firstGav = gavCsv
+                        .split(',')
+                        .firstOrNull()
+                        ?.trim()
+                        .orEmpty()
                     val parts = firstGav.split(':')
                     if (parts.size < 2 || parts[0].isBlank() || parts[1].isBlank()) return@mapNotNull null
                     Triple(id, parts[0], parts[1])
@@ -226,8 +243,7 @@ class TraceReplayCompatTest : CompatibilityTestBase() {
                 .mapNotNull { (id, group, artifact) ->
                     val version = VersionSampler.versionsFor(id, limit = 1, rmsUrl = rmsUrl).firstOrNull()
                     if (version != null) ArtifactDependency(group, artifact, version) else null
-                }
-                .take(5)
+                }.take(5)
                 .toList()
         log.info(
             "body-fixtures: singleArtifact=${singleArtifact != null}, " +
@@ -258,7 +274,10 @@ class TraceReplayCompatTest : CompatibilityTestBase() {
      * schema-v2 `{errorMessage}`). Sending a valid body routes both stands through the same lookup
      * path so the residual shrinks to real business diffs.
      */
-    private fun chooseBody(rawPath: String, fixtures: BodyFixtures): Any {
+    private fun chooseBody(
+        rawPath: String,
+        fixtures: BodyFixtures,
+    ): Any {
         val pathOnly = pathOnlyForRouting(rawPath)
         return when {
             pathOnly.endsWith("/find-by-artifact") ->
@@ -375,7 +394,9 @@ class TraceReplayCompatTest : CompatibilityTestBase() {
         // replay sized independently from the per-stand HTTP cap (CompatibilityTestBase
         // limits in-flight calls per request, this pool limits total in-flight TUPLES).
         val pool = Executors.newFixedThreadPool(config.parallelism)
-        val ts = java.time.Instant.now().toString()
+        val ts = java.time.Instant
+            .now()
+            .toString()
         val processed = AtomicInteger(0)
         val withDiffs = AtomicInteger(0)
         // Per-(endpoint, category) weight accumulator. Endpoint is the templated form
@@ -418,91 +439,92 @@ class TraceReplayCompatTest : CompatibilityTestBase() {
         try {
             val futures =
                 replaySet.map { entry ->
-                    pool.submit {
-                        // ThreadLocal count — `snapshot().size` is the global queue and
-                        // races with other workers between read points. count() is
-                        // per-worker-thread, so the delta is "diffs this tuple recorded"
-                        // even under fan-out parallelism.
-                        val diffsBefore = DiffCollector.count()
-                        val t0 = System.nanoTime()
-                        if (verbose) log.info("→ ${entry.method} ${entry.path}")
-                        val fetchOnce: () -> Pair<RawResponse, RawResponse>? = {
-                            when (entry.method.uppercase()) {
-                                "GET" -> fetchPair(entry.path)
-                                "POST" -> {
-                                    val body = chooseBody(entry.path, fixtures)
-                                    if (verbose) {
-                                        val bodyPreview = body.toString().take(120)
-                                        log.info("  body[${body::class.simpleName}]: $bodyPreview")
+                    pool
+                        .submit {
+                            // ThreadLocal count — `snapshot().size` is the global queue and
+                            // races with other workers between read points. count() is
+                            // per-worker-thread, so the delta is "diffs this tuple recorded"
+                            // even under fan-out parallelism.
+                            val diffsBefore = DiffCollector.count()
+                            val t0 = System.nanoTime()
+                            if (verbose) log.info("→ ${entry.method} ${entry.path}")
+                            val fetchOnce: () -> Pair<RawResponse, RawResponse>? = {
+                                when (entry.method.uppercase()) {
+                                    "GET" -> fetchPair(entry.path)
+                                    "POST" -> {
+                                        val body = chooseBody(entry.path, fixtures)
+                                        if (verbose) {
+                                            val bodyPreview = body.toString().take(120)
+                                            log.info("  body[${body::class.simpleName}]: $bodyPreview")
+                                        }
+                                        postJsonPair(entry.path, body)
                                     }
-                                    postJsonPair(entry.path, body)
-                                }
-                                "PUT" -> putPair(entry.path)
-                                else -> {
-                                    log.debug("skipping unsupported method ${entry.method} ${entry.path}")
-                                    null
+                                    "PUT" -> putPair(entry.path)
+                                    else -> {
+                                        log.debug("skipping unsupported method ${entry.method} ${entry.path}")
+                                        null
+                                    }
                                 }
                             }
-                        }
-                        var pair =
-                            try {
-                                fetchOnce() ?: return@submit
-                            } catch (e: Exception) {
-                                log.warn("transport failed for ${entry.method} ${entry.path}: ${e.message}")
-                                return@submit
-                            }
-                        // Anti-flake: a one-sided 5xx under load (pool starvation on a
-                        // busy agent) is not a contract divergence — re-fetch ONCE and
-                        // record the second result. A deterministic 5xx reproduces and
-                        // is still recorded. See TransientRetry.
-                        if (TransientRetry.shouldRetry(pair.first.status, pair.second.status)) {
-                            log.warn(
-                                "transient one-sided 5xx for ${entry.method} ${entry.path} " +
-                                    "(b=${pair.first.status} c=${pair.second.status}) — retrying once",
-                            )
-                            Thread.sleep(RETRY_BACKOFF_MS)
-                            pair =
+                            var pair =
                                 try {
                                     fetchOnce() ?: return@submit
                                 } catch (e: Exception) {
-                                    log.warn("transport failed on retry for ${entry.method} ${entry.path}: ${e.message}")
+                                    log.warn("transport failed for ${entry.method} ${entry.path}: ${e.message}")
                                     return@submit
                                 }
-                        }
-                        val (baseline, candidate) = pair
-                        val dtMs = (System.nanoTime() - t0) / 1_000_000
-                        val (pathOnly, parsedQuery) = parsePathAndQuery(entry.path)
-                        val endpoint = "${entry.method} $pathOnly"
-                        val queryParams = parsedQuery + ("_weight" to entry.count.toString())
-                        val cats =
-                            Comparators.compareRaw(
-                                endpoint = endpoint,
-                                pathParams = emptyMap(),
-                                baseline = baseline,
-                                candidate = candidate,
-                                queryParams = queryParams,
-                            )
-                        cats.distinct().forEach { cat ->
-                            weightByBucket.merge(endpoint to cat, entry.count) { a, b -> a + b }
-                        }
-                        val newDiffs = DiffCollector.count() - diffsBefore
-                        if (verbose) {
-                            log.info(
-                                "← ${entry.method} ${entry.path} " +
-                                    "b=${baseline.status}/${baseline.bodyBytes.size}B " +
-                                    "c=${candidate.status}/${candidate.bodyBytes.size}B " +
-                                    "${dtMs}ms diffs=$newDiffs cats=${cats.distinct()}",
-                            )
-                        }
-                        val n = processed.incrementAndGet()
-                        if (newDiffs > 0) withDiffs.incrementAndGet()
-                        if (n % 100 == 0) {
-                            log.info(
-                                "trace-replay progress: $n / ${replaySet.size} " +
-                                    "(${withDiffs.get()} tuples with diffs, ${hungEntries.size} hung)",
-                            )
-                        }
-                    }.also { f -> futureToEntry[f] = entry }
+                            // Anti-flake: a one-sided 5xx under load (pool starvation on a
+                            // busy agent) is not a contract divergence — re-fetch ONCE and
+                            // record the second result. A deterministic 5xx reproduces and
+                            // is still recorded. See TransientRetry.
+                            if (TransientRetry.shouldRetry(pair.first.status, pair.second.status)) {
+                                log.warn(
+                                    "transient one-sided 5xx for ${entry.method} ${entry.path} " +
+                                        "(b=${pair.first.status} c=${pair.second.status}) — retrying once",
+                                )
+                                Thread.sleep(RETRY_BACKOFF_MS)
+                                pair =
+                                    try {
+                                        fetchOnce() ?: return@submit
+                                    } catch (e: Exception) {
+                                        log.warn("transport failed on retry for ${entry.method} ${entry.path}: ${e.message}")
+                                        return@submit
+                                    }
+                            }
+                            val (baseline, candidate) = pair
+                            val dtMs = (System.nanoTime() - t0) / 1_000_000
+                            val (pathOnly, parsedQuery) = parsePathAndQuery(entry.path)
+                            val endpoint = "${entry.method} $pathOnly"
+                            val queryParams = parsedQuery + ("_weight" to entry.count.toString())
+                            val cats =
+                                Comparators.compareRaw(
+                                    endpoint = endpoint,
+                                    pathParams = emptyMap(),
+                                    baseline = baseline,
+                                    candidate = candidate,
+                                    queryParams = queryParams,
+                                )
+                            cats.distinct().forEach { cat ->
+                                weightByBucket.merge(endpoint to cat, entry.count) { a, b -> a + b }
+                            }
+                            val newDiffs = DiffCollector.count() - diffsBefore
+                            if (verbose) {
+                                log.info(
+                                    "← ${entry.method} ${entry.path} " +
+                                        "b=${baseline.status}/${baseline.bodyBytes.size}B " +
+                                        "c=${candidate.status}/${candidate.bodyBytes.size}B " +
+                                        "${dtMs}ms diffs=$newDiffs cats=${cats.distinct()}",
+                                )
+                            }
+                            val n = processed.incrementAndGet()
+                            if (newDiffs > 0) withDiffs.incrementAndGet()
+                            if (n % 100 == 0) {
+                                log.info(
+                                    "trace-replay progress: $n / ${replaySet.size} " +
+                                        "(${withDiffs.get()} tuples with diffs, ${hungEntries.size} hung)",
+                                )
+                            }
+                        }.also { f -> futureToEntry[f] = entry }
                 }
             // Per-future hard cap. OkHttp's callTimeout(60s) is theoretically a cap,
             // but in practice some sun.nio.ch.Net.poll calls survived 12+ minutes

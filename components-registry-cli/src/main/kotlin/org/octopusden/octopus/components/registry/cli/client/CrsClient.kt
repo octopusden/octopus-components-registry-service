@@ -52,7 +52,10 @@ class CrsClient(
      * GET [path] (+ optional [query]) and return the raw 2xx body verbatim (for the as-code /
      * text/plain endpoints). Sends `Accept: text/plain`.
      */
-    fun getText(path: String, query: QueryParams? = null): String {
+    fun getText(
+        path: String,
+        query: QueryParams? = null,
+    ): String {
         val response = get(path, query, "text/plain")
         return response.body() ?: ""
     }
@@ -70,8 +73,13 @@ class CrsClient(
         throw toApiException(response)
     }
 
-    private fun buildGet(path: String, query: QueryParams?, accept: String): HttpRequest {
-        val builder = HttpRequest.newBuilder()
+    private fun buildGet(
+        path: String,
+        query: QueryParams?,
+        accept: String,
+    ): HttpRequest {
+        val builder = HttpRequest
+            .newBuilder()
             .uri(buildUri(path, query))
             .timeout(Duration.ofSeconds(REQUEST_TIMEOUT_SECONDS))
             .GET()
@@ -82,7 +90,10 @@ class CrsClient(
         return builder.build()
     }
 
-    private fun buildUri(path: String, query: QueryParams?): URI {
+    private fun buildUri(
+        path: String,
+        query: QueryParams?,
+    ): URI {
         val normalizedPath = if (path.startsWith("/")) path else "/$path"
         val suffix = if (query != null && !query.isEmpty()) "?${query.encode()}" else ""
         return URI.create("$baseUrl$normalizedPath$suffix")

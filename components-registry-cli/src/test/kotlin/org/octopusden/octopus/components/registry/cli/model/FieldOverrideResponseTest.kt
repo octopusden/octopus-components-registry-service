@@ -12,7 +12,8 @@ class FieldOverrideResponseTest {
 
     @Test
     fun decodesFieldOverrideArray() {
-        val literal = """
+        val literal =
+            """
             [
               {
                 "id": "44444444-4444-4444-4444-444444444444",
@@ -36,7 +37,7 @@ class FieldOverrideResponseTest {
                 }
               }
             ]
-        """.trimIndent()
+            """.trimIndent()
 
         val overrides = json.decodeFromString<List<FieldOverrideResponse>>(literal)
 
@@ -46,7 +47,14 @@ class FieldOverrideResponseTest {
         assertEquals("build.javaVersion", scalar.overriddenAttribute)
         assertEquals("SCALAR_OVERRIDE", scalar.rowType)
         assertEquals("[2.0,3.0)", scalar.versionRange)
-        assertEquals("17", scalar.value?.jsonObject?.get("javaVersion")?.jsonPrimitive?.content)
+        assertEquals(
+            "17",
+            scalar.value
+                ?.jsonObject
+                ?.get("javaVersion")
+                ?.jsonPrimitive
+                ?.content,
+        )
 
         val marker = overrides[1]
         assertEquals("MARKER", marker.rowType)
