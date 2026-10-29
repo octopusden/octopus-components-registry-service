@@ -5052,39 +5052,36 @@ class ComponentManagementServiceImpl(
 
     /** Deterministic token over the same canonical order as [splitManifest]. */
     private fun splitManifestToken(resolved: List<ResolvedPlan>): String =
-        sha256Hex(
-            resolved
-                .map(::splitPreimageRow)
-                .sorted()
-                .joinToString(ROW_SEP),
-        )
+        sha256Hex(encodeFields(resolved.map(::splitPreimageRow).sorted()))
 
     private fun splitPreimageRow(rp: ResolvedPlan): String {
         val row = rp.row
-        val payload =
+        val entries =
             row.vcsEntries
                 .sortedBy { it.sortOrder }
-                .joinToString(ENTRY_SEP) { splitPreimageEntry(it) }
-        return listOf(
-            row.component.componentKey,
-            row.overriddenAttribute,
-            normalizeRange(row.versionRange),
-            rp.segmentsToCreate.sorted().joinToString(SEG_SEP),
-            rp.skipped.toString(),
-            payload,
-        ).joinToString(COL_SEP)
+                .map { encodeFields(splitPreimageEntry(it)) }
+        return encodeFields(
+            listOf(
+                row.component.componentKey,
+                row.overriddenAttribute,
+                normalizeRange(row.versionRange),
+                encodeFields(rp.segmentsToCreate.sorted()),
+                rp.skipped.toString(),
+                encodeFields(entries),
+            ),
+        )
     }
 
-    private fun splitPreimageEntry(e: VcsSettingsEntryEntity): String =
+    private fun splitPreimageEntry(e: VcsSettingsEntryEntity): List<String?> =
         listOf(
             e.name,
             e.vcsPath,
-            e.branch ?: NULL_MARK,
-            e.tag ?: NULL_MARK,
-            e.hotfixBranch ?: NULL_MARK,
-            e.repositoryType ?: NULL_MARK,
+            e.branch,
+            e.tag,
+            e.hotfixBranch,
+            e.repositoryType,
             e.sortOrder.toString(),
-        ).joinToString(FIELD_SEP)
+        )
 
     /** 6. Write: bind to the reviewed manifest. */
     private fun requireManifestTokenMatches(
@@ -5205,6 +5202,14 @@ class ComponentManagementServiceImpl(
         return a.vcsEntries.sortedBy { it.sortOrder }.map(::sig) == b.vcsEntries.sortedBy { it.sortOrder }.map(::sig)
     }
 
+    /**
+     * Injective encoding of a field list: each non-null field is written as `<length>:<value>` and a null
+     * as [NULL_FIELD]. A reader can always recover the exact field boundaries, so no field content (even a
+     * control character) can imitate a boundary.
+     */
+    private fun encodeFields(fields: List<String?>): String =
+        fields.joinToString("") { if (it == null) NULL_FIELD else "${it.length}:$it" }
+
     private fun sha256Hex(input: String): String =
         MessageDigest
             .getInstance("SHA-256")
@@ -5265,15 +5270,9 @@ class ComponentManagementServiceImpl(
     private companion object {
         private val log = org.slf4j.LoggerFactory.getLogger(ComponentManagementServiceImpl::class.java)
 
-        // SYS-066 manifest-token separators: distinct control chars, one per nesting level, so the
-        // delimiter-joined preimage is injective (no VCS field/range/key contains a control char).
-        // NULL_MARK also distinguishes a SQL NULL from the literal string "null".
-        private const val FIELD_SEP = "\u0000"
-        private const val ENTRY_SEP = "\u0001"
-        private const val SEG_SEP = "\u0002"
-        private const val COL_SEP = "\u0003"
-        private const val ROW_SEP = "\u0004"
-        private const val NULL_MARK = "\u001fNULL\u001f"
+        // SYS-066 manifest-token marker for a SQL NULL field; a present field is always `<length>:<value>`,
+        // so this cannot collide with a value.
+        private const val NULL_FIELD = "n"
 
         private const val AUTO_RELEASE_FIELD = "component.autoRelease"
 
