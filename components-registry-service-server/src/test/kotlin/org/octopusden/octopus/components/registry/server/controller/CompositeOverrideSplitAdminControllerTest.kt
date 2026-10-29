@@ -121,6 +121,18 @@ class CompositeOverrideSplitAdminControllerTest {
     }
 
     @Test
+    @DisplayName("SYS-066: a composite range containing whitespace splits into normalized single-segment rows")
+    fun `SYS-066 whitespace in composite is normalized on split`() {
+        val id = newComponent()
+        seedRawMarker(id, " [1.0, 2.0-1) ,\n(2.0-1,3.0) ")
+        writeSplit()
+        assertEquals(
+            listOf("(2.0-1,3.0)", "[1.0,2.0-1)"),
+            overridesOf(id).map { it["versionRange"].asText() }.sorted(),
+        )
+    }
+
+    @Test
     @DisplayName("SYS-066: a second run is a no-op (idempotent)")
     fun `SYS-066 idempotent`() {
         val id = newComponent()
