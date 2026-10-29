@@ -3,6 +3,7 @@ import jetbrains.buildServer.configs.kotlin.buildFeatures.XmlReport
 import jetbrains.buildServer.configs.kotlin.buildFeatures.dockerSupport
 import jetbrains.buildServer.configs.kotlin.buildFeatures.swabra
 import jetbrains.buildServer.configs.kotlin.buildFeatures.xmlReport
+import jetbrains.buildServer.configs.kotlin.buildSteps.ScriptBuildStep
 import jetbrains.buildServer.configs.kotlin.buildSteps.gradle
 import jetbrains.buildServer.configs.kotlin.buildSteps.kotlinFile
 import jetbrains.buildServer.configs.kotlin.buildSteps.script
@@ -59,24 +60,27 @@ project {
 
     buildType(id10CompileUtAuto)
     buildType(id12IntegrationDbTestsAuto)
+    buildType(id11MutationTestingAuto)
     buildType(id15CompatManual)
     buildType(id16CompatTraceReplayManual)
     buildType(id17CompatLocalStandManual)
     buildType(id18CompatLocalStandGitModeAuto)
     buildType(id20ValidateComponentsRegistryProductionDataAuto)
     buildType(id30DeployToOkdQaDevAuto)
-    buildType(id29Step2AggregateAuto)
+    buildType(id30Step2AggregateAuto)
     buildType(id40ReleaseManual)
     buildType(id50ReleasePostProcessingAuto)
     buildType(id60DeployToOkdQaGhAuto)
     buildType(id70DeployToOkdProdManual_2)
+    buildType(id80RecreateQaDbFromProdManual)
     buildType(WL_Validation_id)
 
-    // Display order mirrors the numbering: [1.0] first, then the two on-demand
-    // manual compat builds ([1.5]/[1.6]), then the AUTO fan-out that all triggers
+    // Display order mirrors the numbering: [1.0] first, then [1.1] (off-chain, scheduled), then the two
+    // on-demand manual compat builds ([1.5]/[1.6]), then the AUTO fan-out that all triggers
     // in parallel off [1.0] ([2.0]–[2.4]), then the release chain ([4.0]+).
     buildTypesOrder = arrayListOf(
         id10CompileUtAuto,
+        id11MutationTestingAuto,
         id15CompatManual,
         id16CompatTraceReplayManual,
         id20ValidateComponentsRegistryProductionDataAuto,
@@ -84,11 +88,12 @@ project {
         id17CompatLocalStandManual,
         id18CompatLocalStandGitModeAuto,
         id30DeployToOkdQaDevAuto,
-        id29Step2AggregateAuto,
+        id30Step2AggregateAuto,
         id40ReleaseManual,
         id50ReleasePostProcessingAuto,
         id60DeployToOkdQaGhAuto,
         id70DeployToOkdProdManual_2,
+        id80RecreateQaDbFromProdManual,
         WL_Validation_id
     )
 }
@@ -164,13 +169,15 @@ object id10CompileUtAuto : BuildType({
             -Pokd.cluster-domain=%OKD_APPS_DOMAIN_DEV%
             -Pokd.project=%OKD_F1_TEST_PROJECT%
         """.trimIndent())
-        // [1.0] compiles, runs unit + H2/MOCK smoke + static quality, publishes artifacts and
-        // pushes the image — one step, so the image carries [1.0]'s OWN version (no cross-config
-        // propagation). `build` also runs the fat-jar FT (dockerPushImage depends on it, so it
-        // gates the push) and :…-automation:test (depends on ocCreate -> dockerPushImage, so it
-        // deploys the just-pushed image). Only the heavy @Tag("integration") DB suite is split
-        // out, to [2.1] (excluded from build/check by the gradle tag filter).
-        param("GRADLE_TASK", "clean build publish dockerPushImage")
+        // [1.0] compiles, runs unit + H2/MOCK smoke + static quality and pushes the image — one
+        // step, so the image carries [1.0]'s OWN version (no cross-config propagation). It
+        // publishes no Maven artifacts: the active downstream configs take the docker image.
+        // (Add `publishAllPublicationsToArtifactoryRepository` to upload them for [2.0].)
+        // `build` also runs the fat-jar FT (dockerPushImage depends on it, so it gates the push)
+        // and :…-automation:test (depends on ocCreate -> dockerPushImage, so it deploys the
+        // just-pushed image). Only the heavy @Tag("integration") DB suite is split out, to [2.1]
+        // (excluded from build/check by the gradle tag filter).
+        param("GRADLE_TASK", "clean build dockerPushImage")
         param("COMPONENTS_REGISTRY_BRANCH", "master")
     }
 
@@ -206,7 +213,7 @@ object id10CompileUtAuto : BuildType({
     }
 
     failureConditions {
-        executionTimeoutMin = 240
+        executionTimeoutMin = 35
     }
 
     features {
@@ -353,7 +360,7 @@ object id12IntegrationDbTestsAuto : BuildType({
     }
 
     failureConditions {
-        executionTimeoutMin = 240
+        executionTimeoutMin = 45
     }
 
     features {
@@ -394,6 +401,154 @@ object id12IntegrationDbTestsAuto : BuildType({
     // run is now MAIN-ONLY via [1.0]'s schedule → this config's finishBuildTrigger.
     // (The build-number override is handled by the PIN_BUILD_NUMBER step above,
     // not by disabling RUNNER_1720.)
+    disableSettings("TRIGGER_1003", "TRIGGER_1006")
+})
+
+// [1.1] Mutation Testing — PIT over the server's pure-logic packages (`..server.util..`,
+// `..server.mapper..`; scope and thresholds in components-registry-service-server/build.gradle).
+//
+// DELIBERATELY OUTSIDE THE CHAIN. No snapshot dependency in either direction, no finishBuildTrigger:
+// nothing waits for it and it waits for nothing, so it cannot delay or block [2.4] deploy or [4.0]
+// release. That is the point — the mutation score says how well the tests would notice a regression,
+// which is a review concern, not a "is this build shippable" concern.
+//
+// Limit of that guarantee, stated because it is easy to assume otherwise: this config uses the shared
+// template, and TeamCity does not allow a build type to drop an inherited setting — snapshot
+// dependencies in particular cannot be overridden. An empty `dependencies {}` block would generate
+// nothing and neutralise nothing, so none is written here. What holds instead: the template declares no
+// dependencies (verified via REST), and were it ever to gain one, EVERY config using it inherits it —
+// [1.0] and the whole [2.x] fan-out included — which makes that a project-wide, visible change rather
+// than a silent capture of this one build. A hard local invariant would mean not using the template,
+// paying for it by re-implementing %WORK_DIR%, %GRADLE_STANDARD_PARAMETERS%, %JDK_CMDLINE_PARAMETERS%,
+// the docker wiring and the RUNNER_1720 meta-runner; not worth it for that trade.
+//
+// Division of labour with GitHub, which also runs this analysis (.github/workflows/mutation.yml):
+//   - GitHub, every PR touching the targeted paths — the per-change SIGNAL: fast feedback on the diff.
+//     Not a gate today: the job is absent from `gate-merge.needs`, so a red run is visible but does not
+//     block a merge. Adding it there is what would make the threshold blocking.
+//   - here, weekly on the default branch — the ANALYTICS: a browsable HTML report in the artifact tree
+//     (a GitHub Actions artifact is a zip you must download and unpack) and, via the stats step below,
+//     a mutation-score chart across builds, which GitHub Actions has no equivalent for.
+//     It also covers a blind spot of the GitHub trigger: that workflow only fires on changes to the
+//     server module and the build files, so a change ELSEWHERE that weakens a mutant's fate (e.g. in
+//     component-resolver-core, which the mappers call) does not run it. This weekly build catches that
+//     drift on main.
+object id11MutationTestingAuto : BuildType({
+    templates(AbsoluteId("Octopus_OctopusGradleBuild"))
+    id("11MutationTestingAuto")
+    name = "[1.1] Mutation Testing [AUTO]"
+
+    // Scoped to the PIT output only: this config produces no test-results, logs or diagnostics worth
+    // keeping, and publishing `**/build/reports/**` wholesale would drag in every other module's
+    // unrelated reports. The HTML report is published as a directory so it is browsable in place.
+    //
+    // The LEADING wildcard is deliberate. TeamCity drops the static part of the path before the first
+    // wildcard, so `components-registry-service-server/build/reports/pitest/** => reports/pitest` would
+    // flatten to `reports/pitest/index.html` — while `qualityReportsIndex` links reports by their
+    // REPO-RELATIVE path (`../pitest/components-registry-service-server/build/reports/pitest/index.html`),
+    // leaving a dead link. Starting the pattern with `**` preserves the whole relative structure, which is
+    // also why [1.0] publishes `**/build/reports/** => reports` rather than a static prefix.
+    artifactRules = """
+        **/build/reports/pitest/** => reports/pitest
+        build/reports/quality/** => reports/quality
+    """.trimIndent()
+
+    params {
+        param("GRADLE_TASK", ":components-registry-service-server:pitest")
+        param("COMPONENTS_REGISTRY_BRANCH", "master")
+    }
+
+    steps {
+        gradle {
+            name = "Gradle Mutation Testing"
+            id = "RUNNER_1768"
+            tasks = "%GRADLE_TASK%"
+            workingDir = "%WORK_DIR%"
+            gradleParams = """
+                --info
+                %GRADLE_STANDARD_PARAMETERS%
+            """.trimIndent()
+            enableStacktrace = true
+            jdkHome = "%env.JAVA_HOME%"
+            jvmArgs = "%JDK_CMDLINE_PARAMETERS%"
+            dockerRunParameters = "--userns=keep-id -e JAVA_HOME=/opt/java/openjdk -v %env.BUILD_ENV%:/opt/BUILD_ENV -v %teamcity.build.checkoutDir%:/home/tcagent/work -v %teamcity.agent.jvm.user.home%:/home/tcagent -w /home/tcagent/work -e TZ=Europe/Brussels"
+            param("org.jfrog.artifactory.selectedDeployableServer.defaultModuleVersionConfiguration", "GLOBAL")
+        }
+        // Regenerates build/reports/quality/index.html so the published report set has its documented
+        // single entry point (AGENTS.md §Reports). A separate step rather than an extra task on the line
+        // above: Gradle gives no ordering guarantee between two independent requested tasks, and the index
+        // must be written AFTER the PIT report exists or its section is silently omitted.
+        //
+        // ALWAYS, for the same reason as the stats step below: a threshold failure is exactly when someone
+        // wants to open the report.
+        gradle {
+            name = "Quality reports index"
+            id = "RUNNER_QUALITY_INDEX"
+            executionMode = BuildStep.ExecutionMode.ALWAYS
+            tasks = "qualityReportsIndex"
+            workingDir = "%WORK_DIR%"
+            gradleParams = """
+                --info
+                %GRADLE_STANDARD_PARAMETERS%
+            """.trimIndent()
+            enableStacktrace = true
+            jdkHome = "%env.JAVA_HOME%"
+            jvmArgs = "%JDK_CMDLINE_PARAMETERS%"
+            dockerRunParameters = "--userns=keep-id -e JAVA_HOME=/opt/java/openjdk -v %env.BUILD_ENV%:/opt/BUILD_ENV -v %teamcity.build.checkoutDir%:/home/tcagent/work -v %teamcity.agent.jvm.user.home%:/home/tcagent -w /home/tcagent/work -e TZ=Europe/Brussels"
+        }
+        // Turns the score into a tracked TeamCity statistic (charted per build) and puts the headline on
+        // the build overview. Reporting only — the pass/fail verdict stays with the `pitest` task, which
+        // owns mutationThreshold/coverageThreshold.
+        //
+        // ALWAYS is load-bearing, not defensive: `pitest` FAILS the build when the score drops below
+        // mutationThreshold, and with the default execution mode TeamCity would skip this step precisely
+        // then — so the one score that most needs to land on the chart and in the build status would be
+        // the one that never does. The script tolerates a missing report and never fails the build.
+        script {
+            name = "Report mutation statistics"
+            id = "REPORT_MUTATION_STATS"
+            executionMode = BuildStep.ExecutionMode.ALWAYS
+            scriptContent = "scripts/teamcity/report-mutation-stats.sh"
+        }
+        stepsOrder = arrayListOf("RUNNER_1720", "RUNNER_1768", "RUNNER_QUALITY_INDEX", "REPORT_MUTATION_STATS")
+    }
+
+    failureConditions {
+        // A cold run (no PIT history) took ~8 min on a GitHub runner; 60 min is a generous ceiling that
+        // still fails a hung analysis rather than occupying an agent indefinitely.
+        executionTimeoutMin = 60
+    }
+
+    requirements {
+        doesNotContain("env.OS_TYPE", "WIN", "RQ_2875")
+    }
+
+    triggers {
+        // Weekly, DEFAULT BRANCH ONLY — same shape as [1.0]'s heartbeat, one hour later so the two never
+        // contend for an agent ([1.0]'s Sunday run fans out into the whole [2.x] chain). Per-branch runs
+        // are deliberately absent: per-PR feedback is GitHub's job. Run this config manually to inspect a
+        // specific branch.
+        //
+        // This schedule is why the name carries [AUTO] rather than [MANUAL] despite the config sitting
+        // outside the chain: [AUTO] in this project means "fires by itself" (like [1.0]'s VCS+schedule and
+        // the [2.x] finishBuildTriggers), while the [1.5]/[1.6] compat pair is [MANUAL] precisely because
+        // their inherited schedule is disabled and only an operator starts them. Dropping this trigger
+        // would leave the score chart empty unless somebody remembered to press the button, which is the
+        // one thing this config exists to avoid.
+        schedule {
+            schedulingPolicy = weekly {
+                timezone = "UTC"
+                dayOfWeek = ScheduleTrigger.DAY.Sunday
+                hour = 11
+            }
+            branchFilter = "+:<default>"
+            triggerBuild = always()
+        }
+    }
+
+    // Disable the inherited triggers from Octopus_OctopusGradleBuild:
+    //   TRIGGER_1003 — VCS Trigger (would run the analysis on every commit on every branch)
+    //   TRIGGER_1006 — Schedule Trigger (weekly on ALL branches; replaced by the main-only one above)
     disableSettings("TRIGGER_1003", "TRIGGER_1006")
 })
 
@@ -962,11 +1117,8 @@ object id17CompatLocalStandManual : BuildType({
     }
 
     failureConditions {
-        // Full sweep budget. With `components/all.txt` (~475 IDs) and
-        // COMPAT_FULL=true the per-test-class matrix is ~30-50 min after
-        // cold-pull + postgres + auto-migrate (~5-7 min upfront). Headroom
-        // for slow agents or congested registry → cap at 120 min.
-        executionTimeoutMin = 120
+        // Scales with COMPAT_COMPONENTS_FILE and COMPAT_TRACE_LIMIT; revisit when either grows.
+        executionTimeoutMin = 85
     }
 
     features {
@@ -1240,9 +1392,8 @@ object id18CompatLocalStandGitModeAuto : BuildType({
     }
 
     failureConditions {
-        // Git-mode skips auto-migrate AND Postgres, so the candidate comes up faster
-        // than id17; keep a generous cap for cold image pulls + two stand boots.
-        executionTimeoutMin = 120
+        // Scales with COMPAT_COMPONENTS_FILE and COMPAT_TRACE_LIMIT; revisit when either grows.
+        executionTimeoutMin = 50
     }
 
     features {
@@ -1289,6 +1440,10 @@ object id18CompatLocalStandGitModeAuto : BuildType({
 object id20ValidateComponentsRegistryProductionDataAuto : BuildType({
     id("20ValidateComponentsRegistryProductionDataAuto")
     name = "[2.0] Validate Git-based Components Registry [AUTO]"
+
+    // Resolves the [1.0] candidate (components-registry-service.version=%BUILD_NUMBER%) from the
+    // dev repository; this project's [1.0] does not upload it (see its GRADLE_TASK).
+    paused = true
 
     artifactRules = "%COMPONENTS_REGISTRY_CHECKOUT_DIR% => %COMPONENTS_REGISTRY_CHECKOUT_DIR%"
     buildNumberPattern = "%BUILD_NUMBER%"
@@ -1383,10 +1538,10 @@ object id30DeployToOkdQaDevAuto : BuildType({
     }
 })
 
-object id29Step2AggregateAuto : BuildType({
+object id30Step2AggregateAuto : BuildType({
     templates(AbsoluteId("RDDepartment_PostGithubStatus"))
     id("29Step2AggregateAuto")
-    name = "[2.9] Step 2 Aggregate [AUTO]"
+    name = "[3.0] Step 2 Aggregate [AUTO]"
 
     // Surface [1.0]'s build number so the whole chain (id10 = id12 = … = id29)
     // shows the same version tag in the TC chain view.
@@ -1394,10 +1549,6 @@ object id29Step2AggregateAuto : BuildType({
 
     params {
         param("BUILD_NUMBER", "${id10CompileUtAuto.depParamRefs.buildNumber}")
-    }
-
-    vcs {
-        root(AbsoluteId("Octopus_OctopusComponents_OctopusGithubVcsRoot"))
     }
 
     triggers {
@@ -1415,10 +1566,6 @@ object id29Step2AggregateAuto : BuildType({
             reuseBuilds = ReuseBuilds.SUCCESSFUL
             onDependencyFailure = FailureAction.ADD_PROBLEM
         }
-        snapshot(id20ValidateComponentsRegistryProductionDataAuto) {
-            reuseBuilds = ReuseBuilds.SUCCESSFUL
-            onDependencyFailure = FailureAction.ADD_PROBLEM
-        }
         snapshot(id12IntegrationDbTestsAuto) {
             reuseBuilds = ReuseBuilds.SUCCESSFUL
             onDependencyFailure = FailureAction.ADD_PROBLEM
@@ -1431,6 +1578,10 @@ object id29Step2AggregateAuto : BuildType({
             reuseBuilds = ReuseBuilds.SUCCESSFUL
             onDependencyFailure = FailureAction.ADD_PROBLEM
         }
+    }
+
+    failureConditions {
+        executionTimeoutMin = 10
     }
 })
 
@@ -1462,19 +1613,15 @@ object id40ReleaseManual : BuildType({
     }
 
     // A release can only cut when the full quality fan-out passed for the SAME
-    // source revision. [2.4] deploy, [2.0] validate, [2.1] integration, and the
-    // [2.2]/[2.3] compat gates all snapshot the same [1.0], so TeamCity pins every
-    // one of them — and this release — to a single [1.0] build. Release params
-    // still come from [1.0] (reachable via any of these deps); the extra gates
-    // only block, they are not a source of release parameters. reuseBuilds =
-    // SUCCESSFUL so a release reuses the green fan-out builds already produced for
-    // that [1.0] instead of re-running the heavy compat/DB suites.
+    // source revision. [2.4] deploy, [2.1] integration, and the [2.2]/[2.3] compat
+    // gates all snapshot the same [1.0], so TeamCity pins every one of them — and
+    // this release — to a single [1.0] build. Release params still come from [1.0]
+    // (reachable via any of these deps); the extra gates only block, they are not
+    // a source of release parameters. reuseBuilds = SUCCESSFUL so a release reuses
+    // the green fan-out builds already produced for that [1.0] instead of
+    // re-running the heavy compat/DB suites.
     dependencies {
         snapshot(id30DeployToOkdQaDevAuto) {
-            reuseBuilds = ReuseBuilds.SUCCESSFUL
-            onDependencyFailure = FailureAction.FAIL_TO_START
-        }
-        snapshot(id20ValidateComponentsRegistryProductionDataAuto) {
             reuseBuilds = ReuseBuilds.SUCCESSFUL
             onDependencyFailure = FailureAction.FAIL_TO_START
         }
@@ -1591,9 +1738,8 @@ object id70DeployToOkdProdManual_2 : BuildType({
             name = "Publish documentation on wiki"
             id = "RUNNER_869"
             tasks = "adocPublishToWiki"
-            buildFile = "build.gradle"
             workingDir = "octopus-%COMPONENT_NAME%"
-            gradleParams = """-Pdocker.registry=%DOCKER_REGISTRY% -Pwiki.url=%WIKI_URL% -Pwiki.username=%WIKI_USER% -Pwiki.password=%WIKI_PASSWORD% -Pwiki.space-key=%WIKI_SPACE_KEY% -Pwiki.page-id=%WIKI_PAGE_ID% -Padoc.glossary-component-link=%GLOSSARY_COMPONENT_LINK% -Padoc.components-registry-link=%COMPONENTS_REGISTRY_LINK% -Padoc.release-management-automation-link=%RELEASE_MANAGEMENT_AUTOMATION_LINK% -Padoc.escrow-automation-tool-link=%ESCROW_AUTOMATION_TOOL_LINK% -Padoc.components-registry-validation-link=%COMPONENTS_REGISTRY_VALIDATION_LINK% -Padoc.service-desk-link=%SERVICE_DESK_LINK% "-Padoc.header=%WIKI_PAGE_HEADER%""""
+            gradleParams = """-Pdocker.registry=%DOCKER_REGISTRY% -Pwiki.url=%WIKI_URL% -Pwiki.username=%WIKI_USER% -Pwiki.password=%WIKI_PASSWORD% -Pwiki.space-key=%WIKI_SPACE_KEY% -Pwiki.page-id=%WIKI_PAGE_ID% -Padoc.glossary-component-link=%GLOSSARY_COMPONENT_LINK% -Padoc.components-registry-portal-link=%COMPONENTS_REGISTRY_PORTAL_LINK% -Padoc.components-registry-swagger-link=%COMPONENTS_REGISTRY_SWAGGER_LINK% -Padoc.release-management-automation-link=%RELEASE_MANAGEMENT_AUTOMATION_LINK% -Padoc.escrow-automation-tool-link=%ESCROW_AUTOMATION_TOOL_LINK% -Padoc.components-registry-validation-link=%COMPONENTS_REGISTRY_VALIDATION_LINK% -Padoc.service-desk-link=%SERVICE_DESK_LINK% "-Padoc.header=%WIKI_PAGE_HEADER%""""
             enableStacktrace = true
             jdkHome = "%env.JAVA_HOME%"
             jvmArgs = "-Duser.home=%teamcity.agent.jvm.user.home%"
@@ -1606,6 +1752,85 @@ object id70DeployToOkdProdManual_2 : BuildType({
         snapshot(id60DeployToOkdQaGhAuto) {
             onDependencyFailure = FailureAction.FAIL_TO_START
             reuseBuilds = ReuseBuilds.SUCCESSFUL
+        }
+    }
+})
+
+// Replaces the QA database's CRS schema with a copy of production. Production is only read: see the
+// header of scripts/teamcity/recreate-qa-db-from-prod.sh for the guards. The QA application is not
+// restarted and no migrations run; whoever presses the button redeploys the QA version they need.
+// Runbook: docs/registry/deployment/qa-db-refresh.md.
+//
+// Hosts are UI parameters on the parent project (CRS_PROD_DB_HOST, CRS_QA_DB_HOST); credentials come
+// from Vault through the inherited HashiCorp Vault connection. The env.* params are read-only, so a
+// custom run cannot edit them; the parent-project parameters they reference can still be overridden by
+// a custom run, which the script's cluster-identity check and the SELECT-only production role contain
+// (see the runbook).
+object id80RecreateQaDbFromProdManual : BuildType({
+    id("80RecreateQaDbFromProdManual")
+    name = "[8.0] Recreate QA DB from PROD [MANUAL]"
+    description = "Copies the production CRS schema over QA; the previous QA schema is kept as an artifact"
+
+    // One run at a time: two concurrent copies would race on the same QA schema.
+    maxRunningBuilds = 1
+
+    artifactRules = "qa-backup/qa-before-recreate.sql.gz"
+
+    params {
+        // Vault references cannot be composed from other parameters, so the mount is spelled out in each
+        // one. The config-server mount is KV v2 (octopus-config-server: kv-version 2), hence "/data/".
+        // The part after "!/" is a JsonPath: a key containing dots needs the bracket form, or it is read
+        // as a nested path and does not resolve.
+        text("env.SRC_HOST", "%CRS_PROD_DB_HOST%", readOnly = true, allowEmpty = false)
+        text("env.SRC_PORT", "5432", readOnly = true, allowEmpty = false)
+        text("env.SRC_DB", "components-registry", readOnly = true, allowEmpty = false)
+        // A role holding only pg_read_all_data.
+        text("env.SRC_USER", "%vault:f1-config-server/data/teamcity-crs-qa-refresh!/prod_readonly_username%", readOnly = true, allowEmpty = false)
+        password("env.SRC_PASSWORD", "%vault:f1-config-server/data/teamcity-crs-qa-refresh!/prod_readonly_password%", readOnly = true)
+
+        text("env.DST_HOST", "%CRS_QA_DB_HOST%", readOnly = true, allowEmpty = false)
+        text("env.DST_PORT", "5432", readOnly = true, allowEmpty = false)
+        text("env.DST_DB", "components-registry", readOnly = true, allowEmpty = false)
+        // The QA application's own datasource credentials (the profile-less secret; production overrides
+        // them from -cloud-prod), so a password rotation needs no change here.
+        text("env.DST_USER", "%vault:f1-config-server/data/components-registry-service!/['spring.datasource.username']%", readOnly = true, allowEmpty = false)
+        password("env.DST_PASSWORD", "%vault:f1-config-server/data/components-registry-service!/['spring.datasource.password']%", readOnly = true)
+
+        text("env.DB_SCHEMA", "components-registry", readOnly = true, allowEmpty = false)
+        text("env.QA_BACKUP_FILE", "qa-backup/qa-before-recreate.sql.gz", readOnly = true, allowEmpty = false)
+    }
+
+    vcs {
+        root(DslContext.settingsRoot)
+        // The step runs the script from the checkout with the production credential in its environment,
+        // so it must only ever run the reviewed script on the default branch.
+        branchFilter = "+:<default>"
+    }
+
+    steps {
+        script {
+            name = "Copy the production schema over QA"
+            id = "COPY_PROD_TO_QA"
+            scriptContent = "bash scripts/teamcity/recreate-qa-db-from-prod.sh"
+            // Client major version >= both servers (production 16, QA 17). Pulled through the corporate
+            // mirror, like the local-stand builds, to avoid the Docker Hub rate limit.
+            dockerImage = "%DOCKER_REGISTRY%/postgres:17"
+            dockerImagePlatform = ScriptBuildStep.ImagePlatform.Linux
+        }
+    }
+
+    failureConditions {
+        // The copy is a few MB and takes seconds.
+        executionTimeoutMin = 15
+    }
+
+    features {
+        // The postgres image comes through the corporate registry, which needs a login (as in id17).
+        dockerSupport {
+            id = "DockerSupport"
+            loginToRegistry = on {
+                dockerRegistryId = "PROJECT_EXT_177,PROJECT_EXT_350,PROJECT_EXT_351"
+            }
         }
     }
 })

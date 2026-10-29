@@ -26,6 +26,7 @@ import org.octopusden.octopus.components.registry.server.entity.ComponentSourceE
 import org.octopusden.octopus.components.registry.server.entity.ComponentSystemEntity
 import org.octopusden.octopus.components.registry.server.entity.DistributionDockerImageEntity
 import org.octopusden.octopus.components.registry.server.entity.DistributionFileUrlArtifactEntity
+import org.octopusden.octopus.components.registry.server.entity.DistributionGenericArtifactEntity
 import org.octopusden.octopus.components.registry.server.entity.DistributionMavenArtifactEntity
 import org.octopusden.octopus.components.registry.server.entity.DistributionPackageEntity
 import org.octopusden.octopus.components.registry.server.entity.DistributionSecurityGroupEntity
@@ -58,6 +59,7 @@ import org.octopusden.octopus.components.registry.server.service.MigrationProgre
 import org.octopusden.octopus.components.registry.server.service.MigrationProgressListener
 import org.octopusden.octopus.components.registry.server.service.MigrationResult
 import org.octopusden.octopus.components.registry.server.service.MigrationStatus
+import org.octopusden.octopus.components.registry.server.service.TestComponentFlags
 import org.octopusden.octopus.components.registry.server.service.ValidationResult
 import org.octopusden.octopus.components.registry.server.util.ArtifactOwnershipModeClassifier
 import org.octopusden.octopus.components.registry.server.util.JiraRowView
@@ -121,6 +123,9 @@ class ImportServiceImpl(
     private val dockerImageRepository: DistributionDockerImageRepository,
     private val versionRangeFactory: VersionRangeFactory,
     private val numericVersionFactory: NumericVersionFactory,
+    // Defaulted (nullable) so tests constructing this service directly need no new wiring; evicted
+    // when an imported component is flagged testComponent (SYS-099).
+    private val testComponentFlags: TestComponentFlags? = null,
 ) : ImportService {
     @PersistenceContext
     private lateinit var entityManager: EntityManager
@@ -1407,6 +1412,9 @@ class ImportServiceImpl(
         entity.productType = cfg.productType?.name
         entity.clientCode = cfg.clientCode
         entity.archived = cfg.archived
+        // SYS-099: the legacy label marks a test component (same rule as V11__); the DSL has no flag.
+        entity.testComponent = cfg.labels?.contains(TestComponentFlags.TEST_COMPONENT_LABEL) == true
+        if (entity.testComponent) testComponentFlags?.evictAfterCommit()
         entity.solution = cfg.solution
         // CSV → ordered list happens HERE (the single split site). The accessor
         // does trim → drop blank → keep-first dedupe, so import only needs the
@@ -1908,6 +1916,11 @@ class ImportServiceImpl(
                 attachPackages(row, overDist)
             }?.let { saved += it }
         }
+        if (genericArtifactsDiffer(baseDist, overDist)) {
+            saveMarkerRowWithChildren(component, versionRange, MarkerAttributes.DISTRIBUTION_GENERIC) { row ->
+                attachGenericArtifacts(row, overDist)
+            }?.let { saved += it }
+        }
 
         // Required tools override (junction rows need the config ID; handled inside).
         // Use the same effective base tools that were attached to the BASE row in
@@ -2013,6 +2026,7 @@ class ImportServiceImpl(
         attachFileUrlArtifacts(row, dist)
         attachDockerImages(row, dist)
         attachPackages(row, dist)
+        attachGenericArtifacts(row, dist)
     }
 
     private fun attachMavenArtifacts(
@@ -2116,6 +2130,24 @@ class ImportServiceImpl(
         }
     }
 
+    private fun attachGenericArtifacts(
+        row: ComponentConfigurationEntity,
+        dist: Distribution?,
+    ) {
+        val genericCsv = dist?.generic() ?: return
+        var sortOrder = 0
+        for (path in splitCsv(genericCsv)) {
+            if (path.isBlank()) continue
+            row.genericArtifacts.add(
+                DistributionGenericArtifactEntity(
+                    componentConfiguration = row,
+                    path = path,
+                    sortOrder = sortOrder++,
+                ),
+            )
+        }
+    }
+
     // =========================================================================
     // §6.7 VCS and required tools
     // =========================================================================
@@ -2126,7 +2158,7 @@ class ImportServiceImpl(
     ) {
         vcsSettings ?: return
         val roots = vcsSettings.versionControlSystemRoots ?: return
-        var sortOrder = 0
+        var rootCount = 0
         for (root in roots) {
             val path = root.vcsPath ?: continue // skip roots with no path
             val name = root.name
@@ -2139,10 +2171,12 @@ class ImportServiceImpl(
                     tag = root.tag,
                     hotfixBranch = root.hotfixBranch,
                     repositoryType = root.repositoryType?.name,
-                    sortOrder = sortOrder++,
+                    sortOrder = rootCount++,
                 ),
             )
         }
+        // Secondary roots (sortOrder > 0) of a multi-root row (2+ roots) are checked out under their name (the V8 migration rule).
+        if (rootCount > 1) row.vcsEntries.filter { it.sortOrder > 0 }.forEach { it.checkoutDirectory = it.name }
     }
 
     private fun attachRequiredTools(
@@ -2359,7 +2393,9 @@ class ImportServiceImpl(
         if (base == null || override == null) return true
         val baseRoots = base.versionControlSystemRoots ?: emptyList<Any>()
         val overRoots = override.versionControlSystemRoots ?: emptyList<Any>()
-        return baseRoots != overRoots || base.externalRegistry != override.externalRegistry
+        return baseRoots != overRoots ||
+            base.externalRegistry != override.externalRegistry ||
+            base.buildWorkingDirectory != override.buildWorkingDirectory
     }
 
     private fun mavenArtifactsDiffer(
@@ -2398,6 +2434,11 @@ class ImportServiceImpl(
         base: Distribution?,
         override: Distribution?,
     ): Boolean = base?.DEB() != override?.DEB() || base?.RPM() != override?.RPM()
+
+    private fun genericArtifactsDiffer(
+        base: Distribution?,
+        override: Distribution?,
+    ): Boolean = base?.generic() != override?.generic()
 
     private fun extractMavenGavs(gavCsv: String?): List<String> {
         gavCsv ?: return emptyList()
@@ -2686,19 +2727,6 @@ class ImportServiceImpl(
 }
 
 /**
- * Stable per-bean key set used to diff build-tool lists across base and override configs.
- * Extracted from `ImportServiceImpl` as a top-level `internal fun` so it can be unit-tested
- * directly without spinning up a Spring context.
- *
- * Key shape: `<beanType>:<settingsProperty>:<version>` (plus `:<edition>` for
- * `OracleDatabaseToolBean`). `settingsProperty` is part of the discriminator because two
- * beans of the same type/version that differ only in `settingsProperty` are semantically
- * distinct — without it, `emitMarkerOverrides` silently drops the override and the base
- * `settingsProperty` bleeds into the override range. `edition` is meaningful only for
- * Oracle (always null for the others).
- */
-
-/**
  * One would-be `distribution_maven_artifacts` row derived from the DSL, for the §6.0
  * uniqueness pre-pass. [origin] names the DSL source for the conflict message:
  * an explicit `distribution { GAV }` coordinate vs the component-level
@@ -2845,6 +2873,18 @@ internal fun computeDisplayNameDbCollisions(
         }.sorted()
 }
 
+/**
+ * Stable per-bean key set used to diff build-tool lists across base and override configs.
+ * Extracted from `ImportServiceImpl` as a top-level `internal fun` so it can be unit-tested
+ * directly without spinning up a Spring context.
+ *
+ * Key shape: `<beanType>:<settingsProperty>:<version>` (plus `:<edition>` for
+ * `OracleDatabaseToolBean`). `settingsProperty` is part of the discriminator because two
+ * beans of the same type/version that differ only in `settingsProperty` are semantically
+ * distinct — without it, `emitMarkerOverrides` silently drops the override and the base
+ * `settingsProperty` bleeds into the override range. `edition` is meaningful only for
+ * Oracle (always null for the others).
+ */
 internal fun buildBuildToolKeys(tools: Collection<BuildTool>?): Set<String> =
     tools
         ?.mapNotNull { tool ->

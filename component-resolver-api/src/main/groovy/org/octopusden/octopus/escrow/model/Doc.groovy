@@ -7,7 +7,10 @@ import groovy.transform.TypeChecked
 import org.apache.commons.lang3.Validate
 
 @TypeChecked
-@EqualsAndHashCode
+// Same shape as Distribution: private fields only, so without includeFields the generated equals
+// compares nothing (TD-023) — and includeFields then drags in the per-instance synthetic
+// `metaClass`, which has to be excluded or identical objects never compare equal.
+@EqualsAndHashCode(includeFields = true, excludes = ['metaClass'])
 @JsonInclude(JsonInclude.Include.NON_NULL)
 class Doc {
 

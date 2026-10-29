@@ -4,12 +4,12 @@ import java.util.zip.CRC32
 
 plugins {
     id 'application'
-    id 'com.github.johnrengelman.shadow'
+    id 'com.gradleup.shadow'
     id 'org.octopusden.octopus.oc-template'
 }
 
-sourceCompatibility = 1.8
-targetCompatibility = 1.8
+java.sourceCompatibility = 1.8
+java.targetCompatibility = 1.8
 
 compileKotlin {
     kotlinOptions.jvmTarget = "1.8"
@@ -242,6 +242,17 @@ publishing {
                         name.set("octopus")
                     }
                 }
+            }
+        }
+    }
+
+    repositories {
+        maven {
+            name = 'GitHubPackages'
+            url = uri("https://maven.pkg.github.com/octopusden/octopus-components-registry-service")
+            credentials {
+                username = System.getenv('GITHUB_PACKAGES_USERNAME')
+                password = System.getenv('GITHUB_PACKAGES_TOKEN')
             }
         }
     }

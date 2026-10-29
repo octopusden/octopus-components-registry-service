@@ -61,7 +61,7 @@ class ComponentDisplayNameEditorsV4Test {
         System.setProperty("COMPONENTS_REGISTRY_SERVICE_TEST_DATA_DIR", testResourcesPath.toString())
     }
 
-    private fun unique(prefix: String) = "${prefix}_${UUID.randomUUID().toString().take(8)}"
+    private fun unique(prefix: String) = "${prefix.lowercase().replace('_', '-')}-${UUID.randomUUID().toString().take(8)}"
 
     private fun createBody(
         name: String,
@@ -200,7 +200,7 @@ class ComponentDisplayNameEditorsV4Test {
                 .andReturn()
                 .response.contentAsString
         val versions = objectMapper.readTree(result).map { it.asText() }
-        assert(versions == listOf("2.2.1", "3", "3.3.9", "3.6", "3.6.3", "3.9")) {
+        assert(versions == listOf("2.2.1", "3", "3.3.9", "3.6", "3.6.3", "3.9", "3.10")) {
             "expected configured Maven versions numeric-sorted; got $versions"
         }
     }

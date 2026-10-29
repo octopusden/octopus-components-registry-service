@@ -11,11 +11,14 @@ import java.util.UUID
  *  group with no flagged project is left unresolved (skipped), not resolved by id.
  * @property projectVersion the TC `PROJECT_VERSION` parameter, or null when absent. A component
  *  may own one project per release line; [TeamcitySyncService] groups candidates by this value.
+ * @property hasAutoReleaseTrigger true when one of those release buildTypes has an enabled
+ *  finish-build trigger, i.e. TeamCity already releases automatically (SYS-104).
  */
 data class TcProject(
     val id: String,
     val hasCdReleaseBuild: Boolean,
     val projectVersion: String? = null,
+    val hasAutoReleaseTrigger: Boolean = false,
 )
 
 fun interface TcProjectFetcher {

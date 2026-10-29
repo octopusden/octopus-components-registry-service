@@ -132,7 +132,7 @@ class ListComponentsSystemFilterTest {
 
     private fun uniqueSysCode(prefix: String) = "${prefix}_${UUID.randomUUID().toString().take(6)}"
 
-    private fun uniqueName(prefix: String) = "${prefix}_${UUID.randomUUID().toString().take(8)}"
+    private fun uniqueName(prefix: String) = "${prefix.lowercase().replace('_', '-')}-${UUID.randomUUID().toString().take(8)}"
 
     private fun createComponentWithSystem(
         name: String,
@@ -349,9 +349,9 @@ class ListComponentsSystemFilterTest {
         val sysA = uniqueSysCode("pgnsysa")
         val sysB = uniqueSysCode("pgnsysb")
         val suffix = UUID.randomUUID().toString().take(6)
-        val first = "syspg_aaa_$suffix"
-        val second = "syspg_bbb_$suffix"
-        val third = "syspg_ccc_$suffix"
+        val first = "syspg-aaa-$suffix"
+        val second = "syspg-bbb-$suffix"
+        val third = "syspg-ccc-$suffix"
         // Seed in reverse insertion order so a sort regression is visible.
         createComponentWithSystem(third, sysB)
         createComponentWithSystem(second, sysA)
@@ -388,7 +388,7 @@ class ListComponentsSystemFilterTest {
                 .andReturn()
                 .response.contentAsString
         val returnedNames = objectMapper.readTree(fullBody)["content"].map { it["name"].asText() }
-        val seededNames = returnedNames.filter { it.endsWith("_$suffix") }
+        val seededNames = returnedNames.filter { it.endsWith("-$suffix") }
         assert(seededNames == listOf(first, second, third)) {
             "expected components returned sorted by componentKey ASC ($first, $second, $third); got $seededNames"
         }

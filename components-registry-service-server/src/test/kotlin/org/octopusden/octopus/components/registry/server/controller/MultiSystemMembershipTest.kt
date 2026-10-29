@@ -77,7 +77,7 @@ class MultiSystemMembershipTest {
 
     private fun uniqueSysCode(prefix: String) = "${prefix}_${UUID.randomUUID().toString().take(6)}"
 
-    private fun uniqueName(prefix: String) = "${prefix}_${UUID.randomUUID().toString().take(8)}"
+    private fun uniqueName(prefix: String) = "${prefix.lowercase().replace('_', '-')}-${UUID.randomUUID().toString().take(8)}"
 
     /** Pre-seed the master `systems` dictionary — the write-side validator rejects unknown codes. */
     private fun seedSystem(code: String) {

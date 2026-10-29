@@ -28,6 +28,48 @@ class MavenVersionResolverTest {
         assertEquals(expected, resolver.resolve(raw)?.raw)
     }
 
+    @ParameterizedTest(name = "\"{0}\" -> \"{1}\"")
+    @CsvSource(
+        "%env.BUILD_ENV%/MAVEN/3.6, 3.6",
+        "%env.BUILD_ENV%/MAVEN/3.9, 3.9",
+        "%env.BUILD_ENV%/MAVEN/3.10, 3.10",
+        "%env.BUILD_ENV%/MAVEN/3.6.3, 3.6.3",
+        "%env.BUILD_ENV%/MAVEN/LATEST, LATEST",
+        "M2_HOME=/opt/BUILD_ENV/MAVEN/3.9, 3.9",
+        "/opt/BUILD_ENV/MAVEN/3.10/bin/mvn, 3.10",
+        "%%BUILD_ENV%%\\MAVEN\\3.6\\bin\\mvn, 3.6",
+    )
+    @DisplayName("SYS-106: resolve() takes the whole version from a MAVEN/<version> path segment")
+    fun `SYS-106 resolve takes the version from the MAVEN path segment`(
+        raw: String,
+        expected: String,
+    ) {
+        assertEquals(expected, resolver.resolve(raw)?.raw)
+    }
+
+    @Test
+    @DisplayName("SYS-106: versions of different Maven lines resolve to different versions")
+    fun `SYS-106 different Maven lines are told apart`() {
+        val versions =
+            listOf("MAVEN/3.6", "MAVEN/3.6.3", "MAVEN/3.9", "MAVEN/3.10")
+                .map { resolver.resolve("%env.BUILD_ENV%/$it")?.raw }
+        assertEquals(listOf("3.6", "3.6.3", "3.9", "3.10"), versions)
+    }
+
+    @ParameterizedTest(name = "\"{0}\" -> \"{1}\"")
+    @CsvSource(
+        "/opt/apache-MAVEN/3.10/bin/mvn, 3",
+        "/opt/NOT_MAVEN/3.10, 3",
+        "/opt/MyMAVEN/3.6.3, 3.6.3",
+    )
+    @DisplayName("SYS-106: MAVEN that is only part of a path element is not a version segment")
+    fun `SYS-106 MAVEN inside a longer path element falls back to known tokens`(
+        raw: String,
+        expected: String,
+    ) {
+        assertEquals(expected, resolver.resolve(raw)?.raw)
+    }
+
     @Test
     @DisplayName("resolve() returns null without a maven marker")
     fun `resolve returns null without the marker`() {

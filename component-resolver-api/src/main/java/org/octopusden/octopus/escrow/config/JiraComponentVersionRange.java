@@ -84,6 +84,7 @@ public class JiraComponentVersionRange {
         JiraComponentVersionRange that = (JiraComponentVersionRange) o;
 
         return new EqualsBuilder()
+                .append(componentName, that.componentName)
                 .append(versionRange, that.versionRange)
                 .append(jiraComponent, that.jiraComponent)
                 .append(distribution, that.distribution)
@@ -94,6 +95,7 @@ public class JiraComponentVersionRange {
     @Override
     public int hashCode() {
         return new HashCodeBuilder()
+                .append(componentName)
                 .append(versionRange)
                 .append(jiraComponent)
                 .append(distribution)

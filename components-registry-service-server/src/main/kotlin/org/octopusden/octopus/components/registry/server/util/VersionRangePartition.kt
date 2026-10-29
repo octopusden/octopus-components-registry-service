@@ -85,12 +85,27 @@ object VersionRangePartition {
         )
     }
 
-    /** Flatten a (possibly composite) range string into its single-interval segments. */
-    private fun toSegments(range: String): List<Segment> {
+    /** Flatten a (possibly composite) range string into its single-interval segments. Drops any piece it can't parse. */
+    internal fun toSegments(range: String): List<Segment> {
         if (isAllVersions(range)) return listOf(Segment(null, false, null, false))
         parseSegment(range)?.let { return listOf(it) }
         // Composite: split on top-level commas between segments (e.g. "[1,2),[5,)").
         return SEGMENT_GLOBAL.findAll(normalize(range)).mapNotNull { parseSegment(it.value) }.toList()
+    }
+
+    /**
+     * Like [toSegments], but `null` if any piece of [range] fails to parse or there is leftover text
+     * [toSegments]'s lenient extraction silently drops — for callers that must fail closed on
+     * anything they can't fully verify, rather than silently checking only part of the range.
+     */
+    internal fun toSegmentsOrNull(range: String): List<Segment>? {
+        if (isAllVersions(range)) return listOf(Segment(null, false, null, false))
+        parseSegment(range)?.let { return listOf(it) }
+        val normalized = normalize(range)
+        val matches = SEGMENT_GLOBAL.findAll(normalized).map { it.value }.toList()
+        if (matches.isEmpty() || matches.joinToString(",") != normalized) return null
+        val segments = matches.map { parseSegment(it) }
+        return if (segments.any { it == null }) null else segments.filterNotNull()
     }
 
     // Matches a comma-form segment `[a,b)` OR a single-version segment `[x]` inside a composite.

@@ -4,9 +4,13 @@ name: Merge Gate
 on:
   pull_request:
 
+permissions:
+  contents: read
+  security-events: write
+
 jobs:
   build:
-    uses: octopusden/octopus-base/.github/workflows/common-java-gradle-build.yml@v2.5.2
+    uses: octopusden/octopus-base/.github/workflows/common-java-gradle-build.yml@v3.2.0
     with:
       java-version: '21'
       flow-type: hybrid
@@ -14,13 +18,13 @@ jobs:
     secrets: inherit
 
   quality:
-    uses: octopusden/octopus-base/.github/workflows/common-java-gradle-quality-gates.yml@v2.5.2
+    uses: octopusden/octopus-base/.github/workflows/common-java-gradle-quality-gates.yml@v3.2.0
     with:
       java-version: '21'
     secrets: inherit
 
   security:
-    uses: octopusden/octopus-base/.github/workflows/common-java-gradle-security-reports.yml@v2.5.2
+    uses: octopusden/octopus-base/.github/workflows/common-java-gradle-security-reports.yml@v3.2.0
     with:
       java-version: '21'
       enable-codeql: true
@@ -28,13 +32,106 @@ jobs:
       enable-dependency-check: false
     secrets: inherit
 
+  # A change to the committed v4 contract must carry a consumer-facing changelog
+  # entry. This is the rule api-changelog.md already states ("How to update"),
+  # made non-optional.
+  #
+  # Deliberately narrow. Whether a behaviour change needs a numbered requirement
+  # is a judgement a diff cannot make, and stays with review (AGENTS.md
+  # § Technical Requirements Tracking). This checks the one thing a diff answers
+  # exactly: the generated contract moved, so the consumers' changelog must say
+  # what moved. OpenApiV4SpecTest already covers the other direction — a v4
+  # source change whose committed spec was never regenerated.
+  api-changelog:
+    name: changelog/v4
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      pull-requests: read
+    steps:
+      # No checkout: the file list comes from the API, so this needs neither a
+      # clone nor the full history a merge-base diff would.
+      #
+      # The files endpoint, not `gh pr diff --name-only`: that serves the diff
+      # media type, which answers 406 above 300 files. A large PR would fail
+      # this job with "diff exceeded the maximum number of files" — blocking a
+      # PR that may touch no contract at all, and that no changelog edit could
+      # unblock. #428 changed 346 files, none of them the contract.
+      - name: Require a changelog entry when the v4 contract changes
+        env:
+          GH_TOKEN: ${{ github.token }}
+          PR: ${{ github.event.pull_request.number }}
+          REPO: ${{ github.repository }}
+        run: |
+          set -euo pipefail
+          SURFACE='components-registry-service-server/src/main/resources/openapi/v4.json'
+          CHANGELOG='docs/registry/api-changelog.md'
+
+          files=$(gh api --paginate "repos/$REPO/pulls/$PR/files?per_page=100" --jq '.[].filename')
+
+          # -x -F: whole line, no regex. Paths arrive verbatim from the API.
+          if ! grep -qxF "$SURFACE" <<<"$files"; then
+            echo "v4 contract unchanged — nothing to check."
+            exit 0
+          fi
+          if grep -qxF "$CHANGELOG" <<<"$files"; then
+            echo "ok — v4 contract change carries a changelog entry."
+            exit 0
+          fi
+
+          # The annotation has to be one line to render as one; the detail goes
+          # to the log above it.
+          cat >&2 <<MSG
+          The v4 contract is what the Portal binds to, so a change to it needs a
+          dated entry under "Unreleased" in $CHANGELOG saying what consumers see
+          differently — a new field, endpoint, enum value, rename or removal.
+
+          If the regenerated spec carries no consumer-visible change, say that in
+          one line rather than committing a silent contract move.
+          MSG
+          echo "::error::$SURFACE changed but $CHANGELOG did not."
+          exit 1
+
+  # Applied Flyway migrations are immutable: production runs Flyway validate,
+  # so an edited, removed or renamed V<n>__ file stops the service from
+  # starting. Compares main with the merge commit under test, so a branch
+  # behind main does not look like it deletes main's newer migrations.
+  # The rule lives in the script so it can be run locally on any two commits.
+  migrations-append-only:
+    name: migrations/append-only
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      contents: read
+    steps:
+      # Depth 2: the merge commit and its parents, which is all the check reads.
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 2
+          persist-credentials: false
+      - name: Self-test the check
+        run: scripts/ci/test-check-migrations-append-only.sh
+      # The base is the merge commit's first parent: main as it was when the
+      # event fired. pull_request does not re-fire when main moves, and the
+      # policy/checks-common ruleset requires gate/merge without strict, so a
+      # branch need not be up to date with main to merge. Two PRs that each add
+      # a migration can then both pass and both merge even when one version is
+      # not above the other (the same version, or a lower one merged second),
+      # and Flyway then refuses to start. Turning strict on for gate/merge
+      # closes that gap. pull_request.base.sha is not used: it can be older
+      # still.
+      - name: Check migrations are append-only and in order
+        env:
+          CHECKED: ${{ github.sha }}
+        run: scripts/ci/check-migrations-append-only.sh "$CHECKED^1" "$CHECKED"
+
   gate-merge:
     name: gate/merge
-    needs: [ build, quality, security ]
+    needs: [ build, quality, security, api-changelog, migrations-append-only ]
     if: always()
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - uses: octopusden/octopus-base/.github/actions/merge-gate@v2.5.2
+      - uses: octopusden/octopus-base/.github/actions/merge-gate@v3.2.0
         with:
           needs: ${{ toJson(needs) }}

@@ -29,6 +29,7 @@
 | RES-023 | Maven artifact parameters (3 cases) | Medium | integration-test | ⏳ Git-only |
 | RES-024 | Find component by single artifact | High | integration-test | ⏳ Git-only |
 | RES-025 | Find components by artifacts batch (V3) | High | integration-test | ⏳ Git-only |
+| RES-026 | Range Set equality keeps one element per component | High | unit-test | ✅ Git + DB |
 
 ---
 
@@ -642,3 +643,34 @@ correct ArtifactComponentsDTO.
 3. Response order matches expected fixture
 
 **Test method:** `BaseComponentsRegistryServiceTest.testFindByArtifactsV3` via `ComponentsRegistryServiceControllerTest` (Git), `DbBackedComponentsRegistryServiceControllerTest` (DB — planned)
+
+---
+
+### RES-026: Range Set equality keeps one element per component
+
+**Priority:** High
+**Test layer:** unit-test
+**Status:** ✅ Tested
+
+**Description:**
+`getAllJiraComponentVersionRanges` collects into a `Set`, so the equality contract of
+`JiraComponentVersionRange` decides which components the `jira-component-version-ranges` endpoints
+show. Distinct components must stay distinct elements; the same component must stay one.
+
+The contract is transitive through the range's parts, so `Distribution` and `Doc` are bound by it
+too: an equality that compares nothing makes the enclosing comparison vacuous.
+
+**Preconditions:**
+- Two components sharing a Jira project key, a version range and a VCS root, differing in name
+- A `Distribution` pair differing only in its artifacts, and an identical pair
+- A `Doc` pair differing only in its component, and an identical pair
+
+**Acceptance criteria:**
+1. Two ranges differing only in `componentName` are not equal, and a `Set` keeps both
+2. The same range twice is one element — the contract stays strict enough to deduplicate
+3. Distributions differing in their artifacts are not equal; identical ones are
+4. Docs of different components are not equal; identical ones are
+5. Both resolvers return the same element count for the same configuration
+
+**Test method:** `EqualityContractTest` (model contract, six cases) and
+`RangeSetDropsCollidingComponentsTest` (endpoint seam, two cases)

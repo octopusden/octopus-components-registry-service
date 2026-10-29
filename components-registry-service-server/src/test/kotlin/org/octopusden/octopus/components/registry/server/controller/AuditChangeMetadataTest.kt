@@ -68,7 +68,7 @@ class AuditChangeMetadataTest {
         System.setProperty("COMPONENTS_REGISTRY_SERVICE_TEST_DATA_DIR", testResourcesPath.toString())
     }
 
-    private fun uniqueName(prefix: String) = "${prefix}_${UUID.randomUUID().toString().take(8)}"
+    private fun uniqueName(prefix: String) = "${prefix.lowercase().replace('_', '-')}-${UUID.randomUUID().toString().take(8)}"
 
     /** POST a component, optionally with change metadata. Returns the new id. Expects 201. */
     private fun createComponent(

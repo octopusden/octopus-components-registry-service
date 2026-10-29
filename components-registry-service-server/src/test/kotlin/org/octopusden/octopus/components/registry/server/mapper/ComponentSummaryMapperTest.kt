@@ -14,6 +14,8 @@ import org.octopusden.octopus.components.registry.server.entity.ComponentSystemE
 import org.octopusden.octopus.components.registry.server.entity.TeamcityProjectEntity
 import org.octopusden.octopus.components.registry.server.entity.VcsSettingsEntryEntity
 import org.octopusden.octopus.components.registry.server.entity.VersionLineEntity
+import org.octopusden.octopus.components.registry.server.service.rms.ComponentBuildRanges
+import org.octopusden.octopus.components.registry.server.util.BuildRangeCollapser
 import java.util.UUID
 
 /**
@@ -152,27 +154,49 @@ class ComponentSummaryMapperTest {
     }
 
     // -----------------------------------------------------------------------
-    // javaVersion from BASE config row (same shape as buildSystem)
+    // javaVersion — the component's *effective* Java version: RMS's registered
+    // rollup when present, else the BASE config row's configured value.
     // -----------------------------------------------------------------------
 
     @Test
-    @DisplayName("BASE config javaVersion propagates to summary")
-    fun baseConfig_javaVersion_propagates() {
+    @DisplayName("no RMS data → javaVersion falls back to the configured BASE value")
+    fun noRmsRanges_javaVersion_fallsBackToBase() {
         val component = minimalComponent()
         val cfg = baseConfigFor(component).also { it.javaVersion = "21" }
         component.configurations.add(cfg)
 
-        assertEquals("21", component.toSummaryResponse().javaVersion)
+        assertEquals("21", component.toSummaryResponse(rmsRanges = null).javaVersion)
     }
 
     @Test
-    @DisplayName("BASE config with blank javaVersion → null in summary (blank-to-null)")
+    @DisplayName("BASE config with blank javaVersion, no RMS data → null in summary (blank-to-null)")
     fun baseConfig_blankJavaVersion_normalizedToNull() {
         val component = minimalComponent()
         val cfg = baseConfigFor(component).also { it.javaVersion = "   " }
         component.configurations.add(cfg)
 
-        assertNull(component.toSummaryResponse().javaVersion)
+        assertNull(component.toSummaryResponse(rmsRanges = null).javaVersion)
+    }
+
+    @Test
+    @DisplayName("RMS data present → javaVersion uses RMS's rollup, not the configured BASE value")
+    fun rmsRanges_javaVersion_prefersRms() {
+        val component = minimalComponent()
+        val cfg = baseConfigFor(component).also { it.javaVersion = "8" }
+        component.configurations.add(cfg)
+        val rmsRanges = ComponentBuildRanges(javaRanges = listOf(BuildRangeCollapser.Run("[1,)", "21")), mavenRanges = emptyList())
+
+        assertEquals("21", component.toSummaryResponse(rmsRanges = rmsRanges).javaVersion)
+    }
+
+    @Test
+    @DisplayName("RMS data present but empty ranges, no BASE javaVersion → javaVersion is null")
+    fun noRmsRanges_noBaseJavaVersion_javaVersionNull() {
+        val component = minimalComponent()
+        component.configurations.add(baseConfigFor(component))
+        val rmsRanges = ComponentBuildRanges(javaRanges = emptyList(), mavenRanges = emptyList())
+
+        assertNull(component.toSummaryResponse(rmsRanges = rmsRanges).javaVersion)
     }
 
     // -----------------------------------------------------------------------

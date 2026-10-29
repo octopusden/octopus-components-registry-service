@@ -7,6 +7,7 @@ import org.octopusden.octopus.components.registry.server.entity.ComponentConfigu
 import org.octopusden.octopus.components.registry.server.entity.ComponentEntity
 import org.octopusden.octopus.components.registry.server.entity.DistributionDockerImageEntity
 import org.octopusden.octopus.components.registry.server.entity.DistributionFileUrlArtifactEntity
+import org.octopusden.octopus.components.registry.server.entity.DistributionGenericArtifactEntity
 import org.octopusden.octopus.components.registry.server.entity.DistributionMavenArtifactEntity
 import org.octopusden.octopus.components.registry.server.entity.DistributionPackageEntity
 import org.octopusden.octopus.components.registry.server.entity.VcsSettingsEntryEntity
@@ -15,6 +16,8 @@ import org.octopusden.octopus.components.registry.server.mapper.ComponentConfigu
 import org.octopusden.octopus.components.registry.server.mapper.MarkerAttributes
 import org.octopusden.octopus.components.registry.server.mapper.NOT_AVAILABLE_EXTERNAL_REGISTRY
 import org.octopusden.octopus.components.registry.server.mapper.extractScalarValue
+import org.octopusden.octopus.components.registry.server.service.rms.ComponentBuildRanges
+import org.octopusden.octopus.components.registry.server.service.rms.RegisteredBuildParametersMapper
 import org.octopusden.releng.versions.NumericVersionFactory
 import org.octopusden.releng.versions.VersionRangeFactory
 import org.springframework.stereotype.Component
@@ -71,7 +74,7 @@ import java.util.UUID
  * quotes so the literal `$placeholder` is preserved (matching the old format).
  */
 @Component
-@Suppress("TooManyFunctions")
+@Suppress("TooManyFunctions", "LargeClass")
 class ComponentCodeRenderer(
     private val versionRangeFactory: VersionRangeFactory,
     private val numericVersionFactory: NumericVersionFactory,
@@ -81,10 +84,17 @@ class ComponentCodeRenderer(
      * [ownershipExportPatterns] maps an ownership mapping's id → its DSL/export `artifactIdPattern`
      * (sibling-aware for ALL_EXCEPT_CLAIMED, computed by the service); a mapping absent from the map
      * falls back to the plain wire render. Empty = legacy/wire rendering everywhere.
+     *
+     * [rmsRanges] — RMS's ACTUAL Java/Maven ranges for this component, if any (`null`/empty
+     * omits the section entirely). Appended as a trailing, RMS-labeled section inside the
+     * component block, after its own override ranges but before the closing brace — see
+     * [writeRmsSection]. Never merged into the component's own configured values; RMS is
+     * read-only and CRS never writes it.
      */
     fun renderFull(
         component: ComponentEntity,
         ownershipExportPatterns: Map<UUID, String> = emptyMap(),
+        rmsRanges: ComponentBuildRanges? = null,
     ): String {
         val configs =
             component.configurations.sortedWith(
@@ -127,6 +137,7 @@ class ComponentCodeRenderer(
             fileUrlArtifacts = base.fileUrlArtifacts.toList(),
             dockerImages = base.dockerImages.toList(),
             packages = base.packages.toList(),
+            genericArtifacts = base.genericArtifacts.toList(),
             requiredTools = base.requiredToolJunctions.map { it.toolName },
             buildToolBeans = base.buildToolBeans.toList(),
             ownershipMappings = ownershipByRange[ALL_VERSIONS_RANGE].orEmpty(),
@@ -159,6 +170,9 @@ class ComponentCodeRenderer(
             )
         }
 
+        if (rmsRanges != null && (rmsRanges.javaRanges.isNotEmpty() || rmsRanges.mavenRanges.isNotEmpty())) {
+            writeRmsSection(cb, rmsRanges)
+        }
         cb.close()
         return cb.toString()
     }
@@ -167,12 +181,18 @@ class ComponentCodeRenderer(
      * RESOLVED view for [version]. Returns `null` when the component has no BASE
      * row or [version] is unparseable (the caller maps that to a 404), matching
      * `EntityMappers.toResolvedEscrowModuleConfig`.
+     *
+     * [rmsRanges] — RMS's ACTUAL Java/Maven ranges for this component, if any. For each attribute
+     * independently: if one of its ACTUAL ranges contains [version], that value is used in place of
+     * the configured BASE/override merge below; otherwise the merge result is unchanged. `null`
+     * (no ACTUAL data at all) behaves exactly as before this parameter existed.
      */
     @Suppress("ReturnCount")
     fun renderResolved(
         component: ComponentEntity,
         version: String,
         ownershipExportPatterns: Map<UUID, String> = emptyMap(),
+        rmsRanges: ComponentBuildRanges? = null,
     ): String? {
         val configs = component.configurations.toList()
         val base = configs.firstOrNull { it.rowType == ROW_BASE } ?: return null
@@ -226,6 +246,12 @@ class ComponentCodeRenderer(
 
         val view = ComponentConfigurationView.from(base)
         scalarOverrides.forEach { view.applyScalarOverride(it) }
+        if (rmsRanges != null) {
+            val actualJava = RegisteredBuildParametersMapper.actualValueAt(rmsRanges.javaRanges, numericVersion, versionRangeFactory)
+            if (actualJava != null) view.javaVersion = actualJava
+            val actualMaven = RegisteredBuildParametersMapper.actualValueAt(rmsRanges.mavenRanges, numericVersion, versionRangeFactory)
+            if (actualMaven != null) view.mavenVersion = actualMaven
+        }
 
         val vcs =
             pickMarkerChildren(MarkerAttributes.VCS_SETTINGS, markerOverrides, base.vcsEntries.toList()) { it.vcsEntries.toList() }
@@ -243,6 +269,10 @@ class ComponentCodeRenderer(
             }
         val pkgs =
             pickMarkerChildren(MarkerAttributes.DISTRIBUTION_PACKAGES, markerOverrides, base.packages.toList()) { it.packages.toList() }
+        val generic =
+            pickMarkerChildren(MarkerAttributes.DISTRIBUTION_GENERIC, markerOverrides, base.genericArtifacts.toList()) {
+                it.genericArtifacts.toList()
+            }
         val tools =
             pickMarkerChildren(MarkerAttributes.BUILD_REQUIRED_TOOLS, markerOverrides, base.requiredToolJunctions.toList()) {
                 it.requiredToolJunctions.toList()
@@ -281,6 +311,7 @@ class ComponentCodeRenderer(
             fileUrlArtifacts = fileUrl,
             dockerImages = docker,
             packages = pkgs,
+            genericArtifacts = generic,
             requiredTools = tools,
             buildToolBeans = beans,
             ownershipMappings = effectiveOwnership,
@@ -304,6 +335,7 @@ class ComponentCodeRenderer(
         fileUrlArtifacts: List<DistributionFileUrlArtifactEntity>,
         dockerImages: List<DistributionDockerImageEntity>,
         packages: List<DistributionPackageEntity>,
+        genericArtifacts: List<DistributionGenericArtifactEntity>,
         requiredTools: List<String>,
         buildToolBeans: List<ComponentBuildToolBeanEntity>,
         ownershipMappings: List<ComponentArtifactMappingEntity>,
@@ -339,7 +371,7 @@ class ComponentCodeRenderer(
         writeBuild(cb, scalars, requiredTools, buildToolBeans)
         writeArtifactIds(cb, ownershipMappings, ownershipExportPatterns)
         writeJira(cb, scalars, component)
-        writeDistribution(cb, component, mavenArtifacts, fileUrlArtifacts, dockerImages, packages)
+        writeDistribution(cb, component, mavenArtifacts, fileUrlArtifacts, dockerImages, packages, genericArtifacts)
         writeEscrow(cb, scalars)
         writeDocs(cb, component)
         cb.strList(
@@ -516,7 +548,7 @@ class ComponentCodeRenderer(
         cb.close()
     }
 
-    @Suppress("LongParameterList")
+    @Suppress("LongParameterList", "CyclomaticComplexMethod")
     private fun writeDistribution(
         cb: CodeBuilder,
         component: ComponentEntity,
@@ -524,6 +556,7 @@ class ComponentCodeRenderer(
         fileUrlArtifacts: List<DistributionFileUrlArtifactEntity>,
         dockerImages: List<DistributionDockerImageEntity>,
         packages: List<DistributionPackageEntity>,
+        genericArtifacts: List<DistributionGenericArtifactEntity>,
     ) {
         val securityGroups = component.securityGroups
         val hasContent =
@@ -533,6 +566,7 @@ class ComponentCodeRenderer(
                 fileUrlArtifacts.isNotEmpty() ||
                 dockerImages.isNotEmpty() ||
                 packages.isNotEmpty() ||
+                genericArtifacts.isNotEmpty() ||
                 securityGroups.isNotEmpty()
         if (!hasContent) return
         cb.open("distribution")
@@ -563,6 +597,11 @@ class ComponentCodeRenderer(
             cb.open("package")
             cb.bare("type", p.packageType)
             cb.str("name", p.packageName)
+            cb.close()
+        }
+        genericArtifacts.sortedBy { it.sortOrder }.forEach { g ->
+            cb.open("generic")
+            cb.str("path", g.path)
             cb.close()
         }
         if (securityGroups.isNotEmpty()) {
@@ -719,7 +758,8 @@ class ComponentCodeRenderer(
         val fileUrl = markers.firstOrNull { it.overriddenAttribute == MarkerAttributes.DISTRIBUTION_FILE_URL }
         val docker = markers.firstOrNull { it.overriddenAttribute == MarkerAttributes.DISTRIBUTION_DOCKER }
         val pkgs = markers.firstOrNull { it.overriddenAttribute == MarkerAttributes.DISTRIBUTION_PACKAGES }
-        if (maven == null && fileUrl == null && docker == null && pkgs == null) return
+        val generic = markers.firstOrNull { it.overriddenAttribute == MarkerAttributes.DISTRIBUTION_GENERIC }
+        if (listOf(maven, fileUrl, docker, pkgs, generic).all { it == null }) return
         cb.open("distribution")
         maven?.mavenArtifacts?.sortedBy { it.sortOrder }?.forEach { m ->
             cb.open("maven")
@@ -748,12 +788,45 @@ class ComponentCodeRenderer(
             cb.str("name", p.packageName)
             cb.close()
         }
+        generic?.genericArtifacts?.sortedBy { it.sortOrder }?.forEach { g ->
+            cb.open("generic")
+            cb.str("path", g.path)
+            cb.close()
+        }
         cb.close()
     }
 
     // ============================================================
-    // Helpers
+    // RMS ACTUAL data (FULL only) — trailing, read-only, inside the component block
     // ============================================================
+
+    /**
+     * One block per ACTUAL range, Java then Maven, each in the same shape as a real
+     * `SCALAR_OVERRIDE` block (`"<range>" { build { javaVersion = "<value>" } }`) — only the
+     * header comment marks the section as RMS-sourced; the range blocks themselves are literal,
+     * uncommented text (design.md Decision 16 accepts the reimport-hazard tradeoff deliberately).
+     */
+    private fun writeRmsSection(
+        cb: CodeBuilder,
+        rmsRanges: ComponentBuildRanges,
+    ) {
+        cb.comment("RMS registered parameters (read-only; not written by CRS)")
+        rmsRanges.javaRanges.forEach { writeRmsRangeBlock(cb, it.versionRange, "javaVersion", it.value) }
+        rmsRanges.mavenRanges.forEach { writeRmsRangeBlock(cb, it.versionRange, "mavenVersion", it.value) }
+    }
+
+    private fun writeRmsRangeBlock(
+        cb: CodeBuilder,
+        range: String,
+        field: String,
+        value: String,
+    ) {
+        cb.open(doubleQuoted(range))
+        cb.open("build")
+        cb.str(field, value)
+        cb.close()
+        cb.close()
+    }
 
     private fun <T> pickMarkerChildren(
         attribute: String,
@@ -849,6 +922,11 @@ internal class CodeBuilder {
         values: List<String>,
     ) {
         if (values.isNotEmpty()) raw("$name = ${groovyList(values)}")
+    }
+
+    /** A single-line `// text` comment, at the current indentation level. */
+    fun comment(text: String) {
+        raw("// $text")
     }
 
     private fun raw(text: String) {

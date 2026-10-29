@@ -23,6 +23,8 @@ import com.fasterxml.jackson.annotation.JsonProperty
  *   `skipped_ambiguous`/`skipped_no_match`, which only fire when a component resolves nothing, so a
  *   partially-linked component isn't invisible. Non-zero means some lines were silently dropped;
  *   the per-line reason is in the WARN logs.
+ * - `auto_release_enabled` — components whose `autoRelease` this run turned on, because a linked
+ *   release configuration has an enabled finish-build trigger (SYS-104). Never turned off here.
  * - `errors` — per-component errors from the `applyMatches` loop. A fetch-level TC API failure
  *   instead aborts the whole sync and surfaces via the job's `errorMessage`.
  */
@@ -35,4 +37,5 @@ data class TeamcitySyncResult(
     @JsonProperty("ambiguous_auto_resolved") val ambiguousAutoResolved: Int,
     @JsonProperty("dropped_lines") val droppedLines: Int,
     val errors: List<String>,
+    @JsonProperty("auto_release_enabled") val autoReleaseEnabled: Int = 0,
 )

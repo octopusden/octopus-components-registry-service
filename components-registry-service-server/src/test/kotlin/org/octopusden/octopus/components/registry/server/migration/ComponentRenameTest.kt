@@ -66,7 +66,7 @@ class ComponentRenameTest {
         System.setProperty("COMPONENTS_REGISTRY_SERVICE_TEST_DATA_DIR", testResourcesPath.toString())
     }
 
-    private fun uniqueName(prefix: String) = "${prefix}_${UUID.randomUUID().toString().take(8)}"
+    private fun uniqueName(prefix: String) = "${prefix.lowercase().replace('_', '-')}-${UUID.randomUUID().toString().take(8)}"
 
     private fun createComponent(name: String): JsonNode {
         val body =
@@ -137,7 +137,9 @@ class ComponentRenameTest {
         // polymorphic dispatch parses the path as a UUID first; that UUID won't
         // match the entity's auto-generated id, so the fallback to
         // getComponentByName() is the only way this resolves.
-        val uuidShapedName = UUID.randomUUID().toString()
+        // SYS-095: a key must start with a lowercase letter, so pin the leading hex digit to
+        // a letter. The value still parses as a UUID, which is all this test needs.
+        val uuidShapedName = "a" + UUID.randomUUID().toString().substring(1)
         val created = createComponent(uuidShapedName)
         val id = created.path("id").asText()
 

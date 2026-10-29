@@ -4,10 +4,17 @@ import io.swagger.v3.oas.annotations.media.Content
 import io.swagger.v3.oas.annotations.media.Schema
 import io.swagger.v3.oas.annotations.responses.ApiResponse
 import io.swagger.v3.oas.annotations.responses.ApiResponses
+import org.octopusden.octopus.components.registry.server.config.AdminConfigReloader
 import org.octopusden.octopus.components.registry.server.config.ConditionalOnDatabaseEnabled
+import org.octopusden.octopus.components.registry.server.dto.v4.AdminComponentProfilesResponse
+import org.octopusden.octopus.components.registry.server.dto.v4.ComponentProfileResponse
+import org.octopusden.octopus.components.registry.server.dto.v4.ComponentProfilesReloadResponse
+import org.octopusden.octopus.components.registry.server.dto.v4.ComponentTemplateResponse
 import org.octopusden.octopus.components.registry.server.dto.v4.HistoryMigrationJobResponse
 import org.octopusden.octopus.components.registry.server.dto.v4.MigrationConflictResponse
 import org.octopusden.octopus.components.registry.server.dto.v4.MigrationJobResponse
+import org.octopusden.octopus.components.registry.server.dto.v4.ReloadConfigFailureResponse
+import org.octopusden.octopus.components.registry.server.dto.v4.ReloadConfigResponse
 import org.octopusden.octopus.components.registry.server.dto.v4.TeamcitySyncJobResponse
 import org.octopusden.octopus.components.registry.server.dto.v4.TeamcityValidationJobResponse
 import org.octopusden.octopus.components.registry.server.security.CurrentUserResolver
@@ -15,16 +22,19 @@ import org.octopusden.octopus.components.registry.server.service.BatchMigrationR
 import org.octopusden.octopus.components.registry.server.service.ForceResetOutcome
 import org.octopusden.octopus.components.registry.server.service.HistoryMigrationJobService
 import org.octopusden.octopus.components.registry.server.service.ImportService
+import org.octopusden.octopus.components.registry.server.service.ListValues
 import org.octopusden.octopus.components.registry.server.service.MigrationConflictException
 import org.octopusden.octopus.components.registry.server.service.MigrationJobService
-import org.octopusden.octopus.components.registry.server.service.MigrationLifecycleGate
 import org.octopusden.octopus.components.registry.server.service.MigrationResult
 import org.octopusden.octopus.components.registry.server.service.MigrationStatus
+import org.octopusden.octopus.components.registry.server.service.ProfileAvailability
 import org.octopusden.octopus.components.registry.server.service.ValidationResult
+import org.octopusden.octopus.components.registry.server.service.impl.ComponentProfileCatalog
 import org.octopusden.octopus.components.registry.server.service.impl.ConfigValidationException
 import org.octopusden.octopus.components.registry.server.teamcity.sync.TeamcitySyncJobService
 import org.octopusden.octopus.components.registry.server.teamcity.validation.TeamcityValidationJobService
-import org.springframework.cloud.context.refresh.ContextRefresher
+import org.octopusden.octopus.components.registry.server.util.EntryYaml
+import org.slf4j.LoggerFactory
 import org.springframework.http.HttpStatus
 import org.springframework.http.ResponseEntity
 import org.springframework.security.access.prepost.PreAuthorize
@@ -47,9 +57,14 @@ class AdminControllerV4(
     private val historyMigrationJobService: HistoryMigrationJobService,
     private val teamcitySyncJobService: TeamcitySyncJobService,
     private val teamcityValidationJobService: TeamcityValidationJobService,
-    private val contextRefresher: ContextRefresher,
     private val currentUserResolver: CurrentUserResolver,
+    private val adminConfigReloader: AdminConfigReloader,
+    private val componentProfileCatalog: ComponentProfileCatalog,
+    private val profileAvailability: ProfileAvailability,
+    private val templateListValues: ListValues,
 ) {
+    private val log = LoggerFactory.getLogger(AdminControllerV4::class.java)
+
     @PostMapping("/migrate-component/{name}")
     fun migrateComponent(
         @PathVariable name: String,
@@ -115,6 +130,35 @@ class AdminControllerV4(
     fun migrateDefaults(): ResponseEntity<Map<String, Any?>> = ResponseEntity.ok(importService.migrateDefaults())
 
     /**
+     * Every configured profile and template in use, live or failed, with its configuration as read
+     * (Decision 11). The version is the one the entries in use were loaded from, as Spring Cloud
+     * Config reported it, so a reload that failed does not change it.
+     */
+    @GetMapping("/component-profiles")
+    fun componentProfiles(): AdminComponentProfilesResponse {
+        val snapshot = componentProfileCatalog.snapshot()
+        val profiles = snapshot.profiles.associateBy { it.id }
+        val templates = snapshot.templates.associateBy { it.id }
+        val caller = currentUserResolver.currentUsername()
+        return AdminComponentProfilesResponse(
+            configVersion = snapshot.configVersion,
+            lastLoad = ComponentProfilesReloadResponse.from(snapshot.lastLoad),
+            entries =
+                snapshot.entries.map { entry ->
+                    AdminComponentProfilesResponse.Entry(
+                        id = entry.id,
+                        kind = entry.kind,
+                        status = entry.status.name.lowercase(),
+                        problems = entry.problems,
+                        profile = profiles[entry.id]?.let { ComponentProfileResponse.from(it, profileAvailability.evaluate(it)) },
+                        template = templates[entry.id]?.let { ComponentTemplateResponse.from(it, templateListValues, caller) },
+                        configuration = EntryYaml.dump(entry.id, snapshot.raw[entry.id].orEmpty()),
+                    )
+                },
+        )
+    }
+
+    /**
      * Reload the code-as-config admin blobs (`field-config` + `component-defaults`)
      * from `service-config` WITHOUT a pod restart.
      *
@@ -125,11 +169,58 @@ class AdminControllerV4(
      * [ConfigRefreshListener][org.octopusden.octopus.components.registry.server.listener.ConfigRefreshListener]
      * to re-sync both blobs into the `registry_config` cache synchronously. Returns the
      * set of property keys that changed.
+     *
+     * The component profiles are then reloaded by this request itself, also when the refresh
+     * failed, and every response carries their outcome as `componentProfiles`
+     * ([AdminConfigReloader] runs the pair as one critical section). Profiles that are not usable
+     * are kept as they were and answer 422 `component-profiles`; a refresh failure other than
+     * `config-validation` answers 500 `config-refresh`.
      */
     @PostMapping("/reload-config")
-    fun reloadConfig(): ResponseEntity<Map<String, Any?>> {
-        val changed = contextRefresher.refresh()
-        return ResponseEntity.ok(mapOf("status" to "reloaded", "changedKeys" to changed.sorted()))
+    @ApiResponses(
+        ApiResponse(
+            responseCode = "200",
+            description = "Configuration refreshed and component profiles applied",
+            content = [Content(schema = Schema(implementation = ReloadConfigResponse::class))],
+        ),
+        ApiResponse(
+            responseCode = "422",
+            description = "`config-validation`: a service-config value is invalid. `component-profiles`: the " +
+                "component profiles are not usable and the profiles in use are kept.",
+            content = [Content(schema = Schema(implementation = ReloadConfigFailureResponse::class))],
+        ),
+        ApiResponse(
+            responseCode = "500",
+            description = "`config-refresh`: the refresh failed for another reason; the component profiles were " +
+                "reloaded all the same.",
+            content = [Content(schema = Schema(implementation = ReloadConfigFailureResponse::class))],
+        ),
+    )
+    fun reloadConfig(): ResponseEntity<Any> {
+        val outcome = adminConfigReloader.reload()
+        val profileLoad = outcome.profiles
+        val profiles = ComponentProfilesReloadResponse.from(profileLoad)
+        val refreshFailure = outcome.refresh.exceptionOrNull()
+        return when {
+            refreshFailure is ConfigValidationException -> configValidationFailed(refreshFailure, profiles)
+            refreshFailure != null -> refreshFailed(refreshFailure, profiles)
+            !profileLoad.usable ->
+                ResponseEntity.status(HttpStatus.UNPROCESSABLE_ENTITY).body(
+                    ReloadConfigFailureResponse(
+                        error = "component-profiles",
+                        message = "Component profiles are not usable; the profiles in use are kept",
+                        componentProfiles = profiles,
+                    ),
+                )
+            else ->
+                ResponseEntity.ok(
+                    ReloadConfigResponse(
+                        status = "reloaded",
+                        changedKeys = outcome.refresh.getOrThrow().sorted(),
+                        componentProfiles = profiles,
+                    ),
+                )
+        }
     }
 
     /**
@@ -138,9 +229,36 @@ class AdminControllerV4(
      * message instead of an opaque 500; the DB cache is left untouched (no-clobber).
      */
     @ExceptionHandler(ConfigValidationException::class)
-    fun handleConfigValidation(e: ConfigValidationException): ResponseEntity<Map<String, Any?>> =
+    fun handleConfigValidation(e: ConfigValidationException): ResponseEntity<Any> = configValidationFailed(e, null)
+
+    /**
+     * Any other refresh failure — a value Spring cannot bind, say. The profiles were reloaded all the
+     * same, so the response still carries their outcome; the administrator must see whether they changed.
+     */
+    private fun refreshFailed(
+        e: Throwable,
+        profiles: ComponentProfilesReloadResponse,
+    ): ResponseEntity<Any> {
+        log.error("Configuration refresh failed; component profiles reloaded with status {}", profiles.status, e)
+        return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body(
+            ReloadConfigFailureResponse(
+                error = "config-refresh",
+                message = e.message ?: "Configuration refresh failed",
+                componentProfiles = profiles,
+            ),
+        )
+    }
+
+    private fun configValidationFailed(
+        e: ConfigValidationException,
+        profiles: ComponentProfilesReloadResponse?,
+    ): ResponseEntity<Any> =
         ResponseEntity.status(HttpStatus.UNPROCESSABLE_ENTITY).body(
-            mapOf("error" to "config-validation", "message" to (e.message ?: "Invalid configuration")),
+            ReloadConfigFailureResponse(
+                error = "config-validation",
+                message = e.message ?: "Invalid configuration",
+                componentProfiles = profiles,
+            ),
         )
 
     /**
@@ -299,29 +417,13 @@ class AdminControllerV4(
         return ResponseEntity.ok(TeamcityValidationJobResponse.from(state))
     }
 
-    /**
-     * Map cross-kind gate conflicts to a structured 409. Same-kind 409 is
-     * NOT routed here — it returns from startAsync as `isNewlyStarted=false`
-     * with the existing job state body so the SPA can attach.
-     */
-    @ExceptionHandler(MigrationConflictException::class)
-    fun handleCrossKindConflict(e: MigrationConflictException): ResponseEntity<MigrationConflictResponse> {
-        val code =
-            when (e.active.kind) {
-                MigrationLifecycleGate.JobKind.COMPONENTS -> "components-migration-running"
-                MigrationLifecycleGate.JobKind.HISTORY -> "history-migration-running"
-                MigrationLifecycleGate.JobKind.TC_RESYNC -> "tc-resync-running"
-                MigrationLifecycleGate.JobKind.TC_VALIDATION -> "tc-validation-running"
-            }
-        return ResponseEntity.status(HttpStatus.CONFLICT).body(
-            MigrationConflictResponse(
-                code = code,
-                message = e.message ?: "Cross-kind migration conflict",
-                activeKind = e.active.kind.name,
-                activeJobId = e.active.jobId,
-            ),
-        )
-    }
+    // Cross-kind gate conflicts (MigrationConflictException -> 409 MigrationConflictResponse) are
+    // handled globally by ControllerExceptionHandler (@ControllerAdvice) — not locally here — so
+    // the mapping also covers other controllers whose jobs share MigrationLifecycleGate
+    // (TeamcityCheckoutLayoutControllerV4's Diff/Sync). A local @ExceptionHandler only ever sees
+    // exceptions thrown by ITS OWN controller's methods. Same-kind 409 is NOT routed through an
+    // exception at all — it returns from startAsync as `isNewlyStarted=false` with the existing
+    // job state body so the SPA can attach.
 }
 
 /**

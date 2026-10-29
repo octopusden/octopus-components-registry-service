@@ -21,6 +21,14 @@ components-registry:
       - "3.6"
       - "3.6.3"
       - "3.9"
+      - "3.10"
+
+  # SYS-099: component keys that may carry testComponent = true (regexes, find semantics).
+  # service-config replaces the whole list per installation; served via /meta/test-component-name-patterns.
+  test-components:
+    name-patterns:
+      - "^test-"
+      - "^cvelab-"
 
   # Admin config-as-code BASELINE (product defaults). service-config overrides
   # per installation, merging at the property-leaf level (see ADR-016). Keep
@@ -37,6 +45,7 @@ components-registry:
       name:                 { visibility: editable, searchable: Extended, required: true }
       displayName:          { visibility: editable, searchable: Extended }
       solution:             { visibility: editable, searchable: Extended }
+      autoRelease:          { visibility: editable, searchable: Extended }
       componentOwner:       { visibility: editable, searchable: Main }
       system:               { visibility: editable, searchable: Main }
       productType:          { visibility: editable, searchable: Extended }
@@ -216,6 +225,12 @@ octopus-security:
       - ACCESS_COMPONENTS
       - CREATE_COMPONENTS
       - ACCESS_AUDIT
+    # Creates components only from templates, without overrides. CREATE_COMPONENTS
+    # already includes creating from a template, so the other creating roles do not list it.
+    ROLE_COMPONENTS_REGISTRY_TEMPLATE_CREATOR:
+      - ACCESS_COMPONENTS
+      - ACCESS_AUDIT
+      - CREATE_FROM_TEMPLATE
     # Super-admin — reuses the existing Keycloak realm-role `ADMIN`
     # (bare; converter prefixes ROLE_). F1_ADMIN is a separate f1-security
     # legacy role, not used here.
