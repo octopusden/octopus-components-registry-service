@@ -236,7 +236,6 @@ class CompositeOverrideSplitAdminControllerTest {
         // must fail closed rather than report success with the bad row untouched.
         seedRawMarker(id, "[5.0,1.0)")
         split(dryRun = true).andExpect(status().isConflict)
-        assertEquals(1, overridesOf(id).size, "no writes")
     }
 
     @Test

@@ -2838,10 +2838,10 @@ touching other admin endpoints. `POST /field-overrides/split-composites?dryRun={
 Robustness (review-hardened): the collision preflight inspects EVERY intersecting sibling (a segment is
 skipped only when byte-identical + identical ordered payload, and any other intersecting sibling still
 aborts); every produced segment is validated through the production `VersionRangeFactory` (a
-regex-accepted but factory-invalid segment aborts); the manifest token is a control-delimited,
-length-prefixed, null-marked, sorted encoding (each field `<length>:<value>`, injective). Configuration rows have no optimistic-lock version, so the
-operation MUST run in a maintenance window with the registry quiesced (no concurrent edits) — the token
-covers the dry-run→write gap, quiescence covers the write itself.
+regex-accepted but factory-invalid segment aborts); the manifest token is a length-prefixed, null-marked,
+sorted encoding (each field `<length>:<value>`, injective). Configuration rows have no optimistic-lock
+version, so the operation MUST run in a maintenance window with the registry quiesced (no concurrent
+edits) — the token covers the dry-run→write gap, quiescence covers the write itself.
 
 **Acceptance criteria:**
 1. Dry-run returns the manifest + token and writes nothing.
