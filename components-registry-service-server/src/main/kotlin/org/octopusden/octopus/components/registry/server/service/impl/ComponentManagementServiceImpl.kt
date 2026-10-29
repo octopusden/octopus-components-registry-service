@@ -16,6 +16,8 @@ import org.octopusden.octopus.components.registry.server.dto.v4.ComponentEditors
 import org.octopusden.octopus.components.registry.server.dto.v4.ComponentFilter
 import org.octopusden.octopus.components.registry.server.dto.v4.ComponentSummaryResponse
 import org.octopusden.octopus.components.registry.server.dto.v4.ComponentUpdateRequest
+import org.octopusden.octopus.components.registry.server.dto.v4.CompositeOverrideSplitEntry
+import org.octopusden.octopus.components.registry.server.dto.v4.CompositeOverrideSplitResult
 import org.octopusden.octopus.components.registry.server.dto.v4.DockerImageRequest
 import org.octopusden.octopus.components.registry.server.dto.v4.FieldOverrideCreateRequest
 import org.octopusden.octopus.components.registry.server.dto.v4.FieldOverrideResponse
@@ -92,6 +94,7 @@ import org.octopusden.octopus.components.registry.server.security.CurrentUserRes
 import org.octopusden.octopus.components.registry.server.security.PermissionEvaluator
 import org.octopusden.octopus.components.registry.server.service.ComponentManagementService
 import org.octopusden.octopus.components.registry.server.service.ComponentSourceRegistry
+import org.octopusden.octopus.components.registry.server.service.CompositeOverrideSplitAbortedException
 import org.octopusden.octopus.components.registry.server.service.RenderedComponentCode
 import org.octopusden.octopus.components.registry.server.service.TestComponentFlags
 import org.octopusden.octopus.components.registry.server.service.rms.ComponentBuildRanges
@@ -129,6 +132,7 @@ import org.springframework.transaction.annotation.Transactional
 import org.springframework.transaction.support.TransactionTemplate
 import org.springframework.web.server.ResponseStatusException
 import java.nio.file.Files
+import java.security.MessageDigest
 import java.time.Instant
 import java.util.UUID
 
@@ -4831,6 +4835,387 @@ class ComponentManagementServiceImpl(
                 },
         )
 
+    // ── SYS-066: one-off composite field-override split ──────────────────────
+
+    private data class SplitPlan(
+        val row: ComponentConfigurationEntity,
+        val segments: List<String>,
+    )
+
+    private data class ResolvedPlan(
+        val row: ComponentConfigurationEntity,
+        val segments: List<String>,
+        val segmentsToCreate: List<String>,
+        val skipped: Int,
+    )
+
+    override fun splitCompositeFieldOverrides(
+        dryRun: Boolean,
+        manifestToken: String?,
+    ): CompositeOverrideSplitResult {
+        val plans = discoverCompositeSplits()
+        requireSplitsInScope(plans)
+        val resolved = plans.map(::resolveSplit)
+        val manifest = splitManifest(resolved)
+        val token = splitManifestToken(resolved)
+
+        if (dryRun) {
+            return compositeSplitResult(
+                dryRun = true,
+                token = token,
+                resolved = resolved.size,
+                created = resolved.sumOf { it.segmentsToCreate.size },
+                skipped = resolved.sumOf { it.skipped },
+                components = plans.map { it.row.component.id }.distinct().size,
+                manifest = manifest,
+            )
+        }
+
+        requireManifestTokenMatches(manifestToken, token)
+        val components = applySplits(resolved)
+
+        return compositeSplitResult(
+            dryRun = false,
+            token = token,
+            resolved = resolved.size,
+            created = resolved.sumOf { it.segmentsToCreate.size },
+            skipped = resolved.sumOf { it.skipped },
+            components = components,
+            manifest = manifest,
+        )
+    }
+
+    /** 1. Composite field-override rows (one-off scope → full scan). A single-segment row is not composite. */
+    private fun discoverCompositeSplits(): List<SplitPlan> =
+        configurationRepository
+            .findAll()
+            .filter { it.rowType in fieldOverrideRowTypes }
+            .filterNot { VersionRangePartition.isAllVersions(it.versionRange) }
+            .mapNotNull(::compositeSplitPlan)
+
+    private fun compositeSplitPlan(row: ComponentConfigurationEntity): SplitPlan? {
+        val segments =
+            try {
+                VersionRangePartition.splitCompositeStrict(row.versionRange)
+            } catch (e: IllegalArgumentException) {
+                throw CompositeOverrideSplitAbortedException(
+                    "Malformed field-override range '${row.versionRange}' on component " +
+                        "'${row.component.componentKey}': ${e.message}. Aborting; no rows changed.",
+                    e,
+                )
+            }
+        // The regex splitter is permissive (e.g. it accepts `[3,]`). Validate every produced
+        // segment through the production VersionRangeFactory, including a single segment, so a
+        // malformed row aborts here rather than being left behind or written as a bad row.
+        segments.forEach { requireValidSegment(row, it) }
+        return if (segments.size > 1) SplitPlan(row, segments) else null
+    }
+
+    private fun requireValidSegment(
+        row: ComponentConfigurationEntity,
+        segment: String,
+    ) {
+        runCatching { versionRangeFactory.create(normalizeRange(segment)) }.onFailure {
+            throw CompositeOverrideSplitAbortedException(
+                "Field-override range '${row.versionRange}' on component " +
+                    "'${row.component.componentKey}' yields an invalid segment '$segment' " +
+                    "(${it.message}). Aborting; no rows changed.",
+            )
+        }
+    }
+
+    /** 2. Fail-closed scope guard: the approved manifest is exclusively vcs.settings MARKER rows. */
+    private fun requireSplitsInScope(plans: List<SplitPlan>) {
+        val outOfScope =
+            plans.filterNot {
+                it.row.rowType == "MARKER" && it.row.overriddenAttribute == MarkerAttributes.VCS_SETTINGS
+            }
+        if (outOfScope.isEmpty()) return
+        val offenders =
+            outOfScope.joinToString("; ") {
+                "${it.row.component.componentKey}:${it.row.overriddenAttribute}='${it.row.versionRange}'"
+            }
+        throw CompositeOverrideSplitAbortedException(
+            "Refusing to split composite overrides on attributes other than 'vcs.settings' " +
+                "(needs human review): $offenders. Aborting; no rows changed.",
+        )
+    }
+
+    /**
+     * 3. Preflight one plan before any write. A segment already covered by an identical sibling is
+     *    skipped (not recreated).
+     */
+    private fun resolveSplit(plan: SplitPlan): ResolvedPlan {
+        val row = plan.row
+        val attribute = row.overriddenAttribute!!
+        requireCopyableChildren(row)
+        requireDisjointSegments(plan)
+        val siblings =
+            row.component.configurations.filter {
+                it.id != row.id && it.overriddenAttribute == attribute && it.rowType in fieldOverrideRowTypes
+            }
+        val toCreate = mutableListOf<String>()
+        var skipped = 0
+        for (segment in plan.segments) {
+            if (isCoveredByIdenticalSibling(row, segment, siblings)) skipped++ else toCreate += segment
+        }
+        return ResolvedPlan(row, plan.segments, toCreate, skipped)
+    }
+
+    /**
+     * Copy-completeness guard: the split deep-copies ONLY vcsEntries. A well-formed vcs.settings MARKER
+     * carries nothing else; if a corrupt legacy row also holds any other child collection, abort rather
+     * than silently drop it on the delete.
+     */
+    private fun requireCopyableChildren(row: ComponentConfigurationEntity) {
+        val nonVcsChildren =
+            listOf<List<*>>(
+                row.mavenArtifacts,
+                row.fileUrlArtifacts,
+                row.dockerImages,
+                row.packages,
+                row.requiredToolJunctions,
+                row.buildToolBeans,
+            )
+        if (nonVcsChildren.any { it.isNotEmpty() }) {
+            throw CompositeOverrideSplitAbortedException(
+                "Composite '${row.versionRange}' on '${row.component.componentKey}' carries non-VCS " +
+                    "child data the split does not copy. Aborting; no rows changed.",
+            )
+        }
+    }
+
+    /**
+     * A composite's own segments must be mutually disjoint (a malformed legacy value like [1,3),[2,4)
+     * parses cleanly yet overlaps → cannot split unambiguously).
+     */
+    private fun requireDisjointSegments(plan: SplitPlan) {
+        val segments = plan.segments
+        for (i in segments.indices) {
+            for (j in i + 1 until segments.size) {
+                if (rangesIntersectFailClosed(segments[i], segments[j])) {
+                    throw CompositeOverrideSplitAbortedException(
+                        "Composite '${plan.row.versionRange}' on '${plan.row.component.componentKey}' has " +
+                            "overlapping segments ('${segments[i]}' ∩ '${segments[j]}'). " +
+                            "Aborting; no rows changed.",
+                    )
+                }
+            }
+        }
+    }
+
+    /**
+     * Each segment vs every OTHER override row on the same (component, attribute). Returns true when the
+     * segment may be SKIPPED: the sibling is the SAME interval with an identical payload (already covered
+     * identically). Equality is decided by exact canonical-string match, NOT the DefaultArtifactVersion-based
+     * simpleContains: a false "equal" here would DELETE the composite while skipping creation → silent
+     * coverage loss, so we fail closed on anything but a byte-identical range. Do NOT break on the first
+     * identical sibling — keep inspecting the rest, because a SEPARATE sibling could still partially overlap
+     * this segment (deleting the composite would then change that region's resolver precedence). Any
+     * intersection that is not a byte-identical duplicate aborts.
+     */
+    private fun isCoveredByIdenticalSibling(
+        row: ComponentConfigurationEntity,
+        segment: String,
+        siblings: List<ComponentConfigurationEntity>,
+    ): Boolean {
+        var duplicate = false
+        for (sibling in siblings) {
+            if (!rangesIntersectFailClosed(segment, sibling.versionRange)) continue
+            if (normalizeRange(segment) == normalizeRange(sibling.versionRange) && vcsPayloadEqual(row, sibling)) {
+                duplicate = true
+                continue
+            }
+            throw CompositeOverrideSplitAbortedException(
+                "Segment '$segment' of composite '${row.versionRange}' on " +
+                    "'${row.component.componentKey}' intersects existing override " +
+                    "'${sibling.versionRange}'. Aborting; no rows changed.",
+            )
+        }
+        return duplicate
+    }
+
+    /** 4. Manifest in canonical order, independent of DB row order. */
+    private fun splitManifest(resolved: List<ResolvedPlan>): List<CompositeOverrideSplitEntry> =
+        resolved
+            .map { rp ->
+                CompositeOverrideSplitEntry(
+                    componentKey = rp.row.component.componentKey,
+                    overriddenAttribute = rp.row.overriddenAttribute!!,
+                    originalRange = rp.row.versionRange,
+                    segments = rp.segments,
+                    vcsEntryCount = rp.row.vcsEntries.size,
+                )
+            }.sortedWith(
+                compareBy({ it.componentKey }, { it.overriddenAttribute }, { normalizeRange(it.originalRange) }),
+            )
+
+    /** Deterministic token over the same canonical order as [splitManifest]. */
+    private fun splitManifestToken(resolved: List<ResolvedPlan>): String =
+        sha256Hex(encodeFields(resolved.map(::splitPreimageRow).sorted()))
+
+    private fun splitPreimageRow(rp: ResolvedPlan): String {
+        val row = rp.row
+        val entries =
+            row.vcsEntries
+                .sortedBy { it.sortOrder }
+                .map { encodeFields(splitPreimageEntry(it)) }
+        return encodeFields(
+            listOf(
+                row.component.componentKey,
+                row.overriddenAttribute,
+                normalizeRange(row.versionRange),
+                encodeFields(rp.segmentsToCreate.sorted()),
+                rp.skipped.toString(),
+                encodeFields(entries),
+            ),
+        )
+    }
+
+    private fun splitPreimageEntry(e: VcsSettingsEntryEntity): List<String?> =
+        listOf(
+            e.name,
+            e.vcsPath,
+            e.branch,
+            e.tag,
+            e.hotfixBranch,
+            e.repositoryType,
+            e.sortOrder.toString(),
+        )
+
+    /** 6. Write: bind to the reviewed manifest. */
+    private fun requireManifestTokenMatches(
+        manifestToken: String?,
+        token: String,
+    ) {
+        if (manifestToken.isNullOrBlank()) {
+            throw CompositeOverrideSplitAbortedException(
+                "A write (dryRun=false) requires the manifestToken from a preceding dry-run. Aborting.",
+            )
+        }
+        if (manifestToken != token) {
+            throw CompositeOverrideSplitAbortedException(
+                "manifestToken does not match the current data (it changed since the dry-run was " +
+                    "reviewed). Re-run dryRun=true and review again. Aborting; no rows changed.",
+            )
+        }
+    }
+
+    /**
+     * 7. Apply: create single-segment rows (deep-copying vcs entries), delete the composite, audit per
+     * component, then bump each affected component's @Version once. Returns the affected component count.
+     */
+    private fun applySplits(resolved: List<ResolvedPlan>): Int {
+        val affected = LinkedHashSet<ComponentEntity>()
+        resolved.forEach { rp ->
+            applySplit(rp)
+            affected += rp.row.component
+        }
+        affected.forEach { bumpParentVersion(it) }
+        return affected.size
+    }
+
+    private fun applySplit(rp: ResolvedPlan) {
+        val row = rp.row
+        val component = row.component
+        val before = fieldOverrideAuditSnapshot(row)
+        rp.segmentsToCreate.forEach { segment ->
+            val newRow = splitRowCopy(row, segment)
+            component.configurations.add(newRow)
+            configurationRepository.save(newRow)
+        }
+        // ComponentEntity.configurations is orphanRemoval = true: removing the row from the collection deletes it
+        // (and its cascaded vcsEntries) at flush.
+        component.configurations.remove(row)
+        publishAuditEvent(
+            action = "UPDATE",
+            entityId = component.id.toString(),
+            oldValue = before,
+            newValue =
+                mapOf(
+                    "fieldOverride[${row.overriddenAttribute}]" to
+                        mapOf("splitInto" to rp.segmentsToCreate, "skippedDuplicates" to rp.skipped),
+                ),
+        )
+    }
+
+    private fun splitRowCopy(
+        row: ComponentConfigurationEntity,
+        segment: String,
+    ): ComponentConfigurationEntity {
+        val newRow =
+            ComponentConfigurationEntity(
+                component = row.component,
+                versionRange = segment,
+                overriddenAttribute = row.overriddenAttribute,
+                rowType = "MARKER",
+            )
+        row.vcsEntries.sortedBy { it.sortOrder }.forEach { e ->
+            newRow.vcsEntries.add(
+                VcsSettingsEntryEntity(
+                    componentConfiguration = newRow,
+                    name = e.name,
+                    vcsPath = e.vcsPath,
+                    branch = e.branch,
+                    tag = e.tag,
+                    hotfixBranch = e.hotfixBranch,
+                    repositoryType = e.repositoryType,
+                    sortOrder = e.sortOrder,
+                ),
+            )
+        }
+        return newRow
+    }
+
+    private fun compositeSplitResult(
+        dryRun: Boolean,
+        token: String,
+        resolved: Int,
+        created: Int,
+        skipped: Int,
+        components: Int,
+        manifest: List<CompositeOverrideSplitEntry>,
+    ) = CompositeOverrideSplitResult(
+        dryRun = dryRun,
+        manifestToken = token,
+        rowsSplit = resolved,
+        segmentsCreated = created,
+        segmentsSkippedAsDuplicate = skipped,
+        componentsAffected = components,
+        manifest = manifest,
+    )
+
+    /** Intersection via the releng factory; UNPARSEABLE → treated as intersecting (fail-closed). */
+    private fun rangesIntersectFailClosed(
+        a: String,
+        b: String,
+    ): Boolean =
+        runCatching {
+            versionRangeFactory.create(normalizeRange(a)).isIntersect(versionRangeFactory.create(normalizeRange(b)))
+        }.getOrDefault(true)
+
+    /** Ordered (by sortOrder) vcs-entry payload equality — sortOrder is output-affecting (V4Mappers). */
+    private fun vcsPayloadEqual(
+        a: ComponentConfigurationEntity,
+        b: ComponentConfigurationEntity,
+    ): Boolean {
+        fun sig(e: VcsSettingsEntryEntity) = listOf(e.name, e.vcsPath, e.branch, e.tag, e.hotfixBranch, e.repositoryType, e.sortOrder)
+        return a.vcsEntries.sortedBy { it.sortOrder }.map(::sig) == b.vcsEntries.sortedBy { it.sortOrder }.map(::sig)
+    }
+
+    /**
+     * Injective encoding of a field list: each non-null field is written as `<length>:<value>` and a null
+     * as [NULL_FIELD]. A reader can always recover the exact field boundaries, so no field content (even a
+     * control character) can imitate a boundary.
+     */
+    private fun encodeFields(fields: List<String?>): String = fields.joinToString("") { if (it == null) NULL_FIELD else "${it.length}:$it" }
+
+    private fun sha256Hex(input: String): String =
+        MessageDigest
+            .getInstance("SHA-256")
+            .digest(input.toByteArray(Charsets.UTF_8))
+            .joinToString("") { "%02x".format(it) }
+
     /**
      * Snapshot of a field-override row for the audit trail, keyed by the
      * overridden attribute so the change reads as `fieldOverride[<attr>]` in the
@@ -4884,6 +5269,10 @@ class ComponentManagementServiceImpl(
 
     private companion object {
         private val log = org.slf4j.LoggerFactory.getLogger(ComponentManagementServiceImpl::class.java)
+
+        // SYS-066 manifest-token marker for a SQL NULL field; a present field is always `<length>:<value>`,
+        // so this cannot collide with a value.
+        private const val NULL_FIELD = "n"
 
         private const val AUTO_RELEASE_FIELD = "component.autoRelease"
 
