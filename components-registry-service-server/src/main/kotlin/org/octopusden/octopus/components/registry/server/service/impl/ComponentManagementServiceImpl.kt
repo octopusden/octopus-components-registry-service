@@ -4904,12 +4904,11 @@ class ComponentManagementServiceImpl(
                     e,
                 )
             }
-        if (segments.size <= 1) return null
         // The regex splitter is permissive (e.g. it accepts `[3,]`). Validate every produced
-        // segment through the production VersionRangeFactory so a malformed segment aborts
-        // here rather than being written as a bad row or mishandled by the collision check.
+        // segment through the production VersionRangeFactory, including a single segment, so a
+        // malformed row aborts here rather than being left behind or written as a bad row.
         segments.forEach { requireValidSegment(row, it) }
-        return SplitPlan(row, segments)
+        return if (segments.size > 1) SplitPlan(row, segments) else null
     }
 
     private fun requireValidSegment(
