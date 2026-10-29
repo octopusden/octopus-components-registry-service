@@ -5208,8 +5208,7 @@ class ComponentManagementServiceImpl(
      * as [NULL_FIELD]. A reader can always recover the exact field boundaries, so no field content (even a
      * control character) can imitate a boundary.
      */
-    private fun encodeFields(fields: List<String?>): String =
-        fields.joinToString("") { if (it == null) NULL_FIELD else "${it.length}:$it" }
+    private fun encodeFields(fields: List<String?>): String = fields.joinToString("") { if (it == null) NULL_FIELD else "${it.length}:$it" }
 
     private fun sha256Hex(input: String): String =
         MessageDigest
