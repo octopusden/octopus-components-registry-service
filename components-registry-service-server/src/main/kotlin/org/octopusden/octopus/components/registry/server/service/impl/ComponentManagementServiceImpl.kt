@@ -5124,8 +5124,9 @@ class ComponentManagementServiceImpl(
             component.configurations.add(newRow)
             configurationRepository.save(newRow)
         }
+        // ComponentEntity.configurations is orphanRemoval = true, so removing the row from the collection is the
+        // only delete needed. An explicit repository delete as well would schedule the same row twice.
         component.configurations.remove(row)
-        configurationRepository.delete(row)
         publishAuditEvent(
             action = "UPDATE",
             entityId = component.id.toString(),
