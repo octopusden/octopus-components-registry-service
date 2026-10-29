@@ -217,6 +217,17 @@ class CompositeOverrideSplitAdminControllerTest {
     }
 
     @Test
+    @DisplayName("SYS-066: a malformed single-segment range aborts (409) instead of being left behind")
+    fun `SYS-066 malformed single segment aborts`() {
+        val id = newComponent()
+        // A reversed single segment is not composite, but it is still a malformed override: the operation
+        // must fail closed rather than report success with the bad row untouched.
+        seedRawMarker(id, "[5.0,1.0)")
+        split(dryRun = true).andExpect(status().isConflict)
+        assertEquals(1, overridesOf(id).size, "no writes")
+    }
+
+    @Test
     @DisplayName("SYS-066: an identical AND a conflicting sibling on one segment both get checked (no early-break bypass)")
     fun `SYS-066 all intersecting siblings are inspected`() {
         val id = newComponent()
