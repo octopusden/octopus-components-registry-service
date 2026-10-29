@@ -14,7 +14,7 @@ import org.springframework.web.bind.annotation.RequestMapping
 import org.springframework.web.bind.annotation.RestController
 
 /**
- * SYS-106: distribution preview for a component over a candidate override set.
+ * SYS-107: distribution preview for a component over a candidate override set.
  *
  * A read: it requires `ACCESS_COMPONENTS` like getComponent, never edit rights. Being a POST it
  * falls to the authenticated `rest/api/4` catch-all in WebSecurityConfig, so an anonymous caller

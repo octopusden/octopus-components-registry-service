@@ -200,7 +200,7 @@ class ComponentDisplayNameEditorsV4Test {
                 .andReturn()
                 .response.contentAsString
         val versions = objectMapper.readTree(result).map { it.asText() }
-        assert(versions == listOf("2.2.1", "3", "3.3.9", "3.6", "3.6.3", "3.9")) {
+        assert(versions == listOf("2.2.1", "3", "3.3.9", "3.6", "3.6.3", "3.9", "3.10")) {
             "expected configured Maven versions numeric-sorted; got $versions"
         }
     }

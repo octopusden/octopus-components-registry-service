@@ -18,7 +18,7 @@ refresh it with `./gradlew :components-registry-service-server:generateOpenApiDo
 
 ## Unreleased
 
-- **`POST /rest/api/4/components/{idOrName}/distribution/preview` added (SYS-106).** Read-only:
+- **`POST /rest/api/4/components/{idOrName}/distribution/preview` added (SYS-107).** Read-only:
   for a concrete `version`, reports which source each `distribution.*` marker path takes over a
   candidate override set. Body `DistributionPreviewRequest { version, fieldOverrides?,
   supportedVersions? }` — `fieldOverrides` is the `FieldOverrideUpsertRequest` list a component PATCH

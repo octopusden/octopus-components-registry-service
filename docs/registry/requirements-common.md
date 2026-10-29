@@ -98,7 +98,9 @@
 | SYS-103 | `ClassicComponentsRegistryServiceClient` takes the retry policy for retryable failures (503, I/O errors) from its caller (`Retryer` constructor parameter); without one it keeps the default of 5 attempts, backoff 100 ms – 1 s (`defaultRetryer()`); the policy is per request, so one call exhausting it does not shorten the next | Medium | unit-test | ✅ Tested |
 | SYS-104 | Component flag `autoRelease` (default false), DB and v4 only: create/update requests, summary/detail responses, `?autoRelease=` list filter, field-config visibility/editability; an admin-started TeamCity resync turns it on (never off) when every linked release line has a finish-build trigger and nobody has changed the flag; the weekly cron only with `teamcity.sync.auto-release-on-cron` | Medium | unit + integration-test | ✅ Tested |
 | SYS-105 | Template-only creators: the permission `CREATE_FROM_TEMPLATE` (role `ROLE_COMPONENTS_REGISTRY_TEMPLATE_CREATOR`, with `ACCESS_COMPONENTS` and `ACCESS_AUDIT`) lets a caller without `CREATE_COMPONENTS` create components from templates only: templates usable, regular profiles unusable with "You may create components from templates only", any template override `403`, the regular create `403`. `CREATE_COMPONENTS` keeps every right and wins over it; editing by ownership is unchanged | High | unit + integration-test | ✅ Tested |
-| SYS-106 | `POST /rest/api/4/components/{idOrName}/distribution/preview` resolves, for a concrete version, which source each `distribution.*` marker path takes — `BASE`, `OVERRIDE` (one matching range) or `CONFLICT` (several) — over a **candidate** override set (when present it replaces the saved set entirely) and candidate supported versions sent by the caller (omitted = saved state), with the resolver's own containment, ordering and coverage-gate semantics; one path entry per family, ranges echoed exactly as sent; a version outside coverage answers `supported=false` with no paths, not 404; unparseable override ranges never match and are listed per path; only a missing, blank or non-numeric `version` is 400; read-only, `ACCESS_COMPONENTS` | High | unit + integration-test | ✅ Tested |
+| SYS-106 | `component-validation` module: `MavenVersionResolver` takes the whole version from a `MAVEN/<version>` path segment (`/` or `\`, e.g. `BUILD_ENV/MAVEN/3.10`), so `3.6`, `3.9` and `3.10` stay distinct versions instead of resolving to `3`; `LATEST` and the known-token fallback for values without such a segment are unchanged | High | unit-test | ✅ Tested |
+
+| SYS-107 | `POST /rest/api/4/components/{idOrName}/distribution/preview` resolves, for a concrete version, which source each `distribution.*` marker path takes — `BASE`, `OVERRIDE` (one matching range) or `CONFLICT` (several) — over a **candidate** override set (when present it replaces the saved set entirely) and candidate supported versions sent by the caller (omitted = saved state), with the resolver's own containment, ordering and coverage-gate semantics; one path entry per family, ranges echoed exactly as sent; a version outside coverage answers `supported=false` with no paths, not 404; unparseable override ranges never match and are listed per path; only a missing, blank or non-numeric `version` is 400; read-only, `ACCESS_COMPONENTS` | High | unit + integration-test | ✅ Tested |
 
 ---
 
@@ -3788,7 +3790,43 @@ users who may create any component.
 `` `SYS-105 template only creator refused` `` (5); `ComponentOwnershipEditSecurityTest` —
 `` `SYS-105 template only creator owner allowed` `` (7).
 
-### SYS-106: Distribution preview over a candidate override set
+### SYS-106: component-validation — Maven version from the MAVEN/<version> path segment
+
+**Priority:** High
+**Test layer:** unit-test
+**Status:** ✅ Tested
+
+**Motivation:**
+Maven installations are laid out as `BUILD_ENV/MAVEN/<version>`, and installations name those
+directories by line (`3.6`, `3.9`, `3.10`) as well as by full version (`3.6.3`). Matching only
+known tokens resolved every directory other than `3.6.3`/`3.6.0`/`3.3.9`/`LATEST` to the bare `3`,
+so `MULTIPLE_MAVEN_VERSIONS` (SYS-084) did not see steps on `3.6` and `3.9` as different versions.
+
+**Description:**
+`MavenVersionResolver` first looks for a `MAVEN/<version>` path segment (separator `/` or `\`):
+`MAVEN` as a whole path element (at the start of the value or after `/`, `\`, `=`, whitespace or
+a quote), followed by a directory name that is either `LATEST` or a dotted number, ending the value
+or followed by a separator, whitespace or a quote. If found, that whole
+directory name is the Maven version. Otherwise the known-token rule applies unchanged.
+
+**Acceptance criteria:**
+1. `%env.BUILD_ENV%/MAVEN/3.6`, `.../MAVEN/3.9`, `.../MAVEN/3.10`, `.../MAVEN/3.6.3` and
+   `.../MAVEN/LATEST` resolve to `3.6`, `3.9`, `3.10`, `3.6.3` and `LATEST`.
+2. The segment is found inside longer values: `M2_HOME=/opt/BUILD_ENV/MAVEN/3.9`,
+   `/opt/BUILD_ENV/MAVEN/3.10/bin/mvn`, and the Windows form `%%BUILD_ENV%%\MAVEN\3.6\bin\mvn`.
+3. `3.6`, `3.6.3`, `3.9` and `3.10` resolve to four different versions.
+4. `MAVEN` inside a longer path element (`/opt/apache-MAVEN/3.10`) is not a segment; such values
+   resolve by the known-token rule.
+5. Values without the segment resolve as before (known tokens; `null` without a `maven` marker or a
+   known token).
+
+**Test method:** `MavenVersionResolverTest` —
+`` `SYS-106 resolve takes the version from the MAVEN path segment` `` (1, 2),
+`` `SYS-106 different Maven lines are told apart` `` (3),
+`` `SYS-106 MAVEN inside a longer path element falls back to known tokens` `` (4); the existing cases of the same
+class (5).
+
+### SYS-107: Distribution preview over a candidate override set
 
 **Priority:** High
 **Test layer:** unit + integration-test
@@ -3872,28 +3910,28 @@ unevaluableRanges }] }`. Children are not echoed: the caller sent them.
    (whitespace included).
 
 **Test method:** `DistributionPreviewTest` (unit) —
-`` `SYS-106 no override gives BASE on every distribution family` ``,
-`` `SYS-106 one matching override gives OVERRIDE and paths are independent` ``,
-`` `SYS-106 several matching overrides give CONFLICT` ``,
-`` `SYS-106 empty child list is a normal OVERRIDE` ``,
-`` `SYS-106 non-distribution entries are ignored` `` (1);
-`` `SYS-106 version outside coverage is unsupported` ``,
-`` `SYS-106 no restriction supports every version` ``,
-`` `SYS-106 unparseable supported range counts as covering` ``,
-`` `SYS-106 bounded base bounds coverage` ``,
-`` `SYS-106 version in coverage gap is unsupported` `` (2);
-`` `SYS-106 unparseable override range is listed and never matches` `` (3);
-`` `SYS-106 qualified version lies in range` `` (4);
-`` `SYS-106 omitted fields use saved state` ``,
-`` `SYS-106 present fields replace saved state` `` (5);
-`` `SYS-106 non-numeric version is rejected` `` (6);
-`` `SYS-106 ranges are echoed byte-for-byte` `` (7);
-shared helpers `` `SYS-106 overrideRangeContains` ``, `` `SYS-106 coverageRangeContains` ``,
-`` `SYS-106 isInCoverage` ``, `` `SYS-106 normalizeVersionRange` ``.
+`` `SYS-107 no override gives BASE on every distribution family` ``,
+`` `SYS-107 one matching override gives OVERRIDE and paths are independent` ``,
+`` `SYS-107 several matching overrides give CONFLICT` ``,
+`` `SYS-107 empty child list is a normal OVERRIDE` ``,
+`` `SYS-107 non-distribution entries are ignored` `` (1);
+`` `SYS-107 version outside coverage is unsupported` ``,
+`` `SYS-107 no restriction supports every version` ``,
+`` `SYS-107 unparseable supported range counts as covering` ``,
+`` `SYS-107 bounded base bounds coverage` ``,
+`` `SYS-107 version in coverage gap is unsupported` `` (2);
+`` `SYS-107 unparseable override range is listed and never matches` `` (3);
+`` `SYS-107 qualified version lies in range` `` (4);
+`` `SYS-107 omitted fields use saved state` ``,
+`` `SYS-107 present fields replace saved state` `` (5);
+`` `SYS-107 non-numeric version is rejected` `` (6);
+`` `SYS-107 ranges are echoed byte-for-byte` `` (7);
+shared helpers `` `SYS-107 overrideRangeContains` ``, `` `SYS-107 coverageRangeContains` ``,
+`` `SYS-107 isInCoverage` ``, `` `SYS-107 normalizeVersionRange` ``.
 `DistributionPreviewApiTest` (integration) —
-`` `SYS-106 preview evaluates candidate overrides` `` (1, 3, 7),
-`` `SYS-106 saved state agrees with distribution endpoint` `` (5),
-`` `SYS-106 candidate coverage replaces saved coverage` `` (2, 5),
-`` `SYS-106 non-numeric version is 400` ``, `` `SYS-106 missing version is 400` ``,
-`` `SYS-106 unknown component is 404` ``,
-`` `SYS-106 unauthenticated is 401` ``, `` `SYS-106 read permission is required and sufficient` `` (6).
+`` `SYS-107 preview evaluates candidate overrides` `` (1, 3, 7),
+`` `SYS-107 saved state agrees with distribution endpoint` `` (5),
+`` `SYS-107 candidate coverage replaces saved coverage` `` (2, 5),
+`` `SYS-107 non-numeric version is 400` ``, `` `SYS-107 missing version is 400` ``,
+`` `SYS-107 unknown component is 404` ``,
+`` `SYS-107 unauthenticated is 401` ``, `` `SYS-107 read permission is required and sufficient` `` (6).

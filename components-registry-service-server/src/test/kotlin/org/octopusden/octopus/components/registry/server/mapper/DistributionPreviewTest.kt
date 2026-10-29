@@ -21,7 +21,7 @@ import org.octopusden.releng.versions.VersionRangeFactory
 import java.util.UUID
 
 /**
- * SYS-106: distribution preview over a candidate override set, evaluated with real
+ * SYS-107: distribution preview over a candidate override set, evaluated with real
  * version factories, plus the shared containment / coverage helpers the resolver uses.
  */
 class DistributionPreviewTest {
@@ -79,8 +79,8 @@ class DistributionPreviewTest {
     // ── AC1: BASE / OVERRIDE / CONFLICT, paths independent ───────────────────
 
     @Test
-    @DisplayName("SYS-106: no candidate override -> every distribution path is BASE, one entry per family in resolver order")
-    fun `SYS-106 no override gives BASE on every distribution family`() {
+    @DisplayName("SYS-107: no candidate override -> every distribution path is BASE, one entry per family in resolver order")
+    fun `SYS-107 no override gives BASE on every distribution family`() {
         val result = preview("1.5")
         assertTrue(result.supported)
         assertEquals("1.5", result.version)
@@ -105,8 +105,8 @@ class DistributionPreviewTest {
     }
 
     @Test
-    @DisplayName("SYS-106: one matching override -> OVERRIDE with its range; other paths stay independent")
-    fun `SYS-106 one matching override gives OVERRIDE and paths are independent`() {
+    @DisplayName("SYS-107: one matching override -> OVERRIDE with its range; other paths stay independent")
+    fun `SYS-107 one matching override gives OVERRIDE and paths are independent`() {
         val result = preview("1.5", listOf(override(maven, "[1.0,2.0)"), override(docker, "[2.0,3.0)")))
         assertEquals(DistributionPreviewSource.OVERRIDE, result.path(maven).source)
         assertEquals(listOf("[1.0,2.0)"), result.path(maven).matchedRanges)
@@ -116,23 +116,23 @@ class DistributionPreviewTest {
     }
 
     @Test
-    @DisplayName("SYS-106: several matching overrides on one path -> CONFLICT listing all of them in request order")
-    fun `SYS-106 several matching overrides give CONFLICT`() {
+    @DisplayName("SYS-107: several matching overrides on one path -> CONFLICT listing all of them in request order")
+    fun `SYS-107 several matching overrides give CONFLICT`() {
         val result = preview("1.7", listOf(override(maven, "[1.0,2.0)"), override(maven, "[1.5,3.0)"), override(maven, "[5,6)")))
         assertEquals(DistributionPreviewSource.CONFLICT, result.path(maven).source)
         assertEquals(listOf("[1.0,2.0)", "[1.5,3.0)"), result.path(maven).matchedRanges)
     }
 
     @Test
-    @DisplayName("SYS-106: an override with an empty child list is a normal OVERRIDE")
-    fun `SYS-106 empty child list is a normal OVERRIDE`() {
+    @DisplayName("SYS-107: an override with an empty child list is a normal OVERRIDE")
+    fun `SYS-107 empty child list is a normal OVERRIDE`() {
         val result = preview("1.5", listOf(override(maven, "[1.0,2.0)")))
         assertEquals(DistributionPreviewSource.OVERRIDE, result.path(maven).source)
     }
 
     @Test
-    @DisplayName("SYS-106: candidate entries on non-distribution attributes are ignored")
-    fun `SYS-106 non-distribution entries are ignored`() {
+    @DisplayName("SYS-107: candidate entries on non-distribution attributes are ignored")
+    fun `SYS-107 non-distribution entries are ignored`() {
         val result =
             preview(
                 "1.5",
@@ -148,8 +148,8 @@ class DistributionPreviewTest {
     // ── AC2: coverage ────────────────────────────────────────────────────────
 
     @Test
-    @DisplayName("SYS-106: a version outside candidate coverage -> supported=false with no paths")
-    fun `SYS-106 version outside coverage is unsupported`() {
+    @DisplayName("SYS-107: a version outside candidate coverage -> supported=false with no paths")
+    fun `SYS-107 version outside coverage is unsupported`() {
         val coverage = DistributionPreviewCoverage(all = false, ranges = listOf("[1.0,2.0)"))
         val outside = preview("2.5", listOf(override(maven, "[2.0,3.0)")), coverage)
         assertFalse(outside.supported)
@@ -158,16 +158,16 @@ class DistributionPreviewTest {
     }
 
     @Test
-    @DisplayName("SYS-106: no restriction (all=true, or no ranges) -> every version supported")
-    fun `SYS-106 no restriction supports every version`() {
+    @DisplayName("SYS-107: no restriction (all=true, or no ranges) -> every version supported")
+    fun `SYS-107 no restriction supports every version`() {
         assertTrue(preview("99.1", coverage = DistributionPreviewCoverage(all = true, ranges = listOf("[1.0,2.0)"))).supported)
         assertTrue(preview("99.1", coverage = DistributionPreviewCoverage(all = false, ranges = emptyList())).supported)
         assertTrue(preview("99.1", coverage = DistributionPreviewCoverage()).supported)
     }
 
     @Test
-    @DisplayName("SYS-106: an unparseable or blank supported range counts as covering")
-    fun `SYS-106 unparseable supported range counts as covering`() {
+    @DisplayName("SYS-107: an unparseable or blank supported range counts as covering")
+    fun `SYS-107 unparseable supported range counts as covering`() {
         assertTrue(preview("99.1", coverage = DistributionPreviewCoverage(ranges = listOf("[1.0,2.0)", "not-a-range"))).supported)
         assertTrue(preview("99.1", coverage = DistributionPreviewCoverage(ranges = listOf("  "))).supported)
     }
@@ -175,8 +175,8 @@ class DistributionPreviewTest {
     // ── AC3: unparseable override ranges ─────────────────────────────────────
 
     @Test
-    @DisplayName("SYS-106: an unparseable or blank override range never matches and is listed in unevaluableRanges")
-    fun `SYS-106 unparseable override range is listed and never matches`() {
+    @DisplayName("SYS-107: an unparseable or blank override range never matches and is listed in unevaluableRanges")
+    fun `SYS-107 unparseable override range is listed and never matches`() {
         val result = preview("1.5", listOf(override(maven, "not-a-range"), override(maven, "[1.0,2.0)"), override(maven, "")))
         val path = result.path(maven)
         assertEquals(DistributionPreviewSource.OVERRIDE, path.source)
@@ -186,8 +186,8 @@ class DistributionPreviewTest {
     }
 
     @Test
-    @DisplayName("SYS-106: matchedRanges / unevaluableRanges echo each range byte-for-byte as sent")
-    fun `SYS-106 ranges are echoed byte-for-byte`() {
+    @DisplayName("SYS-107: matchedRanges / unevaluableRanges echo each range byte-for-byte as sent")
+    fun `SYS-107 ranges are echoed byte-for-byte`() {
         val result = preview("1.5", listOf(override(maven, " [1.0, 2.0) "), override(docker, " bad range ")))
         assertEquals(DistributionPreviewSource.OVERRIDE, result.path(maven).source)
         assertEquals(listOf(" [1.0, 2.0) "), result.path(maven).matchedRanges)
@@ -197,8 +197,8 @@ class DistributionPreviewTest {
     // ── AC4: qualified versions ──────────────────────────────────────────────
 
     @Test
-    @DisplayName("SYS-106: qualified versions are ordered as at read time (1.2-0003 lies in [1.2,1.3))")
-    fun `SYS-106 qualified version lies in range`() {
+    @DisplayName("SYS-107: qualified versions are ordered as at read time (1.2-0003 lies in [1.2,1.3))")
+    fun `SYS-107 qualified version lies in range`() {
         val overrides = listOf(override(maven, "[1.2,1.3)"))
         assertEquals(DistributionPreviewSource.OVERRIDE, preview("1.2-0003", overrides).path(maven).source)
         assertEquals(DistributionPreviewSource.BASE, preview("1.1-0003", overrides).path(maven).source)
@@ -207,8 +207,8 @@ class DistributionPreviewTest {
     // ── AC5: omitted fields = saved state; explicit fields replace it ────────
 
     @Test
-    @DisplayName("SYS-106: omitted fieldOverrides / supportedVersions use the saved MARKER rows and RANGE_PRESENCE coverage")
-    fun `SYS-106 omitted fields use saved state`() {
+    @DisplayName("SYS-107: omitted fieldOverrides / supportedVersions use the saved MARKER rows and RANGE_PRESENCE coverage")
+    fun `SYS-107 omitted fields use saved state`() {
         val saved =
             component(
                 "RANGE_PRESENCE" to (null to "[1.0,2.0)"),
@@ -223,8 +223,8 @@ class DistributionPreviewTest {
     }
 
     @Test
-    @DisplayName("SYS-106: present fieldOverrides / supportedVersions replace the saved state entirely")
-    fun `SYS-106 present fields replace saved state`() {
+    @DisplayName("SYS-107: present fieldOverrides / supportedVersions replace the saved state entirely")
+    fun `SYS-107 present fields replace saved state`() {
         val saved = component("RANGE_PRESENCE" to (null to "[1.0,2.0)"), "MARKER" to (maven to "[1.0,1.5)"))
         val noOverrides = preview("1.2", overrides = emptyList(), coverage = null, entity = saved)
         assertEquals(DistributionPreviewSource.BASE, noOverrides.path(maven).source)
@@ -232,8 +232,8 @@ class DistributionPreviewTest {
     }
 
     @Test
-    @DisplayName("SYS-106: a bounded base with no presence rows bounds coverage, also under candidate supportedVersions")
-    fun `SYS-106 bounded base bounds coverage`() {
+    @DisplayName("SYS-107: a bounded base with no presence rows bounds coverage, also under candidate supportedVersions")
+    fun `SYS-107 bounded base bounds coverage`() {
         val saved = component(baseRange = "[1.0,2.0)")
         assertTrue(preview("1.5", overrides = null, coverage = null, entity = saved).supported)
         assertFalse(preview("2.5", overrides = null, coverage = null, entity = saved).supported)
@@ -246,8 +246,8 @@ class DistributionPreviewTest {
     }
 
     @Test
-    @DisplayName("SYS-106: a version in the gap between two supported ranges is unsupported")
-    fun `SYS-106 version in coverage gap is unsupported`() {
+    @DisplayName("SYS-107: a version in the gap between two supported ranges is unsupported")
+    fun `SYS-107 version in coverage gap is unsupported`() {
         val saved = component("RANGE_PRESENCE" to (null to "[1.0,2.0)"), "RANGE_PRESENCE" to (null to "[3.0,4.0)"))
         assertFalse(preview("2.5", overrides = null, coverage = null, entity = saved).supported)
         assertTrue(preview("3.5", overrides = null, coverage = null, entity = saved).supported)
@@ -260,8 +260,8 @@ class DistributionPreviewTest {
     // ── AC6 (unit side): version validation ──────────────────────────────────
 
     @Test
-    @DisplayName("SYS-106: a blank or non-numeric version is rejected with a message naming version")
-    fun `SYS-106 non-numeric version is rejected`() {
+    @DisplayName("SYS-107: a blank or non-numeric version is rejected with a message naming version")
+    fun `SYS-107 non-numeric version is rejected`() {
         listOf("abc", "", "   ").forEach { bad ->
             val e = assertThrows<IllegalArgumentException> { preview(bad) }
             assertTrue(e.message!!.startsWith("version"), e.message)
@@ -272,8 +272,8 @@ class DistributionPreviewTest {
     // ── shared helpers (also used by toResolvedEscrowModuleConfig / renderResolved) ──
 
     @Test
-    @DisplayName("SYS-106: override reading - unparseable never matches; containment otherwise")
-    fun `SYS-106 overrideRangeContains`() {
+    @DisplayName("SYS-107: override reading - unparseable never matches; containment otherwise")
+    fun `SYS-107 overrideRangeContains`() {
         assertTrue(rangeFactory.overrideRangeContains("[1.0,2.0)", v("1.5")))
         assertFalse(rangeFactory.overrideRangeContains("[1.0,2.0)", v("2.0")))
         assertFalse(rangeFactory.overrideRangeContains("not-a-range", v("1.5")))
@@ -283,8 +283,8 @@ class DistributionPreviewTest {
     }
 
     @Test
-    @DisplayName("SYS-106: coverage reading - blank, all-versions and unparseable count as containing")
-    fun `SYS-106 coverageRangeContains`() {
+    @DisplayName("SYS-107: coverage reading - blank, all-versions and unparseable count as containing")
+    fun `SYS-107 coverageRangeContains`() {
         assertTrue(rangeFactory.coverageRangeContains(null, v("9")))
         assertTrue(rangeFactory.coverageRangeContains("", v("9")))
         assertTrue(rangeFactory.coverageRangeContains(ALL_VERSIONS, v("9")))
@@ -294,8 +294,8 @@ class DistributionPreviewTest {
     }
 
     @Test
-    @DisplayName("SYS-106: coverage gate - presence ranges united with a bounded base; no restriction supports all")
-    fun `SYS-106 isInCoverage`() {
+    @DisplayName("SYS-107: coverage gate - presence ranges united with a bounded base; no restriction supports all")
+    fun `SYS-107 isInCoverage`() {
         assertTrue(rangeFactory.isInCoverage(emptyList(), ALL_VERSIONS, v("9")))
         assertTrue(rangeFactory.isInCoverage(listOf("[1,2)"), ALL_VERSIONS, v("1.5")))
         assertFalse(rangeFactory.isInCoverage(listOf("[1,2)"), ALL_VERSIONS, v("9")))
@@ -307,8 +307,8 @@ class DistributionPreviewTest {
     }
 
     @Test
-    @DisplayName("SYS-106: candidate ranges are normalised like the save path (trim + strip whitespace)")
-    fun `SYS-106 normalizeVersionRange`() {
+    @DisplayName("SYS-107: candidate ranges are normalised like the save path (trim + strip whitespace)")
+    fun `SYS-107 normalizeVersionRange`() {
         assertEquals("[1.0,2.0)", normalizeVersionRange(" [1.0, 2.0)\t"))
     }
 }

@@ -12,7 +12,7 @@ import org.springframework.stereotype.Service
 import org.springframework.transaction.annotation.Transactional
 import java.util.UUID
 
-/** SYS-106: read-only distribution preview; the evaluation itself is [previewDistribution]. */
+/** SYS-107: read-only distribution preview; the evaluation itself is [previewDistribution]. */
 @ConditionalOnDatabaseEnabled
 @Service
 class DistributionPreviewService(
