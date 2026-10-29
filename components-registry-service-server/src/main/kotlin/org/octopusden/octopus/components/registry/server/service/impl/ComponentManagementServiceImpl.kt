@@ -4917,7 +4917,7 @@ class ComponentManagementServiceImpl(
     ) {
         runCatching { versionRangeFactory.create(normalizeRange(segment)) }.onFailure {
             throw CompositeOverrideSplitAbortedException(
-                "Composite '${row.versionRange}' on component " +
+                "Field-override range '${row.versionRange}' on component " +
                     "'${row.component.componentKey}' yields an invalid segment '$segment' " +
                     "(${it.message}). Aborting; no rows changed.",
             )
