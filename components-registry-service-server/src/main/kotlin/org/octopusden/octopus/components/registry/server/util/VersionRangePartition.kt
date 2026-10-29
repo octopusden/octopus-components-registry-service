@@ -139,7 +139,7 @@ object VersionRangePartition {
             }
         // Defence in depth: the fragments must rejoin to the exact normalized input (guards against a
         // future boundary-regex change that consumes more than the delimiter comma).
-        check(fragments.joinToString(",") == n) {
+        require(fragments.joinToString(",") == n) {
             "Range '$range' did not fully decompose into single segments"
         }
         return segments.map { render(it) }
