@@ -100,6 +100,8 @@
 | SYS-105 | Template-only creators: the permission `CREATE_FROM_TEMPLATE` (role `ROLE_COMPONENTS_REGISTRY_TEMPLATE_CREATOR`, with `ACCESS_COMPONENTS` and `ACCESS_AUDIT`) lets a caller without `CREATE_COMPONENTS` create components from templates only: templates usable, regular profiles unusable with "You may create components from templates only", any template override `403`, the regular create `403`. `CREATE_COMPONENTS` keeps every right and wins over it; editing by ownership is unchanged | High | unit + integration-test | ✅ Tested |
 | SYS-106 | `component-validation` module: `MavenVersionResolver` takes the whole version from a `MAVEN/<version>` path segment (`/` or `\`, e.g. `BUILD_ENV/MAVEN/3.10`), so `3.6`, `3.9` and `3.10` stay distinct versions instead of resolving to `3`; `LATEST` and the known-token fallback for values without such a segment are unchanged | High | unit-test | ✅ Tested |
 
+| SYS-107 | `POST /rest/api/4/components/{idOrName}/distribution/preview` resolves, for a concrete version, which source each `distribution.*` marker path takes — `BASE`, `OVERRIDE` (one matching range) or `CONFLICT` (several) — over a **candidate** override set (when present it replaces the saved set entirely) and candidate supported versions sent by the caller (omitted = saved state), with the resolver's own containment, ordering and coverage-gate semantics; one path entry per family, ranges echoed exactly as sent; a version outside coverage answers `supported=false` with no paths, not 404; unparseable override ranges never match and are listed per path; only a missing, blank or non-numeric `version` is 400; read-only, `ACCESS_COMPONENTS` | High | unit + integration-test | ✅ Tested |
+
 ---
 
 ## Requirements
@@ -3823,3 +3825,113 @@ directory name is the Maven version. Otherwise the known-token rule applies unch
 `` `SYS-106 different Maven lines are told apart` `` (3),
 `` `SYS-106 MAVEN inside a longer path element falls back to known tokens` `` (4); the existing cases of the same
 class (5).
+
+### SYS-107: Distribution preview over a candidate override set
+
+**Priority:** High
+**Test layer:** unit + integration-test
+**Status:** ✅ Tested
+
+**Motivation:**
+The Portal's Distribution tab needs to answer "for version X, which artifacts
+does this component publish, and from which range?" while the user is editing
+overrides that are not saved yet. Answering it client-side would duplicate the
+resolver's version ordering, which handles qualified versions (`1.2-0003`,
+`2.1.0-RC1`, `1.0.0-SNAPSHOT`) that a client mirror would get wrong. A stateless
+endpoint that applies the resolver's own rules to the caller's candidate state
+keeps a single implementation.
+
+**Description:**
+`POST /rest/api/4/components/{idOrName}/distribution/preview`, resolving the
+component exactly as `getComponent` does. Request:
+`{ version, fieldOverrides?, supportedVersions? }` — `fieldOverrides` is the same
+`FieldOverrideUpsertRequest` list a component PATCH sends and, when present,
+**replaces the saved override set entirely** (the PATCH full-set semantics: a
+saved override absent from the list does not participate); only entries on
+`distribution.*` attributes are evaluated, any other entry is ignored.
+`supportedVersions` is `{ all, ranges }` (`all=true` or no ranges = no
+restriction). An omitted field means the saved state: the component's `MARKER`
+rows, and the supported versions `GET .../supported-versions` returns. Nothing is
+persisted.
+
+For the version, using the same `NumericVersionFactory` / `VersionRangeFactory`
+beans and the same shared containment helpers as resolution at read time
+(`toResolvedEscrowModuleConfig`):
+1. **Coverage** — the rule `toResolvedEscrowModuleConfig` applies (MIG-042): with
+   no restriction every version is supported; otherwise the version must lie in
+   a supported range (or a bounded base range), and a blank or unparseable
+   supported range counts as covering. Outside coverage the response is
+   `supported=false` with `paths: []`.
+2. **Per marker path** — one entry for every `distribution.*` marker family the
+   resolver knows (today `distribution.maven`, `distribution.fileUrl`,
+   `distribution.docker`, `distribution.packages`, `distribution.generic`),
+   `BASE` entries included, in
+   the resolver's stable order. Candidate overrides on that attribute whose range
+   contains the version: none → `BASE`; exactly one → `OVERRIDE`; more than one →
+   `CONFLICT`. A candidate set has not been through write validation, so overlap
+   is reported rather than resolved positionally. `matchedRanges` lists the
+   matching ranges. An override whose child list is empty is a normal `OVERRIDE`
+   (it replaces the base with nothing).
+3. An override range that is blank or does not parse never matches (as on the
+   resolve path) and is listed in that path's `unevaluableRanges`.
+4. `matchedRanges` and `unevaluableRanges` echo each override's `versionRange`
+   byte-for-byte as it was sent (or stored); candidate ranges are evaluated in the
+   normalised form a save would store, the echo is never normalised.
+
+Errors: the only `400` is a missing, blank or non-numeric `version` — a blank or
+non-numeric one answers an `errorMessage` starting with `version`; a body without
+`version` is rejected while it is read (`Malformed request body`). Candidate data
+never fails the request. Unknown component →
+`404`.
+
+Response: `{ version, supported, paths: [{ attribute, source, matchedRanges,
+unevaluableRanges }] }`. Children are not echoed: the caller sent them.
+
+**Acceptance criteria:**
+1. No covering override → `BASE`; one → `OVERRIDE` with its range; several →
+   `CONFLICT` with all of them. Paths are independent; `paths` has exactly one
+   entry per `distribution.*` family, and an empty child list is a normal
+   `OVERRIDE`.
+2. A version outside candidate coverage (including one in the gap between two
+   supported ranges, or outside a bounded base range, which candidate
+   `supportedVersions` do not lift) → `supported=false`, `paths: []`; no
+   restriction, or an unparseable supported range, → supported.
+3. A blank or unparseable override range never matches and is listed in
+   `unevaluableRanges`.
+4. Qualified versions are ordered as at read time (`1.2-0003` lies in `[1.2,1.3)`).
+5. Omitted `fieldOverrides` / `supportedVersions` use the saved state; present
+   ones replace it entirely. For a saved component whose ranges are disjoint, the
+   verdict agrees with `GET .../versions/{v}/distribution`.
+6. A blank or non-numeric version → `400` naming `version`; a body without
+   `version` → `400`; unknown component →
+   `404`; unauthenticated → `401`; a caller without `ACCESS_COMPONENTS` → `403`;
+   a caller with `ACCESS_COMPONENTS` and no edit rights → `200`.
+7. `matchedRanges` / `unevaluableRanges` echo each range exactly as sent
+   (whitespace included).
+
+**Test method:** `DistributionPreviewTest` (unit) —
+`` `SYS-107 no override gives BASE on every distribution family` ``,
+`` `SYS-107 one matching override gives OVERRIDE and paths are independent` ``,
+`` `SYS-107 several matching overrides give CONFLICT` ``,
+`` `SYS-107 empty child list is a normal OVERRIDE` ``,
+`` `SYS-107 non-distribution entries are ignored` `` (1);
+`` `SYS-107 version outside coverage is unsupported` ``,
+`` `SYS-107 no restriction supports every version` ``,
+`` `SYS-107 unparseable supported range counts as covering` ``,
+`` `SYS-107 bounded base bounds coverage` ``,
+`` `SYS-107 version in coverage gap is unsupported` `` (2);
+`` `SYS-107 unparseable override range is listed and never matches` `` (3);
+`` `SYS-107 qualified version lies in range` `` (4);
+`` `SYS-107 omitted fields use saved state` ``,
+`` `SYS-107 present fields replace saved state` `` (5);
+`` `SYS-107 non-numeric version is rejected` `` (6);
+`` `SYS-107 ranges are echoed byte-for-byte` `` (7);
+shared helpers `` `SYS-107 overrideRangeContains` ``, `` `SYS-107 coverageRangeContains` ``,
+`` `SYS-107 isInCoverage` ``, `` `SYS-107 normalizeVersionRange` ``.
+`DistributionPreviewApiTest` (integration) —
+`` `SYS-107 preview evaluates candidate overrides` `` (1, 3, 7),
+`` `SYS-107 saved state agrees with distribution endpoint` `` (5),
+`` `SYS-107 candidate coverage replaces saved coverage` `` (2, 5),
+`` `SYS-107 non-numeric version is 400` ``, `` `SYS-107 missing version is 400` ``,
+`` `SYS-107 unknown component is 404` ``,
+`` `SYS-107 unauthenticated is 401` ``, `` `SYS-107 read permission is required and sufficient` `` (6).
