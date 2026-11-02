@@ -110,7 +110,7 @@ dependencies {
 // Hibernate >= 6.6.2 can drop this.
 dependencies {
     constraints {
-        implementation("org.hibernate.orm:hibernate-core:6.6.53.Final")
+        implementation("org.hibernate.orm:hibernate-core:6.6.59.Final")
     }
 }
 
