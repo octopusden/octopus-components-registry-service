@@ -33,47 +33,25 @@ consumer's code: "client" already means an OAuth client (`client-id`,
 
 ## Decision
 
-### 1. Customer data comes from the read service, renamed `octopus-customer-service`
+### 1. Customer data comes from the read service (proposed name `octopus-customer-service`)
 
 Use the dedicated read service, not the onboarding service's `/clients`. It is the
 service built for this, it authenticates callers, and it returns `status`, which validation
 needs. Not going straight to the cache or its database keeps the dependency on the service
 that owns the contract. The cache could later move behind it without consumers noticing.
 
-We propose renaming it **`octopus-customer-service`** and moving it to the octopusden
-GitHub org, following the precedent of `octopus-employee-service`, a public octopusden
-service in front of internal people data that CRS already uses (ADR-015).
-
-**Name rationale:**
-
-| Candidate | Verdict |
-|---|---|
-| `*-client-service` (current) | "client" collides with OAuth and HTTP clients. `ClientServiceClient` is unreadable |
-| `octopus-client-service` | Still ambiguous |
-| `octopus-customer-directory` | The backend services it sits next to all use the `-service` suffix (`employee-service`, `dms-service`, `release-management-service`, `components-registry-service`, …). Without it the name reads like a library or data repo |
-| `octopus-customer-directory-service` | "directory" describes the consumer's role (read-only lookup), not the domain. `employee-service` is the same kind of directory without saying so. It would also mislead once the service owns writes (hosting, waivers) |
-| **`octopus-customer-service`** | **Chosen.** Unambiguous, follows the `octopus-<domain>-service` pattern of its peers, pairs with `octopus-employee-service`, still fits if writes are added |
+A separate cross-team ADR, owned by the service's team, proposes renaming it
+**`octopus-customer-service`** (the current name collides with "OAuth client" and "HTTP
+client" in every consumer), moving it to the octopusden GitHub org after the
+`octopus-employee-service` precedent, and making it the owner of the customer data. This
+ADR uses the proposed name. If the rename is not adopted, only the CRS property prefix and
+class names change.
 
 "Directory" stays at the consumer level: the CRS class is `CustomerDirectoryService`,
 mirroring `EmployeeDirectoryService`.
 
 **Terminology:** customer = the entity, `clientCode` = its identifier. The CRS v4 field
 stays `clientCode`; it is part of the published contract and of the ADR-020 key format.
-The service README must state this mapping so the two names are not read as two entities.
-
-**Move to GitHub.** The move does not affect runtime dependencies: they are per-environment
-config (upstream URL, Keycloak issuer and client, `allowed-callers`, deployment hostname),
-not repo location. CRS and the Portal already run this way. The move needs:
-- packages and `groupId` moved to `org.octopusden.octopus.customer`;
-- a public base image and GitHub Actions on the octopus-base workflows, with images on ghcr;
-- the upstream kept configurable, with no system-of-record names in code;
-- a **fresh git history**, not a mirror, because the old history predates the read/write split;
-- the `server` / `client` / `ft` module layout of `octopus-employee-service`, so CRS
-  consumes a published Kotlin client.
-
-If the rename and the move happen, they should happen **before** CRS is wired in. The
-service name is embedded in its Keycloak client id, and from there in the
-`service-account-*` identities on every allow-list.
 
 ### 2. CRS validates `clientCode` on the v4 write path, mirroring ADR-015
 
@@ -156,8 +134,8 @@ scripts) gets it, not only the Portal form. **Scope is the same as ADR-015:** v4
   (and ownership is set accordingly). An on-demand refresh on the platform side (open
   question 5) would remove this.
 - DSL import still accepts any `clientCode`, as it accepts any person field today.
-- The rename and the move are the platform team's call. If they don't happen, CRS still
-  integrates; only the property prefix and class names change.
+- CRS depends on the upstream's identity: if the service is renamed after CRS is wired in,
+  the CRS Keycloak client stays, but the allow-list entry and URL move with it.
 
 ### Interaction with other ADRs
 - **ADR-015** (employee-service validation): §2 is the same design applied to customers,
@@ -174,10 +152,9 @@ scripts) gets it, not only the Portal form. **Scope is the same as ADR-015:** v4
 2. The exact `status` values, and which of them count as active for a new component
    (seeds `customer-service.active-statuses` / `inactive-statuses`).
 3. Does the read service return internal `_`-prefixed codes, and should they validate?
-4. Rename and move: accepted or not, and when, relative to CRS wiring.
+4. Timing of the rename (separate ADR) relative to CRS wiring.
 5. Can a directory refresh be triggered on demand, for customers created today?
 
 ## References
 - [ADR-015](015-employee-service-runtime-validation.md), [ADR-020](020-component-key-format.md)
-- `octopus-employee-service`: naming and module-layout precedent
 - `GET /rest/api/4/components/meta/client-codes` (SYS-046): the existing "codes in use" list
