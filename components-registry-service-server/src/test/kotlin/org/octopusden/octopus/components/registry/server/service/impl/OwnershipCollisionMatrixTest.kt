@@ -5,6 +5,8 @@ import org.junit.jupiter.api.Assertions.assertTrue
 import org.junit.jupiter.api.DisplayName
 import org.junit.jupiter.api.Test
 import org.octopusden.octopus.components.registry.server.entity.ArtifactIdMode
+import org.octopusden.releng.versions.VersionNames
+import org.octopusden.releng.versions.VersionRangeFactory
 
 /**
  * Pure mode-aware cross-component uniqueness matrix (no Spring). Mirrors the legacy #24/#25 invariant
@@ -13,6 +15,10 @@ import org.octopusden.octopus.components.registry.server.entity.ArtifactIdMode
 class OwnershipCollisionMatrixTest {
     private val always: (String, String) -> Boolean = { _, _ -> true }
     private val base = "(,0),[0,)"
+    private val versionRangeFactory = VersionRangeFactory(VersionNames("serviceCBranch", "serviceC", "minorC"))
+    private val realIntersect: (String, String) -> Boolean = { x, y ->
+        versionRangeFactory.create(x).isIntersect(versionRangeFactory.create(y))
+    }
 
     private fun claim(
         key: String,
@@ -159,6 +165,97 @@ class OwnershipCollisionMatrixTest {
         val intersect: (String, String) -> Boolean = { x, y -> x == base || y == base || x == y }
         assertTrue(
             computeOwnershipCollisions(newA, existingB, intersect, mapOf("B" to setOf("[1,2)"))).isNotEmpty(),
+        )
+    }
+
+    @Test
+    @DisplayName("a base claim is in force only within its component's supported versions (migrated archived w4u)")
+    fun baseClaimClippedToCoverage() {
+        // Archived w4u was migrated with ALL ownership of com.openwaygroup.w4u at all versions, but it is
+        // supported only in its old DSL blocks. The legacy DSL validator compared each block's own range on
+        // both sides, so dbadapter (supported in later versions) never met it there.
+        val newDbadapter =
+            listOf(
+                claim("dbadapter", group = "com.openwaygroup.w4u", mode = ArtifactIdMode.EXPLICIT, tokens = setOf("dbadapter")),
+            )
+        val existingW4u = listOf(claim("w4u", group = "com.openwaygroup.w4u", mode = ArtifactIdMode.ALL))
+
+        assertTrue(computeOwnershipCollisions(newDbadapter, existingW4u, realIntersect).isNotEmpty())
+        assertTrue(
+            computeOwnershipCollisions(
+                newDbadapter,
+                existingW4u,
+                realIntersect,
+                coverageByComponent =
+                    mapOf("w4u" to listOf("[2.4.62-0001,2.4.64-9999]"), "dbadapter" to listOf("[10,)")),
+            ).isEmpty(),
+        )
+    }
+
+    @Test
+    @DisplayName("a per-range claim does not collide with a rival base outside the rival's supported versions (mesh-agent vs mesh-client)")
+    fun perRangeClaimVsBaseOutsideRivalCoverage() {
+        val newMeshAgent =
+            listOf(claim("mesh-agent", group = "com.openwaygroup.mesh", mode = ArtifactIdMode.ALL, range = "[1.0.0,1.1.999)"))
+        val existingMeshClient =
+            listOf(
+                claim("mesh-client", group = "com.openwaygroup.mesh", mode = ArtifactIdMode.EXPLICIT, tokens = setOf("mesh-client")),
+            )
+        assertTrue(
+            computeOwnershipCollisions(
+                newMeshAgent,
+                existingMeshClient,
+                realIntersect,
+                coverageByComponent = mapOf("mesh-client" to listOf("[1.2.0,)")),
+            ).isEmpty(),
+        )
+    }
+
+    @Test
+    @DisplayName("build-suffixed ranges (one with a space after the comma) parse and are pairwise disjoint (archived system)")
+    fun buildSuffixedRangesAreDisjoint() {
+        val ranges =
+            listOf("[1.0.36-0000, 1.0.37-0000)", "[1.0.37-0001,1.0.37-0004]", "[1.0.37-0005,1.0.37-0010]", "[1.0.37-0011,1.0.38-0000)")
+        for (i in ranges.indices) {
+            for (j in i + 1 until ranges.size) {
+                assertEquals(false, realIntersect(ranges[i], ranges[j]), "${ranges[i]} vs ${ranges[j]}")
+            }
+        }
+    }
+
+    @Test
+    @DisplayName("supported versions do not mask a real conflict inside them, on either side")
+    fun coverageKeepsRealConflict() {
+        val coverageB = listOf("[1.0,1.2)", "[1.4,2.0)")
+        val b = listOf(claim("B", mode = ArtifactIdMode.ALL))
+
+        val v =
+            computeOwnershipCollisions(
+                listOf(claim("A", mode = ArtifactIdMode.ALL, range = "[1.5,1.6)")),
+                b,
+                realIntersect,
+                coverageByComponent = mapOf("B" to coverageB),
+            )
+        assertEquals(1, v.size)
+        assertTrue(v.single().contains("'[1.5,1.6)' ∩ '[1.4,2.0)'"), v.single())
+
+        // Both base with bounded coverage: they meet only where both are supported.
+        val baseA = listOf(claim("A", mode = ArtifactIdMode.ALL))
+        assertTrue(
+            computeOwnershipCollisions(
+                baseA,
+                b,
+                realIntersect,
+                coverageByComponent = mapOf("A" to listOf("[1.2,1.4)"), "B" to coverageB),
+            ).isEmpty(),
+        )
+        assertTrue(
+            computeOwnershipCollisions(
+                baseA,
+                b,
+                realIntersect,
+                coverageByComponent = mapOf("A" to listOf("[1.1,1.3)"), "B" to coverageB),
+            ).isNotEmpty(),
         )
     }
 }
