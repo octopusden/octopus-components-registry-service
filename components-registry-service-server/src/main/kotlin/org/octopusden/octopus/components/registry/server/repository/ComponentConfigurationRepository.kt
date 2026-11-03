@@ -2,6 +2,7 @@ package org.octopusden.octopus.components.registry.server.repository
 import org.octopusden.octopus.components.registry.server.entity.ComponentConfigurationEntity
 import org.springframework.data.jpa.repository.JpaRepository
 import org.springframework.data.jpa.repository.Query
+import org.springframework.data.repository.query.Param
 import org.springframework.stereotype.Repository
 import java.util.UUID
 
@@ -40,6 +41,21 @@ interface ComponentConfigurationRepository : JpaRepository<ComponentConfiguratio
             "WHERE comp.archived = false AND cfg.rowType = 'BASE' AND cfg.buildSystem IN ('MAVEN', 'GRADLE')",
     )
     fun findNonArchivedMavenOrGradleComponentKeys(): List<String>
+
+    /**
+     * Bounded supported ranges (`RANGE_PRESENCE` rows) of every component except [excludeComponentId].
+     * A component with no such rows is supported in all versions (ADR-018). Used to limit a rival's
+     * base ownership claim to the versions the rival actually defines.
+     */
+    @Query(
+        "SELECT comp.componentKey AS componentKey, cfg.versionRange AS versionRange " +
+            "FROM ComponentConfigurationEntity cfg " +
+            "JOIN cfg.component comp " +
+            "WHERE cfg.rowType = 'RANGE_PRESENCE' AND comp.id <> :excludeComponentId",
+    )
+    fun findRangePresenceOfOtherComponents(
+        @Param("excludeComponentId") excludeComponentId: UUID,
+    ): List<RangePresenceRow>
 
     /** All configuration rows (base + overrides) for a component, in arbitrary order. */
     fun findByComponentId(componentId: UUID): List<ComponentConfigurationEntity>
@@ -90,6 +106,12 @@ interface ComponentConfigurationRepository : JpaRepository<ComponentConfiguratio
             "(SELECT v.componentConfiguration.id FROM VcsSettingsEntryEntity v)",
     )
     fun findAllRowsWithVcsEntries(): List<ComponentConfigurationEntity>
+}
+
+/** A component's bounded supported range (one `RANGE_PRESENCE` row). */
+interface RangePresenceRow {
+    val componentKey: String
+    val versionRange: String
 }
 
 /** Row projection for effective jira-pair computation (see `computeEffectiveJiraPairs`). */
