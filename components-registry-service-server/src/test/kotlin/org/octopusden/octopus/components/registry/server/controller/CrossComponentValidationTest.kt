@@ -13,6 +13,7 @@ import org.springframework.boot.test.autoconfigure.web.servlet.AutoConfigureMock
 import org.springframework.boot.test.context.SpringBootTest
 import org.springframework.boot.test.mock.mockito.MockBean
 import org.springframework.http.MediaType
+import org.springframework.jdbc.core.JdbcTemplate
 import org.springframework.test.annotation.DirtiesContext
 import org.springframework.test.context.ActiveProfiles
 import org.springframework.test.web.servlet.MockMvc
@@ -56,6 +57,9 @@ class CrossComponentValidationTest {
 
     @Autowired
     private lateinit var objectMapper: ObjectMapper
+
+    @Autowired
+    private lateinit var jdbcTemplate: JdbcTemplate
 
     init {
         val testResourcesPath =
@@ -893,6 +897,37 @@ class CrossComponentValidationTest {
             .andExpect(status().isConflict)
             .andExpect(jsonPath("$.errorCode").value("UNIQUENESS_VIOLATION"))
         putSupported(a, """{"ranges":["[1,1.5)"]}""").andExpect(status().is2xxSuccessful)
+    }
+
+    @Test
+    @DisplayName("shrinking supported versions never re-checks ownership, even over a pre-existing conflict")
+    fun ownership_shrinkSupportedOverExistingConflict() {
+        val s = sfx()
+        val group = "org.octopusden.octopus.own$s"
+        val a = createOk(
+            """{"name":"xcc-own-shrink-a-$s","baseConfiguration":{"build":{"buildSystem":"MAVEN"}},""" +
+                """"artifactIds":[{"groupPattern":"$group","mode":"ALL"}]}""",
+        )
+        putSupported(a, """{"ranges":["[1,4)"]}""").andExpect(status().is2xxSuccessful)
+        // The API refuses to create a conflict, so seed one the way migrated data can hold it: B owns the
+        // same group in all versions.
+        val b = createOk("""{"name":"xcc-own-shrink-b-$s","baseConfiguration":{"build":{"buildSystem":"MAVEN"}}}""")
+        jdbcTemplate.update(
+            "INSERT INTO component_artifact_mappings " +
+                "(id, component_id, version_range, group_pattern, artifact_id_mode, sort_order) VALUES (?, ?, ?, ?, ?, 0)",
+            UUID.randomUUID(),
+            UUID.fromString(b),
+            "(,0),[0,)",
+            group,
+            "ALL",
+        )
+        // The conflict is real: widening A is rejected.
+        putSupported(a, """{"ranges":["[1,5)"]}""")
+            .andExpect(status().isConflict)
+            .andExpect(jsonPath("$.errorCode").value("UNIQUENESS_VIOLATION"))
+        // A different string that covers only versions A already had is a shrink → allowed.
+        putSupported(a, """{"ranges":["[1,2)"]}""").andExpect(status().is2xxSuccessful)
+        putSupported(a, """{"ranges":["[1,1.5)","[1.7,2)"]}""").andExpect(status().is2xxSuccessful)
     }
 
     private fun putSupported(
