@@ -45,7 +45,9 @@ A separate cross-team ADR, owned by the service's team, proposes renaming it
 client" in every consumer), moving it to the octopusden GitHub org after the
 `octopus-employee-service` precedent, and making it the owner of the customer data. This
 ADR uses the proposed name. If the rename is not adopted, only the CRS property prefix and
-class names change.
+class names change. The same ADR makes `/api/customers` and `/api/customers/{code}` the
+service's canonical paths, with `/api/clients` kept as a deprecated alias; CRS calls
+`/api/customers` only.
 
 "Directory" stays at the consumer level: the CRS class is `CustomerDirectoryService`,
 mirroring `EmployeeDirectoryService`.
@@ -84,9 +86,12 @@ scripts) gets it, not only the Portal form. **Scope is the same as ADR-015:** v4
   | code found, `status` in the inactive set | `INACTIVE` | **reject (400)** |
   | code found, `status` in neither set | `UNAVAILABLE` | allow + WARN log |
   | code absent from a good snapshot | `UNKNOWN` | **reject (400)**; admins may override, see below |
+  | `clientCode` absent, empty or whitespace | none | allow; no lookup |
   | no snapshot / refresh failing | `UNAVAILABLE` | allow + WARN log |
   | no bean (flag off / blank URL) | `DISABLED` | allow |
 
+  "Reject (400)" is the direct-write contract (v4 POST and PATCH). Template creates report
+  the same outcomes in their own shape; see **Error contract**.
 - **Explicit admin override for `UNKNOWN`.** Because of the daily sync, a legitimate
   customer created today is `UNKNOWN` until the next sync. The override needs **both** the
   `EDIT_ANY_COMPONENT` permission **and** an explicit request flag: a nullable body field
@@ -98,15 +103,32 @@ scripts) gets it, not only the Portal form. **Scope is the same as ADR-015:** v4
   is logged at WARN, and its audit-log row carries the marker `[clientCode override]` as
   the prefix of `change_comment` (`[clientCode override] <user comment>`), so overrides are
   queryable. The prefix is reserved like the ADR-023 sync prefix: `requireNotReserved`
-  rejects it in a user-supplied `changeComment`, so the marker can't be forged. Without the
-  permission, the flag is ignored.
+  rejects it in a user-supplied `changeComment`, so the marker can't be forged. That guard
+  must cover **every** path that takes a user-supplied `changeComment`, template creates
+  included: `ComponentTemplateControllerV4` does not call `requireNotReserved` today, so
+  adding it there is part of this change. Without the permission, the flag is ignored.
+- **No code, no lookup.** `clientCode` is optional. An absent, empty or whitespace-only
+  value means "no customer", as in the existing validator, and is never looked up, so a
+  PATCH that clears the code with `""` is not rejected as `UNKNOWN`.
 - **Timing.** The check runs on create, and on update only when `clientCode` changed, so
   legacy values that are no longer in the directory are grandfathered on unrelated edits.
   As in ADR-015, it is skipped for archived components and for a field whose field-config
   `visibility` is `hidden`.
-- **Error contract.** A 400 in the colon form `clientCode: <message>`, which the Portal's
-  `parseServerFieldErrors` maps inline. The `UNKNOWN` message says the directory is
-  synced daily, so a brand-new customer is not reported as simply "invalid".
+- **Error contract.** The message always has the colon form `clientCode: <message>`, which
+  the Portal's `parseServerFieldErrors` maps inline. The `UNKNOWN` message says the
+  directory is synced daily, so a brand-new customer is not reported as simply "invalid".
+  The Portal must tell `UNKNOWN` (offer the override) from `INACTIVE` (no override), so each
+  rejection also carries a machine-readable code, `CLIENT_CODE_UNKNOWN` or
+  `CLIENT_CODE_INACTIVE`:
+  - **Direct creates and updates:** a 400 whose `ErrorResponse.errorCode` is that code (the
+    existing discriminator field; clients already tolerate unknown values).
+  - **Template creates:** a problem in `TemplateRunResponse.problems`, with
+    `fields: ["clientCode"]`, the same message, and a new nullable `code` field on the
+    problem carrying the code (additive, per ADR-006). As for every other template problem,
+    a dry run answers 200 with the problem listed, and a committed create answers 422 with
+    the same body and creates nothing. The Portal reads the code from either shape and, for
+    `CLIENT_CODE_UNKNOWN`, offers the admin checkbox, which sets
+    `acknowledgeUnknownClientCode` on the retried request.
 - **Dictionary endpoint.** New `GET /rest/api/4/components/meta/customers` →
   `[{ code, name, status }]`, served from the same snapshot, for the Portal picker. It
   requires **authentication plus `ACCESS_COMPONENTS`**, like the employee lookups in
