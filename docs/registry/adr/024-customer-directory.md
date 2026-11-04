@@ -44,8 +44,9 @@ A separate cross-team ADR, owned by the service's team, proposes renaming it
 **`octopus-customer-service`** (the current name collides with "OAuth client" and "HTTP
 client" in every consumer), moving it to the octopusden GitHub org after the
 `octopus-employee-service` precedent, and making it the owner of the customer data. This
-ADR uses the proposed name. If the rename is not adopted, only the CRS property prefix and
-class names change. The same ADR makes `/api/customers` and `/api/customers/{code}` the
+ADR uses the proposed name. If the rename is not adopted, the CRS property prefix, the
+class names and the upstream path (`/api/clients` instead of `/api/customers`) change;
+nothing else in this ADR does. The same ADR makes `/api/customers` and `/api/customers/{code}` the
 service's canonical paths, with `/api/clients` kept as a deprecated alias; CRS calls
 `/api/customers` only.
 
@@ -122,6 +123,12 @@ scripts) gets it, not only the Portal form. **Scope is the same as ADR-015:** v4
   `CLIENT_CODE_INACTIVE`:
   - **Direct creates and updates:** a 400 whose `ErrorResponse.errorCode` is that code (the
     existing discriminator field; clients already tolerate unknown values).
+  - **How the code travels:** a plain `require(...)` is not enough. Its
+    `IllegalArgumentException` becomes an `ErrorResponse` without `errorCode`, and
+    `TemplateDryRun` keeps only its message. The rejection is therefore a dedicated exception
+    that carries the code: `ControllerExceptionHandler` maps it to a 400 with `errorCode`, and
+    `TemplateDryRun` copies the code into the template problem. The two constants are added
+    to `ErrorCodes`.
   - **Template creates:** a problem in `TemplateRunResponse.problems`, with
     `fields: ["clientCode"]`, the same message, and a new nullable `code` field on the
     problem carrying the code (additive, per ADR-006). As for every other template problem,
