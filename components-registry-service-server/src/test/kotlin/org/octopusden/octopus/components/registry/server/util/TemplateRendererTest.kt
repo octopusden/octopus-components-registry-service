@@ -67,9 +67,60 @@ class TemplateRendererTest {
     }
 
     @Test
-    @DisplayName("R1: expressions are replaced, converted by lower or upper, and the text around them kept")
+    @DisplayName("R1: expressions are replaced, converted by lower, upper, title or kebab, and the text around them kept")
     fun r1FreeText() {
         assertEquals("acme-plugin-core", render(values = EXAMPLE_VALUES + ("CLIENT_CODE" to listOf("Acme"))).request.name)
+    }
+
+    @Test
+    @DisplayName("R1: title and kebab render through a field, same as lower and upper")
+    fun r1TitleAndKebabFilters() {
+        val template =
+            parsedTemplate(
+                exampleTemplate().apply {
+                    at("fields")["displayName"] = "{{ PLUGIN_NAME | title }}-{{ CLIENT_CODE | kebab }}"
+                },
+            )
+
+        val rendered =
+            render(
+                template,
+                EXAMPLE_VALUES + ("PLUGIN_NAME" to listOf("payment-methods")) + ("CLIENT_CODE" to listOf("Payment Methods")),
+            )
+
+        assertEquals("Payment Methods-payment-methods", rendered.request.displayName)
+    }
+
+    @Test
+    @DisplayName("R2: a free-text field that kebab collapses to empty is unset, as any other empty render is")
+    fun r2KebabCollapseToEmpty() {
+        val template =
+            parsedTemplate(
+                exampleTemplate().apply {
+                    at("fields")["displayName"] = "{{ PLUGIN_NAME | kebab }}"
+                },
+            )
+
+        val rendered = render(template, EXAMPLE_VALUES + ("PLUGIN_NAME" to listOf("---")))
+
+        assertNull(rendered.request.displayName)
+        assertFalse("displayName" in rendered.sources)
+    }
+
+    @Test
+    @DisplayName("R2: a free-text field that title collapses to empty is unset, as any other empty render is")
+    fun r2TitleCollapseToEmpty() {
+        val template =
+            parsedTemplate(
+                exampleTemplate().apply {
+                    at("fields")["displayName"] = "{{ PLUGIN_NAME | title }}"
+                },
+            )
+
+        val rendered = render(template, EXAMPLE_VALUES + ("PLUGIN_NAME" to listOf("- -")))
+
+        assertNull(rendered.request.displayName)
+        assertFalse("displayName" in rendered.sources)
     }
 
     @Test

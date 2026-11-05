@@ -28,5 +28,32 @@ data class TemplateExpression(
     enum class Filter {
         LOWER,
         UPPER,
+
+        /** Splits on `-`, `_` and whitespace, capitalizes each non-empty word, joins with a single space. */
+        TITLE,
+
+        /** Lowercases, replaces each run of non-alphanumeric ASCII characters with `-`, trims the result. */
+        KEBAB,
+        ;
+
+        fun transform(value: String): String =
+            when (this) {
+                LOWER -> value.lowercase()
+                UPPER -> value.uppercase()
+                TITLE ->
+                    value
+                        .split(TITLE_SEPARATOR)
+                        .filter { it.isNotEmpty() }
+                        .joinToString(" ") { it.lowercase().replaceFirstChar(Char::titlecase) }
+                KEBAB -> value.lowercase().replace(KEBAB_SEPARATOR, "-").trim('-')
+            }
+
+        private companion object {
+            val TITLE_SEPARATOR = Regex("""[-_\s]+""")
+
+            // shortcut: ASCII alphanumerics only; a non-ASCII value (such as "Café") becomes mostly
+            // dashes. Widen to `[^\p{L}\p{N}]+` if a template field needs `kebab` on non-ASCII text.
+            val KEBAB_SEPARATOR = Regex("[^a-z0-9]+")
+        }
     }
 }
