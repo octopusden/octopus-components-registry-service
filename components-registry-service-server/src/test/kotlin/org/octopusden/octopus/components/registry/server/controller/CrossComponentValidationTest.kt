@@ -13,12 +13,15 @@ import org.springframework.boot.test.autoconfigure.web.servlet.AutoConfigureMock
 import org.springframework.boot.test.context.SpringBootTest
 import org.springframework.boot.test.mock.mockito.MockBean
 import org.springframework.http.MediaType
+import org.springframework.jdbc.core.JdbcTemplate
 import org.springframework.test.annotation.DirtiesContext
 import org.springframework.test.context.ActiveProfiles
 import org.springframework.test.web.servlet.MockMvc
 import org.springframework.test.web.servlet.ResultActions
+import org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get
 import org.springframework.test.web.servlet.request.MockMvcRequestBuilders.patch
 import org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post
+import org.springframework.test.web.servlet.request.MockMvcRequestBuilders.put
 import org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath
 import org.springframework.test.web.servlet.result.MockMvcResultMatchers.status
 import java.nio.file.Paths
@@ -54,6 +57,9 @@ class CrossComponentValidationTest {
 
     @Autowired
     private lateinit var objectMapper: ObjectMapper
+
+    @Autowired
+    private lateinit var jdbcTemplate: JdbcTemplate
 
     init {
         val testResourcesPath =
@@ -866,6 +872,85 @@ class CrossComponentValidationTest {
                 """"artifactIds":[{"groupPattern":"$group","mode":"ALL_EXCEPT_CLAIMED"}]}""",
         ).andExpect(status().is2xxSuccessful)
     }
+
+    @Test
+    @DisplayName("ownership collides only within supported versions; widening coverage into a rival's claim → 409")
+    fun ownership_limitedToSupportedVersions() {
+        val s = sfx()
+        val group = "org.octopusden.octopus.own$s"
+        // A owns the whole group, but is supported only in [1,2) (like a migrated archived component).
+        val a = createOk(
+            """{"name":"xcc-own-cov-a-$s","baseConfiguration":{"build":{"buildSystem":"MAVEN"}},""" +
+                """"artifactIds":[{"groupPattern":"$group","mode":"ALL"}]}""",
+        )
+        putSupported(a, """{"ranges":["[1,2)"]}""").andExpect(status().is2xxSuccessful)
+        // B is supported only in [3,) and claims an artifact of the same group: no shared version → 2xx.
+        val b = createOk("""{"name":"xcc-own-cov-b-$s","baseConfiguration":{"build":{"buildSystem":"MAVEN"}}}""")
+        putSupported(b, """{"ranges":["[3,)"]}""").andExpect(status().is2xxSuccessful)
+        patchComponent(
+            b,
+            """{"version":${currentVersion(b)},""" +
+                """"artifactIds":[{"groupPattern":"$group","mode":"EXPLICIT","artifactTokens":["lib-b"]}]}""",
+        ).andExpect(status().is2xxSuccessful)
+        // Widening A's coverage into [3,) would make both own lib-b there → 409; shrinking stays allowed.
+        putSupported(a, """{"ranges":["[1,4)"]}""")
+            .andExpect(status().isConflict)
+            .andExpect(jsonPath("$.errorCode").value("UNIQUENESS_VIOLATION"))
+        putSupported(a, """{"ranges":["[1,1.5)"]}""").andExpect(status().is2xxSuccessful)
+    }
+
+    @Test
+    @DisplayName("shrinking supported versions never re-checks ownership, even over a pre-existing conflict")
+    fun ownership_shrinkSupportedOverExistingConflict() {
+        val s = sfx()
+        val group = "org.octopusden.octopus.own$s"
+        val a = createOk(
+            """{"name":"xcc-own-shrink-a-$s","baseConfiguration":{"build":{"buildSystem":"MAVEN"}},""" +
+                """"artifactIds":[{"groupPattern":"$group","mode":"ALL"}]}""",
+        )
+        putSupported(a, """{"ranges":["[1,4)"]}""").andExpect(status().is2xxSuccessful)
+        // The API refuses to create a conflict, so seed one the way migrated data can hold it: B owns the
+        // same group in all versions.
+        val b = createOk("""{"name":"xcc-own-shrink-b-$s","baseConfiguration":{"build":{"buildSystem":"MAVEN"}}}""")
+        jdbcTemplate.update(
+            "INSERT INTO component_artifact_mappings " +
+                "(id, component_id, version_range, group_pattern, artifact_id_mode, sort_order) VALUES (?, ?, ?, ?, ?, 0)",
+            UUID.randomUUID(),
+            UUID.fromString(b),
+            "(,0),[0,)",
+            group,
+            "ALL",
+        )
+        // The conflict is real: widening A is rejected.
+        putSupported(a, """{"ranges":["[1,5)"]}""")
+            .andExpect(status().isConflict)
+            .andExpect(jsonPath("$.errorCode").value("UNIQUENESS_VIOLATION"))
+        // A different string that covers only versions A already had is a shrink → allowed.
+        putSupported(a, """{"ranges":["[1,2)"]}""").andExpect(status().is2xxSuccessful)
+        putSupported(a, """{"ranges":["[1,1.5)","[1.7,2)"]}""").andExpect(status().is2xxSuccessful)
+    }
+
+    private fun putSupported(
+        id: String,
+        body: String,
+    ): ResultActions =
+        mvc.perform(
+            put("/rest/api/4/components/$id/supported-versions")
+                .with(adminJwt())
+                .contentType(MediaType.APPLICATION_JSON)
+                .content(body),
+        )
+
+    private fun currentVersion(id: String): Long =
+        objectMapper
+            .readTree(
+                mvc
+                    .perform(get("/rest/api/4/components/$id").with(adminJwt()))
+                    .andExpect(status().isOk)
+                    .andReturn()
+                    .response.contentAsString,
+            )["version"]
+            .asLong()
 
     @Test
     @DisplayName("CREATE rejects ALL_EXCEPT_CLAIMED with a comma group (single-group only) → 400")

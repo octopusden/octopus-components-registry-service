@@ -39,12 +39,20 @@ internal data class OwnershipClaim(
  * per-range override frees a token that another component legitimately claims only in that range —
  * symmetrically on both sides. It is SOUND: a base is skipped only where it is provably replaced; a
  * strict-subset override range (different string) is not skipped, which can only over-report, never miss.
+ *
+ * NOTE (base is in force only where the component is supported): the base mapping is stored at
+ * `ALL_VERSIONS` (ADR-018), but a component with bounded coverage (`RANGE_PRESENCE` rows) defines no
+ * version outside it, so it owns nothing there. [coverageByComponent] gives each component's bounded
+ * supported ranges (absent / empty ⇒ supported = ALL); a base claim is matched against those ranges
+ * instead of `ALL_VERSIONS`. Without this, a migrated component whose every DSL block declared the same
+ * groupId (stored once at `ALL_VERSIONS`) blocks every other owner of that group in every version.
  */
 internal fun computeOwnershipCollisions(
     newClaims: List<OwnershipClaim>,
     existingClaims: List<OwnershipClaim>,
     rangesIntersect: (String, String) -> Boolean,
     shadowRangesByComponent: Map<String, Set<String>> = emptyMap(),
+    coverageByComponent: Map<String, List<String>> = emptyMap(),
 ): List<String> {
     val violations = mutableListOf<String>()
 
@@ -55,13 +63,25 @@ internal fun computeOwnershipCollisions(
         claim.versionRange == OWNERSHIP_ALL_VERSIONS &&
             otherRange in shadowRangesByComponent[claim.componentKey].orEmpty()
 
+    // The ranges where a claim is in force: a base claim of a bounded-coverage component is limited to
+    // that coverage; any other claim keeps its own range.
+    fun effectiveRanges(claim: OwnershipClaim): List<String> =
+        coverageByComponent[claim.componentKey]
+            ?.takeIf { claim.versionRange == OWNERSHIP_ALL_VERSIONS && it.isNotEmpty() }
+            ?: listOf(claim.versionRange)
+
     fun check(
         a: OwnershipClaim,
         b: OwnershipClaim,
     ) {
         if (a.componentKey == b.componentKey) return
         val sharedGroup = a.groupTokens.firstOrNull { it in b.groupTokens } ?: return
-        if (!rangesIntersect(a.versionRange, b.versionRange)) return
+        val (rangeA, rangeB) =
+            effectiveRanges(a)
+                .asSequence()
+                .flatMap { ra -> effectiveRanges(b).asSequence().map { rb -> ra to rb } }
+                .firstOrNull { (ra, rb) -> rangesIntersect(ra, rb) }
+                ?: return
         // A base claim is shadowed (replaced) in any range its own component overrides → not in force there.
         if (shadowed(a, b.versionRange) || shadowed(b, a.versionRange)) return
         val conflict =
@@ -76,7 +96,7 @@ internal fun computeOwnershipCollisions(
         violations +=
             "uniqueness violation: groupId/artifactId ownership of component '${a.componentKey}' " +
             "(group '$sharedGroup', ${a.mode}) duplicates component '${b.componentKey}' " +
-            "(${b.mode}) in intersecting version ranges '${a.versionRange}' ∩ '${b.versionRange}'"
+            "(${b.mode}) in intersecting version ranges '$rangeA' ∩ '$rangeB'"
     }
 
     for (i in newClaims.indices) {
