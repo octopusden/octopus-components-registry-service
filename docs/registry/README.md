@@ -67,6 +67,7 @@ PRD (why?) ──→ FS (what?) ──→ TDD (how?)
 | [ADR-021](adr/021-effective-jira-display-name.md) | Jira display name falls back to `componentDisplayName` (Accepted) |
 | [ADR-022](adr/022-vcs-root-checkout-layout.md) | VCS root checkout layout: Source Path, Checkout Directory, Build Working Directory (Accepted) |
 | [ADR-023](adr/023-teamcity-checkout-layout-diff-sync.md) | TeamCity → registry checkout layout Diff/Sync jobs (Accepted) |
+| [ADR-024](adr/024-customer-directory.md) | `clientCode` validated against a customer directory (`octopus-customer-service`) (Proposed) |
 
 ### Action Items
 
