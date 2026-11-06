@@ -258,32 +258,11 @@ fun ComponentEntity.toResolvedEscrowModuleConfig(
     // so we union ONLY RANGE_PRESENCE rows (+ bounded base), never every non-BASE row. A version in a GAP
     // between presence ranges ([11,12.1) + [12.2,) queried with 12.1.x) is out of the union, like V1.
     // Unparseable or blank ranges count as containing — conservative, never a false 404.
-    val hasBoundedBase = base.versionRange != ALL_VERSIONS
-    val hasRangePresence = configs.any { it.rowType == "RANGE_PRESENCE" }
-    if (hasBoundedBase || hasRangePresence) {
-        val containsVersion = { range: String? ->
-            range.isNullOrBlank() ||
-                range == ALL_VERSIONS ||
-                try {
-                    versionRangeFactory.create(range).containsVersion(numericVersion)
-                } catch (_: Exception) {
-                    true
-                }
-        }
-        val inSupported =
-            configs.any { it.rowType == "RANGE_PRESENCE" && containsVersion(it.versionRange) } ||
-                (hasBoundedBase && containsVersion(base.versionRange))
-        if (!inSupported) return null
-    }
+    val presenceRanges = configs.filter { it.rowType == "RANGE_PRESENCE" }.map { it.versionRange }
+    if (!versionRangeFactory.isInCoverage(presenceRanges, base.versionRange, numericVersion)) return null
 
     val matchingOverrides =
-        overrides.filter { override ->
-            try {
-                versionRangeFactory.create(override.versionRange).containsVersion(numericVersion)
-            } catch (_: Exception) {
-                false
-            }
-        }
+        overrides.filter { versionRangeFactory.overrideRangeContains(it.versionRange, numericVersion) }
 
     // Effective ownership range for this version: the narrowest per-range ownership override whose
     // range contains the version REPLACES the base; else the base ALL_VERSIONS mappings. Without this
@@ -295,13 +274,7 @@ fun ComponentEntity.toResolvedEscrowModuleConfig(
             .filter { it != ALL_VERSIONS }
             .distinct()
             .sorted()
-            .firstOrNull { range ->
-                try {
-                    versionRangeFactory.create(range).containsVersion(numericVersion)
-                } catch (_: Exception) {
-                    false
-                }
-            } ?: base.versionRange
+            .firstOrNull { versionRangeFactory.overrideRangeContains(it, numericVersion) } ?: base.versionRange
 
     return buildEscrowModuleConfig(
         component = this,
