@@ -3,6 +3,7 @@ package org.octopusden.octopus.components.registry.server.util
 import org.junit.jupiter.api.Assertions.assertDoesNotThrow
 import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.Assertions.assertFalse
+import org.junit.jupiter.api.Assertions.assertThrows
 import org.junit.jupiter.api.Assertions.assertTrue
 import org.junit.jupiter.api.DisplayName
 import org.junit.jupiter.api.Test
@@ -242,5 +243,52 @@ class VersionRangePartitionTest {
         // No open-upper block (all bounded/historical): the highest range wins — floor, then ceiling.
         assertEquals("[2.0,3.0)", listOf("(,1.0)", "[1.0,2.0)", "[2.0,3.0)").maxWith(rank))
         assertEquals("(,2.0)", listOf("(,1.0)", "(,2.0)").maxWith(rank)) // same (-inf) floor → higher ceiling
+    }
+
+    // ── SYS-066: strict composite decomposition for the one-off split cleanup ───────
+
+    @Test
+    @DisplayName("SYS-066: splitCompositeStrict decomposes composites into canonical single segments")
+    fun `SYS-066 strict split decomposes composites`() {
+        // Two-segment composite around an excluded point.
+        assertEquals(
+            listOf("[2.2.18,2.2.20-132)", "(2.2.20-132,2.2.21)"),
+            VersionRangePartition.splitCompositeStrict("[2.2.18,2.2.20-132),(2.2.20-132,2.2.21)"),
+        )
+        // Exact-version members render in hard-version [x] form, not [x,x].
+        assertEquals(
+            listOf("[1.1.40]", "[1.1.49]", "[1.1.51]"),
+            VersionRangePartition.splitCompositeStrict("[1.1.40],[1.1.49],[1.1.51]"),
+        )
+        // Whitespace is normalized away before splitting.
+        assertEquals(
+            listOf("[1.7,2)", "[2.4.0,2.4.11]"),
+            VersionRangePartition.splitCompositeStrict("[1.7, 2), [2.4.0,2.4.11]"),
+        )
+        // A non-composite input returns a single element (caller decides via size > 1).
+        assertEquals(listOf("[1.0,2.0)"), VersionRangePartition.splitCompositeStrict("[1.0,2.0)"))
+        assertEquals(listOf("[1.0.49]"), VersionRangePartition.splitCompositeStrict("[1.0.49]"))
+    }
+
+    @Test
+    @DisplayName("SYS-066: splitCompositeStrict splits overlapping segments verbatim (disjointness is the caller's job)")
+    fun `SYS-066 strict split does not check disjointness`() {
+        // A self-overlapping composite still decomposes cleanly — overlap detection lives in the caller.
+        assertEquals(listOf("[1,3)", "[2,4)"), VersionRangePartition.splitCompositeStrict("[1,3),[2,4)"))
+    }
+
+    @Test
+    @DisplayName("SYS-066: splitCompositeStrict throws on a malformed range (no silent drop)")
+    fun `SYS-066 strict split throws on malformed input`() {
+        // Unlike the lenient toSegments scan, a malformed fragment must abort, never be dropped.
+        assertThrows(IllegalArgumentException::class.java) {
+            VersionRangePartition.splitCompositeStrict("[1,2),garbage,[5,6)")
+        }
+        assertThrows(IllegalArgumentException::class.java) {
+            VersionRangePartition.splitCompositeStrict("[1,2")
+        }
+        assertThrows(IllegalArgumentException::class.java) {
+            VersionRangePartition.splitCompositeStrict("")
+        }
     }
 }
