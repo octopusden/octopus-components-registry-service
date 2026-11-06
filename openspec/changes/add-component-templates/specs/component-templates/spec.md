@@ -76,6 +76,8 @@ Expressions are a small subset of Jinja syntax. Only these SHALL be accepted:
 | `{{ NAME }}` | The parameter's value |
 | `{{ NAME \| lower }}` | The value in lower case |
 | `{{ NAME \| upper }}` | The value in upper case |
+| `{{ NAME \| title }}` | Split on `-`, `_` and whitespace, each non-empty word capitalized and lower-cased otherwise, joined with a single space; an empty or all-separator value gives an empty string |
+| `{{ NAME \| kebab }}` | Lower case, each run of characters outside ASCII letters and digits replaced by `-`, the result trimmed of leading and trailing `-`; an empty or all-separator value gives an empty string |
 
 - Spaces inside the braces are optional.
 - Any other Jinja construct SHALL fail the template on load: a `{% … %}` tag, a `{# … #}` comment,
@@ -134,7 +136,7 @@ Field checks:
 | Parameter | The field uses a parameter the template does not define |
 | Kind | The field kind does not accept the parameter, as the field table says: a Person never goes into free text, and a multi-value parameter only into a list |
 | Whole value | A CRS value, a Person, or an item of a CRS list or people list has text around `{{ NAME }}`, or a filter |
-| Filter | A filter other than `lower` or `upper` is used |
+| Filter | A filter other than `lower`, `upper`, `title` or `kebab` is used |
 | Fixed value | A fixed value is not in its static list: build systems, escrow generation modes, fixed choices |
 
 Whole-template checks:
@@ -159,7 +161,10 @@ Required fields, by classification:
   as needing VCS and as not `WHISKEY`. A build system the template leaves unset SHALL be the
   `component-defaults` one; a default `BS2_0` is ignored.
 - A field fills a requirement when it has non-blank literal text, alone or around a parameter, or a
-  fixed list item, uses a required parameter, or gets a value from `component-defaults`.
+  fixed list item, uses a required parameter, or gets a value from `component-defaults`. A `title`
+  or `kebab` expression is the one exception this load check cannot see: a required parameter
+  guarantees a non-blank value, not a non-blank render, since an all-separator value renders empty
+  under either filter.
 - A template rule on a field the template leaves unset, or fixes blank (which R2 leaves unset), is
   checked against the default R7 would give it, or against an empty value. A build system fixed
   blank is the `component-defaults` one, as when it is unset.
@@ -172,6 +177,13 @@ Not checked on load, because they depend on data that changes at runtime:
 - Fixed people; the dry run's create step checks them, as on any create.
 - A `person` parameter's default; P8 checks it at the dry run, when the default is used.
 - Uniqueness, such as a fixed name already taken; the dry run's create step checks it.
+- A field whose only content is a `title` or `kebab` expression, when the parameter's actual value
+  renders it empty (such as a value made entirely of separators): R2 leaves the field unset, as for
+  any other empty render. A field `component-defaults` also covers then takes that default, as R7
+  gives any other field R2 leaves unset. One that is required, that no default covers, and that
+  today's create itself requires, reaches the create step still missing; since the field has no
+  recorded source there, it is reported as a template problem, not by naming the parameter — a
+  `pattern` on the parameter is how a template author rules this out.
 
 #### Scenario: Key not for the type
 - **WHEN** a `text` parameter has `options`
@@ -310,7 +322,7 @@ registry SHALL record the parameters the value came from.
 
 | Rule | What happens |
 |---|---|
-| R1 Free text | Each expression is replaced by the parameter's value, converted by `lower` or `upper`; the text around it is kept |
+| R1 Free text | Each expression is replaced by the parameter's value, converted by `lower`, `upper`, `title` or `kebab`; the text around it is kept |
 | R2 Empty values | An empty optional parameter is replaced by nothing; a field that ends up empty is unset |
 | R3 Whole values | A CRS value or Person field set to `{{ NAME }}` takes the value as it is |
 | R4 Free-text lists | Each item follows R1 and R2; an empty item is dropped; a multi-value parameter becomes one item per value |
@@ -350,6 +362,18 @@ asks only for its parameters, so the registry applies them instead, with the sam
 #### Scenario: Empty optional parameter
 - **WHEN** an optional `SUFFIX` is empty in `"{{ CLIENT_CODE | lower }}-plugin{{ SUFFIX }}"`
 - **THEN** the value is `acme-plugin`
+
+#### Scenario: Title case
+- **WHEN** `displayName` is `"{{ PLUGIN_NAME | title }}"` with `payment-methods`
+- **THEN** `displayName` is `Payment Methods`
+
+#### Scenario: Kebab case
+- **WHEN** `displayName` is `"{{ PLUGIN_NAME | kebab }}"` with `Payment Methods`
+- **THEN** `displayName` is `payment-methods`
+
+#### Scenario: Title or kebab collapses to empty
+- **WHEN** `displayName` is `"{{ PLUGIN_NAME | kebab }}"` and `PLUGIN_NAME` is `"---"`
+- **THEN** `displayName` is unset, as R2 leaves any other empty render
 
 #### Scenario: Labels combine
 - **WHEN** the template fixes `labels: [plugin]` and adds `{{ EXTRA }}` with `plugin` and `ui`
