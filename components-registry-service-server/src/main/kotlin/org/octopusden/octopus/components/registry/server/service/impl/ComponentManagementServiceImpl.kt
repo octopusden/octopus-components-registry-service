@@ -4890,7 +4890,6 @@ class ComponentManagementServiceImpl(
         configurationRepository
             .findAll()
             .filter { it.rowType in fieldOverrideRowTypes }
-            .filterNot { VersionRangePartition.isAllVersions(it.versionRange) }
             .mapNotNull(::compositeSplitPlan)
 
     private fun compositeSplitPlan(row: ComponentConfigurationEntity): SplitPlan? {
@@ -4907,10 +4906,20 @@ class ComponentManagementServiceImpl(
         // malformed row aborts here rather than being left behind or written as a bad row.
         segments.forEach { requireValidSegment(row, it) }
         if (segments.size == 1) return null
+        requireResolverReadsLikeSplit(row)
+        return SplitPlan(row, segments)
+    }
+
+    /** A composite whose stored string the resolver reads differently from its split segments aborts. */
+    private fun requireResolverReadsLikeSplit(row: ComponentConfigurationEntity) {
         // The resolver tolerates whitespace at the ends and around commas, but reads a bound with
         // whitespace inside it differently (`[ 1.0` parses as a lower bound of 0), while the split
         // writes the normalized bound. Abort rather than change which versions the row covers.
-        if (row.versionRange.trim().replace(WHITESPACE_AROUND_COMMA, ",").any(Char::isWhitespace)) {
+        if (row.versionRange
+                .trim()
+                .replace(WHITESPACE_AROUND_COMMA, ",")
+                .any(Char::isWhitespace)
+        ) {
             throw CompositeOverrideSplitAbortedException(
                 "Composite '${row.versionRange}' on component '${row.component.componentKey}' has whitespace " +
                     "inside a version bound, which the resolver reads differently from the split. " +
@@ -4927,7 +4936,6 @@ class ComponentManagementServiceImpl(
                     "Aborting; no rows changed.",
             )
         }
-        return SplitPlan(row, segments)
     }
 
     private fun requireValidSegment(
