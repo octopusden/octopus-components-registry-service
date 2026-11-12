@@ -7,6 +7,7 @@ import org.junit.jupiter.api.DisplayName
 import org.junit.jupiter.api.Test
 import org.junit.jupiter.api.assertThrows
 import org.octopusden.octopus.components.registry.server.dto.v4.ArtifactIdRequest
+import org.octopusden.octopus.components.registry.server.dto.v4.MavenArtifactRequest
 import org.octopusden.octopus.components.registry.server.dto.v4.VcsEntryRequest
 import org.octopusden.octopus.components.registry.server.model.ComponentTemplate
 import org.octopusden.octopus.components.registry.server.support.EXAMPLE_DEFAULTS
@@ -328,6 +329,49 @@ class TemplateRendererTest {
     @DisplayName("R8: an override on a path the template does not list as overridable is refused")
     fun r8NotOverridable() {
         assertThrows<IllegalArgumentException> { render(overrides = mapOf("name" to listOf("other"))) }
+    }
+
+    @Test
+    @DisplayName("a Maven GAV's extension and classifier render into the create request with the coordinate")
+    fun mavenExtensionAndClassifier() {
+        val request =
+            render(
+                parsedTemplate(
+                    exampleTemplate().apply {
+                        at("fields.baseConfiguration")["mavenArtifacts"] =
+                            listOf(
+                                linkedMapOf(
+                                    "groupPattern" to "org.example.plugins.{{ CLIENT_CODE | lower }}",
+                                    "artifactPattern" to "{{ PLUGIN_CODE | lower }}",
+                                    "extension" to "tgz",
+                                    "classifier" to "{{ CLIENT_CODE | lower }}-dist",
+                                ),
+                            )
+                    },
+                ),
+            ).request
+
+        assertEquals(
+            listOf(
+                MavenArtifactRequest(
+                    groupPattern = "org.example.plugins.acme",
+                    artifactPattern = "core",
+                    extension = "tgz",
+                    classifier = "acme-dist",
+                ),
+            ),
+            request.baseConfiguration?.mavenArtifacts,
+        )
+    }
+
+    @Test
+    @DisplayName("a Maven GAV with no extension or classifier sends neither")
+    fun mavenWithoutExtensionOrClassifier() {
+        val request = render(parsedTemplate(exampleTemplate().withExplicitExternalFields())).request
+
+        val maven = requireNotNull(request.baseConfiguration?.mavenArtifacts).single()
+        assertNull(maven.extension)
+        assertNull(maven.classifier)
     }
 
     @Test

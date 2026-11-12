@@ -37,7 +37,15 @@ class CreateRequestPathsTest {
                             releaseVersionFormat = "release",
                             buildVersionFormat = "build",
                         ),
-                    mavenArtifacts = listOf(MavenArtifactRequest(groupPattern = "org.example.maven", artifactPattern = "pay-.*")),
+                    mavenArtifacts =
+                        listOf(
+                            MavenArtifactRequest(
+                                groupPattern = "org.example.maven",
+                                artifactPattern = "pay-.*",
+                                extension = "tgz",
+                                classifier = "dist",
+                            ),
+                        ),
                     dockerImages = listOf(DockerImageRequest(imageName = "payments/api", flavor = "alpine")),
                     packages = listOf(PackageRequest(packageType = "DEB", packageName = "payments-deb")),
                 ),
@@ -62,6 +70,8 @@ class CreateRequestPathsTest {
         "baseConfiguration.jira.buildVersionFormat, build",
         "baseConfiguration.mavenArtifacts[0].groupPattern, org.example.maven",
         "baseConfiguration.mavenArtifacts[0].artifactPattern, pay-.*",
+        "baseConfiguration.mavenArtifacts[0].extension, tgz",
+        "baseConfiguration.mavenArtifacts[0].classifier, dist",
         "baseConfiguration.dockerImages[0].imageName, payments/api",
         "baseConfiguration.dockerImages[0].flavor, alpine",
         "baseConfiguration.packages[0].packageName, payments-deb",
@@ -77,7 +87,7 @@ class CreateRequestPathsTest {
     @Test
     @DisplayName("the path list is exactly the paths a rule may name")
     fun pathListMatchesReader() {
-        assertEquals(20, CreateRequestPaths.PATHS.size)
+        assertEquals(22, CreateRequestPaths.PATHS.size)
         CreateRequestPaths.PATHS.forEach { CreateRequestPaths.read(full, it) }
     }
 
