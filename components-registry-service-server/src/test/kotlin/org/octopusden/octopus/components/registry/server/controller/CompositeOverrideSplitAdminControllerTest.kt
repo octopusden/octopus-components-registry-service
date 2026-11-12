@@ -115,7 +115,7 @@ class CompositeOverrideSplitAdminControllerTest {
     @DisplayName("SYS-066: write splits the composite into single-segment rows with copied vcs payload")
     fun `SYS-066 write splits with copied payload`() {
         val id = newComponent()
-        seedCompositeMarker(id, "[1.0,2.0-1),(2.0-1,3.0)", vcsPath = "ssh://vcs/ufx")
+        seedCompositeMarker(id, "[1.0,2.0-1),(2.0-1,3.0)", vcsPath = "ssh://vcs/legacy-a")
         val token = split(dryRun = true).body()["manifestToken"].asText()
         split(dryRun = false, token = token).andExpect(status().isOk)
         val rows = overridesOf(id).sortedBy { it["versionRange"].asText() }
@@ -123,7 +123,7 @@ class CompositeOverrideSplitAdminControllerTest {
         assertEquals(listOf("(2.0-1,3.0)", "[1.0,2.0-1)"), rows.map { it["versionRange"].asText() }.sorted())
         rows.forEach {
             assertEquals("vcs.settings", it["overriddenAttribute"].asText())
-            assertEquals("ssh://vcs/ufx", it["markerChildren"]["vcsEntries"][0]["vcsPath"].asText(), "payload copied")
+            assertEquals("ssh://vcs/legacy-a", it["markerChildren"]["vcsEntries"][0]["vcsPath"].asText(), "payload copied")
         }
     }
 
@@ -166,8 +166,8 @@ class CompositeOverrideSplitAdminControllerTest {
     @DisplayName("SYS-066: the BASE all-versions sentinel is never touched")
     fun `SYS-066 base sentinel untouched`() {
         val id = newComponent()
-        // An override row carrying the all-versions sentinel: it parses as two segments, so only the
-        // all-versions filter keeps it out of the split.
+        // An override row carrying the all-versions sentinel looks like a two-segment composite; it must
+        // be read as all versions and left alone.
         seedRawMarker(id, "(,0),[0,)")
         val res = split(dryRun = true).andExpect(status().isOk).body()
         assertEquals(0, res["rowsSplit"].asInt(), "(,0),[0,) is all versions, not a composite")
@@ -203,7 +203,8 @@ class CompositeOverrideSplitAdminControllerTest {
     @DisplayName("SYS-066: a self-overlapping composite aborts (409)")
     fun `SYS-066 self-overlapping aborts`() {
         val id = newComponent()
-        seedCompositeMarker(id, "[1,3),[2,4)")
+        // The resolver accepts this composite (unlike [1,3),[2,4)), so only the disjointness check stops it.
+        seedCompositeMarker(id, "[1,2],[2,3)")
         split(dryRun = true).andExpect(status().isConflict)
     }
 
