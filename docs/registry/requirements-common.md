@@ -2870,7 +2870,8 @@ edits) — the token covers the dry-run→write gap, quiescence covers the write
    ONB-001 placement fields; a placement-only change moves the token, and a sibling differing only in
    a placement field is a collision.
 10. After the split no checkout-layout field reads as manually edited.
-11. A composite the resolver cannot parse, or one carrying non-vcs child data, → 409.
+11. A composite the resolver cannot parse or reads differently (whitespace inside a bound), or one
+    carrying non-vcs child data, → 409.
 
 **Test method:** `CompositeOverrideSplitAdminControllerTest` —
 `SYS-066 dry-run previews without writing`, `SYS-066 write splits with copied payload`,
@@ -2883,7 +2884,8 @@ edits) — the token covers the dry-run→write gap, quiescence covers the write
 `SYS-066 manifest token distinguishes field boundaries`, `SYS-066 whitespace in composite is normalized on split`,
 `SYS-066 placement fields and resolved output preserved`, `SYS-066 manifest token covers placement fields`,
 `SYS-066 sibling differing in placement aborts`, `SYS-066 audit keeps placement non-manual`,
-`SYS-066 out-of-order composite aborts`, `SYS-066 generic artifacts abort`;
+`SYS-066 out-of-order composite aborts`, `SYS-066 generic artifacts abort`,
+`SYS-066 whitespace inside a bound aborts`, `SYS-066 version bump and audit`;
 `CompositeOverrideSplitDisabledTest` — `SYS-066 endpoint absent when flag off`;
 `VersionRangePartitionTest` — `SYS-066 strict split decomposes composites`,
 `SYS-066 strict split does not check disjointness`, `SYS-066 strict split throws on malformed input`.
