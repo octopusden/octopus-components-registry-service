@@ -17,6 +17,7 @@ import org.octopusden.octopus.components.registry.server.entity.ComponentConfigu
 import org.octopusden.octopus.components.registry.server.entity.DistributionGenericArtifactEntity
 import org.octopusden.octopus.components.registry.server.entity.VcsSettingsEntryEntity
 import org.octopusden.octopus.components.registry.server.mapper.toResolvedEscrowModuleConfig
+import org.octopusden.octopus.components.registry.server.repository.AuditLogRepository
 import org.octopusden.octopus.components.registry.server.repository.ComponentConfigurationRepository
 import org.octopusden.octopus.components.registry.server.repository.ComponentRepository
 import org.octopusden.octopus.components.registry.server.support.adminJwt
@@ -69,6 +70,8 @@ class CompositeOverrideSplitAdminControllerTest {
     @Autowired private lateinit var componentRepository: ComponentRepository
 
     @Autowired private lateinit var checkoutLayoutEditHistory: CheckoutLayoutEditHistory
+
+    @Autowired private lateinit var auditLogRepository: AuditLogRepository
 
     @Autowired private lateinit var versionRangeFactory: VersionRangeFactory
 
@@ -163,8 +166,27 @@ class CompositeOverrideSplitAdminControllerTest {
     @DisplayName("SYS-066: the BASE all-versions sentinel is never touched")
     fun `SYS-066 base sentinel untouched`() {
         val id = newComponent()
+        // An override row carrying the all-versions sentinel: it parses as two segments, so only the
+        // all-versions filter keeps it out of the split.
+        seedRawMarker(id, "(,0),[0,)")
         val res = split(dryRun = true).andExpect(status().isOk).body()
-        assertEquals(0, res["rowsSplit"].asInt(), "BASE (,0),[0,) is not a composite override")
+        assertEquals(0, res["rowsSplit"].asInt(), "(,0),[0,) is all versions, not a composite")
+        assertEquals(listOf("(,0),[0,)"), overridesOf(id).map { it["versionRange"].asText() })
+    }
+
+    @Test
+    @DisplayName("SYS-066: a write bumps the component version once and audits once per composite")
+    fun `SYS-066 version bump and audit`() {
+        val id = newComponent()
+        seedCompositeMarker(id, "[1.0,2.0-1),(2.0-1,3.0)")
+        val componentId = UUID.fromString(id)
+        val versionBefore = componentRepository.findById(componentId).orElseThrow().version
+        val auditBefore = auditRows(id).size
+
+        writeSplit()
+
+        assertEquals(versionBefore + 1, componentRepository.findById(componentId).orElseThrow().version)
+        assertEquals(auditBefore + 1, auditRows(id).size)
     }
 
     @Test
@@ -378,8 +400,12 @@ class CompositeOverrideSplitAdminControllerTest {
         val rowId = seedPlacedMarker(id, "[1.0,2.0-1),(2.0-1,3.0)")
         val tokenBefore = split(dryRun = true).andExpect(status().isOk).body()["manifestToken"].asText()
         inTransaction {
-            configurationRepository.findById(UUID.fromString(rowId)).orElseThrow().vcsEntries
-                .single { it.sortOrder == 1 }.checkoutDirectory = "moved"
+            configurationRepository
+                .findById(UUID.fromString(rowId))
+                .orElseThrow()
+                .vcsEntries
+                .single { it.sortOrder == 1 }
+                .checkoutDirectory = "moved"
         }
         val tokenAfterEntry = split(dryRun = true).andExpect(status().isOk).body()["manifestToken"].asText()
         inTransaction {
@@ -436,6 +462,9 @@ class CompositeOverrideSplitAdminControllerTest {
     }
 
     // ── helpers ────────────────────────────────────────────────────────────
+
+    private fun auditRows(componentId: String) =
+        auditLogRepository.findByEntityTypeAndEntityIdAndActionInOrderByChangedAtDesc("Component", componentId, listOf("UPDATE"))
 
     private fun inTransaction(block: () -> Unit) {
         TransactionTemplate(transactionManager).executeWithoutResult { block() }
