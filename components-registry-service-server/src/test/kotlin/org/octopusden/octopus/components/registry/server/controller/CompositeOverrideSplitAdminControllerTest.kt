@@ -4,6 +4,7 @@ import com.fasterxml.jackson.databind.JsonNode
 import com.fasterxml.jackson.databind.ObjectMapper
 import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.Assertions.assertFalse
+import org.junit.jupiter.api.Assertions.assertNotEquals
 import org.junit.jupiter.api.Assertions.assertTrue
 import org.junit.jupiter.api.BeforeEach
 import org.junit.jupiter.api.DisplayName
@@ -13,10 +14,15 @@ import org.junit.jupiter.api.Timeout
 import org.octopusden.cloud.commons.security.client.AuthServerClient
 import org.octopusden.octopus.components.registry.server.ComponentRegistryServiceApplication
 import org.octopusden.octopus.components.registry.server.entity.ComponentConfigurationEntity
+import org.octopusden.octopus.components.registry.server.entity.DistributionGenericArtifactEntity
 import org.octopusden.octopus.components.registry.server.entity.VcsSettingsEntryEntity
+import org.octopusden.octopus.components.registry.server.mapper.toResolvedEscrowModuleConfig
 import org.octopusden.octopus.components.registry.server.repository.ComponentConfigurationRepository
 import org.octopusden.octopus.components.registry.server.repository.ComponentRepository
 import org.octopusden.octopus.components.registry.server.support.adminJwt
+import org.octopusden.octopus.components.registry.server.teamcity.checkoutlayout.CheckoutLayoutEditHistory
+import org.octopusden.releng.versions.NumericVersionFactory
+import org.octopusden.releng.versions.VersionRangeFactory
 import org.springframework.beans.factory.annotation.Autowired
 import org.springframework.boot.test.autoconfigure.web.servlet.AutoConfigureMockMvc
 import org.springframework.boot.test.context.SpringBootTest
@@ -29,6 +35,8 @@ import org.springframework.test.web.servlet.ResultActions
 import org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get
 import org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post
 import org.springframework.test.web.servlet.result.MockMvcResultMatchers.status
+import org.springframework.transaction.PlatformTransactionManager
+import org.springframework.transaction.support.TransactionTemplate
 import java.nio.file.Paths
 import java.util.UUID
 
@@ -59,6 +67,14 @@ class CompositeOverrideSplitAdminControllerTest {
     @Autowired private lateinit var configurationRepository: ComponentConfigurationRepository
 
     @Autowired private lateinit var componentRepository: ComponentRepository
+
+    @Autowired private lateinit var checkoutLayoutEditHistory: CheckoutLayoutEditHistory
+
+    @Autowired private lateinit var versionRangeFactory: VersionRangeFactory
+
+    @Autowired private lateinit var numericVersionFactory: NumericVersionFactory
+
+    @Autowired private lateinit var transactionManager: PlatformTransactionManager
 
     init {
         // The ft-db profile's `components-registry.groovy-path` interpolates this system property.
@@ -338,7 +354,148 @@ class CompositeOverrideSplitAdminControllerTest {
         }
     }
 
+    @Test
+    @DisplayName("SYS-066: the split keeps the whole vcs payload (incl. ONB-001 placement) and the resolved output")
+    fun `SYS-066 placement fields and resolved output preserved`() {
+        val id = newComponent()
+        seedPlacedMarker(id, "[1.0,2.0-1),(2.0-1,3.0)")
+        val payloadBefore = overridesOf(id).single()["markerChildren"]
+        val versions = listOf("1.5", "2.0-1", "2.5", "3.5")
+        val resolvedBefore = resolvedVcsSettings(id, versions)
+
+        writeSplit()
+
+        val rows = overridesOf(id)
+        assertEquals(2, rows.size, "composite replaced by its two segments")
+        rows.forEach { assertEquals(payloadBefore, it["markerChildren"], "payload of ${it["versionRange"]}") }
+        assertEquals(resolvedBefore, resolvedVcsSettings(id, versions), "resolved vcs settings per version")
+    }
+
+    @Test
+    @DisplayName("SYS-066: the manifest token changes when only a placement field changes")
+    fun `SYS-066 manifest token covers placement fields`() {
+        val id = newComponent()
+        val rowId = seedPlacedMarker(id, "[1.0,2.0-1),(2.0-1,3.0)")
+        val tokenBefore = split(dryRun = true).andExpect(status().isOk).body()["manifestToken"].asText()
+        inTransaction {
+            configurationRepository.findById(UUID.fromString(rowId)).orElseThrow().vcsEntries
+                .single { it.sortOrder == 1 }.checkoutDirectory = "moved"
+        }
+        val tokenAfterEntry = split(dryRun = true).andExpect(status().isOk).body()["manifestToken"].asText()
+        inTransaction {
+            configurationRepository.findById(UUID.fromString(rowId)).orElseThrow().buildWorkingDirectory = "other"
+        }
+        val tokenAfterRow = split(dryRun = true).andExpect(status().isOk).body()["manifestToken"].asText()
+        assertNotEquals(tokenBefore, tokenAfterEntry, "checkoutDirectory is part of the reviewed state")
+        assertNotEquals(tokenAfterEntry, tokenAfterRow, "buildWorkingDirectory is part of the reviewed state")
+    }
+
+    @Test
+    @DisplayName("SYS-066: a sibling differing only in a placement field is a collision (409), not a duplicate")
+    fun `SYS-066 sibling differing in placement aborts`() {
+        val id = newComponent()
+        seedPlacedMarker(id, "[1.0,2.0-1),(2.0-1,3.0)")
+        seedPlacedMarker(id, "[1.0,2.0-1)", docsCheckoutDirectory = "elsewhere")
+        split(dryRun = true).andExpect(status().isConflict)
+    }
+
+    @Test
+    @DisplayName("SYS-066: the split's audit row does not read as a manual checkout-layout edit")
+    fun `SYS-066 audit keeps placement non-manual`() {
+        val id = newComponent()
+        seedPlacedMarker(id, "[1.0,2.0-1),(2.0-1,3.0)")
+        val componentId = UUID.fromString(id)
+
+        writeSplit()
+
+        assertFalse(checkoutLayoutEditHistory.isCheckoutDirectoryManuallySet(componentId, DOCS_VCS_PATH))
+        assertFalse(checkoutLayoutEditHistory.isSourcePathManuallySet(componentId, MAIN_VCS_PATH))
+        assertFalse(checkoutLayoutEditHistory.isBuildWorkingDirectoryManuallySet(componentId, MAIN_VCS_PATH))
+    }
+
+    @Test
+    @DisplayName("SYS-066: a composite the resolver cannot parse (segments out of order) aborts (409)")
+    fun `SYS-066 out-of-order composite aborts`() {
+        val id = newComponent()
+        // Each segment is valid and they are disjoint, but the resolver rejects the composite as a whole,
+        // so the row is inert today; splitting it would make two live overrides.
+        seedCompositeMarker(id, "[2.0,3.0),[1.0,1.5)")
+        split(dryRun = true).andExpect(status().isConflict)
+    }
+
+    @Test
+    @DisplayName("SYS-066: a composite carrying generic artifacts aborts (409) instead of dropping them")
+    fun `SYS-066 generic artifacts abort`() {
+        val id = newComponent()
+        val rowId = seedCompositeMarker(id, "[1.0,2.0-1),(2.0-1,3.0)")
+        inTransaction {
+            val row = configurationRepository.findById(UUID.fromString(rowId)).orElseThrow()
+            row.genericArtifacts.add(DistributionGenericArtifactEntity(componentConfiguration = row, path = "x.zip"))
+        }
+        split(dryRun = true).andExpect(status().isConflict)
+    }
+
     // ── helpers ────────────────────────────────────────────────────────────
+
+    private fun inTransaction(block: () -> Unit) {
+        TransactionTemplate(transactionManager).executeWithoutResult { block() }
+    }
+
+    /** The vcs settings the DB resolver returns per version, as JSON (null when the version does not resolve). */
+    private fun resolvedVcsSettings(
+        componentId: String,
+        versions: List<String>,
+    ): List<String> =
+        TransactionTemplate(transactionManager).execute {
+            val component = componentRepository.findById(UUID.fromString(componentId)).orElseThrow()
+            versions.map { v ->
+                objectMapper.writeValueAsString(
+                    component.toResolvedEscrowModuleConfig(v, versionRangeFactory, numericVersionFactory)?.vcsSettings,
+                )
+            }
+        }!!
+
+    /**
+     * A two-root `vcs.settings` MARKER with every ONB-001 placement field set, as the V8 back-fill
+     * left real multi-root rows (`checkout_directory = name` on the secondary root).
+     */
+    private fun seedPlacedMarker(
+        componentId: String,
+        range: String,
+        docsCheckoutDirectory: String = "docs",
+    ): String {
+        val component = componentRepository.findById(UUID.fromString(componentId)).orElseThrow()
+        val row = ComponentConfigurationEntity(
+            component = component,
+            versionRange = range,
+            overriddenAttribute = "vcs.settings",
+            rowType = "MARKER",
+        )
+        row.buildWorkingDirectory = "build-dir"
+        row.vcsEntries.add(
+            VcsSettingsEntryEntity(
+                componentConfiguration = row,
+                name = "main",
+                vcsPath = MAIN_VCS_PATH,
+                branch = "master",
+                repositoryType = "GIT",
+                sortOrder = 0,
+                sourcePath = "src-main",
+            ),
+        )
+        row.vcsEntries.add(
+            VcsSettingsEntryEntity(
+                componentConfiguration = row,
+                name = "docs",
+                vcsPath = DOCS_VCS_PATH,
+                branch = "master",
+                repositoryType = "GIT",
+                sortOrder = 1,
+                checkoutDirectory = docsCheckoutDirectory,
+            ),
+        )
+        return configurationRepository.save(row).id!!.toString()
+    }
 
     private fun ResultActions.body(): JsonNode = objectMapper.readTree(andReturn().response.contentAsString)
 
@@ -426,4 +583,9 @@ class CompositeOverrideSplitAdminControllerTest {
                     .andReturn()
                     .response.contentAsString,
             ).toList()
+
+    private companion object {
+        const val MAIN_VCS_PATH = "ssh://git@example.test/proj/main.git"
+        const val DOCS_VCS_PATH = "ssh://git@example.test/proj/docs.git"
+    }
 }
