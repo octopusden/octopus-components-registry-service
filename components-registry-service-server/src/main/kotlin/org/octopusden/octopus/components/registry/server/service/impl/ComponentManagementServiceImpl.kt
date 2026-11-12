@@ -4907,6 +4907,16 @@ class ComponentManagementServiceImpl(
         // malformed row aborts here rather than being left behind or written as a bad row.
         segments.forEach { requireValidSegment(row, it) }
         if (segments.size == 1) return null
+        // The resolver tolerates whitespace at the ends and around commas, but reads a bound with
+        // whitespace inside it differently (`[ 1.0` parses as a lower bound of 0), while the split
+        // writes the normalized bound. Abort rather than change which versions the row covers.
+        if (row.versionRange.trim().replace(WHITESPACE_AROUND_COMMA, ",").any(Char::isWhitespace)) {
+            throw CompositeOverrideSplitAbortedException(
+                "Composite '${row.versionRange}' on component '${row.component.componentKey}' has whitespace " +
+                    "inside a version bound, which the resolver reads differently from the split. " +
+                    "Aborting; no rows changed.",
+            )
+        }
         // The resolver parses the stored string as-is and treats a failure as "matches nothing", so a
         // composite it rejects (e.g. segments out of order) is inert today. Splitting it would make its
         // segments live and change the resolved output: abort instead.
@@ -5298,6 +5308,8 @@ class ComponentManagementServiceImpl(
         // SYS-066 manifest-token marker for a SQL NULL field; a present field is always `<length>:<value>`,
         // so this cannot collide with a value.
         private const val NULL_FIELD = "n"
+
+        private val WHITESPACE_AROUND_COMMA = Regex("\\s*,\\s*")
 
         private const val AUTO_RELEASE_FIELD = "component.autoRelease"
 

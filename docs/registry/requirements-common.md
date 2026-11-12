@@ -2826,7 +2826,9 @@ touching other admin endpoints. `POST /field-overrides/split-composites?dryRun={
    The scan is deliberately global: a malformed override row on ANY attribute blocks the whole run until
    that data is fixed, and the dry-run names it. A composite is also parsed as a whole, exactly as the
    resolver parses it; one the resolver rejects (e.g. segments out of order) applies to no version
-   today, so splitting it would change the resolved output — it aborts.
+   today, so splitting it would change the resolved output — it aborts. So does a composite with
+   whitespace inside a version bound (`[ 1.0,…`): the resolver reads that bound differently from the
+   normalized one the split would write. Whitespace at the ends and around commas is harmless.
 2. Fail-closed scope guard: any composite that is not a `vcs.settings` MARKER aborts (409), and so does
    one carrying any child collection other than vcs entries (the split copies only those).
 3. Intra-composite disjointness: a composite whose own segments overlap aborts.
