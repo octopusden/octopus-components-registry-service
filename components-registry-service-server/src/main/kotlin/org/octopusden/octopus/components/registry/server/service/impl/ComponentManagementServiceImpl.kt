@@ -4908,7 +4908,18 @@ class ComponentManagementServiceImpl(
         // segment through the production VersionRangeFactory, including a single segment, so a
         // malformed row aborts here rather than being left behind or written as a bad row.
         segments.forEach { requireValidSegment(row, it) }
-        return if (segments.size > 1) SplitPlan(row, segments) else null
+        if (segments.size == 1) return null
+        // The resolver parses the stored string as-is and treats a failure as "matches nothing", so a
+        // composite it rejects (e.g. segments out of order) is inert today. Splitting it would make its
+        // segments live and change the resolved output: abort instead.
+        runCatching { versionRangeFactory.create(row.versionRange) }.onFailure {
+            throw CompositeOverrideSplitAbortedException(
+                "Composite '${row.versionRange}' on component '${row.component.componentKey}' is not " +
+                    "parseable by the resolver (${it.message}), so it applies to no version today. " +
+                    "Aborting; no rows changed.",
+            )
+        }
+        return SplitPlan(row, segments)
     }
 
     private fun requireValidSegment(
@@ -4974,6 +4985,7 @@ class ComponentManagementServiceImpl(
                 row.fileUrlArtifacts,
                 row.dockerImages,
                 row.packages,
+                row.genericArtifacts,
                 row.requiredToolJunctions,
                 row.buildToolBeans,
             )
@@ -5056,10 +5068,6 @@ class ComponentManagementServiceImpl(
 
     private fun splitPreimageRow(rp: ResolvedPlan): String {
         val row = rp.row
-        val entries =
-            row.vcsEntries
-                .sortedBy { it.sortOrder }
-                .map { encodeFields(splitPreimageEntry(it)) }
         return encodeFields(
             listOf(
                 row.component.componentKey,
@@ -5067,21 +5075,34 @@ class ComponentManagementServiceImpl(
                 normalizeRange(row.versionRange),
                 encodeFields(rp.segmentsToCreate.sorted()),
                 rp.skipped.toString(),
-                encodeFields(entries),
+                encodeFields(vcsPayload(row)),
             ),
         )
     }
 
-    private fun splitPreimageEntry(e: VcsSettingsEntryEntity): List<String?> =
-        listOf(
-            e.name,
-            e.vcsPath,
-            e.branch,
-            e.tag,
-            e.hotfixBranch,
-            e.repositoryType,
-            e.sortOrder.toString(),
-        )
+    /**
+     * Everything a `vcs.settings` MARKER row contributes to the resolved output: the row's Build Working
+     * Directory and every field of its entries in sortOrder (sortOrder is output-affecting, V4Mappers).
+     * The ONE field list for the split's copy check, sibling-duplicate check and manifest token, so a
+     * field cannot be copied but not compared, or compared but not hashed.
+     */
+    private fun vcsPayload(row: ComponentConfigurationEntity): List<String?> =
+        listOf(row.buildWorkingDirectory) +
+            row.vcsEntries.sortedBy { it.sortOrder }.map { e ->
+                encodeFields(
+                    listOf(
+                        e.name,
+                        e.vcsPath,
+                        e.branch,
+                        e.tag,
+                        e.hotfixBranch,
+                        e.repositoryType,
+                        e.sortOrder.toString(),
+                        e.sourcePath,
+                        e.checkoutDirectory,
+                    ),
+                )
+            }
 
     /** 6. Write: bind to the reviewed manifest. */
     private fun requireManifestTokenMatches(
@@ -5127,15 +5148,20 @@ class ComponentManagementServiceImpl(
         // ComponentEntity.configurations is orphanRemoval = true: removing the row from the collection deletes it
         // (and its cascaded vcsEntries) at flush.
         component.configurations.remove(row)
+        // Same shape on both sides, payload unchanged: only versionRange moves to the segments. A
+        // payload missing from newValue would read as a manual clear of every checkout-layout field to
+        // CheckoutLayoutEditHistory, and ONB-002 Sync would then refuse to touch them.
+        @Suppress("UNCHECKED_CAST")
+        val after =
+            before.mapValues { (_, snapshot) ->
+                (snapshot as Map<String, Any?>) +
+                    mapOf("versionRange" to rp.segmentsToCreate, "skippedDuplicates" to rp.skipped)
+            }
         publishAuditEvent(
             action = "UPDATE",
             entityId = component.id.toString(),
             oldValue = before,
-            newValue =
-                mapOf(
-                    "fieldOverride[${row.overriddenAttribute}]" to
-                        mapOf("splitInto" to rp.segmentsToCreate, "skippedDuplicates" to rp.skipped),
-                ),
+            newValue = after,
         )
     }
 
@@ -5150,6 +5176,7 @@ class ComponentManagementServiceImpl(
                 overriddenAttribute = row.overriddenAttribute,
                 rowType = "MARKER",
             )
+        newRow.buildWorkingDirectory = row.buildWorkingDirectory
         row.vcsEntries.sortedBy { it.sortOrder }.forEach { e ->
             newRow.vcsEntries.add(
                 VcsSettingsEntryEntity(
@@ -5161,9 +5188,13 @@ class ComponentManagementServiceImpl(
                     hotfixBranch = e.hotfixBranch,
                     repositoryType = e.repositoryType,
                     sortOrder = e.sortOrder,
+                    sourcePath = e.sourcePath,
+                    checkoutDirectory = e.checkoutDirectory,
                 ),
             )
         }
+        // A field added to vcsPayload but not copied above must fail here, not lose data silently.
+        check(vcsPayloadEqual(row, newRow)) { "SYS-066 split copy of '${row.versionRange}' is incomplete" }
         return newRow
     }
 
@@ -5194,14 +5225,10 @@ class ComponentManagementServiceImpl(
             versionRangeFactory.create(normalizeRange(a)).isIntersect(versionRangeFactory.create(normalizeRange(b)))
         }.getOrDefault(true)
 
-    /** Ordered (by sortOrder) vcs-entry payload equality — sortOrder is output-affecting (V4Mappers). */
     private fun vcsPayloadEqual(
         a: ComponentConfigurationEntity,
         b: ComponentConfigurationEntity,
-    ): Boolean {
-        fun sig(e: VcsSettingsEntryEntity) = listOf(e.name, e.vcsPath, e.branch, e.tag, e.hotfixBranch, e.repositoryType, e.sortOrder)
-        return a.vcsEntries.sortedBy { it.sortOrder }.map(::sig) == b.vcsEntries.sortedBy { it.sortOrder }.map(::sig)
-    }
+    ): Boolean = vcsPayload(a) == vcsPayload(b)
 
     /**
      * Injective encoding of a field list: each non-null field is written as `<length>:<value>` and a null

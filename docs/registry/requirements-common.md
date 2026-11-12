@@ -2823,17 +2823,27 @@ touching other admin endpoints. `POST /field-overrides/split-composites?dryRun={
 1. Scans all field-override rows. Each row is decomposed with `splitCompositeStrict` (which aborts on any
    malformed/unaccounted input), and every resulting segment is validated through the production
    `VersionRangeFactory`, including single-segment rows. A row is split only when it yields > 1 segment.
-2. Fail-closed scope guard: any composite that is not a `vcs.settings` MARKER aborts (409).
+   The scan is deliberately global: a malformed override row on ANY attribute blocks the whole run until
+   that data is fixed, and the dry-run names it. A composite is also parsed as a whole, exactly as the
+   resolver parses it; one the resolver rejects (e.g. segments out of order) applies to no version
+   today, so splitting it would change the resolved output — it aborts.
+2. Fail-closed scope guard: any composite that is not a `vcs.settings` MARKER aborts (409), and so does
+   one carrying any child collection other than vcs entries (the split copies only those).
 3. Intra-composite disjointness: a composite whose own segments overlap aborts.
 4. Sibling collision preflight (semantic `isIntersect`, decided by mutual containment): a segment
    intersecting an existing sibling aborts unless it is the SAME interval with an identical ordered
-   vcs payload (then that duplicate segment is skipped, not recreated).
+   vcs payload (then that duplicate segment is skipped, not recreated). The vcs payload is the row's
+   Build Working Directory plus every field of every entry in sortOrder, including the ONB-001
+   `sourcePath` / `checkoutDirectory`; one field list serves the copy, this comparison and the token.
 5. Deterministic `manifestToken` (SHA-256 over the canonically-ordered plan incl. payload). `dryRun`
    (default true) previews and writes nothing; a write requires the token, recomputed + compared
    in-transaction — a stale or missing token aborts (409), so a write can only apply the exact
    reviewed state.
-6. Writes create single-segment rows (deep-copying vcs entries), delete the composite, bump each
-   affected component's `@Version` once, and emit a per-composite audit UPDATE. Idempotent.
+6. Writes create single-segment rows (deep-copying the whole vcs payload, checked equal after the
+   copy), delete the composite, bump each affected component's `@Version` once, and emit a
+   per-composite audit UPDATE. The audit row has the same shape on both sides with the payload
+   unchanged — only `versionRange` moves to the segments — so `CheckoutLayoutEditHistory` never reads
+   the split as a manual checkout-layout edit and ONB-002 Sync keeps managing those fields. Idempotent.
 
 Robustness (review-hardened): the collision preflight inspects EVERY intersecting sibling (a segment is
 skipped only when byte-identical + identical ordered payload, and any other intersecting sibling still
@@ -2854,6 +2864,11 @@ edits) — the token covers the dry-run→write gap, quiescence covers the write
 6. A sibling collision with an identical payload skips only that duplicate segment.
 7. A write without a token, or with a token stale after the data changed, → 409 with no writes.
 8. With the flag unset the endpoint is not wired (404).
+9. The resolved vcs settings of every version are the same before and after the split, including the
+   ONB-001 placement fields; a placement-only change moves the token, and a sibling differing only in
+   a placement field is a collision.
+10. After the split no checkout-layout field reads as manually edited.
+11. A composite the resolver cannot parse, or one carrying non-vcs child data, → 409.
 
 **Test method:** `CompositeOverrideSplitAdminControllerTest` —
 `SYS-066 dry-run previews without writing`, `SYS-066 write splits with copied payload`,
@@ -2863,7 +2878,10 @@ edits) — the token covers the dry-run→write gap, quiescence covers the write
 `SYS-066 write without token aborts`, `SYS-066 stale token aborts`, `SYS-066 malformed range aborts`,
 `SYS-066 all intersecting siblings are inspected`, `SYS-066 composite with invalid segment aborts`,
 `SYS-066 multi-entry payload preserved on split`, `SYS-066 malformed single segment aborts`,
-`SYS-066 manifest token distinguishes field boundaries`, `SYS-066 whitespace in composite is normalized on split`;
+`SYS-066 manifest token distinguishes field boundaries`, `SYS-066 whitespace in composite is normalized on split`,
+`SYS-066 placement fields and resolved output preserved`, `SYS-066 manifest token covers placement fields`,
+`SYS-066 sibling differing in placement aborts`, `SYS-066 audit keeps placement non-manual`,
+`SYS-066 out-of-order composite aborts`, `SYS-066 generic artifacts abort`;
 `CompositeOverrideSplitDisabledTest` — `SYS-066 endpoint absent when flag off`;
 `VersionRangePartitionTest` — `SYS-066 strict split decomposes composites`,
 `SYS-066 strict split does not check disjointness`, `SYS-066 strict split throws on malformed input`.
