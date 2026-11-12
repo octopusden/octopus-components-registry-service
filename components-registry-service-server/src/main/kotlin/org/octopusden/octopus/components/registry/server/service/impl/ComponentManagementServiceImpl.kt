@@ -4894,16 +4894,14 @@ class ComponentManagementServiceImpl(
             .mapNotNull(::compositeSplitPlan)
 
     private fun compositeSplitPlan(row: ComponentConfigurationEntity): SplitPlan? {
+        // Fail-closed decomposition: null when any fragment does not parse or text is left over.
         val segments =
-            try {
-                VersionRangePartition.splitCompositeStrict(row.versionRange)
-            } catch (e: IllegalArgumentException) {
-                throw CompositeOverrideSplitAbortedException(
+            VersionRangePartition.toSegmentsOrNull(row.versionRange)?.map(VersionRangePartition::render)
+                ?: throw CompositeOverrideSplitAbortedException(
                     "Malformed field-override range '${row.versionRange}' on component " +
-                        "'${row.component.componentKey}': ${e.message}. Aborting; no rows changed.",
-                    e,
+                        "'${row.component.componentKey}': not a clean composite of single Maven segments. " +
+                        "Aborting; no rows changed.",
                 )
-            }
         // The regex splitter is permissive (e.g. it accepts `[3,]`). Validate every produced
         // segment through the production VersionRangeFactory, including a single segment, so a
         // malformed row aborts here rather than being left behind or written as a bad row.

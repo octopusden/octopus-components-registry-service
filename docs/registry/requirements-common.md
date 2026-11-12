@@ -2820,7 +2820,7 @@ auth, `@ConditionalOnDatabaseEnabled`) gated by
 `@ConditionalOnProperty("components-registry.composite-override-split.enabled", default false)` — the
 bean is not registered unless enabled (path → 404), enforcing "our DB only" structurally without
 touching other admin endpoints. `POST /field-overrides/split-composites?dryRun={true}&manifestToken=`:
-1. Scans all field-override rows. Each row is decomposed with `splitCompositeStrict` (which aborts on any
+1. Scans all field-override rows. Each row is decomposed with `VersionRangePartition.toSegmentsOrNull` (which fails on any
    malformed/unaccounted input), and every resulting segment is validated through the production
    `VersionRangeFactory`, including single-segment rows. A row is split only when it yields > 1 segment.
    The scan is deliberately global: a malformed override row on ANY attribute blocks the whole run until

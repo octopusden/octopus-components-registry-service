@@ -248,47 +248,52 @@ class VersionRangePartitionTest {
     // ── SYS-066: strict composite decomposition for the one-off split cleanup ───────
 
     @Test
-    @DisplayName("SYS-066: splitCompositeStrict decomposes composites into canonical single segments")
+    @DisplayName("SYS-066: strict split decomposes composites into canonical single segments")
     fun `SYS-066 strict split decomposes composites`() {
         // Two-segment composite around an excluded point.
         assertEquals(
             listOf("[2.2.18,2.2.20-132)", "(2.2.20-132,2.2.21)"),
-            VersionRangePartition.splitCompositeStrict("[2.2.18,2.2.20-132),(2.2.20-132,2.2.21)"),
+            strictSplit("[2.2.18,2.2.20-132),(2.2.20-132,2.2.21)"),
         )
         // Exact-version members render in hard-version [x] form, not [x,x].
         assertEquals(
             listOf("[1.1.40]", "[1.1.49]", "[1.1.51]"),
-            VersionRangePartition.splitCompositeStrict("[1.1.40],[1.1.49],[1.1.51]"),
+            strictSplit("[1.1.40],[1.1.49],[1.1.51]"),
         )
         // Whitespace is normalized away before splitting.
         assertEquals(
             listOf("[1.7,2)", "[2.4.0,2.4.11]"),
-            VersionRangePartition.splitCompositeStrict("[1.7, 2), [2.4.0,2.4.11]"),
+            strictSplit("[1.7, 2), [2.4.0,2.4.11]"),
         )
         // A non-composite input returns a single element (caller decides via size > 1).
-        assertEquals(listOf("[1.0,2.0)"), VersionRangePartition.splitCompositeStrict("[1.0,2.0)"))
-        assertEquals(listOf("[1.0.49]"), VersionRangePartition.splitCompositeStrict("[1.0.49]"))
+        assertEquals(listOf("[1.0,2.0)"), strictSplit("[1.0,2.0)"))
+        assertEquals(listOf("[1.0.49]"), strictSplit("[1.0.49]"))
     }
 
     @Test
-    @DisplayName("SYS-066: splitCompositeStrict splits overlapping segments verbatim (disjointness is the caller's job)")
+    @DisplayName("SYS-066: strict split splits overlapping segments verbatim (disjointness is the caller's job)")
     fun `SYS-066 strict split does not check disjointness`() {
         // A self-overlapping composite still decomposes cleanly — overlap detection lives in the caller.
-        assertEquals(listOf("[1,3)", "[2,4)"), VersionRangePartition.splitCompositeStrict("[1,3),[2,4)"))
+        assertEquals(listOf("[1,3)", "[2,4)"), strictSplit("[1,3),[2,4)"))
     }
 
     @Test
-    @DisplayName("SYS-066: splitCompositeStrict throws on a malformed range (no silent drop)")
+    @DisplayName("SYS-066: strict split throws on a malformed range (no silent drop)")
     fun `SYS-066 strict split throws on malformed input`() {
         // Unlike the lenient toSegments scan, a malformed fragment must abort, never be dropped.
         assertThrows(IllegalArgumentException::class.java) {
-            VersionRangePartition.splitCompositeStrict("[1,2),garbage,[5,6)")
+            strictSplit("[1,2),garbage,[5,6)")
         }
         assertThrows(IllegalArgumentException::class.java) {
-            VersionRangePartition.splitCompositeStrict("[1,2")
+            strictSplit("[1,2")
         }
         assertThrows(IllegalArgumentException::class.java) {
-            VersionRangePartition.splitCompositeStrict("")
+            strictSplit("")
         }
     }
+
+    /** The SYS-066 split's decomposition: the fail-closed [VersionRangePartition.toSegmentsOrNull], rendered. */
+    private fun strictSplit(range: String): List<String> =
+        requireNotNull(VersionRangePartition.toSegmentsOrNull(range)) { "not fully parseable: '$range'" }
+            .map(VersionRangePartition::render)
 }
