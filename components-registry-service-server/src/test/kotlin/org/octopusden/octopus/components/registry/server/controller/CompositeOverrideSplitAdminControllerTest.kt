@@ -450,6 +450,16 @@ class CompositeOverrideSplitAdminControllerTest {
     }
 
     @Test
+    @DisplayName("SYS-066: whitespace inside a bound aborts (409): the resolver reads it differently than the split")
+    fun `SYS-066 whitespace inside a bound aborts`() {
+        val id = newComponent()
+        // The resolver parses "[ 1.0" leniently as a lower bound of 0, so version 0.5 matches today; the
+        // split would write the normalized "[1.0,2.0-1)" and drop 0.5 from the override.
+        seedCompositeMarker(id, "[ 1.0,2.0-1),(2.0-1,3.0)")
+        split(dryRun = true).andExpect(status().isConflict)
+    }
+
+    @Test
     @DisplayName("SYS-066: a composite carrying generic artifacts aborts (409) instead of dropping them")
     fun `SYS-066 generic artifacts abort`() {
         val id = newComponent()
