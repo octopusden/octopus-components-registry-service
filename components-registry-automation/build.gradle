@@ -8,17 +8,6 @@ plugins {
     id 'org.octopusden.octopus.oc-template'
 }
 
-java.sourceCompatibility = 1.8
-java.targetCompatibility = 1.8
-
-compileKotlin {
-    kotlinOptions.jvmTarget = "1.8"
-}
-
-compileTestKotlin {
-    kotlinOptions.jvmTarget = "1.8"
-}
-
 group = 'org.octopusden.octopus.components.registry.automation'
 description = 'Octopus Components Registry Automation'
 
@@ -194,8 +183,26 @@ tasks.named("ocCreate") {
     dependsOn(":components-registry-service-server:dockerPushImage")
 }
 
+// A `java` that always fails, put first on the test JVM's PATH. ApplicationTest must start the
+// CLI with the test's own JVM; if it fell back to `java` from PATH (Java 8 on EL8 agents), the
+// tests would fail here on every agent instead of only on some.
+def pathJavaTrapDir = layout.buildDirectory.dir("path-java-trap")
+def pathJavaTrap = tasks.register("pathJavaTrap") {
+    outputs.dir(pathJavaTrapDir)
+    doLast {
+        def java = pathJavaTrapDir.get().file("java").asFile
+        java.parentFile.mkdirs()
+        java.text = """#!/bin/sh
+echo "ApplicationTest must start the CLI with the test JVM, not with java from PATH" >&2
+exit 97
+"""
+        java.setExecutable(true)
+    }
+}
+
 tasks.withType(Test) {
-    dependsOn ocCreate, shadowJar
+    dependsOn ocCreate, shadowJar, pathJavaTrap
+    environment "PATH", pathJavaTrapDir.get().asFile.absolutePath + File.pathSeparator + System.getenv("PATH")
     systemProperties["test.components-registry-service-host"] = ocTemplate.getOkdHost("comp-reg")
     systemProperties["jar"] = shadowJar.archiveFile.get().asFile.absolutePath
     useJUnitPlatform()
