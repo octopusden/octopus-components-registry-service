@@ -16,16 +16,24 @@ Two internal services, both run by the platform team, expose customer data:
 | | Customer read service | Onboarding service |
 |---|---|---|
 | Purpose | Read-only customer data API | Repository provisioning, with a customer list on the side |
-| Customer data | `GET /api/clients?page&pageSize&orderBy&asc`, `GET /api/clients/{code}`; `code`, `name`, `type`, `status`, hosting, PGP, licenses | `GET /api/v1/clients`; `code`, `is_active`, …; unpaged; drops codes starting with `_` |
-| Backing store | The platform's customer cache, read with a `client_credentials` token | A legacy database API, read with basic credentials |
-| Auth | Keycloak resource server; accepts **service-account tokens only**, checked against an `allowed-callers` list | None |
+| Customer data | `GET /api/v1/customers?page&limit&sort` (paged, with filters): `code`, `country`, `type`, `status`, `language`, `pgpStatus`. `GET /api/v1/customers/{code}` adds `name` and hosting; PGP keys and licenses are sub-resources | `GET /api/v1/clients`; `code`, `is_active`, …; unpaged; drops codes starting with `_` |
+| Backing store | The platform's customer cache, read with a technical user's token | A legacy database API, read with basic credentials |
+| Auth | Keycloak resource server; accepts **only callers on an `allowed-callers` list**, matched by the token's `preferred_username` | None |
 | Stack | Kotlin / Spring Boot | Python / Flask |
 
 Both lists ultimately derive from the ERP system of record, but only the read service
-fronts the customer cache. Three writers fill that cache: a nightly sync from the ERP, an
-SVN key scanner (PGP keys), and the customer-management UI (hosting, PGP waivers). The sync
-is nightly because the ERP API is too slow to call per request. As a result, **a customer
-created in the ERP can be missing from the directory for up to a day.**
+fronts the customer cache. Three writers fill that cache: a nightly sync, an SVN key
+scanner (PGP keys), and the customer-management UI (hosting, PGP waivers). The sync is
+nightly because the ERP API is too slow to call per request.
+
+**The sync does not discover customers in the ERP.** It takes its list of codes from the
+platform's registry of customer projects in the VCS, and asks the ERP for the attributes
+of each one. The directory therefore holds the customers that have a registered project,
+not every customer in the ERP:
+
+- a customer whose project was registered today appears after the next nightly sync, so
+  it **can be missing for up to a day**;
+- a customer without a registered project **never appears**, however long one waits.
 
 The read service's current internal name, `*-client-service`, is ambiguous in every
 consumer's code: "client" already means an OAuth client (`client-id`,
@@ -40,15 +48,19 @@ service built for this, it authenticates callers, and it returns `status`, which
 needs. Not going straight to the cache or its database keeps the dependency on the service
 that owns the contract. The cache could later move behind it without consumers noticing.
 
+**Alternative considered: CRS reads the ERP API directly.** Rejected. The ERP API is too
+slow to call on a write (its bulk customer read takes minutes), so CRS would need ERP
+credentials, a sync job and its own copy of the data, which is what the platform's cache
+and the read service already are. A deployment that gets customer data another way is not
+forced to run the read service: with the integration off, the check is `DISABLED`.
+
 A separate cross-team ADR, owned by the service's team, proposes renaming it
 **`octopus-customer-service`** (the current name collides with "OAuth client" and "HTTP
 client" in every consumer), moving it to the octopusden GitHub org after the
 `octopus-employee-service` precedent, and making it the owner of the customer data. This
-ADR uses the proposed name. If the rename is not adopted, the CRS property prefix, the
-class names and the upstream path (`/api/clients` instead of `/api/customers`) change;
-nothing else in this ADR does. The same ADR makes `/api/customers` and `/api/customers/{code}` the
-service's canonical paths, with `/api/clients` kept as a deprecated alias; CRS calls
-`/api/customers` only.
+ADR uses the proposed name. If the rename is not adopted, the CRS property prefix and the
+class names change; nothing else in this ADR does. The service's paths already say
+"customers" whatever the service is called: CRS calls `GET /api/v1/customers`.
 
 "Directory" stays at the consumer level: the CRS class is `CustomerDirectoryService`,
 mirroring `EmployeeDirectoryService`.
@@ -93,8 +105,9 @@ scripts) gets it, not only the Portal form. **Scope is the same as ADR-015:** v4
 
   "Reject (400)" is the direct-write contract (v4 POST and PATCH). Template creates report
   the same outcomes in their own shape; see **Error contract**.
-- **Explicit admin override for `UNKNOWN`.** Because of the daily sync, a legitimate
-  customer created today is `UNKNOWN` until the next sync. The override needs **both** the
+- **Explicit admin override for `UNKNOWN`.** A legitimate customer can be `UNKNOWN`: its
+  project was registered today and the nightly sync has not run yet, or it has no
+  registered project at all (see Context). The override needs **both** the
   `EDIT_ANY_COMPONENT` permission **and** an explicit request flag: a nullable body field
   `acknowledgeUnknownClientCode: Boolean? = null` on `ComponentCreateRequest`,
   `ComponentUpdateRequest` and `TemplateComponentRequest` (an additive v4 change per
@@ -116,8 +129,9 @@ scripts) gets it, not only the Portal form. **Scope is the same as ADR-015:** v4
   As in ADR-015, it is skipped for archived components and for a field whose field-config
   `visibility` is `hidden`.
 - **Error contract.** The message always has the colon form `clientCode: <message>`, which
-  the Portal's `parseServerFieldErrors` maps inline. The `UNKNOWN` message says the
-  directory is synced daily, so a brand-new customer is not reported as simply "invalid".
+  the Portal's `parseServerFieldErrors` maps inline. The `UNKNOWN` message says that the
+  directory lists customers with a registered project and is synced daily, so a real
+  customer is not reported as simply "invalid".
   The Portal must tell `UNKNOWN` (offer the override) from `INACTIVE` (no override), so each
   rejection also carries a machine-readable code, `CLIENT_CODE_UNKNOWN` or
   `CLIENT_CODE_INACTIVE`:
@@ -137,7 +151,10 @@ scripts) gets it, not only the Portal form. **Scope is the same as ADR-015:** v4
     `CLIENT_CODE_UNKNOWN`, offers the admin checkbox, which sets
     `acknowledgeUnknownClientCode` on the retried request.
 - **Dictionary endpoint.** New `GET /rest/api/4/components/meta/customers` →
-  `[{ code, name, status }]`, served from the same snapshot, for the Portal picker. It
+  `[{ code, name, status }]`, served from the same snapshot, for the Portal picker.
+  `name` is nullable: the upstream list does not carry it today, only the per-customer
+  read does, and CRS does not read each customer separately to fill it. Until the upstream
+  list carries `name` (open question 7), the picker shows codes only. The endpoint
   requires **authentication plus `ACCESS_COMPONENTS`**, like the employee lookups in
   ADR-015, not `ACCESS_COMPONENTS` alone: the anonymous role carries that permission, and
   customer names and statuses must not be public. It includes `_`-prefixed
@@ -157,11 +174,15 @@ scripts) gets it, not only the Portal form. **Scope is the same as ADR-015:** v4
 ### Negative
 - A new runtime dependency and a new Keycloak client for CRS, plus an allow-list entry on
   the platform side.
-- Up to a day of staleness for newly created customers. Editors hold
+- The directory is narrower than the ERP and up to a day behind: a customer appears only
+  once its project is registered, and then after the next nightly sync. Editors hold
   `CREATE_COMPONENTS` but not `EDIT_ANY_COMPONENT`, so they cannot finish such a create
   themselves: they wait for the sync, or an admin creates the component with the override
   (and ownership is set accordingly). An on-demand refresh on the platform side (open
-  question 5) would remove this.
+  question 5) would remove the delay but not the gap: for a customer without a registered
+  project, the override is the only way (open question 6).
+- The Portal picker shows codes without names until the upstream list carries `name`
+  (open question 7).
 - DSL import still accepts any `clientCode`, as it accepts any person field today.
 - CRS depends on the upstream's identity: if the service is renamed after CRS is wired in,
   the CRS Keycloak client stays, but the allow-list entry and URL move with it.
@@ -182,7 +203,11 @@ scripts) gets it, not only the Portal form. **Scope is the same as ADR-015:** v4
    (seeds `customer-service.active-statuses` / `inactive-statuses`).
 3. Does the read service return internal `_`-prefixed codes, and should they validate?
 4. Timing of the rename (separate ADR) relative to CRS wiring.
-5. Can a directory refresh be triggered on demand, for customers created today?
+5. Can a directory refresh be triggered on demand, for customers registered today?
+6. Should the directory list every customer in the ERP, not only those with a registered
+   project? Until it does, a component for such a customer needs the admin override.
+7. Can the upstream list carry `name`? Its list items omit it today, and the picker needs
+   it.
 
 ## References
 - [ADR-015](015-employee-service-runtime-validation.md), [ADR-020](020-component-key-format.md)
