@@ -291,9 +291,22 @@ class TemplateParserTest {
     }
 
     @Test
-    @DisplayName("a filter other than lower or upper is a problem naming the field")
+    @DisplayName("a filter outside the supported set is a problem naming the field")
     fun unknownFilter() {
         assertProblem("fields.name", exampleTemplate().apply { at("fields")["name"] = "{{ CLIENT_CODE | capitalize }}-{{ PLUGIN_CODE }}" })
+    }
+
+    @Test
+    @DisplayName("a field using 'title' or 'kebab' loads live, same as 'lower' and 'upper'")
+    fun titleAndKebabFiltersLoadLive() {
+        val load =
+            load(
+                exampleTemplate().apply {
+                    at("fields")["name"] = "{{ CLIENT_CODE | kebab }}-plugin-{{ PLUGIN_CODE | title }}"
+                },
+            )
+
+        assertEquals(emptyList<String>(), load.entries.single { it.id == TEMPLATE_ID }.problems)
     }
 
     @Test
