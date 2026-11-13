@@ -21,6 +21,7 @@ components-registry:
       - "3.6"
       - "3.6.3"
       - "3.9"
+      - "3.10"
 
   # SYS-099: component keys that may carry testComponent = true (regexes, find semantics).
   # service-config replaces the whole list per installation; served via /meta/test-component-name-patterns.

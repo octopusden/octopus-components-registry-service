@@ -1716,6 +1716,14 @@ class ComponentManagementServiceImpl(
                 )
             }
 
+        // A base ownership claim is in force only within the supported versions, so WIDENING coverage can
+        // create an ownership collision → re-check. A pure shrink (or bounded ← ALL) can't, so skip it there
+        // and never 409 a shrink on pre-existing data. Containment is semantic, not by string.
+        val widened =
+            existingRanges.isNotEmpty() &&
+                (finalSet.isEmpty() || !coverageContains(existingRanges, finalSet))
+        if (widened) validateArtifactOwnershipIfChanged(component)
+
         // V1/V5 (warn-and-allow): surface overrides left entirely outside the new supported set — they
         // never resolve (the coverage gate 404s first). Non-blocking; the write still succeeds.
         // `finalRanges` can be empty even when `all=false` (the request's ranges TILED all-versions and
@@ -1760,6 +1768,20 @@ class ComponentManagementServiceImpl(
         // No disjointness requirement: overlapping/adjacent requested ranges are normalized into the
         // canonical merged union by VersionRangePartition.mergeUnion (ADR-018 redesign — coverage is a
         // union, not a partition; enumeration breakpoints are derived at read time).
+    }
+
+    /**
+     * True iff every version in [inner] is also in [outer] (bounds, inclusivity and gaps included):
+     * adding [inner] to [outer] leaves the canonical merged union unchanged. Errs toward "not contained"
+     * (e.g. one version spelt two ways), which only costs an extra ownership re-check.
+     */
+    private fun coverageContains(
+        outer: Collection<String>,
+        inner: Collection<String>,
+    ): Boolean {
+        val compare = numericVersionComparator(numericVersionFactory)
+        return VersionRangePartition.mergeUnion((outer + inner).toList(), compare) ==
+            VersionRangePartition.mergeUnion(outer.toList(), compare)
     }
 
     /** True iff [range] denotes all versions (the ALL_VERSIONS sentinel or the unbounded `(,)`). */
@@ -3678,7 +3700,21 @@ class ComponentManagementServiceImpl(
         val intersect: (String, String) -> Boolean = { a, b ->
             runCatching { versionRangeFactory.create(a).isIntersect(versionRangeFactory.create(b)) }.getOrDefault(true)
         }
-        val violations = computeOwnershipCollisions(ownClaims, rivalClaims, intersect, shadowRanges)
+        // Each component's bounded supported ranges → its base claim is in force only there (a component
+        // with no RANGE_PRESENCE rows is supported in all versions and is simply absent from the map).
+        val coverage =
+            buildMap<String, List<String>> {
+                configurationRepository
+                    .findRangePresenceOfOtherComponents(componentId)
+                    .groupBy({ it.componentKey }, { it.versionRange })
+                    .forEach { (key, ranges) -> put(key, ranges) }
+                entity.configurations
+                    .filter { it.rowType == "RANGE_PRESENCE" }
+                    .map { it.versionRange }
+                    .takeIf { it.isNotEmpty() }
+                    ?.let { put(entity.componentKey, it) }
+            }
+        val violations = computeOwnershipCollisions(ownClaims, rivalClaims, intersect, shadowRanges, coverage)
         if (violations.isNotEmpty()) throw CrossComponentConflictException(violations.first())
     }
 

@@ -98,11 +98,7 @@ object TemplateRenderer {
                 is TemplateExpression.Part.Literal -> part.text
                 is TemplateExpression.Part.Parameter -> {
                     val value = values[part.name]?.firstOrNull().orEmpty()
-                    when (part.filter) {
-                        TemplateExpression.Filter.LOWER -> value.lowercase()
-                        TemplateExpression.Filter.UPPER -> value.uppercase()
-                        null -> value
-                    }
+                    part.filter?.transform(value) ?: value
                 }
             }
         }
