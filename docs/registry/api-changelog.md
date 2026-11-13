@@ -18,6 +18,12 @@ refresh it with `./gradlew :components-registry-service-server:generateOpenApiDo
 
 ## Unreleased
 
+- **`POST /rest/api/4/admin/field-overrides/split-composites` (SYS-066, `IMPORT_DATA`, database
+  mode).** One-off operation that splits legacy composite `vcs.settings` field-override ranges into
+  single-segment rows. Registered only when `components-registry.composite-override-split.enabled=true`
+  (off by default), so it is absent from the published `v4.json` and answers `404` everywhere else.
+  `?dryRun=true` (default) returns the plan and a `manifestToken`; `?dryRun=false&manifestToken=…`
+  applies exactly that plan or answers `409`.
 - **TeamCity placement Diff/Sync renamed to checkout layout (SYS-102).** Endpoints move to
   `/admin/teamcity-checkout-layout/...`; `/admin/teamcity-placement/...` stays as a deprecated alias,
   removed once the Portal uses the new paths in every environment. Both paths return the renamed codes
