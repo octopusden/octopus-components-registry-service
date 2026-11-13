@@ -10,7 +10,7 @@ permissions:
 
 jobs:
   build:
-    uses: octopusden/octopus-base/.github/workflows/common-java-gradle-build.yml@v3.2.0
+    uses: octopusden/octopus-base/.github/workflows/common-java-gradle-build.yml@v3.4.1
     with:
       java-version: '21'
       flow-type: hybrid
@@ -18,16 +18,13 @@ jobs:
     secrets: inherit
 
   quality:
-    uses: octopusden/octopus-base/.github/workflows/common-java-gradle-quality-gates.yml@v3.2.0
+    uses: octopusden/octopus-base/.github/workflows/common-java-gradle-quality-gates.yml@v3.4.1
     with:
       java-version: '21'
-      # Pinned until dbTest runs on ubuntu-26.04 (now ubuntu-latest): there
-      # Testcontainers loses Docker mid-suite. Unpin when #556 is resolved.
-      runs-on: ubuntu-24.04
     secrets: inherit
 
   security:
-    uses: octopusden/octopus-base/.github/workflows/common-java-gradle-security-reports.yml@v3.2.0
+    uses: octopusden/octopus-base/.github/workflows/common-java-gradle-security-reports.yml@v3.4.1
     with:
       java-version: '21'
       enable-codeql: true
@@ -135,6 +132,6 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - uses: octopusden/octopus-base/.github/actions/merge-gate@v3.2.0
+      - uses: octopusden/octopus-base/.github/actions/merge-gate@v3.4.1
         with:
           needs: ${{ toJson(needs) }}

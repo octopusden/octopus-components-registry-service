@@ -12,10 +12,7 @@ permissions:
 
 jobs:
   quality:
-    uses: octopusden/octopus-base/.github/workflows/common-java-gradle-quality-gates.yml@v3.2.0
+    uses: octopusden/octopus-base/.github/workflows/common-java-gradle-quality-gates.yml@v3.4.1
     with:
       java-version: '21'
-      # Pinned until dbTest runs on ubuntu-26.04 (now ubuntu-latest): there
-      # Testcontainers loses Docker mid-suite. Unpin when #556 is resolved.
-      runs-on: ubuntu-24.04
     secrets: inherit
