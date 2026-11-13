@@ -74,6 +74,8 @@ dependencies {
     implementation("com.github.ben-manes.caffeine:caffeine")
 
     // Test - Testcontainers
+    // Spring Boot 3.2.2 manages 1.19.3, whose Docker API 1.32 the Docker Engine on ubuntu-26.04 runners rejects.
+    testImplementation(platform("org.testcontainers:testcontainers-bom:${project['testcontainers.version']}"))
     testImplementation("org.testcontainers:postgresql")
     testImplementation("org.testcontainers:junit-jupiter")
     testImplementation("org.springframework.boot:spring-boot-testcontainers")

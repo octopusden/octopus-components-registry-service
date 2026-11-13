@@ -175,6 +175,8 @@ object TemplateRenderer {
                         MavenArtifactRequest(
                             groupPattern = one("$MAVEN.groupPattern").orEmpty(),
                             artifactPattern = one("$MAVEN.artifactPattern").orEmpty(),
+                            extension = one("$MAVEN.extension"),
+                            classifier = one("$MAVEN.classifier"),
                         ),
                     ).takeIf { any("$MAVEN.groupPattern", "$MAVEN.artifactPattern") },
                 dockerImages =
