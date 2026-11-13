@@ -74,6 +74,8 @@ dependencies {
     implementation("com.github.ben-manes.caffeine:caffeine")
 
     // Test - Testcontainers
+    // Spring Boot 3.2.2 BOM brings Testcontainers 1.19.3 (Docker API 1.32), rejected by Docker 29+ (min API 1.40)
+    testImplementation(platform("org.testcontainers:testcontainers-bom:1.21.4"))
     testImplementation("org.testcontainers:postgresql")
     testImplementation("org.testcontainers:junit-jupiter")
     testImplementation("org.springframework.boot:spring-boot-testcontainers")
