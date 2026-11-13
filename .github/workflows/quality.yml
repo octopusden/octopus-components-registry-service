@@ -12,7 +12,8 @@ permissions:
 
 jobs:
   quality:
-    uses: octopusden/octopus-base/.github/workflows/common-java-gradle-quality-gates.yml@v3.2.0
+    # Runs on ubuntu-24.04 via octopus-base; dbTest fails on 26.04, see TD-031.
+    uses: octopusden/octopus-base/.github/workflows/common-java-gradle-quality-gates.yml@v3.4.1
     with:
       java-version: '21'
     secrets: inherit
