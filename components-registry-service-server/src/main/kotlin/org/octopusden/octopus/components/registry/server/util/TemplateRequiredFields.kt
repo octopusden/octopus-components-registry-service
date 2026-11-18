@@ -38,6 +38,14 @@ internal class TemplateRequiredFields(
                     "(baseConfiguration.packages[0].packageName)",
             )
         }
+        if (!MAVEN_COORDINATE.all { it in fields }) {
+            MAVEN_QUALIFIERS.filter { it in fields }.forEach {
+                keys.problem(
+                    "fields.$it",
+                    "needs the Maven GAV it qualifies; set baseConfiguration.mavenArtifacts[0].groupPattern and .artifactPattern too",
+                )
+            }
+        }
     }
 
     /** As rendering does: a field that may end up empty still takes its default. */
@@ -78,9 +86,13 @@ internal class TemplateRequiredFields(
                 "baseConfiguration.vcsEntries[0].tag",
             )
         private val EXPLICIT_EXTERNAL = listOf("displayName", "releaseManager", "securityChampion")
+        private val MAVEN_COORDINATE =
+            listOf("baseConfiguration.mavenArtifacts[0].groupPattern", "baseConfiguration.mavenArtifacts[0].artifactPattern")
+        private val MAVEN_QUALIFIERS =
+            listOf("baseConfiguration.mavenArtifacts[0].extension", "baseConfiguration.mavenArtifacts[0].classifier")
         private val DISTRIBUTIONS =
             listOf(
-                listOf("baseConfiguration.mavenArtifacts[0].groupPattern", "baseConfiguration.mavenArtifacts[0].artifactPattern"),
+                MAVEN_COORDINATE,
                 listOf("baseConfiguration.dockerImages[0].imageName"),
                 listOf("baseConfiguration.packages[0].packageName"),
             )

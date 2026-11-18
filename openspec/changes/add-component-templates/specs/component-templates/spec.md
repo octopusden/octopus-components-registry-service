@@ -146,6 +146,7 @@ Whole-template checks:
 | Required fields | A field the classification requires has no fixed value, no required parameter and no component default |
 | Overridable | An `overridable` path is not set in `fields`, or is `baseConfiguration.build.buildSystem` |
 | Own rules | A fixed value breaks one of the template's rules |
+| Maven qualifier | `baseConfiguration.mavenArtifacts[0].extension` or `.classifier` is set, but `.groupPattern` or `.artifactPattern` is not |
 
 Required fields, by classification:
 
@@ -214,6 +215,12 @@ Not checked on load, because they depend on data that changes at runtime:
 - **WHEN** an explicit, external template with build system `GRADLE` sets no Maven GAV, Docker
   image or package name
 - **THEN** the template is failed with a problem naming the distribution fields
+
+#### Scenario: Maven extension without a GAV
+- **WHEN** a template sets `baseConfiguration.mavenArtifacts[0].extension: tgz` and no
+  `baseConfiguration.mavenArtifacts[0].groupPattern`
+- **THEN** the template is failed with a problem naming
+  `baseConfiguration.mavenArtifacts[0].extension`
 
 #### Scenario: Default not set either
 - **WHEN** a template sets no VCS branch for a build system that needs VCS, and
