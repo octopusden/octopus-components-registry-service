@@ -1,13 +1,50 @@
 package org.octopusden.octopus.components.registry.server.util
 
+import org.octopusden.octopus.escrow.ModelConfigPostProcessor
+import org.octopusden.octopus.escrow.config.JiraComponentVersionRange
+import org.octopusden.octopus.escrow.model.VCSSettings
 import org.octopusden.octopus.releng.JiraComponentVersionFormatter
+import org.octopusden.octopus.releng.dto.ComponentVersion
 import org.octopusden.octopus.releng.dto.JiraComponentVersion
 import org.octopusden.releng.versions.NumericVersionFactory
+import org.octopusden.releng.versions.VersionNames
 
 fun String.formatVersion(
     versionNumericVersionFactory: NumericVersionFactory,
     version: String,
 ) = versionNumericVersionFactory.create(version).formatVersion(this)
+
+/**
+ * Resolves a component version's VCS settings (`$version` and other variables in tag, branch, …)
+ * the same way for the Git and the DB resolver; see [vcsSettingsVersion] for the version used.
+ */
+class VcsSettingsResolver(
+    private val versionNames: VersionNames,
+    private val jiraComponentVersionFormatter: JiraComponentVersionFormatter,
+    private val numericVersionFactory: NumericVersionFactory,
+) {
+    /**
+     * @param versionToRange the requested version normalized against the component's version ranges,
+     *   with the range it falls into
+     */
+    fun resolve(
+        component: String,
+        requestedVersion: String,
+        versionToRange: Pair<JiraComponentVersion, JiraComponentVersionRange>,
+    ): VCSSettings {
+        val (jiraComponentVersion, jiraComponentVersionRange) = versionToRange
+        val buildVersion =
+            vcsSettingsVersion(
+                requestedVersion,
+                jiraComponentVersion,
+                jiraComponentVersionRange.component.isHotfixEnabled,
+                jiraComponentVersionFormatter,
+                numericVersionFactory,
+            )
+        return ModelConfigPostProcessor(ComponentVersion.create(component, buildVersion), versionNames)
+            .resolveVariables(jiraComponentVersionRange.vcsSettings)
+    }
+}
 
 /**
  * The version substituted for `$version` in a component's VCS settings (tag, branch).

@@ -16,7 +16,7 @@ import org.octopusden.octopus.components.registry.core.dto.VersionedComponent
 import org.octopusden.octopus.components.registry.core.exceptions.NotFoundException
 import org.octopusden.octopus.components.registry.server.config.ComponentsRegistryProperties
 import org.octopusden.octopus.components.registry.server.service.ComponentRegistryResolver
-import org.octopusden.octopus.components.registry.server.util.vcsSettingsVersion
+import org.octopusden.octopus.components.registry.server.util.VcsSettingsResolver
 import org.octopusden.octopus.escrow.ModelConfigPostProcessor
 import org.octopusden.octopus.escrow.config.JiraComponentVersionRange
 import org.octopusden.octopus.escrow.configuration.loader.EscrowConfigurationLoader
@@ -72,6 +72,7 @@ class ComponentRegistryResolverImpl(
             componentsRegistryProperties.versionName.service,
             componentsRegistryProperties.versionName.minor,
         )
+    private val vcsSettingsResolver = VcsSettingsResolver(versionNames, jiraComponentVersionFormatter, numericVersionFactory)
 
     override fun updateCache() {
         configuration = configurationLoader.loadFullConfigurationWithoutValidationForUnknownAttributes(emptyMap())
@@ -116,20 +117,12 @@ class ComponentRegistryResolverImpl(
     override fun getVCSSettings(
         component: String,
         version: String,
-    ): VCSSettings {
-        val (jiraComponentVersion, jiraComponentVersionRange) =
-            getJiraComponentVersionToRangeByComponentAndVersion(component, version)
-        val buildVersion =
-            vcsSettingsVersion(
-                version,
-                jiraComponentVersion,
-                jiraComponentVersionRange.component.isHotfixEnabled,
-                jiraComponentVersionFormatter,
-                numericVersionFactory,
-            )
-        return ModelConfigPostProcessor(ComponentVersion.create(component, buildVersion), versionNames)
-            .resolveVariables(jiraComponentVersionRange.vcsSettings)
-    }
+    ): VCSSettings =
+        vcsSettingsResolver.resolve(
+            component,
+            version,
+            getJiraComponentVersionToRangeByComponentAndVersion(component, version),
+        )
 
     override fun getBuildTools(
         component: String,
