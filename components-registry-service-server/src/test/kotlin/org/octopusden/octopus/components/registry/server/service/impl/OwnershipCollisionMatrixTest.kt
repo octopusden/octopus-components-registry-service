@@ -208,6 +208,34 @@ class OwnershipCollisionMatrixTest {
     }
 
     @Test
+    @DisplayName("a base EXPLICIT claim limited to later versions does not collide with a rival's older per-range EXPLICIT claim")
+    fun baseExplicitVsOlderOverrideOfSplitArtifact() {
+        // An artifact first built inside an old component (per-range block) and later split into its own
+        // component, numbered from a later version: the new owner's all-versions base is in force only there.
+        val newSplit =
+            listOf(claim("split", group = "org.example.sys", mode = ArtifactIdMode.EXPLICIT, tokens = setOf("message")))
+        val existingOld =
+            listOf(
+                claim(
+                    "old",
+                    group = "org.example.sys",
+                    mode = ArtifactIdMode.EXPLICIT,
+                    tokens = setOf("core", "message"),
+                    range = "[1.0.36-0000, 1.0.37-0000)",
+                ),
+            )
+        assertTrue(computeOwnershipCollisions(newSplit, existingOld, realIntersect).isNotEmpty())
+        assertTrue(
+            computeOwnershipCollisions(
+                newSplit,
+                existingOld,
+                realIntersect,
+                coverageByComponent = mapOf("split" to listOf("[11.0.1,)"), "old" to listOf("[1.0.36-0000,1.0.38-0000)")),
+            ).isEmpty(),
+        )
+    }
+
+    @Test
     @DisplayName("build-suffixed ranges (one with a space after the comma) parse and are pairwise disjoint")
     fun buildSuffixedRangesAreDisjoint() {
         val ranges =

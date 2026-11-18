@@ -839,8 +839,11 @@ class ComponentManagementServiceImpl(
 
         // Per-component child REPLACE — present collection wipes and refills (full ownership set)
         request.artifactIds?.let {
+            // Ranges the component already owns by — captured BEFORE the wipe, so a REPLACE that
+            // re-sends them passes the range-alignment rule (see addArtifactIds).
+            val currentOwnershipRanges = entity.artifactMappings.mapTo(mutableSetOf()) { m -> m.versionRange }
             entity.artifactMappings.clear()
-            addArtifactIds(entity, it)
+            addArtifactIds(entity, it, currentOwnershipRanges)
         }
         request.securityGroups?.let {
             entity.securityGroups.clear()
@@ -1811,9 +1814,17 @@ class ComponentManagementServiceImpl(
     // Helpers — child collection management
     // ============================================================
 
+    /**
+     * [currentOwnershipRanges] — the ranges of the component's ownership mappings before this
+     * REPLACE (empty on create). A request range is accepted when it is the base, equals a
+     * configuration range, or is one of these: migration writes a per-range ownership override
+     * WITHOUT a configuration row when a DSL block differs from the base only in groupId/artifactId,
+     * so without this a migrated component could never re-save its own ownership.
+     */
     private fun addArtifactIds(
         component: ComponentEntity,
         requests: List<org.octopusden.octopus.components.registry.server.dto.v4.ArtifactIdRequest>,
+        currentOwnershipRanges: Set<String> = emptySet(),
     ) {
         // Canonicalization: one Maven groupId per stored row. A request's comma group-list expands
         // to one mapping per group (sharing mode/tokens/range), so `sort_order` is a RUNNING counter
@@ -1861,8 +1872,13 @@ class ComponentManagementServiceImpl(
                 "artifactIds: 'All unclaimed' (ALL_EXCEPT_CLAIMED) supports a single group only — " +
                     "split into one mapping per group"
             }
-            require(versionRange == ALL_VERSIONS || component.configurations.any { it.versionRange == versionRange }) {
-                "artifactIds: versionRange '$versionRange' must equal an existing configuration range or be the base"
+            require(
+                versionRange == ALL_VERSIONS ||
+                    versionRange in currentOwnershipRanges ||
+                    component.configurations.any { it.versionRange == versionRange },
+            ) {
+                "artifactIds: versionRange '$versionRange' must equal an existing configuration range, " +
+                    "an existing ownership range, or be the base"
             }
             groupItems.forEach { g ->
                 require(claimedByRange.add(versionRange to g)) {

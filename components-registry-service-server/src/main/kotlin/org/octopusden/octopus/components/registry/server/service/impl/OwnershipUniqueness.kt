@@ -34,8 +34,8 @@ internal data class OwnershipClaim(
  * NOTE (override REPLACES base — shadow skip): a base (`ALL_VERSIONS`) mapping is NOT in force in any
  * range the SAME component overrides, so it cannot conflict there. [shadowRangesByComponent] gives each
  * component's own override range strings; a base claim of component C is skipped against a rival claim
- * whose range C overrides (exact-range match — the realistic case, since an ownership override range
- * equals an existing config range by invariant). This removes the false 409 where one component's
+ * whose range C overrides (exact-range match — the realistic case, since an ownership override range is
+ * a stored range string: a config range or a migrated DSL block range). This removes the false 409 where one component's
  * per-range override frees a token that another component legitimately claims only in that range —
  * symmetrically on both sides. It is SOUND: a base is skipped only where it is provably replaced; a
  * strict-subset override range (different string) is not skipped, which can only over-report, never miss.

@@ -18,6 +18,12 @@ refresh it with `./gradlew :components-registry-service-server:generateOpenApiDo
 
 ## Unreleased
 
+- **`artifactIds` PATCH accepts the component's current ownership ranges.** A per-range ownership
+  mapping may now be re-sent at a range the component already owns by, even with no configuration row
+  there (migration writes a DSL block that differs from the base only in groupId/artifactId that way),
+  so such components can edit their ownership again. A new range must still equal a configuration range
+  or be the base. The 400 message now reads `must equal an existing configuration range, an existing
+  ownership range, or be the base`.
 - **TeamCity placement Diff/Sync renamed to checkout layout (SYS-102).** Endpoints move to
   `/admin/teamcity-checkout-layout/...`; `/admin/teamcity-placement/...` stays as a deprecated alias,
   removed once the Portal uses the new paths in every environment. Both paths return the renamed codes
