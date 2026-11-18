@@ -198,6 +198,21 @@ class ArtifactGroupSplitWriteTest {
         assertEquals(listOf("w2"), overrideTokens.map { it.artifactPattern })
     }
 
+    @Test
+    @DisplayName("ARTGRP-WR-006: a current ownership range matches whitespace-insensitively and keeps its stored form")
+    fun `ARTGRP-WR-006 spaced migrated range matches its unspaced form`() {
+        // DSL-migrated ranges keep the space after the comma; a client may send the range without it.
+        val stored = "[1.0.36-0000, 1.0.37-0000)"
+        val c = component()
+        applyWithCurrentRanges(
+            c,
+            setOf(stored),
+            ArtifactIdRequest(groupPattern = "grp-alfa", mode = "EXPLICIT", artifactTokens = listOf("w1"), versionRange = OLD_BLOCK),
+        )
+
+        assertEquals(listOf(stored), c.artifactMappings.map { it.versionRange })
+    }
+
     private companion object {
         const val OLD_BLOCK = "[1.0.36-0000,1.0.37-0000)"
     }

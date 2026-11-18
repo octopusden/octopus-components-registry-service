@@ -1836,7 +1836,7 @@ class ComponentManagementServiceImpl(
         val claimedByRange = mutableSetOf<Pair<String, String>>()
         var sortOrder = 0
         requests.forEach { req ->
-            val versionRange = req.versionRange?.takeIf { it.isNotBlank() } ?: ALL_VERSIONS
+            val requestedRange = req.versionRange?.takeIf { it.isNotBlank() } ?: ALL_VERSIONS
             val groupRaw = req.groupPattern.trim()
             require(groupRaw.isNotEmpty()) { "artifactIds: groupPattern must not be blank" }
             // Split into per-group rows (canonicalization); fail-loud on an empty comma segment
@@ -1872,14 +1872,11 @@ class ComponentManagementServiceImpl(
                 "artifactIds: 'All unclaimed' (ALL_EXCEPT_CLAIMED) supports a single group only — " +
                     "split into one mapping per group"
             }
-            require(
-                versionRange == ALL_VERSIONS ||
-                    versionRange in currentOwnershipRanges ||
-                    component.configurations.any { it.versionRange == versionRange },
-            ) {
-                "artifactIds: versionRange '$versionRange' must equal an existing configuration range, " +
-                    "an existing ownership range, or be the base"
-            }
+            val versionRange =
+                requireNotNull(storedOwnershipRange(component, requestedRange, currentOwnershipRanges)) {
+                    "artifactIds: versionRange '$requestedRange' must equal an existing configuration range, " +
+                        "an existing ownership range, or be the base"
+                }
             groupItems.forEach { g ->
                 require(claimedByRange.add(versionRange to g)) {
                     "artifactIds: group '$g' is claimed by more than one mapping in range '$versionRange'"
@@ -1902,6 +1899,26 @@ class ComponentManagementServiceImpl(
             }
         }
         validateNonOverlappingOwnershipRanges(component)
+    }
+
+    /**
+     * The stored range string an `artifactIds` request range resolves to, or `null` when it is not
+     * allowed: the base, an exact configuration range, or — compared whitespace-insensitively, since
+     * DSL-migrated ranges keep a space after the comma (`[1.0, 1.1)`) that a client may drop — one of
+     * the component's current ownership ranges or a configuration range. The STORED form is returned so
+     * that exact-string comparisons elsewhere (shadow skip, resolver) keep matching.
+     */
+    private fun storedOwnershipRange(
+        component: ComponentEntity,
+        requestedRange: String,
+        currentOwnershipRanges: Set<String>,
+    ): String? {
+        val normalized = VersionRangePartition.normalize(requestedRange)
+        if (normalized == VersionRangePartition.normalize(ALL_VERSIONS)) return ALL_VERSIONS
+        val configRanges = component.configurations.map { it.versionRange }
+        return configRanges.firstOrNull { it == requestedRange }
+            ?: currentOwnershipRanges.firstOrNull { VersionRangePartition.normalize(it) == normalized }
+            ?: configRanges.firstOrNull { VersionRangePartition.normalize(it) == normalized }
     }
 
     /**
