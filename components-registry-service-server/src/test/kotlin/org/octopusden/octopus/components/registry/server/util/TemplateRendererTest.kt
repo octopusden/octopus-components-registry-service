@@ -332,8 +332,8 @@ class TemplateRendererTest {
     }
 
     @Test
-    @DisplayName("a Maven GAV's extension and classifier render into the create request with the coordinate")
-    fun mavenExtensionAndClassifier() {
+    @DisplayName("SYS-107: a Maven GAV's extension and classifier render into the create request with the coordinate")
+    fun `SYS-107 maven extension and classifier`() {
         val request =
             render(
                 parsedTemplate(
@@ -365,8 +365,8 @@ class TemplateRendererTest {
     }
 
     @Test
-    @DisplayName("a Maven GAV with no extension or classifier sends neither")
-    fun mavenWithoutExtensionOrClassifier() {
+    @DisplayName("SYS-107: a Maven GAV with no extension or classifier sends neither")
+    fun `SYS-107 maven without extension or classifier`() {
         val request = render(parsedTemplate(exampleTemplate().withExplicitExternalFields())).request
 
         val maven = requireNotNull(request.baseConfiguration?.mavenArtifacts).single()

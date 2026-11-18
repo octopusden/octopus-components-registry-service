@@ -99,6 +99,7 @@
 | SYS-104 | Component flag `autoRelease` (default false), DB and v4 only: create/update requests, summary/detail responses, `?autoRelease=` list filter, field-config visibility/editability; an admin-started TeamCity resync turns it on (never off) when every linked release line has a finish-build trigger and nobody has changed the flag; the weekly cron only with `teamcity.sync.auto-release-on-cron` | Medium | unit + integration-test | ✅ Tested |
 | SYS-105 | Template-only creators: the permission `CREATE_FROM_TEMPLATE` (role `ROLE_COMPONENTS_REGISTRY_TEMPLATE_CREATOR`, with `ACCESS_COMPONENTS` and `ACCESS_AUDIT`) lets a caller without `CREATE_COMPONENTS` create components from templates only: templates usable, regular profiles unusable with "You may create components from templates only", any template override `403`, the regular create `403`. `CREATE_COMPONENTS` keeps every right and wins over it; editing by ownership is unchanged | High | unit + integration-test | ✅ Tested |
 | SYS-106 | `component-validation` module: `MavenVersionResolver` takes the whole version from a `MAVEN/<version>` path segment (`/` or `\`, e.g. `BUILD_ENV/MAVEN/3.10`), so `3.6`, `3.9` and `3.10` stay distinct versions instead of resolving to `3`; `LATEST` and the known-token fallback for values without such a segment are unchanged | High | unit-test | ✅ Tested |
+| SYS-107 | Component templates: a template may set the first Maven artifact's `extension` and `classifier` next to its `groupPattern`/`artifactPattern`; both render (with `{{ }}` parameters) into the create request, and a template that sets neither sends neither. A template setting either without both `groupPattern` and `artifactPattern` is failed on load with a problem naming the qualifier. Profile `rules` may name `baseConfiguration.mavenArtifacts[0].extension` and `.classifier` | High | unit-test | ✅ Tested |
 
 ---
 
@@ -3823,3 +3824,37 @@ directory name is the Maven version. Otherwise the known-token rule applies unch
 `` `SYS-106 different Maven lines are told apart` `` (3),
 `` `SYS-106 MAVEN inside a longer path element falls back to known tokens` `` (4); the existing cases of the same
 class (5).
+
+### SYS-107: Component templates — Maven extension and classifier
+
+**Priority:** High
+**Test layer:** unit-test
+**Status:** ✅ Tested
+
+**Motivation:**
+Some distributions are published as a Maven artifact with a non-default extension or a classifier
+(a client solution ships as `tgz`). A template could only set the group and artifact, so a
+component created from it registered the wrong GAV.
+
+**Description:**
+- A template's `fields.baseConfiguration.mavenArtifacts[0]` may set `extension` and `classifier`.
+  Both are rendered like the other fields, so they may use `{{ }}` parameters.
+- Either one qualifies the Maven GAV: a template that sets it without both `groupPattern` and
+  `artifactPattern` is failed on load, with a problem on the qualifier's key.
+- `baseConfiguration.mavenArtifacts[0].extension` and `.classifier` are create-request paths a
+  profile's `rules` may name.
+
+**Acceptance criteria:**
+1. A template with the full coordinate, `extension` and `classifier` renders all four into the
+   create request, parameters substituted.
+2. A template without `extension` or `classifier` sends neither.
+3. A template that sets `extension` or `classifier` with neither, or only one, of `groupPattern`
+   and `artifactPattern` is failed with a problem naming the qualifier.
+4. A template that sets both qualifiers with the full coordinate loads live.
+5. A rule may name either qualifier path, and it reads the value from the create request.
+
+**Test method:** `TemplateRendererTest` — `` `SYS-107 maven extension and classifier` `` (1),
+`` `SYS-107 maven without extension or classifier` `` (2); `TemplateMavenQualifierTest` —
+`` `SYS-107 qualifier without coordinate` `` (3), `` `SYS-107 qualifiers with coordinate are live` `` (4);
+`CreateRequestPathsTest` — the `extension` and `classifier` rows of the path-read table and the
+path-list size check (5).

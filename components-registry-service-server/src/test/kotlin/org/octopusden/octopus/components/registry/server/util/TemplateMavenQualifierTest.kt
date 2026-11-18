@@ -32,8 +32,8 @@ class TemplateMavenQualifierTest {
         "classifier, groupPattern",
         "classifier, artifactPattern",
     )
-    @DisplayName("a Maven extension or classifier without both the groupPattern and artifactPattern is a problem naming it")
-    fun qualifierWithoutCoordinate(
+    @DisplayName("SYS-107: a Maven extension or classifier without both the groupPattern and artifactPattern is a problem naming it")
+    fun `SYS-107 qualifier without coordinate`(
         qualifier: String,
         coordinate: String,
     ) {
@@ -47,8 +47,8 @@ class TemplateMavenQualifierTest {
     }
 
     @Test
-    @DisplayName("a Maven extension and classifier with the full coordinate load live")
-    fun qualifiersWithCoordinateAreLive() {
+    @DisplayName("SYS-107: a Maven extension and classifier with the full coordinate load live")
+    fun `SYS-107 qualifiers with coordinate are live`() {
         val problems =
             problems(
                 mapOf(
