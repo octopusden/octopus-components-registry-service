@@ -35,3 +35,19 @@ parentComponent {
         projectKey = "PARENT"
     }
 }
+
+// The same formats with hotfixes enabled (a hotfix branch is set): a version in the hotfix
+// format keeps it, other versions take the build format, a cut version is still kept.
+hotfixComponent {
+    componentOwner = "user1"
+    groupId = "org.octopusden.octopus.hotfix"
+
+    jira {
+        projectKey = "HOTFIX"
+        hotfixVersionFormat = '$major.$minor.$service-$fix'
+    }
+    vcsSettings {
+        vcsUrl = "ssh://git@example/hotfixComponent"
+        hotfixBranch = "hotfix"
+    }
+}

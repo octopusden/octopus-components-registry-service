@@ -52,32 +52,35 @@ class VcsSettingsVersionCutTest {
     private val gitResolver: ComponentRegistryResolverImpl by lazy { buildGitResolver() }
     private val dbResolver: DatabaseComponentRegistryResolver by lazy { buildDbResolver() }
 
-    @ParameterizedTest(name = "git: {0} -> {1}")
+    @ParameterizedTest(name = "git: {0} {1} -> {2}")
     @CsvSource(textBlock = CASES)
     @DisplayName("RES-027: Git resolver: the VCS tag keeps every part of the requested version")
     fun `RES-027 git resolver tag`(
+        component: String,
         version: String,
         expectedTag: String,
     ) {
-        assertEquals(expectedTag, tagOf(gitResolver, version))
+        assertEquals(expectedTag, tagOf(gitResolver, component, version))
     }
 
-    @ParameterizedTest(name = "db: {0} -> {1}")
+    @ParameterizedTest(name = "db: {0} {1} -> {2}")
     @CsvSource(textBlock = CASES)
     @DisplayName("RES-027: DB resolver: the VCS tag keeps every part of the requested version")
     fun `RES-027 db resolver tag`(
+        component: String,
         version: String,
         expectedTag: String,
     ) {
-        assertEquals(expectedTag, tagOf(dbResolver, version))
+        assertEquals(expectedTag, tagOf(dbResolver, component, version))
     }
 
     private fun tagOf(
         resolver: ComponentRegistryResolver,
+        component: String,
         version: String,
     ): String? =
         resolver
-            .getVCSSettings(COMPONENT, version)
+            .getVCSSettings(component, version)
             .versionControlSystemRoots
             .single()
             .tag
@@ -126,33 +129,13 @@ class VcsSettingsVersionCutTest {
 
     private fun buildDbResolver(): DatabaseComponentRegistryResolver {
         val componentRepository = mock(ComponentRepository::class.java)
-        val component = ComponentEntity(id = UUID.randomUUID(), componentKey = COMPONENT)
-        val base =
-            ComponentConfigurationEntity(
-                component = component,
-                versionRange = ALL_VERSIONS,
-                overriddenAttribute = null,
-                rowType = "BASE",
-                isSyntheticBase = false,
-                buildSystem = "MAVEN",
-                jiraProjectKey = "PARENT",
-                deprecated = false,
+        val components =
+            listOf(
+                componentEntity(COMPONENT, "PARENT", hotfixVersionFormat = null, hotfixBranch = null),
+                componentEntity(HOTFIX_COMPONENT, "HOTFIX", "\$major.\$minor.\$service-\$fix", "hotfix"),
             )
-        base.jiraMinorVersionFormat = "\$major"
-        base.jiraLineVersionFormat = "\$major"
-        base.jiraReleaseVersionFormat = "\$major.\$minor.\$service"
-        base.vcsEntries.add(
-            VcsSettingsEntryEntity(
-                componentConfiguration = base,
-                vcsPath = "ssh://git@example/parent",
-                name = "main",
-                tag = "\$module-\$version",
-                sortOrder = 0,
-            ),
-        )
-        component.configurations.add(base)
-        `when`(componentRepository.findByComponentKey(COMPONENT)).thenReturn(component)
-        `when`(componentRepository.findAll()).thenReturn(mutableListOf(component))
+        components.forEach { `when`(componentRepository.findByComponentKey(it.componentKey)).thenReturn(it) }
+        `when`(componentRepository.findAll()).thenReturn(components.toMutableList())
         return DatabaseComponentRegistryResolver(
             componentRepository,
             mock(DependencyMappingRepository::class.java),
@@ -162,19 +145,62 @@ class VcsSettingsVersionCutTest {
         )
     }
 
+    private fun componentEntity(
+        key: String,
+        projectKey: String,
+        hotfixVersionFormat: String?,
+        hotfixBranch: String?,
+    ): ComponentEntity {
+        val component = ComponentEntity(id = UUID.randomUUID(), componentKey = key)
+        val base =
+            ComponentConfigurationEntity(
+                component = component,
+                versionRange = ALL_VERSIONS,
+                overriddenAttribute = null,
+                rowType = "BASE",
+                isSyntheticBase = false,
+                buildSystem = "MAVEN",
+                jiraProjectKey = projectKey,
+                deprecated = false,
+            )
+        base.jiraMinorVersionFormat = "\$major"
+        base.jiraLineVersionFormat = "\$major"
+        base.jiraReleaseVersionFormat = "\$major.\$minor.\$service"
+        base.jiraHotfixVersionFormat = hotfixVersionFormat
+        base.vcsEntries.add(
+            VcsSettingsEntryEntity(
+                componentConfiguration = base,
+                vcsPath = "ssh://git@example/$key",
+                name = "main",
+                tag = "\$module-\$version",
+                hotfixBranch = hotfixBranch,
+                sortOrder = 0,
+            ),
+        )
+        component.configurations.add(base)
+        return component
+    }
+
     companion object {
         private const val COMPONENT = "parentComponent"
+        private const val HOTFIX_COMPONENT = "hotfixComponent"
         private const val ALL_VERSIONS = "(,0),[0,)"
 
-        // requested version -> expected tag. The first three are shorter than the build format
-        // and normalization cuts them; the rest: a full release version as is, a longer version
-        // trimmed to the build format, zero-only dropped parts and a major version padded to it.
-        private const val CASES = """2.2,     parentComponent-2.2
-            5.3,     parentComponent-5.3
-            6.15,    parentComponent-6.15
-            2.2.1,   parentComponent-2.2.1
-            2.2.1.5, parentComponent-2.2.1
-            2.0,     parentComponent-2.0.0
-            2,       parentComponent-2.0.0"""
+        // component, requested version -> expected tag. parentComponent: the first three are
+        // shorter than the build format and normalization cuts them; the rest: a full release
+        // version as is, a longer version trimmed to the build format, zero-only dropped parts and
+        // a major version padded to it. hotfixComponent (hotfix format $major.$minor.$service-$fix,
+        // hotfix branch set): a hotfix version as is, a release version by the build format, and a
+        // cut version kept with hotfix enabled too.
+        private const val CASES = """parentComponent, 2.2,     parentComponent-2.2
+            parentComponent, 5.3,     parentComponent-5.3
+            parentComponent, 6.15,    parentComponent-6.15
+            parentComponent, 2.2.1,   parentComponent-2.2.1
+            parentComponent, 2.2.1.5, parentComponent-2.2.1
+            parentComponent, 2.0,     parentComponent-2.0.0
+            parentComponent, 2,       parentComponent-2.0.0
+            hotfixComponent, 2.2.1-3, hotfixComponent-2.2.1-3
+            hotfixComponent, 2.2.1,   hotfixComponent-2.2.1
+            hotfixComponent, 2.2,     hotfixComponent-2.2"""
     }
 }

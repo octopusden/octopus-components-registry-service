@@ -704,6 +704,9 @@ as it is.
 3. A version longer than the build format, `2.2.1.5`, is trimmed to it: `<module>-2.2.1`
 4. A version whose dropped parts are zero, `2.0`, and a major version `2` are padded to the build
    format: `<module>-2.0.0`
-5. The Git and the DB resolver give the same tags
+5. With hotfixes enabled (a hotfix branch set, hotfix format `$major.$minor.$service-$fix`): a
+   hotfix version `2.2.1-3` keeps it, `<module>-2.2.1-3`; a release version `2.2.1` takes the build
+   format, `<module>-2.2.1`; a cut version `2.2` is kept, `<module>-2.2`
+6. The Git and the DB resolver give the same tags
 
 **Test method:** `VcsSettingsVersionCutTest` (`RES-027 git resolver tag`, `RES-027 db resolver tag`)
