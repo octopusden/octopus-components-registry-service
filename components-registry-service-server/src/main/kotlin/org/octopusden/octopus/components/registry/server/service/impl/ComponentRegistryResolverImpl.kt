@@ -16,7 +16,7 @@ import org.octopusden.octopus.components.registry.core.dto.VersionedComponent
 import org.octopusden.octopus.components.registry.core.exceptions.NotFoundException
 import org.octopusden.octopus.components.registry.server.config.ComponentsRegistryProperties
 import org.octopusden.octopus.components.registry.server.service.ComponentRegistryResolver
-import org.octopusden.octopus.components.registry.server.util.formatVersion
+import org.octopusden.octopus.components.registry.server.util.vcsSettingsVersion
 import org.octopusden.octopus.escrow.ModelConfigPostProcessor
 import org.octopusden.octopus.escrow.config.JiraComponentVersionRange
 import org.octopusden.octopus.escrow.configuration.loader.EscrowConfigurationLoader
@@ -119,19 +119,14 @@ class ComponentRegistryResolverImpl(
     ): VCSSettings {
         val (jiraComponentVersion, jiraComponentVersionRange) =
             getJiraComponentVersionToRangeByComponentAndVersion(component, version)
-        val versionFormat = jiraComponentVersion.component.componentVersionFormat
-        val defaultBuildVersion = versionFormat.buildVersionFormat.formatVersion(numericVersionFactory, jiraComponentVersion.version)
         val buildVersion =
-            if (jiraComponentVersionRange.component.isHotfixEnabled) {
-                val hotfixVersion = versionFormat.hotfixVersionFormat.formatVersion(numericVersionFactory, jiraComponentVersion.version)
-                if (hotfixVersion == jiraComponentVersion.version) {
-                    hotfixVersion
-                } else {
-                    defaultBuildVersion
-                }
-            } else {
-                defaultBuildVersion
-            }
+            vcsSettingsVersion(
+                version,
+                jiraComponentVersion,
+                jiraComponentVersionRange.component.isHotfixEnabled,
+                jiraComponentVersionFormatter,
+                numericVersionFactory,
+            )
         return ModelConfigPostProcessor(ComponentVersion.create(component, buildVersion), versionNames)
             .resolveVariables(jiraComponentVersionRange.vcsSettings)
     }
