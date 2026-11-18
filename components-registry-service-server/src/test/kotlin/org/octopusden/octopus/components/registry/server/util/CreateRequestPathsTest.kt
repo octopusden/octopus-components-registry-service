@@ -2,6 +2,7 @@ package org.octopusden.octopus.components.registry.server.util
 
 import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.Assertions.assertNull
+import org.junit.jupiter.api.Assertions.assertTrue
 import org.junit.jupiter.api.DisplayName
 import org.junit.jupiter.api.Test
 import org.junit.jupiter.params.ParameterizedTest
@@ -89,6 +90,18 @@ class CreateRequestPathsTest {
     fun pathListMatchesReader() {
         assertEquals(22, CreateRequestPaths.PATHS.size)
         CreateRequestPaths.PATHS.forEach { CreateRequestPaths.read(full, it) }
+    }
+
+    @Test
+    @DisplayName("SYS-107: a rule may name the first Maven artifact's extension and classifier")
+    fun `SYS-107 extension and classifier are rule paths`() {
+        val extension = "baseConfiguration.mavenArtifacts[0].extension"
+        val classifier = "baseConfiguration.mavenArtifacts[0].classifier"
+
+        assertTrue(extension in CreateRequestPaths.PATHS, "$extension should be a rule path")
+        assertTrue(classifier in CreateRequestPaths.PATHS, "$classifier should be a rule path")
+        assertEquals("tgz", CreateRequestPaths.read(full, extension))
+        assertEquals("dist", CreateRequestPaths.read(full, classifier))
     }
 
     @Test

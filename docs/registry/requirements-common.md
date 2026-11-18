@@ -3856,5 +3856,4 @@ component created from it registered the wrong GAV.
 **Test method:** `TemplateRendererTest` — `` `SYS-107 maven extension and classifier` `` (1),
 `` `SYS-107 maven without extension or classifier` `` (2); `TemplateMavenQualifierTest` —
 `` `SYS-107 qualifier without coordinate` `` (3), `` `SYS-107 qualifiers with coordinate are live` `` (4);
-`CreateRequestPathsTest` — the `extension` and `classifier` rows of the path-read table and the
-path-list size check (5).
+`CreateRequestPathsTest` — `` `SYS-107 extension and classifier are rule paths` `` (5).
