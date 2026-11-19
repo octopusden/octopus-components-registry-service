@@ -16,7 +16,8 @@ import org.octopusden.octopus.components.registry.core.dto.VCSSettingsDTO
  * baseline cut it to the major version and padded it to the build format (`1.0.4` → tag
  * `<module>-1.0.0-0`). The vcs-settings and detailed-component endpoints of both modes differ in
  * that one tag; the difference is a suppressed known delta. Anything else in the same record stays
- * active: another field of the root, another major version, a baseline tag that is not a padded major.
+ * active: another field of the root, a candidate tag that is not the prefix followed by the requested
+ * version (the record's `version` path parameter), a baseline tag that is not a padded major.
  * Same matching rules as [VcsCheckoutLayoutKnownDeltaTest].
  */
 @Tag("unit")
@@ -32,23 +33,7 @@ class VcsSettingsVersionKnownDeltaTest {
     private fun suppressed(
         deltas: List<Map<String, Any?>>,
         record: DiffRecord,
-    ): Boolean =
-        deltas.any { d ->
-            (d["endpoint"] == null || d["endpoint"] == record.endpoint) &&
-                (d["endpointPattern"] == null || Regex(d["endpointPattern"] as String).containsMatchIn(record.endpoint)) &&
-                (d["endpoint"] != null || d["endpointPattern"] != null) &&
-                d["category"] == record.category.name &&
-                d["baselineValue"] == null &&
-                d["candidateValue"] == null &&
-                d["pathParams"] == null &&
-                matchesIfSet(d["jsonPathPattern"], record.jsonPath) &&
-                matchesIfSet(d["messagePattern"], record.message)
-        }
-
-    private fun matchesIfSet(
-        pattern: Any?,
-        value: String?,
-    ) = pattern == null || (value != null && Regex(pattern as String).containsMatchIn(value))
+    ) = KnownDeltas.suppressed(deltas, record)
 
     private fun settings(
         tag: String,
