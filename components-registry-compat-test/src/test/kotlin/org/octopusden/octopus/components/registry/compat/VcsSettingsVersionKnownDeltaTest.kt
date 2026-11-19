@@ -86,25 +86,27 @@ class VcsSettingsVersionKnownDeltaTest {
     /** Both layers, as the compat tests drive them: raw, then typed on 2xx. */
     private fun records(
         endpoint: String,
+        version: String,
         baseline: String,
         candidate: String,
     ): List<DiffRecord> {
+        val params = mapOf("component" to "alpha-fixture", "version" to version)
         DiffCollector.clear()
         if (endpoint == VCS_SETTINGS) {
-            Comparators.compareRaw(endpoint, PARAMS, response(baseline), response(candidate))
+            Comparators.compareRaw(endpoint, params, response(baseline), response(candidate))
             Comparators.compareDto(
                 endpoint,
-                PARAMS,
+                params,
                 mapper.readValue<VCSSettingsDTO>(baseline),
                 mapper.readValue<VCSSettingsDTO>(candidate),
             )
         } else {
             val baselineBody = detailed(baseline)
             val candidateBody = detailed(candidate)
-            Comparators.compareRaw(endpoint, PARAMS, response(baselineBody), response(candidateBody))
+            Comparators.compareRaw(endpoint, params, response(baselineBody), response(candidateBody))
             Comparators.compareDto(
                 endpoint,
-                PARAMS,
+                params,
                 mapper.readValue<DetailedComponent>(baselineBody),
                 mapper.readValue<DetailedComponent>(candidateBody),
             )
@@ -117,48 +119,55 @@ class VcsSettingsVersionKnownDeltaTest {
         DiffCollector.clear()
     }
 
-    @ParameterizedTest(name = "{0}: {1} -> {2}")
+    @ParameterizedTest(name = "{0}: {1} -> {2} -> {3}")
     @CsvSource(
-        textBlock = """known-deltas-git.json, alpha-1.0.0-0, alpha-1.0.4
-            known-deltas-git.json, alpha-9.0.0,   alpha-9.11
-            known-deltas-git.json, 2.0.0,         2.2
-            known-deltas-db.json,  alpha-1.0.0-0, alpha-1.0.4
-            known-deltas-db.json,  alpha-9.0.0,   alpha-9.11""",
+        textBlock = """known-deltas-git.json, 1.0.4,  alpha-1.0.0-0, alpha-1.0.4
+            known-deltas-git.json, 9.11,   alpha-9.0.0,   alpha-9.11
+            known-deltas-git.json, 2.2,    2.0.0,         2.2
+            known-deltas-db.json,  1.0.4,  alpha-1.0.0-0, alpha-1.0.4
+            known-deltas-db.json,  9.11,   alpha-9.0.0,   alpha-9.11""",
     )
     @DisplayName("RES-027: a tag cut to the padded major on the baseline is a suppressed known delta")
     fun `RES-027 a cut version tag is suppressed`(
         file: String,
+        version: String,
         baselineTag: String,
         candidateTag: String,
     ) {
         val deltas = deltas(file)
         listOf(VCS_SETTINGS, DETAILED_COMPONENT).forEach { endpoint ->
-            val records = records(endpoint, settings(baselineTag), settings(candidateTag))
+            val records = records(endpoint, version, settings(baselineTag), settings(candidateTag))
 
             assertThat(records).describedAs(endpoint).isNotEmpty
             assertThat(records.filterNot { suppressed(deltas, it) }).describedAs(endpoint).isEmpty()
         }
     }
 
-    @ParameterizedTest(name = "{0}: {1} -> {2}, branch {3}")
+    @ParameterizedTest(name = "{0}: {1} -> {2} -> {3}, branch {4}")
     @CsvSource(
-        textBlock = """known-deltas-git.json, alpha-1.0.3,   alpha-1.0.4, master
-            known-deltas-git.json, alpha-1.0.0-0, alpha-2.0.4, master
-            known-deltas-git.json, alpha-1.0.0-0, beta-1.0.4,  master
-            known-deltas-git.json, alpha-1.0.0-0, alpha-1.0.4, release
-            known-deltas-db.json,  alpha-1.0.3,   alpha-1.0.4, master
-            known-deltas-db.json,  alpha-1.0.0-0, alpha-1.0.4, release""",
+        textBlock = """known-deltas-git.json, 1.0.4,  alpha-1.0.3,   alpha-1.0.4,  master
+            known-deltas-git.json, 1.0.4,  alpha-1.0.0-0, alpha-2.0.4,  master
+            known-deltas-git.json, 1.0.4,  alpha-1.0.0-0, beta-1.0.4,   master
+            known-deltas-git.json, 1.0.4,  alpha-1.0.0-0, alpha-1.0.4,  release
+            known-deltas-git.json, 1.0.4,  alpha-1.0.0-0, alpha-1.7.9,  master
+            known-deltas-git.json, 1.0.4,  alpha-1.0.0-0, alpha-1.0.4.1, master
+            known-deltas-git.json, 1.0.4,  alpha-1.0.0-0, alpha-1.0.44, master
+            known-deltas-db.json,  1.0.4,  alpha-1.0.3,   alpha-1.0.4,  master
+            known-deltas-db.json,  1.0.4,  alpha-1.0.0-0, alpha-1.0.4,  release
+            known-deltas-db.json,  1.0.4,  alpha-1.0.0-0, alpha-1.7.9,  master""",
     )
     @DisplayName("RES-027: another tag or root change stays active")
     fun `RES-027 another change stays active`(
         file: String,
+        version: String,
         baselineTag: String,
         candidateTag: String,
         candidateBranch: String,
     ) {
         val deltas = deltas(file)
         listOf(VCS_SETTINGS, DETAILED_COMPONENT).forEach { endpoint ->
-            val records = records(endpoint, settings(baselineTag), settings(candidateTag, candidateBranch))
+            val records =
+                records(endpoint, version, settings(baselineTag), settings(candidateTag, candidateBranch))
 
             assertThat(records.filterNot { suppressed(deltas, it) }).describedAs(endpoint).isNotEmpty
         }
@@ -167,6 +176,5 @@ class VcsSettingsVersionKnownDeltaTest {
     private companion object {
         const val VCS_SETTINGS = "GET /rest/api/2/components/{component}/versions/{version}/vcs-settings"
         const val DETAILED_COMPONENT = "GET /rest/api/2/components/{component}/versions/{version}"
-        val PARAMS = mapOf("component" to "alpha-fixture", "version" to "1.0.4")
     }
 }
