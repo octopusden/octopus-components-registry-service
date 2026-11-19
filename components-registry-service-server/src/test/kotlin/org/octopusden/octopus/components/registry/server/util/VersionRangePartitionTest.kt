@@ -247,7 +247,7 @@ class VersionRangePartitionTest {
     // ── subtract (base claim minus the component's own override ranges) ───────────
 
     @Test
-    @DisplayName("subtract keeps exact bracket inclusivity at both cut points")
+    @DisplayName("SYS-109: subtract keeps exact bracket inclusivity at both cut points")
     fun `SYS-109 subtract inclusivity`() {
         assertEquals(listOf("[1,2)", "[3,5)"), VersionRangePartition.subtract(listOf("[1,5)"), listOf("[2,3)")))
         assertEquals(listOf("[1,2)", "(3,5)"), VersionRangePartition.subtract(listOf("[1,5)"), listOf("[2,3]")))
@@ -259,7 +259,7 @@ class VersionRangePartitionTest {
     }
 
     @Test
-    @DisplayName("subtract handles all-versions, composites and whitespace on both sides")
+    @DisplayName("SYS-109: subtract handles all-versions, composites and whitespace on both sides")
     fun `SYS-109 subtract composites`() {
         assertEquals(listOf("(,1)", "[2,)"), VersionRangePartition.subtract(listOf("(,0),[0,)"), listOf("[1,2)")))
         assertEquals(
@@ -274,7 +274,7 @@ class VersionRangePartitionTest {
     }
 
     @Test
-    @DisplayName("subtract orders dash-qualified prod bounds with the registry's numeric scheme")
+    @DisplayName("SYS-109: subtract orders dash-qualified prod bounds with the registry's numeric scheme")
     fun `SYS-109 subtract with numeric scheme`() {
         val nvf = NumericVersionFactory(VersionNames("serviceCBranch", "serviceC", "minorC"))
         val cmp: (String, String) -> Int = { a, b -> nvf.create(a).compareTo(nvf.create(b)) }

@@ -932,7 +932,7 @@ class CrossComponentValidationTest {
 
     @Test
     @DisplayName("SYS-109: a rival's base is not in force where its own per-range override replaces it (sub-range of its coverage)")
-    fun ownership_rivalBaseMinusOwnOverride() {
+    fun `SYS-109 rival base is not in force under its own sub-range override`() {
         val s = sfx()
         val group = "org.octopusden.octopus.own$s"
         // B (like prod system-versions): base owns lib-b and lib-a, supported [1,); its own override

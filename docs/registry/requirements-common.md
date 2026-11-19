@@ -3893,6 +3893,9 @@ got a false 409 on every ownership save.
 
 **Test method:** `VersionRangePartitionTest` — `` `SYS-109 subtract inclusivity` ``,
 `` `SYS-109 subtract composites` `` (1), `` `SYS-109 subtract with numeric scheme` `` (2);
-`OwnershipCollisionMatrixTest` — `baseMinusOwnOverridesSystemVersions`, `baseMinusOwnOverridesDms`,
-`baseMinusOwnOverridesW4web3model` (3), `baseMinusOwnOverridesKeepsRealConflict` (4, 5);
-`CrossComponentValidationTest` — `ownership_rivalBaseMinusOwnOverride` (3, 4 through the real `PATCH`).
+`OwnershipCollisionMatrixTest` — `` `SYS-109 system-cards vs system-versions own overrides replace the base` ``,
+`` `SYS-109 dms-client vs dms own override replaces the base` ``,
+`` `SYS-109 way4webapi vs w4web3model other-group override replaces the base` `` (3),
+`` `SYS-109 base minus own overrides keeps a real conflict` `` (4, 5);
+`CrossComponentValidationTest` — `` `SYS-109 rival base is not in force under its own sub-range override` `` (3, 4 through the
+real `PATCH`).
