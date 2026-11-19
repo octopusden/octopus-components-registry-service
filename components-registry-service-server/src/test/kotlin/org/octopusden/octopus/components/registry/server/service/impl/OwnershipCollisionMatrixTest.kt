@@ -282,7 +282,7 @@ class OwnershipCollisionMatrixTest {
     )
 
     @Test
-    @DisplayName("prod system-cards × system-versions: the rival's own overrides replace its base up to 1.0.39-361")
+    @DisplayName("SYS-109: prod system-cards × system-versions: the rival's own overrides replace its base up to 1.0.39-361")
     fun baseMinusOwnOverridesSystemVersions() {
         val group = "com.openwaygroup.system"
         val cards = listOf(claim("system-cards", group, ArtifactIdMode.EXPLICIT, setOf("system-cards")))
@@ -301,7 +301,7 @@ class OwnershipCollisionMatrixTest {
     }
 
     @Test
-    @DisplayName("prod dms-client × dms: dms's (,0.2) override owns only dms, its base is in force from 1.0")
+    @DisplayName("SYS-109: prod dms-client × dms: dms's (,0.2) override owns only dms, its base is in force from 1.0")
     fun baseMinusOwnOverridesDms() {
         val group = "com.openwaygroup.dms"
         val client =
@@ -330,7 +330,7 @@ class OwnershipCollisionMatrixTest {
     }
 
     @Test
-    @DisplayName("prod way4webapi × w4web3model: a group-w4web3-only override (spaced range) replaces both base groups")
+    @DisplayName("SYS-109: prod way4webapi × w4web3model: a group-w4web3-only override (spaced range) replaces both base groups")
     fun baseMinusOwnOverridesW4web3model() {
         val api =
             listOf(
@@ -351,7 +351,7 @@ class OwnershipCollisionMatrixTest {
     }
 
     @Test
-    @DisplayName("base minus own overrides keeps a real conflict outside the overridden range")
+    @DisplayName("SYS-109: base minus own overrides keeps a real conflict outside the overridden range")
     fun baseMinusOwnOverridesKeepsRealConflict() {
         val a = listOf(claim("A", mode = ArtifactIdMode.EXPLICIT, tokens = setOf("old"), range = "[2.5,3)"))
         val b =

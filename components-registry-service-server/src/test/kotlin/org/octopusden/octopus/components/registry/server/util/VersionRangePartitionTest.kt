@@ -248,7 +248,7 @@ class VersionRangePartitionTest {
 
     @Test
     @DisplayName("subtract keeps exact bracket inclusivity at both cut points")
-    fun `subtract inclusivity`() {
+    fun `SYS-109 subtract inclusivity`() {
         assertEquals(listOf("[1,2)", "[3,5)"), VersionRangePartition.subtract(listOf("[1,5)"), listOf("[2,3)")))
         assertEquals(listOf("[1,2)", "(3,5)"), VersionRangePartition.subtract(listOf("[1,5)"), listOf("[2,3]")))
         assertEquals(listOf("[1,2]", "[3,5)"), VersionRangePartition.subtract(listOf("[1,5)"), listOf("(2,3)")))
@@ -260,7 +260,7 @@ class VersionRangePartitionTest {
 
     @Test
     @DisplayName("subtract handles all-versions, composites and whitespace on both sides")
-    fun `subtract composites`() {
+    fun `SYS-109 subtract composites`() {
         assertEquals(listOf("(,1)", "[2,)"), VersionRangePartition.subtract(listOf("(,0),[0,)"), listOf("[1,2)")))
         assertEquals(
             listOf("[1.1,1.1.39)", "[1.1.40,1.2)"),
@@ -275,7 +275,7 @@ class VersionRangePartitionTest {
 
     @Test
     @DisplayName("subtract orders dash-qualified prod bounds with the registry's numeric scheme")
-    fun `subtract with numeric scheme`() {
+    fun `SYS-109 subtract with numeric scheme`() {
         val nvf = NumericVersionFactory(VersionNames("serviceCBranch", "serviceC", "minorC"))
         val cmp: (String, String) -> Int = { a, b -> nvf.create(a).compareTo(nvf.create(b)) }
         // system-versions on prod: supported [1.0.39,), overrides up to 1.0.39-361.

@@ -100,6 +100,7 @@
 | SYS-105 | Template-only creators: the permission `CREATE_FROM_TEMPLATE` (role `ROLE_COMPONENTS_REGISTRY_TEMPLATE_CREATOR`, with `ACCESS_COMPONENTS` and `ACCESS_AUDIT`) lets a caller without `CREATE_COMPONENTS` create components from templates only: templates usable, regular profiles unusable with "You may create components from templates only", any template override `403`, the regular create `403`. `CREATE_COMPONENTS` keeps every right and wins over it; editing by ownership is unchanged | High | unit + integration-test | ✅ Tested |
 | SYS-106 | `component-validation` module: `MavenVersionResolver` takes the whole version from a `MAVEN/<version>` path segment (`/` or `\`, e.g. `BUILD_ENV/MAVEN/3.10`), so `3.6`, `3.9` and `3.10` stay distinct versions instead of resolving to `3`; `LATEST` and the known-token fallback for values without such a segment are unchanged | High | unit-test | ✅ Tested |
 | SYS-107 | Component templates: a template may set the first Maven artifact's `extension` and `classifier` next to its `groupPattern`/`artifactPattern`; both render (with `{{ }}` parameters) into the create request, and a template that sets neither sends neither. A template setting either without both `groupPattern` and `artifactPattern` is failed on load with a problem naming the qualifier. Profile `rules` may name `baseConfiguration.mavenArtifacts[0].extension` and `.classifier` | High | unit-test | ✅ Tested |
+| SYS-109 | Cross-component ownership uniqueness compares a base (`ALL_VERSIONS`) mapping only where it is in force: the component's supported versions minus its own per-range override ranges (range subtraction with exact bracket inclusivity, composite ranges and whitespace, in the registry's numeric version order); an unparseable range keeps the unsubtracted ranges                                                                                                                       | High | unit + integration-test | ✅ Tested |
 
 ---
 
@@ -3857,3 +3858,41 @@ component created from it registered the wrong GAV.
 `` `SYS-107 maven without extension or classifier` `` (2); `TemplateMavenQualifierTest` —
 `` `SYS-107 qualifier without coordinate` `` (3), `` `SYS-107 qualifiers with coordinate are live` `` (4);
 `CreateRequestPathsTest` — `` `SYS-107 extension and classifier are rule paths` `` (5).
+
+### SYS-109: A base ownership claim excludes the component's own override ranges
+
+**Priority:** High
+**Test layer:** unit + integration-test
+**Status:** ✅ Tested
+
+**Motivation:**
+A per-range ownership override replaces the component's whole base for its range. The uniqueness
+check skipped a base claim there only when the rival's range string equalled the override's, but a
+base claim is compared on the component's supported versions, which never equal an override range.
+Migrated components whose own override frees a token another component owns in the same versions
+got a false 409 on every ownership save.
+
+**Description:**
+- A base (`ALL_VERSIONS`) claim is compared on the component's supported versions (all versions when
+  unbounded) minus the component's own non-base ownership ranges, whatever their groups.
+- Subtraction keeps exact bracket inclusivity, accepts composite ranges, the all-versions sentinel and
+  whitespace, and orders versions with the registry's numeric version scheme.
+- If any range cannot be parsed, the base keeps its unsubtracted ranges (may over-report, never misses
+  a conflict); the exact-string skip stays as the fallback.
+- A real conflict outside the component's override ranges is still reported.
+
+**Acceptance criteria:**
+1. Subtraction returns the exact remaining pieces with correct bracket inclusivity, handles composite
+   ranges, all versions and whitespace, and returns `null` for an unparseable range.
+2. Dash-qualified versions are ordered by the registry's numeric scheme.
+3. A component whose supported versions meet a rival only where the rival's own override replaces its
+   base saves its ownership without a 409, on both sides (prod shapes: a sub-range override, an
+   override equal to a coverage segment, an override of another group, a spaced range).
+4. A conflict with the rival's base outside its override ranges is still a 409.
+5. A component that overrides all of its supported versions has no base claim in force.
+
+**Test method:** `VersionRangePartitionTest` — `` `SYS-109 subtract inclusivity` ``,
+`` `SYS-109 subtract composites` `` (1), `` `SYS-109 subtract with numeric scheme` `` (2);
+`OwnershipCollisionMatrixTest` — `baseMinusOwnOverridesSystemVersions`, `baseMinusOwnOverridesDms`,
+`baseMinusOwnOverridesW4web3model` (3), `baseMinusOwnOverridesKeepsRealConflict` (4, 5);
+`CrossComponentValidationTest` — `ownership_rivalBaseMinusOwnOverride` (3, 4 through the real `PATCH`).
