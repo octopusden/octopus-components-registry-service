@@ -359,6 +359,76 @@ object VersionRangePartition {
         }
 
     /**
+     * The part of [ranges] not covered by any of [minus], as rendered single intervals (bracket
+     * inclusivity is exact: `[1,5)` minus `[2,3)` → `[1,2)`, `[3,5)`; minus `[2,3]` → `[1,2)`, `(3,5)`).
+     * Composite ranges and the all-versions sentinel are accepted on both sides. Empty when [minus]
+     * covers [ranges] entirely. `null` if any range fails to parse fully ([toSegmentsOrNull]) — a caller
+     * that must stay sound falls back to the unsubtracted ranges.
+     */
+    fun subtract(
+        ranges: List<String>,
+        minus: Collection<String>,
+        compare: (String, String) -> Int = ::defaultVersionCompare,
+    ): List<String>? {
+        val from = ranges.map { toSegmentsOrNull(it) ?: return null }.flatten()
+        val cut = minus.map { toSegmentsOrNull(it) ?: return null }.flatten()
+        var rest = from
+        for (c in cut) rest = rest.flatMap { subtractSegment(it, c, compare) }
+        return rest.map { render(it) }
+    }
+
+    /** [a] minus [b]: at most two pieces, the part of [a] below [b] and the part above it. */
+    private fun subtractSegment(
+        a: Segment,
+        b: Segment,
+        compare: (String, String) -> Int,
+    ): List<Segment> {
+        val below = b.lo?.let { clip(a, null, false, it, !b.loIncl, compare) }
+        val above = b.hi?.let { clip(a, it, !b.hiIncl, null, false, compare) }
+        return listOfNotNull(below, above)
+    }
+
+    /** [a] ∩ the interval (lo, hi) with the given inclusivity (null bound = unbounded); null if empty. */
+    @Suppress("LongParameterList")
+    private fun clip(
+        a: Segment,
+        lo: String?,
+        loIncl: Boolean,
+        hi: String?,
+        hiIncl: Boolean,
+        compare: (String, String) -> Int,
+    ): Segment? {
+        val (newLo, newLoIncl) = tighterBound(a.lo, a.loIncl, lo, loIncl, upper = false, compare)
+        val (newHi, newHiIncl) = tighterBound(a.hi, a.hiIncl, hi, hiIncl, upper = true, compare)
+        if (newLo != null && newHi != null) {
+            val c = compare(newLo, newHi)
+            val bothIncl = newLoIncl && newHiIncl
+            if (c > 0 || (c == 0 && !bothIncl)) return null
+        }
+        return Segment(newLo, newLoIncl, newHi, newHiIncl)
+    }
+
+    /** The more restrictive of two lower ([upper] = false) or upper bounds; equal values keep inclusive only if both are. */
+    @Suppress("LongParameterList")
+    private fun tighterBound(
+        x: String?,
+        xIncl: Boolean,
+        y: String?,
+        yIncl: Boolean,
+        upper: Boolean,
+        compare: (String, String) -> Int,
+    ): Pair<String?, Boolean> {
+        if (x == null) return y to yIncl
+        if (y == null) return x to xIncl
+        val c = compare(x, y)
+        return when {
+            c == 0 -> x to (xIncl && yIncl)
+            (c < 0) == upper -> x to xIncl
+            else -> y to yIncl
+        }
+    }
+
+    /**
      * Collapse [ranges] (possibly composite) into maximal contiguous single intervals (amendment D).
      * Two segments merge iff their union is a single interval — they overlap, or touch at the same
      * point with at least one side inclusive there (`[1,2)`+`[2,5)`→`[1,5)`; `[1,2)`+`[3,5)` stays
