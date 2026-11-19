@@ -240,6 +240,13 @@
       "messagePattern": "KEY_MISSING_BASELINE at ",
       "reason": "SYS-099 testComponent flag (2026-10): the v1/v2/v3 Component DTO (and its VersionedComponent / DetailedComponent subclasses) always serializes testComponent, so every component payload gains the key: false, or true for the components V11__ flagged from the `test-component` label. The baseline has no key. Matches the templated and the literal (trace-replay) paths of the component list, detail, detailed-version and find-by-artifact endpoints. Only an added key is suppressed (messagePattern KEY_MISSING_BASELINE); a dropped key stays active. Typed layer: both sides deserialize into the same DTO (absent = false), and Comparators.buildAssertion forgives baseline-false -> true. See docs/registry/api-compat-deltas.md.",
       "regressionTest": "TestComponentKnownDeltaTest"
+    },
+    {
+      "endpointPattern": "^GET /rest/api/2/components/\\{component\\}/versions/\\{version\\}(/vcs-settings)?$",
+      "category": "VALUE_DIFF",
+      "messagePattern": "but found the following difference:\\s+field/property '(?:vcsSettings\\.)?versionControlSystemRoots' differ:\\s+- actual value\\s*: \\[VersionControlSystemRootDTO\\(name=([^,]*), vcsPath=([^,]*), type=([^,]*), tag=([^,]*?)(\\d+)(?:\\.0)+(?:-0+)?, (branch=[^\\]]*)\\)\\]\\s+- expected value: \\[VersionControlSystemRootDTO\\(name=\\1, vcsPath=\\2, type=\\3, tag=\\4\\5(?:\\.\\d+)+(?:-\\d+)?, \\6\\)\\]",
+      "reason": "RES-027 (2026-11): vcs-settings, and the DetailedComponent that embeds it, keep every part of the requested version in $version. The baseline normalized a version shorter than the build format non-strictly down to the major (or line) format and padded it back, so e.g. 1.0.4 with release format $major.$minor.$service-$fix gave the tag <module>-1.0.0-0, which does not exist; the candidate gives <module>-1.0.4. Matches a typed record only when that is its single difference: one VCS root, every field but the tag equal (back-references), the baseline tag ending in <major>.0[.0...][-0...] and the candidate tag being the same prefix and major followed by more version parts. Another changed field, another major or a baseline tag that is not a padded major stays active. Applies to the DB resolver path, which shares the same function. Affected component keys are withheld from this public repo; they are named in the build's summary.md. See docs/registry/requirements-resolver.md RES-027.",
+      "regressionTest": "VcsSettingsVersionKnownDeltaTest.RES-027 a cut version tag is suppressed"
     }
   ]
 }

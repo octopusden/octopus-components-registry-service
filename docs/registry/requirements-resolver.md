@@ -709,4 +709,6 @@ as it is.
    format, `<module>-2.2.1`; a cut version `2.2` is kept, `<module>-2.2`
 6. The Git and the DB resolver give the same tags
 
-**Test method:** `VcsSettingsVersionCutTest` (`RES-027 git resolver tag`, `RES-027 db resolver tag`)
+**Test method:** `VcsSettingsVersionCutTest` (`RES-027 git resolver tag`, `RES-027 db resolver tag`);
+the compat known delta for the changed tags: `VcsSettingsVersionKnownDeltaTest` (`RES-027 a cut version
+tag is suppressed`, `RES-027 another change stays active`)
