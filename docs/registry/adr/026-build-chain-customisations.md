@@ -195,15 +195,6 @@ recorded. So:
   open-source user, and building every branch is an organisation's CI choice.
 - **Leave the disabled template step out of scope.** Nothing would disable it on new chains.
 
-## Open questions
-
-1. Which branch should a shared repository's root build for each component of the family?
-2. Do the Compile templates have a VCS trigger? If they do, every push to any branch of any
-   attached root starts a build.
-3. Who updates the registry entries of existing multi-root components?
-4. Why is the code-analysis parameter step disabled for the multi-root family?
-5. What is the empty `UAT` build configuration for, and is it filled in by hand later?
-
 ## References
 
 - [ADR-022](022-vcs-root-checkout-layout.md): VCS roots and checkout layout

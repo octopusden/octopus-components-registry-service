@@ -359,14 +359,6 @@ onboarding service has no production callers, so retiring it needs no migration.
 - **Two-step create: create, then a separate commit action.** Callers would roll back
   themselves, which needs a public delete endpoint.
 
-## Open questions
-
-1. Do the maintainers of vcs-facade and of the automation service accept Keycloak role-based
-   permissions on their new endpoints, and what are the roles called?
-2. Which credential does vcs-facade use for creating repositories in each environment?
-3. Which CRS profiles and component templates exist per environment, and which provisioning
-   configuration does each map to?
-
 ## References
 
 - [ADR-012](012-portal-architecture.md): Portal architecture, gateway and `TokenRelay`
