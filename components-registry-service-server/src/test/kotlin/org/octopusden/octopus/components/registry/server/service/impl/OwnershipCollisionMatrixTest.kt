@@ -22,8 +22,11 @@ class OwnershipCollisionMatrixTest {
         versionRangeFactory.create(x).isIntersect(versionRangeFactory.create(y))
     }
     private val numericVersionFactory = NumericVersionFactory(VersionNames("serviceCBranch", "serviceC", "minorC"))
+    private val numericCompare: (String, String) -> Int = { a, b ->
+        numericVersionFactory.create(a).compareTo(numericVersionFactory.create(b))
+    }
     private val subtract: (List<String>, Collection<String>) -> List<String>? = { ranges, minus ->
-        VersionRangePartition.subtract(ranges, minus) { a, b -> numericVersionFactory.create(a).compareTo(numericVersionFactory.create(b)) }
+        VersionRangePartition.subtract(ranges, minus, numericCompare)
     }
 
     private fun claim(
@@ -395,5 +398,27 @@ class OwnershipCollisionMatrixTest {
         val inside = listOf(claim("A", mode = ArtifactIdMode.EXPLICIT, tokens = setOf("old"), range = "[1.5,2)"))
         assertTrue(prodPair(inside, b, mapOf("B" to listOf("[1,2)")), withSubtract = false).isNotEmpty())
         assertEquals(emptyList<String>(), prodPair(inside, b, mapOf("B" to listOf("[1,2)")), withSubtract = true))
+    }
+
+    @Test
+    @DisplayName("SYS-109: an override range the version factory rejects keeps the rival's base in force")
+    fun `SYS-109 factory-rejected override range keeps the base`() {
+        val factoryAccepts: (String) -> Boolean = { runCatching { versionRangeFactory.create(it) }.isSuccess }
+        val strictSubtract: (List<String>, Collection<String>) -> List<String>? = { ranges, minus ->
+            VersionRangePartition.subtract(ranges, minus, numericCompare, factoryAccepts)
+        }
+        val a = listOf(claim("A", mode = ArtifactIdMode.EXPLICIT, tokens = setOf("shared"), range = "[0.2,0.4)"))
+        val b =
+            listOf(
+                claim("B", mode = ArtifactIdMode.EXPLICIT, tokens = setOf("shared")),
+                claim("B", mode = ArtifactIdMode.EXPLICIT, tokens = setOf("other"), range = "[,1)"),
+            )
+        val intersect: (String, String) -> Boolean = { x, y -> runCatching { realIntersect(x, y) }.getOrDefault(true) }
+        val shadow = overrideRanges(*(a + b).toTypedArray())
+        val coverage = mapOf("B" to listOf("[0,1)"))
+        // The lenient parser alone would subtract all of B's coverage and hide the conflict.
+        assertEquals(emptyList<String>(), computeOwnershipCollisions(a, b, intersect, shadow, coverage, subtract))
+        val v = computeOwnershipCollisions(a, b, intersect, shadow, coverage, strictSubtract)
+        assertEquals(1, v.size, v.toString())
     }
 }

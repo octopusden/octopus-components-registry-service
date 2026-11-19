@@ -362,14 +362,18 @@ object VersionRangePartition {
      * The part of [ranges] not covered by any of [minus], as rendered single intervals (bracket
      * inclusivity is exact: `[1,5)` minus `[2,3)` → `[1,2)`, `[3,5)`; minus `[2,3]` → `[1,2)`, `(3,5)`).
      * Composite ranges and the all-versions sentinel are accepted on both sides. Empty when [minus]
-     * covers [ranges] entirely. `null` if any range fails to parse fully ([toSegmentsOrNull]) — a caller
-     * that must stay sound falls back to the unsubtracted ranges.
+     * covers [ranges] entirely. `null` if any range fails to parse fully ([toSegmentsOrNull]) or is
+     * rejected by [accepts] — a caller that must stay sound falls back to the unsubtracted ranges. This
+     * parser is more lenient than the registry's `VersionRangeFactory` (it reads `[,1)` as unbounded
+     * below), so production callers pass the factory's parse as [accepts].
      */
     fun subtract(
         ranges: List<String>,
         minus: Collection<String>,
         compare: (String, String) -> Int = ::defaultVersionCompare,
+        accepts: (String) -> Boolean = { true },
     ): List<String>? {
+        if (!(ranges.all(accepts) && minus.all(accepts))) return null
         val from = ranges.map { toSegmentsOrNull(it) ?: return null }.flatten()
         val cut = minus.map { toSegmentsOrNull(it) ?: return null }.flatten()
         var rest = from

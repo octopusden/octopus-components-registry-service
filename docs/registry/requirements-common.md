@@ -3917,13 +3917,14 @@ got a false 409 on every ownership save.
   unbounded) minus the component's own non-base ownership ranges, whatever their groups.
 - Subtraction keeps exact bracket inclusivity, accepts composite ranges, the all-versions sentinel and
   whitespace, and orders versions with the registry's numeric version scheme.
-- If any range cannot be parsed, the base keeps its unsubtracted ranges (may over-report, never misses
+- If any range cannot be parsed, or the registry's version range factory rejects it, the base keeps its unsubtracted ranges (may over-report, never misses
   a conflict); the exact-string skip stays as the fallback.
 - A real conflict outside the component's override ranges is still reported.
 
 **Acceptance criteria:**
 1. Subtraction returns the exact remaining pieces with correct bracket inclusivity, handles composite
-   ranges, all versions and whitespace, and returns `null` for an unparseable range.
+   ranges, all versions and whitespace, and returns `null` for an unparseable range or one the
+   registry's version range factory rejects (e.g. `[,1)`), so the base keeps its unsubtracted ranges.
 2. Dash-qualified versions are ordered by the registry's numeric scheme.
 3. A component whose supported versions meet a rival only where the rival's own override replaces its
    base saves its ownership without a 409, on both sides (prod shapes: a sub-range override, an
@@ -3932,10 +3933,12 @@ got a false 409 on every ownership save.
 5. A component that overrides all of its supported versions has no base claim in force.
 
 **Test method:** `VersionRangePartitionTest` — `` `SYS-109 subtract inclusivity` ``,
-`` `SYS-109 subtract composites` `` (1), `` `SYS-109 subtract with numeric scheme` `` (2);
+`` `SYS-109 subtract composites` ``, `` `SYS-109 subtract rejects ranges the factory rejects` `` (1),
+`` `SYS-109 subtract with numeric scheme` `` (2);
 `OwnershipCollisionMatrixTest` — `` `SYS-109 own sub-range overrides replace the base` ``,
 `` `SYS-109 override equal to a coverage segment replaces the base` ``,
 `` `SYS-109 override of another group replaces the base` `` (3),
-`` `SYS-109 base minus own overrides keeps a real conflict` `` (4, 5);
+`` `SYS-109 base minus own overrides keeps a real conflict` `` (4, 5),
+`` `SYS-109 factory-rejected override range keeps the base` `` (1, 4);
 `CrossComponentValidationTest` — `` `SYS-109 rival base is not in force under its own sub-range override` `` (3, 4 through the
 real `PATCH`).

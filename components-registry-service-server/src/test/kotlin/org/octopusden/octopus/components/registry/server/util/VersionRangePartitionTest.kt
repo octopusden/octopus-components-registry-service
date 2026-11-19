@@ -284,4 +284,17 @@ class VersionRangePartitionTest {
             VersionRangePartition.subtract(listOf("[1.0.39,)"), listOf("[1.0.39,1.0.39-307)", "[1.0.39-307,1.0.39-361)"), cmp),
         )
     }
+
+    @Test
+    @DisplayName("SYS-109: subtract returns null for a range the registry's VersionRangeFactory rejects")
+    fun `SYS-109 subtract rejects ranges the factory rejects`() {
+        val names = VersionNames("serviceCBranch", "serviceC", "minorC")
+        val vrf = VersionRangeFactory(names)
+        val accepts: (String) -> Boolean = { runCatching { vrf.create(it) }.isSuccess }
+        // The lenient parser reads `[,1)` as unbounded below and would subtract all of `[0,1)`.
+        assertEquals(emptyList<String>(), VersionRangePartition.subtract(listOf("[0,1)"), listOf("[,1)")))
+        assertFalse(accepts("[,1)"))
+        assertEquals(null, VersionRangePartition.subtract(listOf("[0,1)"), listOf("[,1)"), accepts = accepts))
+        assertEquals(listOf("[0,0.5)"), VersionRangePartition.subtract(listOf("[0,1)"), listOf("[0.5,1)"), accepts = accepts))
+    }
 }
