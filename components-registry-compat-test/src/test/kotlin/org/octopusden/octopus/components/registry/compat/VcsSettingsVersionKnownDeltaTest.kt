@@ -17,7 +17,8 @@ import org.octopusden.octopus.components.registry.core.dto.VCSSettingsDTO
  * `<module>-1.0.0-0`). The vcs-settings and detailed-component endpoints of both modes differ in
  * that one tag; the difference is a suppressed known delta. Anything else in the same record stays
  * active: another field of the root, a candidate tag that is not the prefix followed by the requested
- * version (the record's `version` path parameter), a baseline tag that is not a padded major.
+ * version (the record's `version` path parameter), a baseline tag that is not the padded major of
+ * that version.
  * Same matching rules as [VcsCheckoutLayoutKnownDeltaTest].
  */
 @Tag("unit")
@@ -137,9 +138,13 @@ class VcsSettingsVersionKnownDeltaTest {
             known-deltas-git.json, 1.0.4,  alpha-1.0.0-0, alpha-1.7.9,  master
             known-deltas-git.json, 1.0.4,  alpha-1.0.0-0, alpha-1.0.4.1, master
             known-deltas-git.json, 1.0.4,  alpha-1.0.0-0, alpha-1.0.44, master
+            known-deltas-git.json, 1.0.4,  alpha-2.0.0,   alpha-1.0.4,  master
+            known-deltas-git.json, 1.0.4,  alpha-10.0.0,  alpha-1.0.4,  master
+            known-deltas-git.json, 10.0.4, alpha-1.0.0,   alpha-10.0.4, master
             known-deltas-db.json,  1.0.4,  alpha-1.0.3,   alpha-1.0.4,  master
             known-deltas-db.json,  1.0.4,  alpha-1.0.0-0, alpha-1.0.4,  release
-            known-deltas-db.json,  1.0.4,  alpha-1.0.0-0, alpha-1.7.9,  master""",
+            known-deltas-db.json,  1.0.4,  alpha-1.0.0-0, alpha-1.7.9,  master
+            known-deltas-db.json,  1.0.4,  alpha-2.0.0,   alpha-1.0.4,  master""",
     )
     @DisplayName("RES-027: another tag or root change stays active")
     fun `RES-027 another change stays active`(
