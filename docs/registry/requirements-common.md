@@ -3896,4 +3896,4 @@ which a client may drop.
 `` `SYS-108 ARTGRP-WR-006 spaced migrated range matches its unspaced form` `` (3),
 `` `SYS-108 ARTGRP-WR-007 ownership spelling wins over configuration spelling` `` (4),
 `` `SYS-108 ARTGRP-WR-008 create matches ranges ignoring whitespace` `` (5);
-`CrossComponentValidationTest` — `ownership_migratedOverrideRangeWithoutConfigRow` (1, 2 through the real `PATCH`).
+`CrossComponentValidationTest` — `` `SYS-108 migrated ownership-only override range can be re-saved` `` (1, 2 through the real `PATCH`).
