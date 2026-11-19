@@ -243,4 +243,45 @@ class VersionRangePartitionTest {
         assertEquals("[2.0,3.0)", listOf("(,1.0)", "[1.0,2.0)", "[2.0,3.0)").maxWith(rank))
         assertEquals("(,2.0)", listOf("(,1.0)", "(,2.0)").maxWith(rank)) // same (-inf) floor → higher ceiling
     }
+
+    // ── subtract (base claim minus the component's own override ranges) ───────────
+
+    @Test
+    @DisplayName("subtract keeps exact bracket inclusivity at both cut points")
+    fun `subtract inclusivity`() {
+        assertEquals(listOf("[1,2)", "[3,5)"), VersionRangePartition.subtract(listOf("[1,5)"), listOf("[2,3)")))
+        assertEquals(listOf("[1,2)", "(3,5)"), VersionRangePartition.subtract(listOf("[1,5)"), listOf("[2,3]")))
+        assertEquals(listOf("[1,2]", "[3,5)"), VersionRangePartition.subtract(listOf("[1,5)"), listOf("(2,3)")))
+        // A cut at the segment's own bound leaves the rest; a cut covering it leaves nothing.
+        assertEquals(listOf("(1,5)"), VersionRangePartition.subtract(listOf("[1,5)"), listOf("[1]")))
+        assertEquals(listOf("[1,5)"), VersionRangePartition.subtract(listOf("[1,5)"), listOf("[5,6)")))
+        assertEquals(emptyList<String>(), VersionRangePartition.subtract(listOf("[1,5)"), listOf("(,10)")))
+    }
+
+    @Test
+    @DisplayName("subtract handles all-versions, composites and whitespace on both sides")
+    fun `subtract composites`() {
+        assertEquals(listOf("(,1)", "[2,)"), VersionRangePartition.subtract(listOf("(,0),[0,)"), listOf("[1,2)")))
+        assertEquals(
+            listOf("[1.1,1.1.39)", "[1.1.40,1.2)"),
+            VersionRangePartition.subtract(listOf("[1.1, 1.2)"), listOf("[1.1.39, 1.1.40)")),
+        )
+        assertEquals(
+            listOf("[0,1)", "[2,3)", "[4,5)"),
+            VersionRangePartition.subtract(listOf("[0,3)", "[4,5)"), listOf("[1,2)", "[5,6),[7,8)")),
+        )
+        assertEquals(null, VersionRangePartition.subtract(listOf("[1,5)"), listOf("not-a-range")))
+    }
+
+    @Test
+    @DisplayName("subtract orders dash-qualified prod bounds with the registry's numeric scheme")
+    fun `subtract with numeric scheme`() {
+        val nvf = NumericVersionFactory(VersionNames("serviceCBranch", "serviceC", "minorC"))
+        val cmp: (String, String) -> Int = { a, b -> nvf.create(a).compareTo(nvf.create(b)) }
+        // system-versions on prod: supported [1.0.39,), overrides up to 1.0.39-361.
+        assertEquals(
+            listOf("[1.0.39-361,)"),
+            VersionRangePartition.subtract(listOf("[1.0.39,)"), listOf("[1.0.39,1.0.39-307)", "[1.0.39-307,1.0.39-361)"), cmp),
+        )
+    }
 }

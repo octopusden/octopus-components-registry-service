@@ -18,6 +18,11 @@ refresh it with `./gradlew :components-registry-service-server:generateOpenApiDo
 
 ## Unreleased
 
+- **Ownership uniqueness: a base claim excludes the component's own override ranges.** The cross-component
+  ownership check compares a base (`ALL_VERSIONS`) mapping on the component's supported versions minus its own
+  per-range override ranges. Before, an override freed the base only when the rival's range string was identical
+  to the override's, so saving `artifactIds` could return a false 409 `UNIQUENESS_VIOLATION` against a
+  component whose own override replaces its base where the two meet. No request or response shape changes.
 - **TeamCity placement Diff/Sync renamed to checkout layout (SYS-102).** Endpoints move to
   `/admin/teamcity-checkout-layout/...`; `/admin/teamcity-placement/...` stays as a deprecated alias,
   removed once the Portal uses the new paths in every environment. Both paths return the renamed codes

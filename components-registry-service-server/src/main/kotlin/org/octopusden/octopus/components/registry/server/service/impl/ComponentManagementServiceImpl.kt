@@ -3710,7 +3710,11 @@ class ComponentManagementServiceImpl(
                     .takeIf { it.isNotEmpty() }
                     ?.let { put(entity.componentKey, it) }
             }
-        val violations = computeOwnershipCollisions(ownClaims, rivalClaims, intersect, shadowRanges, coverage)
+        val compare = numericVersionComparator(numericVersionFactory)
+        val subtract: (List<String>, Collection<String>) -> List<String>? = { ranges, minus ->
+            VersionRangePartition.subtract(ranges, minus, compare)
+        }
+        val violations = computeOwnershipCollisions(ownClaims, rivalClaims, intersect, shadowRanges, coverage, subtract)
         if (violations.isNotEmpty()) throw CrossComponentConflictException(violations.first())
     }
 

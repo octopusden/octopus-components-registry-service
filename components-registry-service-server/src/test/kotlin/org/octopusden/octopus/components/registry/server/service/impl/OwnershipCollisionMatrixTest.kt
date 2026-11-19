@@ -5,6 +5,8 @@ import org.junit.jupiter.api.Assertions.assertTrue
 import org.junit.jupiter.api.DisplayName
 import org.junit.jupiter.api.Test
 import org.octopusden.octopus.components.registry.server.entity.ArtifactIdMode
+import org.octopusden.octopus.components.registry.server.util.VersionRangePartition
+import org.octopusden.releng.versions.NumericVersionFactory
 import org.octopusden.releng.versions.VersionNames
 import org.octopusden.releng.versions.VersionRangeFactory
 
@@ -18,6 +20,10 @@ class OwnershipCollisionMatrixTest {
     private val versionRangeFactory = VersionRangeFactory(VersionNames("serviceCBranch", "serviceC", "minorC"))
     private val realIntersect: (String, String) -> Boolean = { x, y ->
         versionRangeFactory.create(x).isIntersect(versionRangeFactory.create(y))
+    }
+    private val numericVersionFactory = NumericVersionFactory(VersionNames("serviceCBranch", "serviceC", "minorC"))
+    private val subtract: (List<String>, Collection<String>) -> List<String>? = { ranges, minus ->
+        VersionRangePartition.subtract(ranges, minus) { a, b -> numericVersionFactory.create(a).compareTo(numericVersionFactory.create(b)) }
     }
 
     private fun claim(
@@ -253,5 +259,113 @@ class OwnershipCollisionMatrixTest {
                 coverageByComponent = mapOf("A" to listOf("[1.1,1.3)"), "B" to coverageB),
             ).isNotEmpty(),
         )
+    }
+
+    /** Both sides' own override ranges, as the service builds them from the mappings. */
+    private fun overrideRanges(vararg claims: OwnershipClaim): Map<String, Set<String>> =
+        claims
+            .groupBy { it.componentKey }
+            .mapValues { (_, cs) -> cs.map { it.versionRange }.filterTo(mutableSetOf()) { it != base } }
+
+    private fun prodPair(
+        newClaims: List<OwnershipClaim>,
+        rivalClaims: List<OwnershipClaim>,
+        coverage: Map<String, List<String>>,
+        withSubtract: Boolean,
+    ) = computeOwnershipCollisions(
+        newClaims,
+        rivalClaims,
+        realIntersect,
+        overrideRanges(*(newClaims + rivalClaims).toTypedArray()),
+        coverage,
+        if (withSubtract) subtract else null,
+    )
+
+    @Test
+    @DisplayName("prod system-cards × system-versions: the rival's own overrides replace its base up to 1.0.39-361")
+    fun baseMinusOwnOverridesSystemVersions() {
+        val group = "com.openwaygroup.system"
+        val cards = listOf(claim("system-cards", group, ArtifactIdMode.EXPLICIT, setOf("system-cards")))
+        val versions =
+            listOf(
+                claim("system-versions", group, ArtifactIdMode.EXPLICIT, setOf("system-versions", "system-cards")),
+                claim("system-versions", group, ArtifactIdMode.EXPLICIT, setOf("system-versions"), "[1.0.39,1.0.39-307)"),
+                claim("system-versions", group, ArtifactIdMode.EXPLICIT, setOf("system-versions"), "[1.0.39-307,1.0.39-361)"),
+            )
+        val coverage = mapOf("system-cards" to listOf("(,1.0.39-361)"), "system-versions" to listOf("[1.0.39,)"))
+
+        assertTrue(prodPair(cards, versions, coverage, withSubtract = false).isNotEmpty())
+        assertEquals(emptyList<String>(), prodPair(cards, versions, coverage, withSubtract = true))
+        // Symmetric: saving system-versions does not meet system-cards either.
+        assertEquals(emptyList<String>(), prodPair(versions, cards, coverage, withSubtract = true))
+    }
+
+    @Test
+    @DisplayName("prod dms-client × dms: dms's (,0.2) override owns only dms, its base is in force from 1.0")
+    fun baseMinusOwnOverridesDms() {
+        val group = "com.openwaygroup.dms"
+        val client =
+            listOf(
+                claim(
+                    "dms-client",
+                    group,
+                    ArtifactIdMode.EXPLICIT,
+                    setOf("client", "dms-client-parent", "gradle-dms-client", "maven-dms-plugin"),
+                ),
+            )
+        val dms =
+            listOf(
+                claim(
+                    "dms",
+                    group,
+                    ArtifactIdMode.EXPLICIT,
+                    setOf("dms", "client", "gradle-dms-client", "maven-dms-plugin", "dms-gradle-plugin"),
+                ),
+                claim("dms", group, ArtifactIdMode.EXPLICIT, setOf("dms"), "(,0.2)"),
+            )
+        val coverage = mapOf("dms-client" to listOf("[0.1,0.2)"), "dms" to listOf("(,0.2)", "[1.0,)"))
+
+        assertTrue(prodPair(client, dms, coverage, withSubtract = false).isNotEmpty())
+        assertEquals(emptyList<String>(), prodPair(client, dms, coverage, withSubtract = true))
+    }
+
+    @Test
+    @DisplayName("prod way4webapi × w4web3model: a group-w4web3-only override (spaced range) replaces both base groups")
+    fun baseMinusOwnOverridesW4web3model() {
+        val api =
+            listOf(
+                claim("way4webapi", "com.openwaygroup.w4web", ArtifactIdMode.EXPLICIT, setOf("apioperations")),
+                claim("way4webapi", "com.openwaygroup.operations", ArtifactIdMode.EXPLICIT, setOf("apioperations")),
+            )
+        val model =
+            listOf(
+                claim("w4web3model", "com.openwaygroup.w4web3", ArtifactIdMode.EXPLICIT, setOf("apioperations", "w4web3model")),
+                claim("w4web3model", "com.openwaygroup.operations", ArtifactIdMode.EXPLICIT, setOf("apioperations", "w4web3model")),
+                claim("w4web3model", "com.openwaygroup.w4web3", ArtifactIdMode.EXPLICIT, setOf("w4web3model"), "[3.52, 3.56)"),
+            )
+        val coverage =
+            mapOf("way4webapi" to listOf("[2,3.56)"), "w4web3model" to listOf("[3.52,3.60.0-4061]", "[3.60.0-4062,)"))
+
+        assertTrue(prodPair(api, model, coverage, withSubtract = false).isNotEmpty())
+        assertEquals(emptyList<String>(), prodPair(api, model, coverage, withSubtract = true))
+    }
+
+    @Test
+    @DisplayName("base minus own overrides keeps a real conflict outside the overridden range")
+    fun baseMinusOwnOverridesKeepsRealConflict() {
+        val a = listOf(claim("A", mode = ArtifactIdMode.EXPLICIT, tokens = setOf("old"), range = "[2.5,3)"))
+        val b =
+            listOf(
+                claim("B", mode = ArtifactIdMode.EXPLICIT, tokens = setOf("old")),
+                claim("B", mode = ArtifactIdMode.EXPLICIT, tokens = setOf("new"), range = "[1,2)"),
+            )
+        val v = prodPair(a, b, mapOf("B" to listOf("[1,4)")), withSubtract = true)
+        assertEquals(1, v.size)
+        assertTrue(v.single().contains("'[2.5,3)' ∩ '[2,4)'"), v.single())
+        // A component that overrides all of its coverage has no base left in force, even against a
+        // sub-range the exact-string shadow skip does not match.
+        val inside = listOf(claim("A", mode = ArtifactIdMode.EXPLICIT, tokens = setOf("old"), range = "[1.5,2)"))
+        assertTrue(prodPair(inside, b, mapOf("B" to listOf("[1,2)")), withSubtract = false).isNotEmpty())
+        assertEquals(emptyList<String>(), prodPair(inside, b, mapOf("B" to listOf("[1,2)")), withSubtract = true))
     }
 }
