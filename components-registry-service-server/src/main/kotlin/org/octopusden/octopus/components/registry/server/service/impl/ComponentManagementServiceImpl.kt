@@ -1903,10 +1903,12 @@ class ComponentManagementServiceImpl(
 
     /**
      * The stored range string an `artifactIds` request range resolves to, or `null` when it is not
-     * allowed: the base, an exact configuration range, or — compared whitespace-insensitively, since
-     * DSL-migrated ranges keep a space after the comma (`[1.0, 1.1)`) that a client may drop — one of
-     * the component's current ownership ranges or a configuration range. The STORED form is returned so
-     * that exact-string comparisons elsewhere (shadow skip, resolver) keep matching.
+     * allowed: the base, one of the component's current ownership ranges, or a configuration range.
+     * Ranges are compared whitespace-insensitively, since DSL-migrated ranges keep a space after the
+     * comma (`[1.0, 1.1)`) that a client may drop. The STORED form is returned so that exact-string
+     * comparisons elsewhere (shadow skip, resolver, code view) keep matching; a current ownership range
+     * wins over a configuration range spelled differently, so re-saving never changes a mapping's range.
+     * Create passes no current ownership ranges, so a new range must still match a configuration range.
      */
     private fun storedOwnershipRange(
         component: ComponentEntity,
@@ -1916,8 +1918,9 @@ class ComponentManagementServiceImpl(
         val normalized = VersionRangePartition.normalize(requestedRange)
         if (normalized == VersionRangePartition.normalize(ALL_VERSIONS)) return ALL_VERSIONS
         val configRanges = component.configurations.map { it.versionRange }
-        return configRanges.firstOrNull { it == requestedRange }
+        return currentOwnershipRanges.firstOrNull { it == requestedRange }
             ?: currentOwnershipRanges.firstOrNull { VersionRangePartition.normalize(it) == normalized }
+            ?: configRanges.firstOrNull { it == requestedRange }
             ?: configRanges.firstOrNull { VersionRangePartition.normalize(it) == normalized }
     }
 

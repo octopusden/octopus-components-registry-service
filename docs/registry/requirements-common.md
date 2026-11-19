@@ -100,6 +100,7 @@
 | SYS-105 | Template-only creators: the permission `CREATE_FROM_TEMPLATE` (role `ROLE_COMPONENTS_REGISTRY_TEMPLATE_CREATOR`, with `ACCESS_COMPONENTS` and `ACCESS_AUDIT`) lets a caller without `CREATE_COMPONENTS` create components from templates only: templates usable, regular profiles unusable with "You may create components from templates only", any template override `403`, the regular create `403`. `CREATE_COMPONENTS` keeps every right and wins over it; editing by ownership is unchanged | High | unit + integration-test | ✅ Tested |
 | SYS-106 | `component-validation` module: `MavenVersionResolver` takes the whole version from a `MAVEN/<version>` path segment (`/` or `\`, e.g. `BUILD_ENV/MAVEN/3.10`), so `3.6`, `3.9` and `3.10` stay distinct versions instead of resolving to `3`; `LATEST` and the known-token fallback for values without such a segment are unchanged | High | unit-test | ✅ Tested |
 | SYS-107 | Component templates: a template may set the first Maven artifact's `extension` and `classifier` next to its `groupPattern`/`artifactPattern`; both render (with `{{ }}` parameters) into the create request, and a template that sets neither sends neither. A template setting either without both `groupPattern` and `artifactPattern` is failed on load with a problem naming the qualifier. Profile `rules` may name `baseConfiguration.mavenArtifacts[0].extension` and `.classifier` | High | unit-test | ✅ Tested |
+| SYS-108 | v4 `artifactIds` REPLACE may re-send the component's current ownership ranges even without a configuration row (DSL-migrated ownership-only blocks); request ranges match the base, current ownership ranges and configuration ranges ignoring whitespace, store the stored form, and prefer the ownership spelling; a range that is none of these is rejected with 400 naming it                                                                                                          | High | unit + integration-test | ✅ Tested |
 
 ---
 
@@ -3857,3 +3858,42 @@ component created from it registered the wrong GAV.
 `` `SYS-107 maven without extension or classifier` `` (2); `TemplateMavenQualifierTest` —
 `` `SYS-107 qualifier without coordinate` `` (3), `` `SYS-107 qualifiers with coordinate are live` `` (4);
 `CreateRequestPathsTest` — `` `SYS-107 extension and classifier are rule paths` `` (5).
+
+### SYS-108: Re-saving ownership ranges that have no configuration row
+
+**Priority:** High
+**Test layer:** unit + integration-test
+**Status:** ✅ Tested
+
+**Motivation:**
+Migration writes a DSL block that differs from the base only in groupId/artifactId as an ownership
+mapping with no configuration row at its range; the supported versions are stored as merged
+`RANGE_PRESENCE` segments, not per block. A v4 `PATCH` replaces the whole `artifactIds` list, so the
+client must re-send these ranges, and a rule that accepted only configuration ranges rejected every
+such save with 400. Migrated ranges also keep the DSL's space after the comma (`[1.7, 2.4.55-477)`),
+which a client may drop.
+
+**Description:**
+- A request range is accepted when it is the base, one of the component's current ownership ranges
+  (on update), or a configuration range. Create has no current ownership ranges, so a new range must
+  still be a configuration range or the base.
+- Ranges are compared ignoring whitespace. The mapping stores the range string already stored: a
+  current ownership range first, then a configuration range, then the canonical base. Re-saving
+  never changes a mapping's range string.
+- Any other range is rejected with 400 naming the range.
+
+**Acceptance criteria:**
+1. A range that is neither the base, a current ownership range nor a configuration range is rejected
+   with 400 naming the range, and nothing is stored.
+2. A `PATCH` that re-sends a current ownership range with no configuration row succeeds.
+3. A current ownership range sent without its stored whitespace matches and keeps the stored form.
+4. When a current ownership range and a configuration range differ only in whitespace, the ownership
+   spelling is stored.
+5. Create matches a configuration range or the base ignoring whitespace and stores their form.
+
+**Test method:** `ArtifactGroupSplitWriteTest` — `` `SYS-108 ARTGRP-WR-004 unknown override range is rejected` `` (1),
+`` `SYS-108 ARTGRP-WR-005 current ownership range without configuration row is accepted` `` (2),
+`` `SYS-108 ARTGRP-WR-006 spaced migrated range matches its unspaced form` `` (3),
+`` `SYS-108 ARTGRP-WR-007 ownership spelling wins over configuration spelling` `` (4),
+`` `SYS-108 ARTGRP-WR-008 create matches ranges ignoring whitespace` `` (5);
+`CrossComponentValidationTest` — `ownership_migratedOverrideRangeWithoutConfigRow` (1, 2 through the real `PATCH`).

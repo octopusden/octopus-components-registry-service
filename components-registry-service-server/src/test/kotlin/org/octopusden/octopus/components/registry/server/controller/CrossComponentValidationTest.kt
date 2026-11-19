@@ -931,7 +931,9 @@ class CrossComponentValidationTest {
     }
 
     @Test
-    @DisplayName("migrated ownership-only override range (no config row) can be re-saved; a rival's base is limited to its coverage")
+    @DisplayName(
+        "SYS-108: migrated ownership-only override range (no config row) can be re-saved; a rival's base is limited to its coverage",
+    )
     fun ownership_migratedOverrideRangeWithoutConfigRow() {
         val s = sfx()
         val group = "org.octopusden.octopus.own$s"
