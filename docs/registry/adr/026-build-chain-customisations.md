@@ -115,34 +115,39 @@ Compile → RC → Release                           (no extra stages; unchanged
   shared repository could start Compile in all of them. Whether the Compile templates have a
   VCS trigger is checked before the setting is turned on for such a family.
 
-### 4. A new multi-root component is registered with all its roots
+### 4. A component that builds from two repositories lists both in the registry
 
-A new component that builds from its own repository plus a shared one is registered with
-both as VCS roots ([ADR-022](022-vcs-root-checkout-layout.md)):
+Some components build from their own repository plus a repository shared by the whole
+family. The registry lists both as VCS roots ([ADR-022](022-vcs-root-checkout-layout.md)):
 
 - its own repository, with a Checkout Directory;
 - the shared repository, with its own Checkout Directory;
 - a Build Working Directory inside the shared one.
 
-The generator already turns these into checkout rules, attached roots and `WORK_DIR`, so the
-chain is right when it is created and no patch is needed.
+The generator already turns these into the chain's checkout and working directory. So a
+chain built from the registry is right from the start, and no patch is needed.
 
-- **Only new components.** Existing components and their chains are not changed, and no
-  shared root is added to them. [ADR-023](023-teamcity-checkout-layout-diff-sync.md) stands:
-  Sync never adds a root, and a shared repository missing from an existing component is still
-  only reported.
-- **Commits in the shared repository count for every component that lists it.** Release
-  tooling attributes commits by each root's `vcsPath`, and a lookup by the shared
-  repository's path returns every such component. This is accepted: the shared repository is
-  part of what each of them builds, so a change in it is a change to each.
-- **Repository provisioning** (ADR-025) handles each root on its own: the family's
-  provisioning configuration fixes the shared repository as `useExisting: true`, so it is
-  never created.
-- The generator creates one root per component for the shared repository instead of reusing
-  one. Accepted.
-- **The version-format file.** The generator sets `BUILD_VERSION_FORMAT_FILE` for a chain
-  with a Build Working Directory, but a compile template's version step must read it. Each
-  template that serves such chains is checked or changed first.
+- **New components** are registered this way from the start.
+- **Existing components** get the shared repository added to their registry entry once,
+  before the other chain creators are removed. Otherwise their next chain, for example for a
+  new version line, would be built without the shared repository, and nothing would patch it
+  any more.
+  - This is a one-off, reviewed change to the registry, not Sync. As
+    [ADR-023](023-teamcity-checkout-layout-diff-sync.md) says, Sync never adds a root.
+  - Chains that already exist are not changed.
+- **A commit in the shared repository counts for every component that lists it.** Release
+  tooling links commits to a component through its roots, and a search by the shared
+  repository's path returns every component that lists it. This is accepted: the shared
+  repository is part of what each of them builds, so a change in it is a change to each.
+- **The shared repository is never created.** When the provisioning service (ADR-025) sets up
+  a new component, the family's provisioning configuration marks the shared repository
+  `useExisting: true`.
+- **Each component gets its own TeamCity VCS root for the shared repository**, instead of
+  sharing one. Accepted.
+- **The version-format file.** In such a chain the build runs inside the shared repository's
+  directory, so the file that sets the version is not at the usual place. The generator passes
+  its location as `BUILD_VERSION_FORMAT_FILE`, but the compile template must read it. Each
+  template used by such chains is checked, and changed if needed, first.
 
 ### 5. Template steps disabled by a patch need a condition first
 
@@ -167,13 +172,15 @@ recorded. So:
   names in the code, and no change unless they opt in.
 - Today's stages are kept, so nothing that depends on them breaks.
 - The old steps retire only after their replacements are proven.
-- The registry describes how new multi-root components are actually built.
+- The registry describes how multi-root components are actually built.
 
 ### Negative
 - A family with a disabled template step keeps its old creation path until the step is
   understood and conditioned.
 - Multi-root registry entries have to be maintained.
-- Commits in a shared repository are attributed to every component that lists it.
+- Existing components of such a family need a one-off registry update before the old chain
+  creators are removed.
+- A commit in a shared repository counts for every component that lists it.
 - One root per component for a shared repository instead of one shared root.
 - A stage list is a small chain language; the limits in decision 2 have to be defended.
 - While the old and new paths coexist, the old step must skip chains the new one already
