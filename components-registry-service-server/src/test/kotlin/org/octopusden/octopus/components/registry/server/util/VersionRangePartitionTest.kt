@@ -313,5 +313,20 @@ class VersionRangePartitionTest {
         assertTrue(vrf.create("[1, 2.3)").containsVersion(nvf.create("2.1")))
         assertEquals(listOf("[2.3,3)"), VersionRangePartition.subtract(listOf("[1,3)"), listOf(" [1, 2.3) ")))
         assertEquals(listOf("[2.3,3)"), VersionRangePartition.subtract(listOf("[1,3)"), listOf("[1,  2.3)")))
+        assertEquals(listOf("[2.3,3)"), VersionRangePartition.subtract(listOf("[1,3)"), listOf("[1,\t2.3)")))
+    }
+
+    @Test
+    @DisplayName("SYS-109: subtract returns null for non-ASCII whitespace the registry's VersionRangeFactory reads differently")
+    fun `SYS-109 subtract rejects non-ASCII whitespace`() {
+        val names = VersionNames("serviceCBranch", "serviceC", "minorC")
+        val vrf = VersionRangeFactory(names)
+        val nvf = NumericVersionFactory(names)
+        // A no-break space is part of the bound for the factory, even right after the comma.
+        assertFalse(vrf.create("[1,2.3\u00A0)").containsVersion(nvf.create("2.1")))
+        assertTrue(vrf.create("[1,\u00A02.3)").containsVersion(nvf.create("2.3")))
+        listOf("[1,2.3\u00A0)", "[1,\u00A02.3)", "[1,2.3\u2003)", "\u00A0[1,2.3)").forEach {
+            assertEquals(null, VersionRangePartition.subtract(listOf("[1,3)"), listOf(it)), it)
+        }
     }
 }

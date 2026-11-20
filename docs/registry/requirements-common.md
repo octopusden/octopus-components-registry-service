@@ -3918,17 +3918,17 @@ got a false 409 on every ownership save.
 - Subtraction keeps exact bracket inclusivity, accepts composite ranges, the all-versions sentinel and
   whitespace right after a comma (the migrated DSL form), and orders versions with the registry's
   numeric version scheme.
-- If any range cannot be parsed, the registry's version range factory rejects it, or it has
-  whitespace anywhere but right after a comma (the factory reads `[1,2.3 )` as a different bound than
-  `[1,2.3)`), the base keeps its unsubtracted ranges (may over-report, never misses a conflict); the
+- If any range cannot be parsed, the registry's version range factory rejects it, or it has a
+  character other than printable ASCII, a space or tab right after a comma, or a space at either end
+  (the factory reads `[1,2.3 )`, or a no-break space anywhere, as a different bound), the base keeps its unsubtracted ranges (may over-report, never misses a conflict); the
   exact-string skip stays as the fallback.
 - A real conflict outside the component's override ranges is still reported.
 
 **Acceptance criteria:**
 1. Subtraction returns the exact remaining pieces with correct bracket inclusivity, handles composite
    ranges, all versions and whitespace, and returns `null` for an unparseable range or one the
-   registry's version range factory rejects (e.g. `[,1)`) or with whitespace anywhere but right after
-   a comma (e.g. `[1,2.3 )`), so the base keeps its unsubtracted ranges.
+   registry's version range factory rejects (e.g. `[,1)`) or with whitespace the factory may read as
+   part of a bound (e.g. `[1,2.3 )`, a no-break space), so the base keeps its unsubtracted ranges.
 2. Dash-qualified versions are ordered by the registry's numeric scheme.
 3. A component whose supported versions meet a rival only where the rival's own override replaces its
    base saves its ownership without a 409, on both sides (prod shapes: a sub-range override, an
@@ -3938,7 +3938,8 @@ got a false 409 on every ownership save.
 
 **Test method:** `VersionRangePartitionTest` — `` `SYS-109 subtract inclusivity` ``,
 `` `SYS-109 subtract composites` ``, `` `SYS-109 subtract rejects ranges the factory rejects` ``,
-`` `SYS-109 subtract rejects whitespace next to a bracket` `` (1),
+`` `SYS-109 subtract rejects whitespace next to a bracket` ``,
+`` `SYS-109 subtract rejects non-ASCII whitespace` `` (1),
 `` `SYS-109 subtract with numeric scheme` `` (2);
 `OwnershipCollisionMatrixTest` — `` `SYS-109 own sub-range overrides replace the base` ``,
 `` `SYS-109 override equal to a coverage segment replaces the base` ``,

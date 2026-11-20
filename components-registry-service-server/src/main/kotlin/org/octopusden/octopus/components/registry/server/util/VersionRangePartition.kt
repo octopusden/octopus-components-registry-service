@@ -50,9 +50,6 @@ object VersionRangePartition {
 
     private val SIMPLE_SEGMENT_PATTERN = Regex("^([\\[(])([^,]*),([^,]*)([\\])])$")
 
-    /** Whitespace not right after a comma: the factory may read it as part of a bound. */
-    private val UNSAFE_WHITESPACE = Regex("[^,\\s]\\s")
-
     // Maven hard-version form `[x]` (no comma): exactly version x.
     private val SINGLE_VERSION_PATTERN = Regex("^\\[([^,\\[\\]()]+)\\]$")
     internal const val ALL_VERSIONS_SENTINEL = "(,0),[0,)"
@@ -369,8 +366,9 @@ object VersionRangePartition {
      * rejected by [accepts] — a caller that must stay sound falls back to the unsubtracted ranges. This
      * parser is more lenient than the registry's `VersionRangeFactory` (it reads `[,1)` as unbounded
      * below), so production callers pass the factory's parse as [accepts]. The parser also drops all
-     * whitespace, while the factory reads whitespace next to a bracket as part of the bound (`[1,2.3 )`
-     * does not contain `2.1`), so a range with whitespace anywhere but right after a comma is `null` too.
+     * whitespace, while the factory reads whitespace next to a bracket, or any non-ASCII whitespace, as
+     * part of the bound (`[1,2.3 )` does not contain `2.1`), so a range is `null` too unless it is
+     * printable ASCII with only spaces or tabs right after a comma and spaces at either end.
      */
     fun subtract(
         ranges: List<String>,
@@ -379,12 +377,22 @@ object VersionRangePartition {
         accepts: (String) -> Boolean = { true },
     ): List<String>? {
         if (!(ranges.all(accepts) && minus.all(accepts))) return null
-        if ((ranges + minus).any { UNSAFE_WHITESPACE.containsMatchIn(it.trim()) }) return null
+        if ((ranges + minus).any { hasUnsafeChars(it) }) return null
         val from = ranges.map { toSegmentsOrNull(it) ?: return null }.flatten()
         val cut = minus.map { toSegmentsOrNull(it) ?: return null }.flatten()
         var rest = from
         for (c in cut) rest = rest.flatMap { subtractSegment(it, c, compare) }
         return rest.map { render(it) }
+    }
+
+    /** True if [range] has a character the factory may read differently from this parser (see [subtract]). */
+    private fun hasUnsafeChars(range: String): Boolean {
+        val s = range.trim(' ')
+        return s.indices.any { i ->
+            val c = s[i]
+            val afterComma = (c == ' ' || c == '\t') && s.substring(0, i).trimEnd(' ', '\t').endsWith(',')
+            c !in '!'..'~' && !afterComma
+        }
     }
 
     /** [a] minus [b]: at most two pieces, the part of [a] below [b] and the part above it. */
