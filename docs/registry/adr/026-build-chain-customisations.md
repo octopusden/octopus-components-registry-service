@@ -115,23 +115,26 @@ Compile → RC → Release                           (no extra stages; unchanged
   shared repository could start Compile in all of them. Whether the Compile templates have a
   VCS trigger is checked before the setting is turned on for such a family.
 
-### 4. A multi-root layout is registry data
+### 4. A new multi-root component is registered with all its roots
 
-Components that build from their own repository plus a shared one register their real
-layout ([ADR-022](022-vcs-root-checkout-layout.md)):
+A new component that builds from its own repository plus a shared one is registered with
+both as VCS roots ([ADR-022](022-vcs-root-checkout-layout.md)):
 
-- their own repository with a Checkout Directory;
-- the shared repository as a second root, with its own Checkout Directory;
+- its own repository, with a Checkout Directory;
+- the shared repository, with its own Checkout Directory;
 - a Build Working Directory inside the shared one.
 
-The generator already turns these into checkout rules, attached roots and `WORK_DIR`. This
-replaces the layout part of today's patch without code, and fixes other registry readers,
-such as the escrow resolver, which today do not know the shared repository is a build input.
+The generator already turns these into checkout rules, attached roots and `WORK_DIR`, so the
+chain is right when it is created and no patch is needed.
 
-- **Existing components.** The Diff and Sync jobs ([ADR-023](023-teamcity-checkout-layout-diff-sync.md))
-  bring checkout layout from TeamCity into the registry. They match roots by URL, so a
-  missing shared root is reported as a mismatch and added by hand. Diff runs first, to show
-  the size of the job.
+- **Only new components.** Existing components and their chains are not changed, and no
+  shared root is added to them. [ADR-023](023-teamcity-checkout-layout-diff-sync.md) stands:
+  Sync never adds a root, and a shared repository missing from an existing component is still
+  only reported.
+- **Commits in the shared repository count for every component that lists it.** Release
+  tooling attributes commits by each root's `vcsPath`, and a lookup by the shared
+  repository's path returns every such component. This is accepted: the shared repository is
+  part of what each of them builds, so a change in it is a change to each.
 - **Repository provisioning** (ADR-025) handles each root on its own: the family's
   provisioning configuration fixes the shared repository as `useExisting: true`, so it is
   never created.
@@ -164,12 +167,13 @@ recorded. So:
   names in the code, and no change unless they opt in.
 - Today's stages are kept, so nothing that depends on them breaks.
 - The old steps retire only after their replacements are proven.
-- The registry describes how multi-root components are actually built.
+- The registry describes how new multi-root components are actually built.
 
 ### Negative
 - A family with a disabled template step keeps its old creation path until the step is
   understood and conditioned.
 - Multi-root registry entries have to be maintained.
+- Commits in a shared repository are attributed to every component that lists it.
 - One root per component for a shared repository instead of one shared root.
 - A stage list is a small chain language; the limits in decision 2 have to be defended.
 - While the old and new paths coexist, the old step must skip chains the new one already
