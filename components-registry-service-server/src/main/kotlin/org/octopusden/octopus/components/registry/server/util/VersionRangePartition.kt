@@ -50,6 +50,9 @@ object VersionRangePartition {
 
     private val SIMPLE_SEGMENT_PATTERN = Regex("^([\\[(])([^,]*),([^,]*)([\\])])$")
 
+    /** Whitespace not right after a comma: the factory may read it as part of a bound. */
+    private val UNSAFE_WHITESPACE = Regex("[^,\\s]\\s")
+
     // Maven hard-version form `[x]` (no comma): exactly version x.
     private val SINGLE_VERSION_PATTERN = Regex("^\\[([^,\\[\\]()]+)\\]$")
     internal const val ALL_VERSIONS_SENTINEL = "(,0),[0,)"
@@ -365,7 +368,9 @@ object VersionRangePartition {
      * covers [ranges] entirely. `null` if any range fails to parse fully ([toSegmentsOrNull]) or is
      * rejected by [accepts] — a caller that must stay sound falls back to the unsubtracted ranges. This
      * parser is more lenient than the registry's `VersionRangeFactory` (it reads `[,1)` as unbounded
-     * below), so production callers pass the factory's parse as [accepts].
+     * below), so production callers pass the factory's parse as [accepts]. The parser also drops all
+     * whitespace, while the factory reads whitespace next to a bracket as part of the bound (`[1,2.3 )`
+     * does not contain `2.1`), so a range with whitespace anywhere but right after a comma is `null` too.
      */
     fun subtract(
         ranges: List<String>,
@@ -374,6 +379,7 @@ object VersionRangePartition {
         accepts: (String) -> Boolean = { true },
     ): List<String>? {
         if (!(ranges.all(accepts) && minus.all(accepts))) return null
+        if ((ranges + minus).any { UNSAFE_WHITESPACE.containsMatchIn(it.trim()) }) return null
         val from = ranges.map { toSegmentsOrNull(it) ?: return null }.flatten()
         val cut = minus.map { toSegmentsOrNull(it) ?: return null }.flatten()
         var rest = from

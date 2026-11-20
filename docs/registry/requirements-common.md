@@ -101,7 +101,7 @@
 | SYS-106 | `component-validation` module: `MavenVersionResolver` takes the whole version from a `MAVEN/<version>` path segment (`/` or `\`, e.g. `BUILD_ENV/MAVEN/3.10`), so `3.6`, `3.9` and `3.10` stay distinct versions instead of resolving to `3`; `LATEST` and the known-token fallback for values without such a segment are unchanged | High | unit-test | ✅ Tested |
 | SYS-107 | Component templates: a template may set the first Maven artifact's `extension` and `classifier` next to its `groupPattern`/`artifactPattern`; both render (with `{{ }}` parameters) into the create request, and a template that sets neither sends neither. A template setting either without both `groupPattern` and `artifactPattern` is failed on load with a problem naming the qualifier. Profile `rules` may name `baseConfiguration.mavenArtifacts[0].extension` and `.classifier` | High | unit-test | ✅ Tested |
 | SYS-108 | v4 `artifactIds` REPLACE may re-send the component's current ownership ranges even without a configuration row (DSL-migrated ownership-only blocks); request ranges match the base, current ownership ranges and configuration ranges ignoring whitespace, store the stored form, and prefer the ownership spelling; a range that is none of these is rejected with 400 naming it                                                                                                          | High | unit + integration-test | ✅ Tested |
-| SYS-109 | Cross-component ownership uniqueness compares a base (`ALL_VERSIONS`) mapping only where it is in force: the component's supported versions minus its own per-range override ranges (range subtraction with exact bracket inclusivity, composite ranges and whitespace, in the registry's numeric version order); an unparseable range keeps the unsubtracted ranges                                                                                                                       | High | unit + integration-test | ✅ Tested |
+| SYS-109 | Cross-component ownership uniqueness compares a base (`ALL_VERSIONS`) mapping only where it is in force: the component's supported versions minus its own per-range override ranges (range subtraction with exact bracket inclusivity, composite ranges and whitespace after a comma, in the registry's numeric version order); an unparseable range keeps the unsubtracted ranges                                                                                                                       | High | unit + integration-test | ✅ Tested |
 
 ---
 
@@ -3916,15 +3916,19 @@ got a false 409 on every ownership save.
 - A base (`ALL_VERSIONS`) claim is compared on the component's supported versions (all versions when
   unbounded) minus the component's own non-base ownership ranges, whatever their groups.
 - Subtraction keeps exact bracket inclusivity, accepts composite ranges, the all-versions sentinel and
-  whitespace, and orders versions with the registry's numeric version scheme.
-- If any range cannot be parsed, or the registry's version range factory rejects it, the base keeps its unsubtracted ranges (may over-report, never misses
-  a conflict); the exact-string skip stays as the fallback.
+  whitespace right after a comma (the migrated DSL form), and orders versions with the registry's
+  numeric version scheme.
+- If any range cannot be parsed, the registry's version range factory rejects it, or it has
+  whitespace anywhere but right after a comma (the factory reads `[1,2.3 )` as a different bound than
+  `[1,2.3)`), the base keeps its unsubtracted ranges (may over-report, never misses a conflict); the
+  exact-string skip stays as the fallback.
 - A real conflict outside the component's override ranges is still reported.
 
 **Acceptance criteria:**
 1. Subtraction returns the exact remaining pieces with correct bracket inclusivity, handles composite
    ranges, all versions and whitespace, and returns `null` for an unparseable range or one the
-   registry's version range factory rejects (e.g. `[,1)`), so the base keeps its unsubtracted ranges.
+   registry's version range factory rejects (e.g. `[,1)`) or with whitespace anywhere but right after
+   a comma (e.g. `[1,2.3 )`), so the base keeps its unsubtracted ranges.
 2. Dash-qualified versions are ordered by the registry's numeric scheme.
 3. A component whose supported versions meet a rival only where the rival's own override replaces its
    base saves its ownership without a 409, on both sides (prod shapes: a sub-range override, an
@@ -3933,12 +3937,14 @@ got a false 409 on every ownership save.
 5. A component that overrides all of its supported versions has no base claim in force.
 
 **Test method:** `VersionRangePartitionTest` — `` `SYS-109 subtract inclusivity` ``,
-`` `SYS-109 subtract composites` ``, `` `SYS-109 subtract rejects ranges the factory rejects` `` (1),
+`` `SYS-109 subtract composites` ``, `` `SYS-109 subtract rejects ranges the factory rejects` ``,
+`` `SYS-109 subtract rejects whitespace next to a bracket` `` (1),
 `` `SYS-109 subtract with numeric scheme` `` (2);
 `OwnershipCollisionMatrixTest` — `` `SYS-109 own sub-range overrides replace the base` ``,
 `` `SYS-109 override equal to a coverage segment replaces the base` ``,
 `` `SYS-109 override of another group replaces the base` `` (3),
 `` `SYS-109 base minus own overrides keeps a real conflict` `` (4, 5),
-`` `SYS-109 factory-rejected override range keeps the base` `` (1, 4);
+`` `SYS-109 factory-rejected override range keeps the base` ``,
+`` `SYS-109 override with whitespace inside a bound keeps the base` `` (1, 4);
 `CrossComponentValidationTest` — `` `SYS-109 rival base is not in force under its own sub-range override` `` (3, 4 through the
 real `PATCH`).

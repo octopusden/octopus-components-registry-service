@@ -421,4 +421,20 @@ class OwnershipCollisionMatrixTest {
         val v = computeOwnershipCollisions(a, b, intersect, shadow, coverage, strictSubtract)
         assertEquals(1, v.size, v.toString())
     }
+
+    @Test
+    @DisplayName("SYS-109: an override range with whitespace inside a bound keeps the base")
+    fun `SYS-109 override with whitespace inside a bound keeps the base`() {
+        val a = listOf(claim("A", mode = ArtifactIdMode.EXPLICIT, tokens = setOf("shared"), range = "[2.1,2.2)"))
+        val b =
+            listOf(
+                claim("B", mode = ArtifactIdMode.EXPLICIT, tokens = setOf("shared")),
+                claim("B", mode = ArtifactIdMode.EXPLICIT, tokens = setOf("other"), range = "[1,2.3 )"),
+            )
+        val shadow = overrideRanges(*(a + b).toTypedArray())
+        val coverage = mapOf("B" to listOf("[1,3)"))
+        // The factory's `[1,2.3 )` does not contain 2.1, so B's base is in force there: a real conflict.
+        val v = computeOwnershipCollisions(a, b, realIntersect, shadow, coverage, subtract)
+        assertEquals(1, v.size, v.toString())
+    }
 }

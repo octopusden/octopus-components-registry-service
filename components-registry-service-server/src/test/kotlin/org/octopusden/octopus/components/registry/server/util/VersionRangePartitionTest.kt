@@ -297,4 +297,21 @@ class VersionRangePartitionTest {
         assertEquals(null, VersionRangePartition.subtract(listOf("[0,1)"), listOf("[,1)"), accepts = accepts))
         assertEquals(listOf("[0,0.5)"), VersionRangePartition.subtract(listOf("[0,1)"), listOf("[0.5,1)"), accepts = accepts))
     }
+
+    @Test
+    @DisplayName("SYS-109: subtract returns null for whitespace the registry's VersionRangeFactory reads as part of a bound")
+    fun `SYS-109 subtract rejects whitespace next to a bracket`() {
+        val names = VersionNames("serviceCBranch", "serviceC", "minorC")
+        val vrf = VersionRangeFactory(names)
+        val nvf = NumericVersionFactory(names)
+        // The factory reads `2.3 ` as a different bound: `[1,2.3 )` does not contain 2.1.
+        assertFalse(vrf.create("[1,2.3 )").containsVersion(nvf.create("2.1")))
+        assertEquals(null, VersionRangePartition.subtract(listOf("[1,3)"), listOf("[1,2.3 )")))
+        assertEquals(null, VersionRangePartition.subtract(listOf("[1,3)"), listOf("[ 1,2.3)")))
+        assertEquals(null, VersionRangePartition.subtract(listOf("[1 ,3)"), listOf("[1,2.3)")))
+        // A space right after a comma (the migrated DSL form) and surrounding whitespace are safe.
+        assertTrue(vrf.create("[1, 2.3)").containsVersion(nvf.create("2.1")))
+        assertEquals(listOf("[2.3,3)"), VersionRangePartition.subtract(listOf("[1,3)"), listOf(" [1, 2.3) ")))
+        assertEquals(listOf("[2.3,3)"), VersionRangePartition.subtract(listOf("[1,3)"), listOf("[1,  2.3)")))
+    }
 }
