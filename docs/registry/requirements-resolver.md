@@ -30,6 +30,7 @@
 | RES-024 | Find component by single artifact | High | integration-test | ⏳ Git-only |
 | RES-025 | Find components by artifacts batch (V3) | High | integration-test | ⏳ Git-only |
 | RES-026 | Range Set equality keeps one element per component | High | unit-test | ✅ Git + DB |
+| RES-027 | VCS settings keep every part of the requested version | High | unit-test | ✅ Git + DB |
 
 ---
 
@@ -674,3 +675,40 @@ too: an equality that compares nothing makes the enclosing comparison vacuous.
 
 **Test method:** `EqualityContractTest` (model contract, six cases) and
 `RangeSetDropsCollidingComponentsTest` (endpoint seam, two cases)
+
+---
+
+### RES-027: VCS settings keep every part of the requested version
+
+**Priority:** High
+**Test layer:** unit-test
+**Status:** ✅ Tested
+
+**Description:**
+`GET /rest/api/2/components/{component}/versions/{version}/vcs-settings` substitutes `$version` in
+the tag and branch with the requested version normalized non-strictly and then formatted with the
+build (or hotfix) format. Non-strict normalization takes the first format with no more parts than the
+version has, so a version shorter than the build format can fall through to the major or line format
+and lose parts: with release format `$major.$minor.$service` and major format `$major`, `2.2` becomes
+`2`, and the tag would name `2.0.0`, which does not exist. A version keeps its parts: when it is
+shorter than the build format and normalization dropped a non-zero part, the requested version is used
+as it is.
+
+**Preconditions:**
+- Release format `$major.$minor.$service`, major and line formats `$major`, no build format
+- Tag `$module-$version`
+
+**Acceptance criteria:**
+1. `2.2`, `5.3`, `6.15` give the tags `<module>-2.2`, `<module>-5.3`, `<module>-6.15`
+2. A full release version `2.2.1` gives `<module>-2.2.1`
+3. A version longer than the build format, `2.2.1.5`, is trimmed to it: `<module>-2.2.1`
+4. A version whose dropped parts are zero, `2.0`, and a major version `2` are padded to the build
+   format: `<module>-2.0.0`
+5. With hotfixes enabled (a hotfix branch set, hotfix format `$major.$minor.$service-$fix`): a
+   hotfix version `2.2.1-3` keeps it, `<module>-2.2.1-3`; a release version `2.2.1` takes the build
+   format, `<module>-2.2.1`; a cut version `2.2` is kept, `<module>-2.2`
+6. The Git and the DB resolver give the same tags
+
+**Test method:** `VcsSettingsVersionCutTest` (`RES-027 git resolver tag`, `RES-027 db resolver tag`);
+the compat known delta for the changed tags: `VcsSettingsVersionKnownDeltaTest` (`RES-027 a cut version
+tag is suppressed`, `RES-027 another change stays active`)
