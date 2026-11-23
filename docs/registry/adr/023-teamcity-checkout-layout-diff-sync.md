@@ -5,6 +5,10 @@
 Accepted. Implemented in #510; [SYS-102](../requirements-common.md); design in
 [technical-design §6.10](../technical-design.md#610-teamcity-checkout-layout-diffsync-onb-002).
 
+**Amended by [ADR-026](026-build-chain-customisations.md)** (proposed), decision 4: a
+component that builds inside a shared repository gets that repository registered as a root,
+and the commit attribution below is accepted for it. Sync still never adds a root.
+
 ## Context
 
 [ADR-022](022-vcs-root-checkout-layout.md) gives the registry the fields that place a

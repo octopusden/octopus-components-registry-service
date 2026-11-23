@@ -2,7 +2,8 @@
 
 ## Status
 
-Proposed.
+Proposed — **amends [ADR-023](023-teamcity-checkout-layout-diff-sync.md)** for components
+that build inside a shared repository (decision 4).
 
 It follows [ADR-025](025-component-provisioning.md), where
 `octopus-component-provisioning-service` creates a component's build chain through
@@ -132,13 +133,20 @@ chain built from the registry is right from the start, and no patch is needed.
   before the other chain creators are removed. Otherwise their next chain, for example for a
   new version line, would be built without the shared repository, and nothing would patch it
   any more.
-  - This is a one-off, reviewed change to the registry, not Sync. As
-    [ADR-023](023-teamcity-checkout-layout-diff-sync.md) says, Sync never adds a root.
+  - This is a one-off, reviewed change to the registry, not Sync. Sync still never adds a
+    root.
+  - The owners of the release tooling agree to it first, because their commit attribution and
+    `vcs-path` lookups change, not only the registry.
   - Chains that already exist are not changed.
 - **A commit in the shared repository counts for every component that lists it.** Release
   tooling links commits to a component through its roots, and a search by the shared
   repository's path returns every component that lists it. This is accepted: the shared
   repository is part of what each of them builds, so a change in it is a change to each.
+- **This amends [ADR-023](023-teamcity-checkout-layout-diff-sync.md).** ADR-023 says adding a
+  missing shared repository to a component is not a fix, because of that attribution. For
+  components that build inside a shared repository, it is now registered as a root, and the
+  attribution is accepted. For any other shared repository, such as tooling the build only
+  uses, ADR-023 still holds.
 - **The shared repository is never created.** When the provisioning service (ADR-025) sets up
   a new component, the family's provisioning configuration marks the shared repository
   `useExisting: true`.
