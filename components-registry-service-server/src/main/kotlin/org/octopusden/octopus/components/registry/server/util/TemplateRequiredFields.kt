@@ -38,6 +38,7 @@ internal class TemplateRequiredFields(
                     "(baseConfiguration.packages[0].packageName)",
             )
         }
+        checkVcsEntries(reported = paths.toSet())
         if (!MAVEN_COORDINATE.all { it in fields }) {
             MAVEN_QUALIFIERS.filter { it in fields }.forEach {
                 keys.problem(
@@ -45,6 +46,42 @@ internal class TemplateRequiredFields(
                     "needs the Maven GAV it qualifies; set baseConfiguration.mavenArtifacts[0].groupPattern and .artifactPattern too",
                 )
             }
+        }
+    }
+
+    /**
+     * The create checks out at most one VCS entry at the checkout root, and needs the folder the build runs
+     * in when none is there. The renderer builds every entry up to the last index set, so the indexes must
+     * run from 0 without a gap. Only the indexes set are walked, so a large one costs nothing; they come from
+     * the keys, so an entry whose fields failed to parse is no gap, though its required fields are reported as
+     * missing too. [reported] are the paths already checked for the classification.
+     */
+    private fun checkVcsEntries(reported: Set<String>) {
+        val indexes =
+            keys.values.keys
+                .filter { it.startsWith(FIELDS) }
+                .mapNotNull { TemplateFields.vcsEntryIndex(it.removePrefix(FIELDS)) }
+                .toSortedSet()
+        if (indexes.any { it > 0 }) {
+            indexes.withIndex().firstOrNull { it.index != it.value }?.let { (missing, _) ->
+                keys.problem(
+                    "fields.$VCS_ENTRIES[$missing]",
+                    "missing: VCS entries are numbered from 0 without gaps; set entry $missing or renumber the entries after it",
+                )
+            }
+            val required =
+                indexes.flatMap { i ->
+                    listOfNotNull("$VCS_ENTRIES[$i].vcsPath", "$VCS_ENTRIES[$i].checkoutDirectory".takeIf { i > 0 })
+                }
+            (required - reported).filterNot { produced(it) }.forEach {
+                keys.problem("fields.$it", "required with more than one VCS entry; fix it or fill it from a required parameter")
+            }
+        }
+        if ("$VCS_ENTRIES[0].checkoutDirectory" in fields && !produced(TemplateFields.BUILD_WORKING_DIRECTORY)) {
+            keys.problem(
+                "fields.${TemplateFields.BUILD_WORKING_DIRECTORY}",
+                "required when the first VCS entry has a checkoutDirectory; fix it or fill it from a required parameter",
+            )
         }
     }
 
@@ -85,6 +122,8 @@ internal class TemplateRequiredFields(
                 "baseConfiguration.vcsEntries[0].branch",
                 "baseConfiguration.vcsEntries[0].tag",
             )
+        private const val FIELDS = "fields."
+        private const val VCS_ENTRIES = "baseConfiguration.vcsEntries"
         private val EXPLICIT_EXTERNAL = listOf("displayName", "releaseManager", "securityChampion")
         private val MAVEN_COORDINATE =
             listOf("baseConfiguration.mavenArtifacts[0].groupPattern", "baseConfiguration.mavenArtifacts[0].artifactPattern")

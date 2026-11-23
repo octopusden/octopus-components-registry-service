@@ -18,6 +18,12 @@ object CreateFailureFields {
     private val EDITABILITY = Regex("""^Field '([^']+)' is (?:not editable|editable by administrators only)""")
     private val LEADING_FIELD = Regex("""^(?:Invalid )?([A-Za-z][A-Za-z0-9_.]*)""")
 
+    /** The checkout layout errors name the base configuration field without its `baseConfiguration.` prefix. */
+    private val VCS_LAYOUT = Regex("""^(vcsEntries\[\d+]\.\w+|buildWorkingDirectory): """)
+
+    /** A template sets no source path, so a source path failure is an entry with the same repository as an earlier one. */
+    private val SOURCE_PATH = Regex("""\.sourcePath$""")
+
     /** Field-config sections, as editability messages name them, to the create-request path they sit under. */
     private val SECTIONS =
         mapOf(
@@ -51,6 +57,10 @@ object CreateFailureFields {
     fun of(message: String): List<String> {
         UNIQUENESS.firstOrNull { message.startsWith(it.first) }?.let { return it.second }
         EDITABILITY.find(message)?.let { match -> return editable(match.groupValues[1]) }
+        VCS_LAYOUT.find(message)?.let { match ->
+            val path = "baseConfiguration.${match.groupValues[1]}".replace(SOURCE_PATH, ".vcsPath")
+            return listOf(path).filter { TemplateFields.kind(it) != null }
+        }
         val field = LEADING_FIELD.find(message)?.groupValues?.get(1) ?: return emptyList()
         return ALIASES[field] ?: listOfNotNull(field.takeIf { it in TemplateFields.KINDS })
     }

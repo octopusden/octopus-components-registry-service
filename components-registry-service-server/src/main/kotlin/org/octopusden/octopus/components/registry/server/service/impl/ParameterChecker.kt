@@ -86,7 +86,7 @@ class ParameterChecker(
         path: String,
         given: List<String>,
     ): List<String> {
-        val kind = TemplateFields.KINDS[path]
+        val kind = TemplateFields.kind(path)
         val count = listOf("takes one value").takeIf { kind?.list == false && given.size > 1 }.orEmpty()
         val values =
             when (kind) {

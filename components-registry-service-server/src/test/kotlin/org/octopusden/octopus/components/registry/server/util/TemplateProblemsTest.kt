@@ -11,10 +11,26 @@ import org.octopusden.octopus.components.registry.server.support.exampleTemplate
 import org.octopusden.octopus.components.registry.server.support.parsedTemplate
 
 class TemplateProblemsTest {
+    /** A second VCS entry built only from `UI`, which renders empty for a value of separators only. */
+    private val uiEntry =
+        parsedTemplate(
+            exampleTemplate().apply {
+                at("parameters")["UI"] = linkedMapOf("label" to "UI", "type" to "text")
+                at("fields.baseConfiguration")["vcsEntries"] =
+                    listOf(
+                        linkedMapOf("vcsPath" to "ssh://git@git.example.com/plugin.git"),
+                        linkedMapOf("vcsPath" to "{{ UI | kebab }}", "checkoutDirectory" to "{{ UI | kebab }}"),
+                    )
+            },
+        )
+
+    private val emptyUi = EXAMPLE_VALUES + ("UI" to listOf("---"))
+
     private fun rendered(
         template: ComponentTemplate = parsedTemplate(),
         overrides: Map<String, List<String>> = emptyMap(),
-    ) = TemplateRenderer.render(template, EXAMPLE_VALUES, overrides, EXAMPLE_DEFAULTS, jiraTaskKey = null, changeComment = null)
+        values: Map<String, List<String>> = EXAMPLE_VALUES,
+    ) = TemplateRenderer.render(template, values, overrides, EXAMPLE_DEFAULTS, jiraTaskKey = null, changeComment = null)
 
     private fun withRule(
         path: String,
@@ -59,7 +75,7 @@ class TemplateProblemsTest {
     @Test
     @DisplayName("Decision 9: a create failure on a field built from parameters names them")
     fun createFailureOnParameters() {
-        val problem = TemplateProblems.create("name: a component with name 'acme-plugin-core' already exists", rendered())
+        val problem = TemplateProblems.create(parsedTemplate(), "name: a component with name 'acme-plugin-core' already exists", rendered())
 
         assertEquals(listOf("name"), problem.fields)
         assertEquals(setOf("CLIENT_CODE", "PLUGIN_CODE"), problem.parameters)
@@ -69,7 +85,7 @@ class TemplateProblemsTest {
     @Test
     @DisplayName("Decision 9: a create failure on a fixed field is a template problem")
     fun createFailureOnFixedField() {
-        val problem = TemplateProblems.create("Field 'jira.projectKey' is not editable", rendered())
+        val problem = TemplateProblems.create(parsedTemplate(), "Field 'jira.projectKey' is not editable", rendered())
 
         assertEquals(listOf("baseConfiguration.jira.projectKey"), problem.fields)
         assertEquals(emptySet<String>(), problem.parameters)
@@ -79,7 +95,9 @@ class TemplateProblemsTest {
     @Test
     @DisplayName("Decision 9: a create failure on a field the template leaves unset is a template problem")
     fun createFailureOnUnsetField() {
-        val problem = TemplateProblems.create("releaseManager is required when distribution is explicit and external", rendered())
+        val message = "releaseManager is required when distribution is explicit and external"
+
+        val problem = TemplateProblems.create(parsedTemplate(), message, rendered())
 
         assertEquals(listOf("releaseManager"), problem.fields)
         assertEquals(true, problem.templateProblem)
@@ -88,7 +106,7 @@ class TemplateProblemsTest {
     @Test
     @DisplayName("Decision 9: of the paths a message concerns, only those the template set are named")
     fun onlySetPaths() {
-        val problem = TemplateProblems.create("artifactIds: invalid artifact 'x y' — literal IDs only", rendered())
+        val problem = TemplateProblems.create(parsedTemplate(), "artifactIds: invalid artifact 'x y' — literal IDs only", rendered())
 
         assertEquals(listOf("artifactIds[0].groupPattern", "artifactIds[0].mode", "artifactIds[0].artifactTokens"), problem.fields)
         assertEquals(setOf("CLIENT_CODE", "PLUGIN_CODE"), problem.parameters)
@@ -99,6 +117,7 @@ class TemplateProblemsTest {
     fun overrideProblem() {
         val problem =
             TemplateProblems.create(
+                parsedTemplate(),
                 "Field 'jira.projectKey' is not editable",
                 rendered(overrides = mapOf("baseConfiguration.jira.projectKey" to listOf("OTHER"))),
             )
@@ -112,8 +131,36 @@ class TemplateProblemsTest {
     fun unattributed() {
         assertEquals(
             TemplateProblem(emptyList(), emptySet(), templateProblem = false, "Invalid version range: '[1,'"),
-            TemplateProblems.create("Invalid version range: '[1,'", rendered()),
+            TemplateProblems.create(parsedTemplate(), "Invalid version range: '[1,'", rendered()),
         )
+    }
+
+    @Test
+    @DisplayName("SYS-109: a VCS entry whose vcsPath rendered empty is a problem naming the field and its parameters")
+    fun `SYS-109 empty vcs path is a problem`() {
+        val path = "baseConfiguration.vcsEntries[1].vcsPath"
+
+        val problem = TemplateProblem(listOf(path), setOf("UI"), templateProblem = false, "$path: required, and it rendered empty")
+
+        assertEquals(listOf(problem), TemplateProblems.blankVcsPaths(uiEntry, rendered(uiEntry, values = emptyUi)))
+        val givenUi = EXAMPLE_VALUES + ("UI" to listOf("Web UI"))
+        assertEquals(emptyList<TemplateProblem>(), TemplateProblems.blankVcsPaths(uiEntry, rendered(uiEntry, values = givenUi)))
+    }
+
+    @Test
+    @DisplayName("SYS-109: a create failure on a field that rendered empty names the parameters it is built from")
+    fun `SYS-109 failure on an empty field names its parameters`() {
+        val problem =
+            TemplateProblems.create(
+                uiEntry,
+                "vcsEntries[1].checkoutDirectory: required: VCS root 1 (plugin) is already checked out at the checkout root, " +
+                    "and only one VCS root can be.",
+                rendered(uiEntry, values = emptyUi),
+            )
+
+        assertEquals(listOf("baseConfiguration.vcsEntries[1].checkoutDirectory"), problem.fields)
+        assertEquals(setOf("UI"), problem.parameters)
+        assertEquals(false, problem.templateProblem)
     }
 
     @Test

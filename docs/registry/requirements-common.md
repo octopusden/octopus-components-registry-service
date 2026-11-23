@@ -101,6 +101,7 @@
 | SYS-106 | `component-validation` module: `MavenVersionResolver` takes the whole version from a `MAVEN/<version>` path segment (`/` or `\`, e.g. `BUILD_ENV/MAVEN/3.10`), so `3.6`, `3.9` and `3.10` stay distinct versions instead of resolving to `3`; `LATEST` and the known-token fallback for values without such a segment are unchanged | High | unit-test | ✅ Tested |
 | SYS-107 | Component templates: a template may set the first Maven artifact's `extension` and `classifier` next to its `groupPattern`/`artifactPattern`; both render (with `{{ }}` parameters) into the create request, and a template that sets neither sends neither. A template setting either without both `groupPattern` and `artifactPattern` is failed on load with a problem naming the qualifier. Profile `rules` may name `baseConfiguration.mavenArtifacts[0].extension` and `.classifier` | High | unit-test | ✅ Tested |
 | SYS-108 | v4 `artifactIds` REPLACE may re-send the component's current ownership ranges even without a configuration row (DSL-migrated ownership-only blocks); request ranges match the base, current ownership ranges and configuration ranges ignoring whitespace, store the stored form, and prefer the ownership spelling; a range that is none of these is rejected with 400 naming it                                                                                                          | High | unit + integration-test | ✅ Tested |
+| SYS-109 | Component templates: a template may set any number of VCS entries (`baseConfiguration.vcsEntries[i]`: `vcsPath`, `branch`, `tag`, `checkoutDirectory`) and `baseConfiguration.buildWorkingDirectory`, rendered into the create request in index order; only the first entry takes the `component-defaults` branch and tag. With more than one entry, a gap in the indexes is failed on load with one problem naming the first missing entry, and a template missing any entry's `vcsPath`, or a `checkoutDirectory` after the first, is failed on load with a problem naming it; so is a first-entry `checkoutDirectory` without a build working directory. An entry after the first that renders empty keeps its place, and the dry run reports its empty `vcsPath`. A checkout layout failure of the create names the template field, and a field that rendered empty names its parameters. Profile `rules` still name only the first entry's `vcsPath`, `branch` and `tag` | High | unit-test | ✅ Tested |
 
 ---
 
@@ -3897,3 +3898,86 @@ which a client may drop.
 `` `SYS-108 ARTGRP-WR-007 ownership spelling wins over configuration spelling` `` (4),
 `` `SYS-108 ARTGRP-WR-008 create matches ranges ignoring whitespace` `` (5);
 `CrossComponentValidationTest` — `` `SYS-108 migrated ownership-only override range can be re-saved` `` (1, 2 through the real `PATCH`).
+
+### SYS-109: Component templates — several VCS entries
+
+**Priority:** High
+**Test layer:** unit-test
+**Status:** ✅ Tested
+
+**Motivation:**
+A component built from several repositories has one VCS entry per repository, each checked out into
+its own directory. A template could set only the first entry, so such a component could not be
+created from a template.
+
+**Description:**
+- A template may set `vcsPath`, `branch`, `tag` and `checkoutDirectory` of
+  any `fields.baseConfiguration.vcsEntries[i]`, `i` written without leading zeros, and
+  `fields.baseConfiguration.buildWorkingDirectory`. They are rendered like the other fields, so they
+  may use `{{ }}` parameters. The create request gets every entry up to the last index set, in index
+  order, so an entry after the first that renders empty keeps its place; the dry run reports its
+  empty `vcsPath` as a problem naming the parameters it is built from, so it is never created.
+- Only the first entry takes the `component-defaults` branch and tag.
+- With more than one entry, the indexes set run from 0 without a gap; a gap is failed on load with
+  one problem naming the first missing entry. An entry whose fields all fail to parse is still set.
+  The check looks only at the indexes set, so a large
+  index costs no more than a small one; an index too large for a number is failed as for any
+  template list ("the list index is too large").
+- With more than one entry, every entry set needs its `vcsPath` and every one after the first its
+  `checkoutDirectory`, filled as a required field is (a fixed value or a required parameter); a
+  template missing one is failed on load with a problem naming it.
+- A first entry with a `checkoutDirectory` leaves no entry at the checkout root, so the create needs
+  the build working directory: a template that sets the first without filling the second is failed
+  on load with a problem naming `baseConfiguration.buildWorkingDirectory`.
+- A checkout layout failure of the create (`vcsEntries[<i>].checkoutDirectory: …`,
+  `buildWorkingDirectory: …`) is attributed to the template field it names; a template sets no
+  `sourcePath`, so a `vcsEntries[<i>].sourcePath: …` failure (an entry repeating an earlier entry's
+  repository) is attributed to that entry's `vcsPath`. A problem on a field
+  that rendered empty names the parameters the field is built from.
+- These paths are template fields only: profile `rules` still name only the first entry's `vcsPath`,
+  `branch` and `tag`.
+
+**Acceptance criteria:**
+1. A template with two VCS entries and a build working directory renders them into the create
+   request, in index order, with their checkout directories and parameters substituted.
+2. An entry after the first takes no `component-defaults` branch or tag.
+3. An entry after the first that renders empty keeps its place, also as the last entry; the entries
+   after it do not shift.
+4. A template with three full VCS entries loads live.
+5. An entry after the first without its `vcsPath` or `checkoutDirectory`, or with the latter only
+   from an optional parameter, is failed with a problem naming it.
+6. A further entry without the first entry's `vcsPath` is failed with a problem naming it, also for
+   a build system that needs no VCS; for one that needs VCS, that is one problem.
+7. A gap in the indexes is failed with one problem naming the first missing entry, also when the
+   index after the gap is very large; an index too large for a number is failed as such; an entry
+   whose fields all fail to parse is not reported as a gap.
+8. A template with one VCS entry needs no checkout directory, and may set one with a build working
+   directory; for a build system that needs no VCS, it needs no `vcsPath`.
+9. A first-entry `checkoutDirectory` without a build working directory is failed with a problem
+   naming it; with one, the template loads live.
+10. Every VCS entry field and the build working directory are template free text and not rule paths
+    (beyond the first entry's `vcsPath`, `branch`, `tag`), and an override of one takes one value.
+11. A checkout layout failure of the create is attributed to the template path it names; a
+    `sourcePath` failure to that entry's `vcsPath`.
+12. A VCS entry whose `vcsPath` rendered empty is a dry-run problem naming the field and the
+    parameters it is built from; a create failure on a field that rendered empty names them too.
+
+**Test method:** `TemplateRendererTest` — `` `SYS-109 vcs entries in index order` `` (1),
+`` `SYS-109 further vcs entry takes no defaults` `` (2), `` `SYS-109 empty vcs entry keeps its place` `` (3),
+`` `SYS-109 empty last vcs entry is kept` `` (3);
+`TemplateVcsEntriesTest` — `` `SYS-109 several vcs entries are live` `` (4),
+`` `SYS-109 further vcs entry needs its own fields` `` (5),
+`` `SYS-109 optional parameter does not produce the checkout directory` `` (5),
+`` `SYS-109 further vcs entry needs the first` `` (6), `` `SYS-109 missing first vcs path is one problem` `` (6),
+`` `SYS-109 gap in vcs entries` `` (7),
+`` `SYS-109 large index is one gap` `` (7), `` `SYS-109 index too large` `` (7),
+`` `SYS-109 unparsed vcs entry is no gap` `` (7),
+`` `SYS-109 one vcs entry with or without a checkout directory` `` (8),
+`` `SYS-109 first checkout directory needs a build working directory` `` (9),
+`` `SYS-109 every checkout directory with a build working directory is live` `` (9),
+`` `SYS-109 template-only vcs paths` `` (10);
+`ParameterCheckerTest` — `` `SYS-109 vcs override takes one value` `` (10);
+`CreateFailureFieldsTest` — `` `SYS-109 vcs layout failures are attributed` `` (11);
+`TemplateProblemsTest` — `` `SYS-109 empty vcs path is a problem` `` (12),
+`` `SYS-109 failure on an empty field names its parameters` `` (12);
+`TemplateDryRunTest` — `` `SYS-109 dry run reports an empty vcs path` `` (12).

@@ -357,6 +357,20 @@ class ParameterCheckerTest {
     }
 
     @Test
+    @DisplayName("SYS-109: an override with several values on a further VCS entry field or the build working directory is a problem")
+    fun `SYS-109 vcs override takes one value`() {
+        val vcsPath = "baseConfiguration.vcsEntries[1].vcsPath"
+        val workingDirectory = "baseConfiguration.buildWorkingDirectory"
+
+        assertEquals(
+            listOf("$vcsPath: takes one value", "$workingDirectory: takes one value"),
+            checker
+                .checkOverrides(mapOf(vcsPath to listOf("a", "b"), workingDirectory to listOf("a", "b")))
+                .map { it.message },
+        )
+    }
+
+    @Test
     @DisplayName("an override with values in the lists and active logins has no problem")
     fun validOverrides() {
         assertEquals(
