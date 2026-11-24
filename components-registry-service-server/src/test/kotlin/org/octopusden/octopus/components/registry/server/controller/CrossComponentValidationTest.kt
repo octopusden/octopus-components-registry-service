@@ -991,6 +991,48 @@ class CrossComponentValidationTest {
             .andExpect(jsonPath("$.errorMessage").value(org.hamcrest.Matchers.containsString("versionRange '[2,3)'")))
     }
 
+    @Test
+    @DisplayName("SYS-109: a rival's base is not in force where its own per-range override replaces it (sub-range of its coverage)")
+    fun `SYS-109 rival base is not in force under its own sub-range override`() {
+        val s = sfx()
+        val group = "org.octopusden.octopus.own$s"
+        // B: base owns lib-b and lib-a, supported [1,); its own override
+        // [1,1.5) owns only lib-b. Seeded the way migration writes it (an override with no config row).
+        val b = createOk(
+            """{"name":"xcc-own-sub-b-$s","baseConfiguration":{"build":{"buildSystem":"MAVEN"}},""" +
+                """"artifactIds":[{"groupPattern":"$group","mode":"EXPLICIT","artifactTokens":["lib-b","lib-a"]}]}""",
+        )
+        putSupported(b, """{"ranges":["[1,)"]}""").andExpect(status().is2xxSuccessful)
+        val override = UUID.randomUUID()
+        jdbcTemplate.update(
+            "INSERT INTO component_artifact_mappings " +
+                "(id, component_id, version_range, group_pattern, artifact_id_mode, sort_order) VALUES (?, ?, ?, ?, ?, 1)",
+            override,
+            UUID.fromString(b),
+            "[1,1.5)",
+            group,
+            "EXPLICIT",
+        )
+        jdbcTemplate.update(
+            "INSERT INTO component_artifact_mapping_tokens (id, mapping_id, artifact_pattern, sort_order) VALUES (?, ?, ?, 0)",
+            UUID.randomUUID(),
+            override,
+            "lib-b",
+        )
+        // A owns lib-a up to 1.5: it meets B only in [1,1.5), where B's base is replaced.
+        val a = createOk("""{"name":"xcc-own-sub-a-$s","baseConfiguration":{"build":{"buildSystem":"MAVEN"}}}""")
+        putSupported(a, """{"ranges":["(,1.5)"]}""").andExpect(status().is2xxSuccessful)
+        patchComponent(
+            a,
+            """{"version":${currentVersion(a)},""" +
+                """"artifactIds":[{"groupPattern":"$group","mode":"EXPLICIT","artifactTokens":["lib-a"]}]}""",
+        ).andExpect(status().is2xxSuccessful)
+        // Past the override B's base is in force again: widening A into [1.5,2) is a real conflict.
+        putSupported(a, """{"ranges":["(,2)"]}""")
+            .andExpect(status().isConflict)
+            .andExpect(jsonPath("$.errorCode").value("UNIQUENESS_VIOLATION"))
+    }
+
     private fun putSupported(
         id: String,
         body: String,
