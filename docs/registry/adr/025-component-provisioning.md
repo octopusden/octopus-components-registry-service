@@ -1,4 +1,4 @@
-# ADR-025: Component provisioning: VCS actions in `octopus-vcs-facade`, the sequence in a new `octopus-component-provisioning-service`
+# ADR-025: Component provisioning
 
 ## Status
 

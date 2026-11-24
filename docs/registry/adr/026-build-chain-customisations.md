@@ -135,6 +135,8 @@ chain built from the registry is right from the start, and no patch is needed.
   any more.
   - This is a one-off, reviewed change to the registry, not Sync. Sync still never adds a
     root.
+  - It is owned by the team that runs the provisioning service, which also removes the other
+    chain creators.
   - The owners of the release tooling agree to it first, because their commit attribution and
     `vcs-path` lookups change, not only the registry.
   - Chains that already exist are not changed.
