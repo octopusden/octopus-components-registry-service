@@ -136,8 +136,8 @@ class TemplateProblemsTest {
     }
 
     @Test
-    @DisplayName("SYS-109: a VCS entry whose vcsPath rendered empty is a problem naming the field and its parameters")
-    fun `SYS-109 empty vcs path is a problem`() {
+    @DisplayName("SYS-110: a VCS entry whose vcsPath rendered empty is a problem naming the field and its parameters")
+    fun `SYS-110 empty vcs path is a problem`() {
         val path = "baseConfiguration.vcsEntries[1].vcsPath"
 
         val problem = TemplateProblem(listOf(path), setOf("UI"), templateProblem = false, "$path: required, and it rendered empty")
@@ -148,8 +148,8 @@ class TemplateProblemsTest {
     }
 
     @Test
-    @DisplayName("SYS-109: a create failure on a field that rendered empty names the parameters it is built from")
-    fun `SYS-109 failure on an empty field names its parameters`() {
+    @DisplayName("SYS-110: a create failure on a field that rendered empty names the parameters it is built from")
+    fun `SYS-110 failure on an empty field names its parameters`() {
         val problem =
             TemplateProblems.create(
                 uiEntry,

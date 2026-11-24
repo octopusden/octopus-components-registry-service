@@ -82,8 +82,8 @@ class TemplateDryRunTest {
     }
 
     @Test
-    @DisplayName("SYS-109: a VCS entry whose vcsPath rendered empty is a dry-run problem naming the field and its parameters")
-    fun `SYS-109 dry run reports an empty vcs path`() {
+    @DisplayName("SYS-110: a VCS entry whose vcsPath rendered empty is a dry-run problem naming the field and its parameters")
+    fun `SYS-110 dry run reports an empty vcs path`() {
         val template =
             parsedTemplate(
                 exampleTemplate().apply {

@@ -101,7 +101,8 @@
 | SYS-106 | `component-validation` module: `MavenVersionResolver` takes the whole version from a `MAVEN/<version>` path segment (`/` or `\`, e.g. `BUILD_ENV/MAVEN/3.10`), so `3.6`, `3.9` and `3.10` stay distinct versions instead of resolving to `3`; `LATEST` and the known-token fallback for values without such a segment are unchanged | High | unit-test | ✅ Tested |
 | SYS-107 | Component templates: a template may set the first Maven artifact's `extension` and `classifier` next to its `groupPattern`/`artifactPattern`; both render (with `{{ }}` parameters) into the create request, and a template that sets neither sends neither. A template setting either without both `groupPattern` and `artifactPattern` is failed on load with a problem naming the qualifier. Profile `rules` may name `baseConfiguration.mavenArtifacts[0].extension` and `.classifier` | High | unit-test | ✅ Tested |
 | SYS-108 | v4 `artifactIds` REPLACE may re-send the component's current ownership ranges even without a configuration row (DSL-migrated ownership-only blocks); request ranges match the base, current ownership ranges and configuration ranges ignoring whitespace, store the stored form, and prefer the ownership spelling; a range that is none of these is rejected with 400 naming it                                                                                                          | High | unit + integration-test | ✅ Tested |
-| SYS-109 | Component templates: a template may set any number of VCS entries (`baseConfiguration.vcsEntries[i]`: `vcsPath`, `branch`, `tag`, `checkoutDirectory`) and `baseConfiguration.buildWorkingDirectory`, rendered into the create request in index order; only the first entry takes the `component-defaults` branch and tag. With more than one entry, a gap in the indexes is failed on load with one problem naming the first missing entry, and a template missing any entry's `vcsPath`, or a `checkoutDirectory` after the first, is failed on load with a problem naming it; so is a first-entry `checkoutDirectory` without a build working directory. An entry after the first that renders empty keeps its place, and the dry run reports its empty `vcsPath`. A checkout layout failure of the create names the template field, and a field that rendered empty names its parameters. Profile `rules` still name only the first entry's `vcsPath`, `branch` and `tag` | High | unit-test | ✅ Tested |
+| SYS-109 | Cross-component ownership uniqueness compares a base (`ALL_VERSIONS`) mapping only where it is in force: the component's supported versions minus its own per-range override ranges (range subtraction with exact bracket inclusivity, composite ranges and whitespace after a comma, in the registry's numeric version order); an unparseable range keeps the unsubtracted ranges                                                                                                                       | High | unit + integration-test | ✅ Tested |
+| SYS-110 | Component templates: a template may set any number of VCS entries (`baseConfiguration.vcsEntries[i]`: `vcsPath`, `branch`, `tag`, `checkoutDirectory`) and `baseConfiguration.buildWorkingDirectory`, rendered into the create request in index order; only the first entry takes the `component-defaults` branch and tag. With more than one entry, a gap in the indexes is failed on load with one problem naming the first missing entry, and a template missing any entry's `vcsPath`, or a `checkoutDirectory` after the first, is failed on load with a problem naming it; so is a first-entry `checkoutDirectory` without a build working directory. An entry after the first that renders empty keeps its place, and the dry run reports its empty `vcsPath`. A checkout layout failure of the create names the template field, and a field that rendered empty names its parameters. Profile `rules` still name only the first entry's `vcsPath`, `branch` and `tag` | High | unit-test | ✅ Tested |
 
 ---
 
@@ -3899,7 +3900,58 @@ which a client may drop.
 `` `SYS-108 ARTGRP-WR-008 create matches ranges ignoring whitespace` `` (5);
 `CrossComponentValidationTest` — `` `SYS-108 migrated ownership-only override range can be re-saved` `` (1, 2 through the real `PATCH`).
 
-### SYS-109: Component templates — several VCS entries
+### SYS-109: A base ownership claim excludes the component's own override ranges
+
+**Priority:** High
+**Test layer:** unit + integration-test
+**Status:** ✅ Tested
+
+**Motivation:**
+A per-range ownership override replaces the component's whole base for its range. The uniqueness
+check skipped a base claim there only when the rival's range string equalled the override's, but a
+base claim is compared on the component's supported versions, which never equal an override range.
+Migrated components whose own override frees a token another component owns in the same versions
+got a false 409 on every ownership save.
+
+**Description:**
+- A base (`ALL_VERSIONS`) claim is compared on the component's supported versions (all versions when
+  unbounded) minus the component's own non-base ownership ranges, whatever their groups.
+- Subtraction keeps exact bracket inclusivity, accepts composite ranges, the all-versions sentinel and
+  whitespace right after a comma (the migrated DSL form), and orders versions with the registry's
+  numeric version scheme.
+- If any range cannot be parsed, the registry's version range factory rejects it, or it has a
+  character other than printable ASCII, a space or tab right after a comma, or a space at either end
+  (the factory reads `[1,2.3 )`, or a no-break space anywhere, as a different bound), the base keeps its unsubtracted ranges (may over-report, never misses a conflict); the
+  exact-string skip stays as the fallback.
+- A real conflict outside the component's override ranges is still reported.
+
+**Acceptance criteria:**
+1. Subtraction returns the exact remaining pieces with correct bracket inclusivity, handles composite
+   ranges, all versions and whitespace, and returns `null` for an unparseable range or one the
+   registry's version range factory rejects (e.g. `[,1)`) or with whitespace the factory may read as
+   part of a bound (e.g. `[1,2.3 )`, a no-break space), so the base keeps its unsubtracted ranges.
+2. Dash-qualified versions are ordered by the registry's numeric scheme.
+3. A component whose supported versions meet a rival only where the rival's own override replaces its
+   base saves its ownership without a 409, on both sides (prod shapes: a sub-range override, an
+   override equal to a coverage segment, an override of another group, a spaced range).
+4. A conflict with the rival's base outside its override ranges is still a 409.
+5. A component that overrides all of its supported versions has no base claim in force.
+
+**Test method:** `VersionRangePartitionTest` — `` `SYS-109 subtract inclusivity` ``,
+`` `SYS-109 subtract composites` ``, `` `SYS-109 subtract rejects ranges the factory rejects` ``,
+`` `SYS-109 subtract rejects whitespace next to a bracket` ``,
+`` `SYS-109 subtract rejects non-ASCII whitespace` `` (1),
+`` `SYS-109 subtract with numeric scheme` `` (2);
+`OwnershipCollisionMatrixTest` — `` `SYS-109 own sub-range overrides replace the base` ``,
+`` `SYS-109 override equal to a coverage segment replaces the base` ``,
+`` `SYS-109 override of another group replaces the base` `` (3),
+`` `SYS-109 base minus own overrides keeps a real conflict` `` (4, 5),
+`` `SYS-109 factory-rejected override range keeps the base` ``,
+`` `SYS-109 override with whitespace inside a bound keeps the base` `` (1, 4);
+`CrossComponentValidationTest` — `` `SYS-109 rival base is not in force under its own sub-range override` `` (3, 4 through the
+real `PATCH`).
+
+### SYS-110: Component templates — several VCS entries
 
 **Priority:** High
 **Test layer:** unit-test
@@ -3962,22 +4014,22 @@ created from a template.
 12. A VCS entry whose `vcsPath` rendered empty is a dry-run problem naming the field and the
     parameters it is built from; a create failure on a field that rendered empty names them too.
 
-**Test method:** `TemplateRendererTest` — `` `SYS-109 vcs entries in index order` `` (1),
-`` `SYS-109 further vcs entry takes no defaults` `` (2), `` `SYS-109 empty vcs entry keeps its place` `` (3),
-`` `SYS-109 empty last vcs entry is kept` `` (3);
-`TemplateVcsEntriesTest` — `` `SYS-109 several vcs entries are live` `` (4),
-`` `SYS-109 further vcs entry needs its own fields` `` (5),
-`` `SYS-109 optional parameter does not produce the checkout directory` `` (5),
-`` `SYS-109 further vcs entry needs the first` `` (6), `` `SYS-109 missing first vcs path is one problem` `` (6),
-`` `SYS-109 gap in vcs entries` `` (7),
-`` `SYS-109 large index is one gap` `` (7), `` `SYS-109 index too large` `` (7),
-`` `SYS-109 unparsed vcs entry is no gap` `` (7),
-`` `SYS-109 one vcs entry with or without a checkout directory` `` (8),
-`` `SYS-109 first checkout directory needs a build working directory` `` (9),
-`` `SYS-109 every checkout directory with a build working directory is live` `` (9),
-`` `SYS-109 template-only vcs paths` `` (10);
-`ParameterCheckerTest` — `` `SYS-109 vcs override takes one value` `` (10);
-`CreateFailureFieldsTest` — `` `SYS-109 vcs layout failures are attributed` `` (11);
-`TemplateProblemsTest` — `` `SYS-109 empty vcs path is a problem` `` (12),
-`` `SYS-109 failure on an empty field names its parameters` `` (12);
-`TemplateDryRunTest` — `` `SYS-109 dry run reports an empty vcs path` `` (12).
+**Test method:** `TemplateRendererTest` — `` `SYS-110 vcs entries in index order` `` (1),
+`` `SYS-110 further vcs entry takes no defaults` `` (2), `` `SYS-110 empty vcs entry keeps its place` `` (3),
+`` `SYS-110 empty last vcs entry is kept` `` (3);
+`TemplateVcsEntriesTest` — `` `SYS-110 several vcs entries are live` `` (4),
+`` `SYS-110 further vcs entry needs its own fields` `` (5),
+`` `SYS-110 optional parameter does not produce the checkout directory` `` (5),
+`` `SYS-110 further vcs entry needs the first` `` (6), `` `SYS-110 missing first vcs path is one problem` `` (6),
+`` `SYS-110 gap in vcs entries` `` (7),
+`` `SYS-110 large index is one gap` `` (7), `` `SYS-110 index too large` `` (7),
+`` `SYS-110 unparsed vcs entry is no gap` `` (7),
+`` `SYS-110 one vcs entry with or without a checkout directory` `` (8),
+`` `SYS-110 first checkout directory needs a build working directory` `` (9),
+`` `SYS-110 every checkout directory with a build working directory is live` `` (9),
+`` `SYS-110 template-only vcs paths` `` (10);
+`ParameterCheckerTest` — `` `SYS-110 vcs override takes one value` `` (10);
+`CreateFailureFieldsTest` — `` `SYS-110 vcs layout failures are attributed` `` (11);
+`TemplateProblemsTest` — `` `SYS-110 empty vcs path is a problem` `` (12),
+`` `SYS-110 failure on an empty field names its parameters` `` (12);
+`TemplateDryRunTest` — `` `SYS-110 dry run reports an empty vcs path` `` (12).

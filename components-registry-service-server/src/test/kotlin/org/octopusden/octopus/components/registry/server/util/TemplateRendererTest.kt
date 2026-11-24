@@ -375,8 +375,8 @@ class TemplateRendererTest {
     }
 
     @Test
-    @DisplayName("SYS-109: VCS entries render into the create request in index order, with their checkout directories")
-    fun `SYS-109 vcs entries in index order`() {
+    @DisplayName("SYS-110: VCS entries render into the create request in index order, with their checkout directories")
+    fun `SYS-110 vcs entries in index order`() {
         val request =
             render(
                 parsedTemplate(
@@ -420,8 +420,8 @@ class TemplateRendererTest {
     }
 
     @Test
-    @DisplayName("SYS-109: a VCS entry that renders empty keeps its place, so the entries after it do not shift")
-    fun `SYS-109 empty vcs entry keeps its place`() {
+    @DisplayName("SYS-110: a VCS entry that renders empty keeps its place, so the entries after it do not shift")
+    fun `SYS-110 empty vcs entry keeps its place`() {
         val template =
             parsedTemplate(
                 exampleTemplate().apply {
@@ -444,8 +444,8 @@ class TemplateRendererTest {
     }
 
     @Test
-    @DisplayName("SYS-109: a last VCS entry that renders empty is kept, not dropped")
-    fun `SYS-109 empty last vcs entry is kept`() {
+    @DisplayName("SYS-110: a last VCS entry that renders empty is kept, not dropped")
+    fun `SYS-110 empty last vcs entry is kept`() {
         val template =
             parsedTemplate(
                 exampleTemplate().apply {
@@ -467,8 +467,8 @@ class TemplateRendererTest {
     }
 
     @Test
-    @DisplayName("SYS-109: component-defaults fill the first VCS entry's branch and tag only")
-    fun `SYS-109 further vcs entry takes no defaults`() {
+    @DisplayName("SYS-110: component-defaults fill the first VCS entry's branch and tag only")
+    fun `SYS-110 further vcs entry takes no defaults`() {
         val request =
             render(
                 parsedTemplate(

@@ -25,8 +25,8 @@ class CreateFailureFieldsTest {
 
     @ParameterizedTest(name = "{0}")
     @MethodSource("vcsLayoutMessages")
-    @DisplayName("SYS-109: a VCS checkout layout failure is attributed to the template path it names")
-    fun `SYS-109 vcs layout failures are attributed`(
+    @DisplayName("SYS-110: a VCS checkout layout failure is attributed to the template path it names")
+    fun `SYS-110 vcs layout failures are attributed`(
         message: String,
         paths: List<String>,
     ) {

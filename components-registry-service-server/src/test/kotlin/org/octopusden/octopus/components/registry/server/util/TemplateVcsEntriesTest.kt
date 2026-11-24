@@ -60,23 +60,23 @@ class TemplateVcsEntriesTest {
     }
 
     @Test
-    @DisplayName("SYS-109: a template with three full VCS entries loads live")
-    fun `SYS-109 several vcs entries are live`() {
+    @DisplayName("SYS-110: a template with three full VCS entries loads live")
+    fun `SYS-110 several vcs entries are live`() {
         assertEquals(emptyList<String>(), problems(listOf(first, further("ui"), further("docs"))))
     }
 
     @ParameterizedTest(name = "without {0}")
     @ValueSource(strings = ["checkoutDirectory", "vcsPath"])
-    @DisplayName("SYS-109: a VCS entry after the first without its checkoutDirectory or vcsPath is a problem naming it")
-    fun `SYS-109 further vcs entry needs its own fields`(field: String) {
+    @DisplayName("SYS-110: a VCS entry after the first without its checkoutDirectory or vcsPath is a problem naming it")
+    fun `SYS-110 further vcs entry needs its own fields`(field: String) {
         val problems = problems(listOf(first, further("ui"), further("docs") - field))
 
         assertProblem("baseConfiguration.vcsEntries[2].$field", MULTI_VCS, problems)
     }
 
     @Test
-    @DisplayName("SYS-109: a further VCS entry's checkoutDirectory from an optional parameter is a problem naming it")
-    fun `SYS-109 optional parameter does not produce the checkout directory`() {
+    @DisplayName("SYS-110: a further VCS entry's checkoutDirectory from an optional parameter is a problem naming it")
+    fun `SYS-110 optional parameter does not produce the checkout directory`() {
         val problems =
             problems(listOf(first, further("ui") + ("checkoutDirectory" to "{{ UI_DIR }}"))) {
                 at("parameters")["UI_DIR"] = linkedMapOf("label" to "UI directory", "type" to "text", "required" to "false")
@@ -86,8 +86,8 @@ class TemplateVcsEntriesTest {
     }
 
     @Test
-    @DisplayName("SYS-109: a further VCS entry needs the first entry's vcsPath, even for a build system without VCS")
-    fun `SYS-109 further vcs entry needs the first`() {
+    @DisplayName("SYS-110: a further VCS entry needs the first entry's vcsPath, even for a build system without VCS")
+    fun `SYS-110 further vcs entry needs the first`() {
         val problems =
             problems(listOf(linkedMapOf<String, Any>("branch" to "main"), further("ui"))) {
                 at("fields.baseConfiguration.build")["buildSystem"] = "PROVIDED"
@@ -97,8 +97,8 @@ class TemplateVcsEntriesTest {
     }
 
     @Test
-    @DisplayName("SYS-109: a missing first vcsPath the build system requires is one problem, also with further VCS entries")
-    fun `SYS-109 missing first vcs path is one problem`() {
+    @DisplayName("SYS-110: a missing first vcsPath the build system requires is one problem, also with further VCS entries")
+    fun `SYS-110 missing first vcs path is one problem`() {
         val problems = problems(listOf(linkedMapOf<String, Any>("branch" to "main"), further("ui"))) { remove("overridable") }
 
         assertEquals(1, problems.size, "problems: $problems")
@@ -106,8 +106,8 @@ class TemplateVcsEntriesTest {
     }
 
     @Test
-    @DisplayName("SYS-109: a gap in the VCS entry indexes is one problem naming the first missing entry")
-    fun `SYS-109 gap in vcs entries`() {
+    @DisplayName("SYS-110: a gap in the VCS entry indexes is one problem naming the first missing entry")
+    fun `SYS-110 gap in vcs entries`() {
         val flat =
             flatten(exampleTemplate(), TEMPLATE_ID) +
                 flatten(further("docs"), "$TEMPLATE_ID.fields.baseConfiguration.vcsEntries[2]")
@@ -119,8 +119,8 @@ class TemplateVcsEntriesTest {
     }
 
     @Test
-    @DisplayName("SYS-109: a VCS entry with a very large index costs one gap problem, not one per missing index")
-    fun `SYS-109 large index is one gap`() {
+    @DisplayName("SYS-110: a VCS entry with a very large index costs one gap problem, not one per missing index")
+    fun `SYS-110 large index is one gap`() {
         val flat =
             flatten(exampleTemplate(), TEMPLATE_ID) +
                 flatten(further("ui"), "$TEMPLATE_ID.fields.baseConfiguration.vcsEntries[1]") +
@@ -133,8 +133,8 @@ class TemplateVcsEntriesTest {
     }
 
     @Test
-    @DisplayName("SYS-109: a VCS entry index too large for a number is a problem naming it, as for any template list")
-    fun `SYS-109 index too large`() {
+    @DisplayName("SYS-110: a VCS entry index too large for a number is a problem naming it, as for any template list")
+    fun `SYS-110 index too large`() {
         val flat =
             flatten(exampleTemplate(), TEMPLATE_ID) +
                 flatten(further("docs"), "$TEMPLATE_ID.fields.baseConfiguration.vcsEntries[99999999999]")
@@ -143,8 +143,8 @@ class TemplateVcsEntriesTest {
     }
 
     @Test
-    @DisplayName("SYS-109: an entry whose fields all fail to parse is reported as such, not also as a gap")
-    fun `SYS-109 unparsed vcs entry is no gap`() {
+    @DisplayName("SYS-110: an entry whose fields all fail to parse is reported as such, not also as a gap")
+    fun `SYS-110 unparsed vcs entry is no gap`() {
         val unparsed = linkedMapOf<String, Any>("vcsPath" to "{{ UI | nofilter }}", "checkoutDirectory" to "{{ UI | nofilter }}")
 
         val problems = problems(listOf(first, unparsed, further("docs")))
@@ -155,10 +155,10 @@ class TemplateVcsEntriesTest {
 
     @Test
     @DisplayName(
-        "SYS-109: a template with one VCS entry needs no checkout directory, and may set one with a build working directory; " +
+        "SYS-110: a template with one VCS entry needs no checkout directory, and may set one with a build working directory; " +
             "for a build system without VCS it needs no vcsPath",
     )
-    fun `SYS-109 one vcs entry with or without a checkout directory`() {
+    fun `SYS-110 one vcs entry with or without a checkout directory`() {
         assertEquals(emptyList<String>(), problems(listOf(first)))
         assertEquals(
             emptyList<String>(),
@@ -176,16 +176,16 @@ class TemplateVcsEntriesTest {
     }
 
     @Test
-    @DisplayName("SYS-109: the first VCS entry's checkoutDirectory needs a buildWorkingDirectory")
-    fun `SYS-109 first checkout directory needs a build working directory`() {
+    @DisplayName("SYS-110: the first VCS entry's checkoutDirectory needs a buildWorkingDirectory")
+    fun `SYS-110 first checkout directory needs a build working directory`() {
         val problems = problems(listOf(first + ("checkoutDirectory" to "plugin"), further("ui")))
 
         assertProblem(WORKING_DIRECTORY, "required when the first VCS entry has a checkoutDirectory", problems)
     }
 
     @Test
-    @DisplayName("SYS-109: every VCS entry with a checkoutDirectory and a buildWorkingDirectory loads live")
-    fun `SYS-109 every checkout directory with a build working directory is live`() {
+    @DisplayName("SYS-110: every VCS entry with a checkoutDirectory and a buildWorkingDirectory loads live")
+    fun `SYS-110 every checkout directory with a build working directory is live`() {
         val problems =
             problems(listOf(first + ("checkoutDirectory" to "plugin"), further("ui"))) {
                 at("fields.baseConfiguration")["buildWorkingDirectory"] = "plugin"
@@ -206,8 +206,8 @@ class TemplateVcsEntriesTest {
             WORKING_DIRECTORY,
         ],
     )
-    @DisplayName("SYS-109: the VCS entry fields and buildWorkingDirectory are template free text, not profile rule paths")
-    fun `SYS-109 template-only vcs paths`(path: String) {
+    @DisplayName("SYS-110: the VCS entry fields and buildWorkingDirectory are template free text, not profile rule paths")
+    fun `SYS-110 template-only vcs paths`(path: String) {
         assertEquals(TemplateFieldKind.FREE_TEXT, TemplateFields.kind(path))
         assertFalse(path in CreateRequestPaths.PATHS, "$path should not be a rule path")
     }

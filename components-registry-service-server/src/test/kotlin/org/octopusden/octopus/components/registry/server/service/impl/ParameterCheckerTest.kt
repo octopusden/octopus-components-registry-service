@@ -357,8 +357,8 @@ class ParameterCheckerTest {
     }
 
     @Test
-    @DisplayName("SYS-109: an override with several values on a further VCS entry field or the build working directory is a problem")
-    fun `SYS-109 vcs override takes one value`() {
+    @DisplayName("SYS-110: an override with several values on a further VCS entry field or the build working directory is a problem")
+    fun `SYS-110 vcs override takes one value`() {
         val vcsPath = "baseConfiguration.vcsEntries[1].vcsPath"
         val workingDirectory = "baseConfiguration.buildWorkingDirectory"
 

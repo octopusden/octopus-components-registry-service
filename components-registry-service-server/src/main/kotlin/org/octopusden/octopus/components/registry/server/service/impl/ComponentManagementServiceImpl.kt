@@ -3746,7 +3746,14 @@ class ComponentManagementServiceImpl(
                     .takeIf { it.isNotEmpty() }
                     ?.let { put(entity.componentKey, it) }
             }
-        val violations = computeOwnershipCollisions(ownClaims, rivalClaims, intersect, shadowRanges, coverage)
+        val compare = numericVersionComparator(numericVersionFactory)
+        // The factory is stricter than the subtraction's own parser: a range it rejects keeps the
+        // unsubtracted coverage, like the intersection above treats it as intersecting.
+        val factoryAccepts: (String) -> Boolean = { runCatching { versionRangeFactory.create(it) }.isSuccess }
+        val subtract: (List<String>, Collection<String>) -> List<String>? = { ranges, minus ->
+            VersionRangePartition.subtract(ranges, minus, compare, factoryAccepts)
+        }
+        val violations = computeOwnershipCollisions(ownClaims, rivalClaims, intersect, shadowRanges, coverage, subtract)
         if (violations.isNotEmpty()) throw CrossComponentConflictException(violations.first())
     }
 
