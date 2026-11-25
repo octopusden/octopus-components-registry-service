@@ -97,8 +97,8 @@ internal class TemplateParser(
         keys.values.filterKeys { it.startsWith(FIELDS) }.forEach { (key, value) ->
             val path = key.removePrefix(FIELDS)
             val item = LIST_ITEM.matchEntire(path)
-            val listPath = item?.groupValues?.get(1)?.takeIf { TemplateFields.KINDS[it]?.list == true }
-            val kind = TemplateFields.KINDS[path]
+            val listPath = item?.groupValues?.get(1)?.takeIf { TemplateFields.kind(it)?.list == true }
+            val kind = TemplateFields.kind(path)
             val expression = { expression(key, value) }
             when {
                 listPath != null -> {
@@ -111,12 +111,13 @@ internal class TemplateParser(
                 }
                 kind?.list == true -> expression()?.let { items.getOrPut(path) { mutableListOf() } += 0 to it }
                 kind != null -> expression()?.let { singles[path] = it }
+                TemplateFields.isVcsEntryField(path) -> keys.problem(key, INDEX_TOO_LARGE)
                 else -> keys.problem(key, "not a create-request path a template may set")
             }
         }
-        return singles.mapValues { (path, value) -> TemplateField.Single(path, TemplateFields.KINDS.getValue(path), value) } +
+        return singles.mapValues { (path, value) -> TemplateField.Single(path, checkNotNull(TemplateFields.kind(path)), value) } +
             items.mapValues { (path, indexed) ->
-                TemplateField.Items(path, TemplateFields.KINDS.getValue(path), indexed.sortedBy { it.first }.map { it.second })
+                TemplateField.Items(path, checkNotNull(TemplateFields.kind(path)), indexed.sortedBy { it.first }.map { it.second })
             }
     }
 

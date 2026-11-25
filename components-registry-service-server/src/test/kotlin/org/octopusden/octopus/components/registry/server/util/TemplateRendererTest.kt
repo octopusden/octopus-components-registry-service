@@ -375,6 +375,119 @@ class TemplateRendererTest {
     }
 
     @Test
+    @DisplayName("SYS-110: VCS entries render into the create request in index order, with their checkout directories")
+    fun `SYS-110 vcs entries in index order`() {
+        val request =
+            render(
+                parsedTemplate(
+                    exampleTemplate().apply {
+                        at("fields.baseConfiguration")["buildWorkingDirectory"] = "plugin"
+                        at("fields.baseConfiguration")["vcsEntries"] =
+                            listOf(
+                                linkedMapOf(
+                                    "vcsPath" to "ssh://git@git.example.com/clients/{{ CLIENT_CODE | lower }}/plugin.git",
+                                    "checkoutDirectory" to "plugin",
+                                ),
+                                linkedMapOf(
+                                    "vcsPath" to "ssh://git@git.example.com/clients/{{ CLIENT_CODE | lower }}/ui.git",
+                                    "branch" to "develop",
+                                    "tag" to "ui-\$version",
+                                    "checkoutDirectory" to "{{ PLUGIN_CODE | lower }}-ui",
+                                ),
+                            )
+                    },
+                ),
+            ).request
+
+        assertEquals(
+            listOf(
+                VcsEntryRequest(
+                    vcsPath = "ssh://git@git.example.com/clients/acme/plugin.git",
+                    branch = "main",
+                    tag = "\$module-\$version",
+                    checkoutDirectory = "plugin",
+                ),
+                VcsEntryRequest(
+                    vcsPath = "ssh://git@git.example.com/clients/acme/ui.git",
+                    branch = "develop",
+                    tag = "ui-\$version",
+                    checkoutDirectory = "core-ui",
+                ),
+            ),
+            request.baseConfiguration?.vcsEntries,
+        )
+        assertEquals("plugin", request.baseConfiguration?.buildWorkingDirectory)
+    }
+
+    @Test
+    @DisplayName("SYS-110: a VCS entry that renders empty keeps its place, so the entries after it do not shift")
+    fun `SYS-110 empty vcs entry keeps its place`() {
+        val template =
+            parsedTemplate(
+                exampleTemplate().apply {
+                    at("parameters")["UI"] = linkedMapOf("label" to "UI", "type" to "text")
+                    at("fields.baseConfiguration")["vcsEntries"] =
+                        listOf(
+                            linkedMapOf("vcsPath" to "ssh://git@git.example.com/plugin.git"),
+                            linkedMapOf("vcsPath" to "{{ UI | kebab }}", "checkoutDirectory" to "{{ UI | kebab }}"),
+                            linkedMapOf("vcsPath" to "ssh://git@git.example.com/docs.git", "checkoutDirectory" to "docs"),
+                        )
+                },
+            )
+
+        val request = render(template, values = EXAMPLE_VALUES + ("UI" to listOf("---"))).request
+
+        val entries = requireNotNull(request.baseConfiguration?.vcsEntries)
+
+        assertEquals(listOf("ssh://git@git.example.com/plugin.git", "", "ssh://git@git.example.com/docs.git"), entries.map { it.vcsPath })
+        assertEquals("docs", entries[2].checkoutDirectory)
+    }
+
+    @Test
+    @DisplayName("SYS-110: a last VCS entry that renders empty is kept, not dropped")
+    fun `SYS-110 empty last vcs entry is kept`() {
+        val template =
+            parsedTemplate(
+                exampleTemplate().apply {
+                    at("parameters")["UI"] = linkedMapOf("label" to "UI", "type" to "text")
+                    at("fields.baseConfiguration")["vcsEntries"] =
+                        listOf(
+                            linkedMapOf("vcsPath" to "ssh://git@git.example.com/plugin.git"),
+                            linkedMapOf("vcsPath" to "{{ UI | kebab }}", "checkoutDirectory" to "{{ UI | kebab }}"),
+                        )
+                },
+            )
+
+        val request = render(template, values = EXAMPLE_VALUES + ("UI" to listOf("---"))).request
+
+        assertEquals(
+            listOf("ssh://git@git.example.com/plugin.git", ""),
+            request.baseConfiguration?.vcsEntries?.map { it.vcsPath },
+        )
+    }
+
+    @Test
+    @DisplayName("SYS-110: component-defaults fill the first VCS entry's branch and tag only")
+    fun `SYS-110 further vcs entry takes no defaults`() {
+        val request =
+            render(
+                parsedTemplate(
+                    exampleTemplate().apply {
+                        at("fields.baseConfiguration")["vcsEntries"] =
+                            listOf(
+                                linkedMapOf("vcsPath" to "ssh://git@git.example.com/plugin.git"),
+                                linkedMapOf("vcsPath" to "ssh://git@git.example.com/ui.git", "checkoutDirectory" to "ui"),
+                            )
+                    },
+                ),
+            ).request
+
+        val second = requireNotNull(request.baseConfiguration?.vcsEntries)[1]
+        assertNull(second.branch)
+        assertNull(second.tag)
+    }
+
+    @Test
     @DisplayName("the same input twice renders the same output")
     fun deterministic() {
         assertEquals(render(), render())

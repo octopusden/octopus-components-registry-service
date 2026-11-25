@@ -43,7 +43,7 @@ data class TemplateRun(
 
 /**
  * Runs a template through the dry-run steps (Decision 8): parameter checks, rendering, the
- * template's rules, fixed labels and override values, then today's [create] on the rendered
+ * template's rules, VCS paths that rendered empty, fixed labels and override values, then today's [create] on the rendered
  * request. The create runs in its own transaction, rolled back unless [run] is asked to commit
  * and nothing failed before it, so a dry run and a create cannot drift apart.
  *
@@ -77,13 +77,14 @@ class TemplateDryRun(
             TemplateRenderer.render(template, checked.values, input.overrides, defaults(), input.jiraTaskKey, input.changeComment)
         val beforeCreate =
             TemplateProblems.rules(template, rendered) +
+                TemplateProblems.blankVcsPaths(template, rendered) +
                 TemplateProblems.fixedLabels(template, lists.values(TemplateList.LABELS)) +
                 parameters.checkOverrides(input.overrides)
         val commits = commit && beforeCreate.isEmpty()
         return when (val outcome = createStep(rendered.request, commits)) {
             is CreateOutcome.Created -> TemplateRun(emptyList(), rendered, beforeCreate, outcome.component.takeIf { commits })
             is CreateOutcome.Failed ->
-                TemplateRun(emptyList(), rendered, beforeCreate + TemplateProblems.create(outcome.message, rendered), null)
+                TemplateRun(emptyList(), rendered, beforeCreate + TemplateProblems.create(template, outcome.message, rendered), null)
         }
     }
 

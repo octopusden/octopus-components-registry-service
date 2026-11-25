@@ -23,6 +23,16 @@ class CreateFailureFieldsTest {
         assertEquals(paths, CreateFailureFields.of(message))
     }
 
+    @ParameterizedTest(name = "{0}")
+    @MethodSource("vcsLayoutMessages")
+    @DisplayName("SYS-110: a VCS checkout layout failure is attributed to the template path it names")
+    fun `SYS-110 vcs layout failures are attributed`(
+        message: String,
+        paths: List<String>,
+    ) {
+        assertEquals(paths, CreateFailureFields.of(message))
+    }
+
     @Test
     @DisplayName("Decision 9: a message no rule matches is attributed to no field")
     fun unmatched() {
@@ -32,6 +42,30 @@ class CreateFailureFieldsTest {
     }
 
     companion object {
+        @JvmStatic
+        fun vcsLayoutMessages(): List<Arguments> =
+            listOf(
+                Arguments.of(
+                    "vcsEntries[1].checkoutDirectory: required: VCS root 1 (plugin) is already checked out at the checkout root, " +
+                        "and only one VCS root can be.",
+                    listOf("baseConfiguration.vcsEntries[1].checkoutDirectory"),
+                ),
+                Arguments.of(
+                    "vcsEntries[2].checkoutDirectory: 'Target' is reserved: the build tooling uses that folder at the checkout root.",
+                    listOf("baseConfiguration.vcsEntries[2].checkoutDirectory"),
+                ),
+                Arguments.of(
+                    "vcsEntries[1].sourcePath: VCS root 1 (plugin) already checks out the same repository and " +
+                        "Source Path (the whole repository). Change the Source Path, or remove one of the VCS roots.",
+                    listOf("baseConfiguration.vcsEntries[1].vcsPath"),
+                ),
+                Arguments.of(
+                    "buildWorkingDirectory: required: every VCS root has a Checkout Directory, so set the folder the build runs in, " +
+                        "for example 'plugin' or 'plugin/app'.",
+                    listOf("baseConfiguration.buildWorkingDirectory"),
+                ),
+            )
+
         @JvmStatic
         fun messages(): List<Arguments> =
             listOf(
