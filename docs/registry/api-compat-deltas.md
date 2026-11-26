@@ -37,9 +37,9 @@ The compat-test exercises **API contracts**:
   `component.displayName` JSON path, and typed-layer field comparators (`*.displayName`, plus
   `component` scoped to the detailed-version endpoints). No ADR-021 entry uses `messagePattern`, so
   no whole typed record is suppressed and a co-occurring regression on the same payload still
-  surfaces — pinned by the negative tests in `Adr021DisplayNameCompatTest`. **`known-deltas-git.json` stays
-  empty for ADR-021**: the fallback is applied only on the DB resolver path, so a no-migration git-mode
-  candidate is still byte-identical to the baseline and the deploy-without-migration invariant is
+  surfaces — pinned by the negative tests in `Adr021DisplayNameCompatTest`. **`known-deltas-git.json` has
+  no ADR-021 entry**: the fallback is applied only on the DB resolver path, so a no-migration git-mode
+  candidate is unaffected by it and the deploy-without-migration invariant is
   untouched. The legacy `$.name` and every write-back surface are excluded from the rule by design
   — see the ADR — so this delta does not spread beyond the Jira-facing payloads.
 
@@ -59,7 +59,7 @@ The compat-test exercises **API contracts**:
   replays hit it). Typed layer: a field comparator in `Comparators.buildAssertion`
   forgives exactly baseline-null → value on those fields; a changed or dropped value is still a
   VALUE_DIFF. Regression tests: `GitVsDbValidationTest` VAL-003a and `VcsCheckoutLayoutKnownDeltaTest`.
-  `known-deltas-git.json` stays empty: Git mode has no checkout layout and no Build Working Directory.
+  `known-deltas-git.json` has no entry for them: Git mode has no checkout layout and no Build Working Directory.
 
 - **`testComponent` flag** (SYS-099, 2026-10) — the v1/v2/v3 `Component` DTO (and its
   `VersionedComponent` / `DetailedComponent` subclasses) always serializes `testComponent`: for a
@@ -80,6 +80,21 @@ The compat-test exercises **API contracts**:
   mapper, and the light client's DTOs ignore unknown properties too. A plain deploy is the rollout;
   no feature flag is needed. The abstract `Component` base class carries the same annotation as
   well, for any future subclass.
+
+- **VCS tag keeps the requested version** (RES-027) — `components/{c}/versions/{v}/vcs-settings` and
+  the `DetailedComponent` (`components/{c}/versions/{v}`, under `vcsSettings.`) substitute in `$version`
+  the requested version when it is shorter than the build format and non-strict normalization dropped a
+  non-zero part of it; the baseline padded the cut major instead, e.g. with build format
+  `$major.$minor.$service-$fix` `1.0.4` gave the tag
+  `<module>-1.0.0-0`, which does not exist, where the candidate gives `<module>-1.0.4`. The fix is in
+  the `getVCSSettings` path both resolvers share, so it reaches **git mode** too. Typed layer only (a
+  changed value is not a raw STRUCTURAL_DIFF): one VALUE_DIFF entry in **both** `known-deltas-db.json`
+  and `known-deltas-git.json`, a `messagePattern` that matches the record only when the tag of its
+  single VCS root is its only difference, the baseline tag ends in the padded major
+  (`<major>.0[.0…][-0…]`) and the candidate tag is the same prefix followed by exactly the requested
+  version (`{{pathParam:version}}`) starting with that major. Several roots, another changed field or
+  any other tag stay active. `projects/{p}/versions/{v}/vcs-settings` substitutes the requested version
+  without normalization and is not affected. Regression test: `VcsSettingsVersionKnownDeltaTest`.
 
 **Operational metadata endpoints are explicitly excluded** from the compat surface:
 
@@ -139,14 +154,17 @@ deltas live in **two files** selected by `-Pcompat.known-deltas` (or
 
 | File | Candidate mode | Selected by | Contents |
 |---|---|---|---|
-| `known-deltas-db.json` | migrated, `default-source=db` (`git==0`) — id17 / `[1.7]` | default | the `updateCache` 410 delta (db-mode is fully migrated, so the endpoint is retired) |
-| `known-deltas-git.json` | no-migration, `default-source=git` (`git>0`) — id18 / `[1.8]` | `-Pcompat.known-deltas=known-deltas-git.json` (set by `teamcity-run.sh` when `CANDIDATE_MODE=git`) | **intentionally empty** |
+| `known-deltas-db.json` | migrated, `default-source=db` (`git==0`) — id17 / `[1.7]` | default | every sanctioned delta of a migrated candidate, e.g. the `updateCache` 410 (db-mode is fully migrated, so the endpoint is retired) |
+| `known-deltas-git.json` | no-migration, `default-source=git` (`git>0`) — id18 / `[1.8]` | `-Pcompat.known-deltas=known-deltas-git.json` (set by `teamcity-run.sh` when `CANDIDATE_MODE=git`) | only the deltas that reach the shared Git-resolver path or the DTOs (TD-022, SYS-099, RES-027) |
 
-`known-deltas-git.json` is empty by design: in git-mode every v1/v2/v3 response
-is served by the Git resolver — the same code path as the 2.0.87 baseline — and
-phase-aware `updateCache` returns 200, so there are **no** sanctioned deviations.
-This encodes the **deploy-without-migration no-op invariant**: any active diff in
-git-mode is a real regression and must be fixed, never suppressed.
+`known-deltas-git.json` encodes the **deploy-without-migration no-op invariant**:
+in git-mode every v1/v2/v3 response is served by the Git resolver — the same code
+path as the 2.0.87 baseline — and phase-aware `updateCache` returns 200, so a
+git-mode diff is a regression unless a deliberate change to the code both modes
+share explains it: a repaired contract in the shared resolver API (TD-022), a new
+DTO key (SYS-099), a fix in the shared `getVCSSettings` path (RES-027). Each such
+entry says why in its `reason`. Anything else active in git-mode is a real
+regression and must be fixed, never suppressed.
 
 ## Known-delta entry format
 
@@ -163,7 +181,7 @@ under `deltas[]`:
 | `pathParams` | no | Map exact-match; `null` means "any". |
 | `queryParams` | no | Map exact-match; `null` means "any". Required to distinguish e.g. `?ignore-required=true` from `?ignore-required=false` when only one of the two variants is intentional. |
 | `jsonPathPattern` | no | Regex, matched with `find()` against the record's raw-layer `jsonPath` (e.g. `\$\.components\[\d+\]\.distribution\.(docker\|GAV)$` covers every array index). A specified pattern requires the record to CARRY a jsonPath and match — records with `jsonPath: null` never match, so the key narrows, never widens. For cluster-wide intentional deltas where per-`pathParams` entries would explode combinatorially. |
-| `messagePattern` | no | Regex, matched with `find()` against the record's `message` (the typed-layer AssertJ text — typed records carry `jsonPath: null`, and the differing field appears only as `field/property 'x.y' differ`). Same narrowing semantics as `jsonPathPattern`. Keep patterns anchored to the differing-field clause, NOT to component names/values, so an entry documents a rule ("this field intentionally changed"), not a data snapshot. **Granularity caveat:** suppression is per RECORD, and one typed record = one whole AssertJ comparison — per-component on detail/v2-list compares (all differing fields of that component in one message), the ENTIRE collection on the v1 whole-list compare. A matching entry therefore also swallows co-occurring unrelated diffs inside the same record for its lifetime; state that blast radius in `reason`. |
+| `messagePattern` | no | Regex, matched with `find()` against the record's `message` (the typed-layer AssertJ text — typed records carry `jsonPath: null`, and the differing field appears only as `field/property 'x.y' differ`). Same narrowing semantics as `jsonPathPattern`. Keep patterns anchored to the differing-field clause, NOT to component names/values, so an entry documents a rule ("this field intentionally changed"), not a data snapshot. **Granularity caveat:** suppression is per RECORD, and one typed record = one whole AssertJ comparison — per-component on detail/v2-list compares (all differing fields of that component in one message), the ENTIRE collection on the v1 whole-list compare. A matching entry therefore also swallows co-occurring unrelated diffs inside the same record for its lifetime; state that blast radius in `reason`. A pattern may contain `{{pathParam:<name>}}`: before matching it is replaced by the record's path parameter `<name>` quoted as a regex literal (a record without that parameter never matches), so an entry can tie a value in the message to the request without naming a real component (RES-027: the candidate tag must end in the requested `version`). |
 | `reason` | yes | Free-text justification. Should reference the relevant code path and/or PR. |
 | `regressionTest` | yes | UT method name in `ClassName.testMethodName` form (simple class name, no package prefix — e.g. `ComponentsRegistryServiceControllerUpdateCacheTest.git equal to zero retires the endpoint with 410 and does not re-read`) that pins the intended behavior. This is the contract that prevents the entry from going stale. |
 
@@ -181,7 +199,7 @@ still returns 200, matching v2, so it is NOT a delta there.)
 
 **Procedure**:
 1. Ship a regression UT that pins the intended behavior on the candidate side.
-2. Add an entry to the appropriate per-mode file — normally `known-deltas-db.json` (migrated/db-mode candidate) — referencing that UT in `regressionTest`. `known-deltas-git.json` stays empty; a git-mode diff is a real regression, not a sanctioned delta. See "Per-mode known-deltas".
+2. Add an entry to the appropriate per-mode file — normally `known-deltas-db.json` (migrated/db-mode candidate) — referencing that UT in `regressionTest`. Add it to `known-deltas-git.json` as well only when the change reaches the code both modes share; otherwise a git-mode diff is a real regression, not a sanctioned delta. See "Per-mode known-deltas".
 3. PR description justifies why this is intentional (link to ADR / spec / ticket).
 
 ### 2. Data drift after tag-revision divergence
@@ -219,7 +237,7 @@ then fix the code. Do NOT enter as known-delta; the entry would mask the bug.
    category 2/3/4, follow that category's procedure instead.
 2. Ship the regression UT first; entry's `regressionTest` field is mandatory
    and must reference an existing test method.
-3. Add the entry to `known-deltas-db.json` (db-mode; `known-deltas-git.json` stays empty — see "Per-mode known-deltas").
+3. Add the entry to `known-deltas-db.json` (db-mode), and to `known-deltas-git.json` only when the change reaches the code both modes share — see "Per-mode known-deltas".
 4. PR description justifies the intentional behavior change with a link to
    the relevant ADR / spec section / ticket.
 

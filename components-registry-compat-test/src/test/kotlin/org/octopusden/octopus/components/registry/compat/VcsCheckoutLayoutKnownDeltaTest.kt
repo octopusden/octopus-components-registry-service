@@ -66,23 +66,7 @@ class VcsCheckoutLayoutKnownDeltaTest {
             durationMs = 0L,
         )
 
-    private fun suppressed(record: DiffRecord): Boolean =
-        deltas.any { d ->
-            (d["endpoint"] == null || d["endpoint"] == record.endpoint) &&
-                (d["endpointPattern"] == null || Regex(d["endpointPattern"] as String).containsMatchIn(record.endpoint)) &&
-                (d["endpoint"] != null || d["endpointPattern"] != null) &&
-                d["category"] == record.category.name &&
-                d["baselineValue"] == null &&
-                d["candidateValue"] == null &&
-                d["pathParams"] == null &&
-                matchesIfSet(d["jsonPathPattern"], record.jsonPath) &&
-                matchesIfSet(d["messagePattern"], record.message)
-        }
-
-    private fun matchesIfSet(
-        pattern: Any?,
-        value: String?,
-    ) = pattern == null || (value != null && Regex(pattern as String).containsMatchIn(value))
+    private fun suppressed(record: DiffRecord) = KnownDeltas.suppressed(deltas, record)
 
     private fun compare(
         endpoint: String,
