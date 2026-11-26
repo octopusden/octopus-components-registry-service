@@ -43,6 +43,55 @@ class OwnershipCollisionMatrixTest {
     ) = computeOwnershipCollisions(listOf(a), listOf(b), always).isNotEmpty()
 
     @Test
+    @DisplayName("message: ALL vs EXPLICIT says what each side owns and how to fix it")
+    fun messageAllVsExplicit() {
+        val v =
+            computeOwnershipCollisions(
+                listOf(claim("acme-promotion", group = "org.example.acme", mode = ArtifactIdMode.ALL)),
+                listOf(
+                    claim(
+                        "acme-dlgen",
+                        group = "org.example.acme",
+                        mode = ArtifactIdMode.EXPLICIT,
+                        tokens = setOf("acme-dlgen"),
+                    ),
+                ),
+                always,
+            )
+        assertEquals(
+            listOf(
+                "uniqueness violation: groupId/artifactId ownership conflict. " +
+                    "Component 'acme-promotion' claims all artifacts of group 'org.example.acme', " +
+                    "but component 'acme-dlgen' already owns artifacts 'org.example.acme:acme-dlgen' " +
+                    "for all versions. List the explicit artifactIds that 'acme-promotion' publishes " +
+                    "instead of all artifacts of the group.",
+            ),
+            v,
+        )
+    }
+
+    @Test
+    @DisplayName("message: EXPLICIT vs EXPLICIT names the shared artifactIds and the ranges")
+    fun messageExplicitVsExplicit() {
+        val v =
+            computeOwnershipCollisions(
+                listOf(claim("a", mode = ArtifactIdMode.EXPLICIT, tokens = setOf("x", "y"), range = "[1,2)")),
+                listOf(claim("b", mode = ArtifactIdMode.EXPLICIT, tokens = setOf("y"))),
+                always,
+            )
+        assertEquals(
+            listOf(
+                "uniqueness violation: groupId/artifactId ownership conflict. " +
+                    "Component 'a' claims artifacts 'org.example:x', 'org.example:y', " +
+                    "but component 'b' already owns artifacts 'org.example:y' " +
+                    "for versions [1,2) vs all versions (they overlap). " +
+                    "An artifact belongs to one component only; remove 'y' from one of them.",
+            ),
+            v,
+        )
+    }
+
+    @Test
     @DisplayName("EXPLICIT × EXPLICIT collides iff token sets intersect")
     fun explicitExplicit() {
         assertTrue(
@@ -270,7 +319,7 @@ class OwnershipCollisionMatrixTest {
                 coverageByComponent = mapOf("B" to coverageB),
             )
         assertEquals(1, v.size)
-        assertTrue(v.single().contains("'[1.5,1.6)' ∩ '[1.4,2.0)'"), v.single())
+        assertTrue(v.single().contains("for versions [1.5,1.6) vs versions [1.4,2.0) (they overlap)"), v.single())
 
         // Both base with bounded coverage: they meet only where both are supported.
         val baseA = listOf(claim("A", mode = ArtifactIdMode.ALL))
@@ -392,7 +441,7 @@ class OwnershipCollisionMatrixTest {
             )
         val v = prodPair(a, b, mapOf("B" to listOf("[1,4)")), withSubtract = true)
         assertEquals(1, v.size)
-        assertTrue(v.single().contains("'[2.5,3)' ∩ '[2,4)'"), v.single())
+        assertTrue(v.single().contains("for versions [2.5,3) vs versions [2,4) (they overlap)"), v.single())
         // A component that overrides all of its coverage has no base left in force, even against a
         // sub-range the exact-string shadow skip does not match.
         val inside = listOf(claim("A", mode = ArtifactIdMode.EXPLICIT, tokens = setOf("old"), range = "[1.5,2)"))
