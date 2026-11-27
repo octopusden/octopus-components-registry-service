@@ -61,7 +61,7 @@ Field paths, the fixed value each field kind accepts, and the parameter types th
 
 | Field kind | Paths | Fixed value | Parameter types accepted |
 |---|---|---|---|
-| Free text | The field-rule paths of the profiles specification | Text | `text`; single-value `select`; `crs-list` of `build-systems` or `escrow-generation`. Any of these as `{{ NAME }}`, with or without a filter and text around it |
+| Free text | The field-rule paths of the profiles specification; `vcsPath`, `branch`, `tag` and `checkoutDirectory` of any `baseConfiguration.vcsEntries[i]`; `baseConfiguration.buildWorkingDirectory` | Text | `text`; single-value `select`; `crs-list` of `build-systems` or `escrow-generation`. Any of these as `{{ NAME }}`, with or without a filter and text around it |
 | CRS value | `baseConfiguration.build.buildSystem`, `baseConfiguration.escrow.generation` | A value of that list | `crs-list` of the same list, as exactly `{{ NAME }}` |
 | Person | `componentOwner` | A login | Single-value `person`, as exactly `{{ NAME }}` |
 | Free-text list | `artifactIds[0].artifactTokens` | Items of text | Per item: what free text accepts, or a multi-value `select` as exactly `{{ NAME }}` |
@@ -76,6 +76,8 @@ Expressions are a small subset of Jinja syntax. Only these SHALL be accepted:
 | `{{ NAME }}` | The parameter's value |
 | `{{ NAME \| lower }}` | The value in lower case |
 | `{{ NAME \| upper }}` | The value in upper case |
+| `{{ NAME \| title }}` | Split on `-`, `_` and whitespace, each non-empty word capitalized and lower-cased otherwise, joined with a single space; an empty or all-separator value gives an empty string |
+| `{{ NAME \| kebab }}` | Lower case, each run of characters outside ASCII letters and digits replaced by `-`, the result trimmed of leading and trailing `-`; an empty or all-separator value gives an empty string |
 
 - Spaces inside the braces are optional.
 - Any other Jinja construct SHALL fail the template on load: a `{% … %}` tag, a `{# … #}` comment,
@@ -83,6 +85,11 @@ Expressions are a small subset of Jinja syntax. Only these SHALL be accepted:
 
 There is no `client-codes` list. A template that offers client codes SHALL list them as the
 `options` of a `select` parameter.
+
+A VCS entry index SHALL be written without leading zeros. Only the first entry's `vcsPath`, `branch`
+and `tag` are field-rule paths; the other VCS paths and `baseConfiguration.buildWorkingDirectory` are
+for templates only, and a rule naming one SHALL fail the template, as any path outside the rule
+paths does.
 
 #### Scenario: Example template
 - **WHEN** the configuration holds the design's example template next to valid regular profiles
@@ -134,7 +141,7 @@ Field checks:
 | Parameter | The field uses a parameter the template does not define |
 | Kind | The field kind does not accept the parameter, as the field table says: a Person never goes into free text, and a multi-value parameter only into a list |
 | Whole value | A CRS value, a Person, or an item of a CRS list or people list has text around `{{ NAME }}`, or a filter |
-| Filter | A filter other than `lower` or `upper` is used |
+| Filter | A filter other than `lower`, `upper`, `title` or `kebab` is used |
 | Fixed value | A fixed value is not in its static list: build systems, escrow generation modes, fixed choices |
 
 Whole-template checks:
@@ -144,13 +151,16 @@ Whole-template checks:
 | Required fields | A field the classification requires has no fixed value, no required parameter and no component default |
 | Overridable | An `overridable` path is not set in `fields`, or is `baseConfiguration.build.buildSystem` |
 | Own rules | A fixed value breaks one of the template's rules |
+| Maven qualifier | `baseConfiguration.mavenArtifacts[0].extension` or `.classifier` is set, but `.groupPattern` or `.artifactPattern` is not |
+| VCS entries | A field of `baseConfiguration.vcsEntries[n]` with `n` above 0 is set, and the indexes set do not run from 0 without a gap (one problem, naming the first missing entry), or an entry set has no `vcsPath`, or one after the first no `checkoutDirectory`, filled as a required field is |
+| Build working directory | `baseConfiguration.vcsEntries[0].checkoutDirectory` is set, and `baseConfiguration.buildWorkingDirectory` is not filled as a required field is |
 
 Required fields, by classification:
 
 | Classification | Required |
 |---|---|
 | Any | `name`, `componentOwner`, build system, Jira project key, full version format |
-| Any, unless the build system needs no VCS | VCS path, branch and tag |
+| Any, unless the build system needs no VCS | The first VCS entry's path, branch and tag |
 | Explicit and external | `displayName`, `releaseManager`, `securityChampion` |
 | Explicit and external, unless the build system is `WHISKEY` | At least one of: Maven GAV (group and artifact pattern), Docker image name, package name |
 
@@ -159,7 +169,10 @@ Required fields, by classification:
   as needing VCS and as not `WHISKEY`. A build system the template leaves unset SHALL be the
   `component-defaults` one; a default `BS2_0` is ignored.
 - A field fills a requirement when it has non-blank literal text, alone or around a parameter, or a
-  fixed list item, uses a required parameter, or gets a value from `component-defaults`.
+  fixed list item, uses a required parameter, or gets a value from `component-defaults`. A `title`
+  or `kebab` expression is the one exception this load check cannot see: a required parameter
+  guarantees a non-blank value, not a non-blank render, since an all-separator value renders empty
+  under either filter.
 - A template rule on a field the template leaves unset, or fixes blank (which R2 leaves unset), is
   checked against the default R7 would give it, or against an empty value. A build system fixed
   blank is the `component-defaults` one, as when it is unset.
@@ -172,6 +185,13 @@ Not checked on load, because they depend on data that changes at runtime:
 - Fixed people; the dry run's create step checks them, as on any create.
 - A `person` parameter's default; P8 checks it at the dry run, when the default is used.
 - Uniqueness, such as a fixed name already taken; the dry run's create step checks it.
+- A field whose only content is a `title` or `kebab` expression, when the parameter's actual value
+  renders it empty (such as a value made entirely of separators): R2 leaves the field unset, as for
+  any other empty render. A field `component-defaults` also covers then takes that default, as R7
+  gives any other field R2 leaves unset. One that is required, that no default covers, and that
+  today's create itself requires, reaches the create step still missing, and the problem names the
+  parameters the field is built from — a `pattern` on the parameter is how a template author rules
+  this out.
 
 #### Scenario: Key not for the type
 - **WHEN** a `text` parameter has `options`
@@ -202,6 +222,32 @@ Not checked on load, because they depend on data that changes at runtime:
 - **WHEN** an explicit, external template with build system `GRADLE` sets no Maven GAV, Docker
   image or package name
 - **THEN** the template is failed with a problem naming the distribution fields
+
+#### Scenario: Maven extension without a GAV
+- **WHEN** a template sets `baseConfiguration.mavenArtifacts[0].extension: tgz` and no
+  `baseConfiguration.mavenArtifacts[0].groupPattern`
+- **THEN** the template is failed with a problem naming
+  `baseConfiguration.mavenArtifacts[0].extension`
+
+#### Scenario: Second VCS entry without a checkout directory
+- **WHEN** a template sets `baseConfiguration.vcsEntries[1].vcsPath` and no
+  `baseConfiguration.vcsEntries[1].checkoutDirectory`
+- **THEN** the template is failed with a problem naming
+  `baseConfiguration.vcsEntries[1].checkoutDirectory`
+
+#### Scenario: Gap in the VCS entries
+- **WHEN** a template sets `baseConfiguration.vcsEntries[0]` and `baseConfiguration.vcsEntries[2]`
+  and nothing of `baseConfiguration.vcsEntries[1]`
+- **THEN** the template is failed with one problem naming `baseConfiguration.vcsEntries[1]`
+
+#### Scenario: VCS entry index too large
+- **WHEN** a template sets `baseConfiguration.vcsEntries[99999999999].vcsPath`
+- **THEN** the template is failed with a problem naming that key: the list index is too large
+
+#### Scenario: Every VCS entry in a checkout directory
+- **WHEN** a template sets `baseConfiguration.vcsEntries[0].checkoutDirectory` and no
+  `baseConfiguration.buildWorkingDirectory`
+- **THEN** the template is failed with a problem naming `baseConfiguration.buildWorkingDirectory`
 
 #### Scenario: Default not set either
 - **WHEN** a template sets no VCS branch for a build system that needs VCS, and
@@ -310,7 +356,7 @@ registry SHALL record the parameters the value came from.
 
 | Rule | What happens |
 |---|---|
-| R1 Free text | Each expression is replaced by the parameter's value, converted by `lower` or `upper`; the text around it is kept |
+| R1 Free text | Each expression is replaced by the parameter's value, converted by `lower`, `upper`, `title` or `kebab`; the text around it is kept |
 | R2 Empty values | An empty optional parameter is replaced by nothing; a field that ends up empty is unset |
 | R3 Whole values | A CRS value or Person field set to `{{ NAME }}` takes the value as it is |
 | R4 Free-text lists | Each item follows R1 and R2; an empty item is dropped; a multi-value parameter becomes one item per value |
@@ -327,7 +373,11 @@ R7 SHALL apply only to the fields the Portal's create wizard pre-fills from `com
 - Jira project key;
 - the full, line, minor, release and build version formats;
 - escrow generation;
-- VCS tag and branch, only when the build system needs VCS.
+- the first VCS entry's tag and branch, only when the build system needs VCS.
+
+The VCS entries SHALL be built for every index up to the last one any field sets, in index order,
+counting an entry after the first that renders empty, so it keeps its place. A lone first entry
+that renders empty SHALL be left out.
 
 Two defaults apply, one after the other, and neither stands in for the other:
 
@@ -350,6 +400,18 @@ asks only for its parameters, so the registry applies them instead, with the sam
 #### Scenario: Empty optional parameter
 - **WHEN** an optional `SUFFIX` is empty in `"{{ CLIENT_CODE | lower }}-plugin{{ SUFFIX }}"`
 - **THEN** the value is `acme-plugin`
+
+#### Scenario: Title case
+- **WHEN** `displayName` is `"{{ PLUGIN_NAME | title }}"` with `payment-methods`
+- **THEN** `displayName` is `Payment Methods`
+
+#### Scenario: Kebab case
+- **WHEN** `displayName` is `"{{ PLUGIN_NAME | kebab }}"` with `Payment Methods`
+- **THEN** `displayName` is `payment-methods`
+
+#### Scenario: Title or kebab collapses to empty
+- **WHEN** `displayName` is `"{{ PLUGIN_NAME | kebab }}"` and `PLUGIN_NAME` is `"---"`
+- **THEN** `displayName` is unset, as R2 leaves any other empty render
 
 #### Scenario: Labels combine
 - **WHEN** the template fixes `labels: [plugin]` and adds `{{ EXTRA }}` with `plugin` and `ui`
@@ -411,8 +473,8 @@ A dry run SHALL run these steps:
 
 1. Check the parameter values. When any check fails, stop here.
 2. Render the template.
-3. Check the template's field rules on the rendered request, its fixed labels, and the override
-   values.
+3. Check the template's field rules on the rendered request, a VCS entry whose `vcsPath` rendered
+   empty, its fixed labels, and the override values.
 4. Run today's create on the rendered request, in a transaction that is always rolled back.
 
 It SHALL return:
@@ -425,12 +487,15 @@ It SHALL return:
 
 How problems are reported:
 
-- A problem on a field SHALL name the field and its source parameters.
+- A problem on a field SHALL name the field and its source parameters; for a field that rendered
+  empty, the parameters it is built from.
 - A problem on a field the template fixes, fills from `component-defaults` or leaves unset SHALL be
   marked a template problem; a problem on an overridden field SHALL NOT.
 - A fixed label not in the labels dictionary SHALL be reported as a template problem.
 - Today's create stops at its first failure, so at most one problem SHALL come from step 4,
   worded as the create words it.
+- A template sets no VCS `sourcePath`, so a `sourcePath` failure of the create (an entry repeating
+  an earlier entry's repository) SHALL be a problem on that entry's `vcsPath`.
 - A unique-index violation from a concurrent create SHALL be a problem on `name`, saying another
   component took the key or display name at the same moment.
 - Any other database constraint failure, such as a value too long for its column, SHALL be a
@@ -463,6 +528,12 @@ recorded in the audit.
 #### Scenario: Unknown label in the template
 - **WHEN** the template fixes a label that is not in the labels dictionary
 - **THEN** the dry run reports a template problem on `labels`
+
+#### Scenario: VCS entry rendered empty
+- **WHEN** the second VCS entry's `vcsPath` and `checkoutDirectory` are `{{ UI | kebab }}` and `UI`
+  is `---`
+- **THEN** the dry run reports a problem on `baseConfiguration.vcsEntries[1].vcsPath` naming `UI`,
+  not a template problem, and a create answers 422
 
 #### Scenario: Failed template
 - **WHEN** the template is failed or unknown

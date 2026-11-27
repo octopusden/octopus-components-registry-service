@@ -67,7 +67,7 @@ object TemplateRenderer {
             fields[path] = value.filter { it.isNotBlank() }
             sources[path] = emptySet()
         }
-        val request = RequestBuilder(fields).build(template.classification, jiraTaskKey, changeComment)
+        val request = RequestBuilder(fields, template.fields.keys).build(template.classification, jiraTaskKey, changeComment)
         return RenderedTemplate(request, fields, sources, overrides.keys)
     }
 
@@ -98,11 +98,7 @@ object TemplateRenderer {
                 is TemplateExpression.Part.Literal -> part.text
                 is TemplateExpression.Part.Parameter -> {
                     val value = values[part.name]?.firstOrNull().orEmpty()
-                    when (part.filter) {
-                        TemplateExpression.Filter.LOWER -> value.lowercase()
-                        TemplateExpression.Filter.UPPER -> value.uppercase()
-                        null -> value
-                    }
+                    part.filter?.transform(value) ?: value
                 }
             }
         }
@@ -122,6 +118,7 @@ object TemplateRenderer {
 
     private class RequestBuilder(
         private val fields: Map<String, List<String>>,
+        private val templatePaths: Set<String>,
     ) {
         private fun one(path: String): String? = fields[path]?.firstOrNull()
 
@@ -171,14 +168,15 @@ object TemplateRenderer {
                     generation = one(TemplateFields.ESCROW_GENERATION),
                 ).takeIf { any(TemplateFields.ESCROW_GENERATION) },
                 jira = jira(),
-                vcsEntries =
-                    listOf(VcsEntryRequest(vcsPath = one("$VCS.vcsPath").orEmpty(), branch = one("$VCS.branch"), tag = one("$VCS.tag")))
-                        .takeIf { any("$VCS.vcsPath", "$VCS.branch", "$VCS.tag") },
+                vcsEntries = vcsEntries(),
+                buildWorkingDirectory = one(TemplateFields.BUILD_WORKING_DIRECTORY),
                 mavenArtifacts =
                     listOf(
                         MavenArtifactRequest(
                             groupPattern = one("$MAVEN.groupPattern").orEmpty(),
                             artifactPattern = one("$MAVEN.artifactPattern").orEmpty(),
+                            extension = one("$MAVEN.extension"),
+                            classifier = one("$MAVEN.classifier"),
                         ),
                     ).takeIf { any("$MAVEN.groupPattern", "$MAVEN.artifactPattern") },
                 dockerImages =
@@ -192,6 +190,24 @@ object TemplateRenderer {
                         ),
                     ).takeIf { any("$PACKAGE.packageType", "$PACKAGE.packageName") },
             )
+
+        /**
+         * Entries 0 up to the last index set. An entry after the first counts even when it rendered empty, so it keeps
+         * its place and the dry run reports it; a lone first entry that rendered empty is left out.
+         */
+        private fun vcsEntries(): List<VcsEntryRequest>? {
+            val further = templatePaths.mapNotNull { TemplateFields.vcsEntryIndex(it) }.filter { it > 0 }
+            val last = (fields.keys.mapNotNull { TemplateFields.vcsEntryIndex(it) } + further).maxOrNull() ?: return null
+            return (0..last).map { index ->
+                val vcs = "$BASE.vcsEntries[$index]"
+                VcsEntryRequest(
+                    vcsPath = one("$vcs.vcsPath").orEmpty(),
+                    branch = one("$vcs.branch"),
+                    tag = one("$vcs.tag"),
+                    checkoutDirectory = one("$vcs.checkoutDirectory"),
+                )
+            }
+        }
 
         private fun jira(): JiraAspectRequest? {
             val paths = JIRA_FIELDS.map { "$BASE.jira.$it" }
@@ -209,7 +225,6 @@ object TemplateRenderer {
 
         companion object {
             private const val BASE = "baseConfiguration"
-            private const val VCS = "$BASE.vcsEntries[0]"
             private const val MAVEN = "$BASE.mavenArtifacts[0]"
             private const val DOCKER = "$BASE.dockerImages[0]"
             private const val PACKAGE = "$BASE.packages[0]"

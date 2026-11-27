@@ -34,9 +34,9 @@ dependencies {
     // them, so its mapper (findAndRegisterModules) needs the jdk8 datatype module on the classpath.
     testImplementation "com.fasterxml.jackson.datatype:jackson-datatype-jdk8"
     testImplementation "com.squareup.okhttp3:okhttp:4.12.0"
-    testImplementation "org.assertj:assertj-core:3.25.3"
+    testImplementation "org.assertj:assertj-core:3.27.7"
     testImplementation "org.slf4j:slf4j-api:2.0.13"
-    testRuntimeOnly "ch.qos.logback:logback-classic:1.3.14"
+    testRuntimeOnly "ch.qos.logback:logback-classic:1.6.1"
 }
 
 test {
@@ -207,6 +207,27 @@ tasks.register('unitTest', Test) {
 //    a null/absent record field never matches, so these keys narrow, never widen.
 //    Needed for cluster-wide intentional deltas (ADR-018 base-row amendment)
 //    where per-pathParams entries would explode combinatorially.
+//  - messagePattern may contain `{{pathParam:<name>}}`: it is replaced by the
+//    record's path parameter <name>, quoted as a regex literal, so an entry can tie
+//    a value in the message to the request (RES-027: the candidate tag must end in
+//    the requested version) without naming a real component. A record without that
+//    path parameter never matches.
+
+// Replaces each `{{pathParam:<name>}}` in a delta pattern with the record's path parameter <name>,
+// quoted as a regex literal; null when the record has no such parameter.
+def compatResolvePathParams = { String pattern, Map pathParams ->
+    def matcher = pattern =~ /\{\{pathParam:([^}]+)\}\}/
+    def resolved = new StringBuilder()
+    def last = 0
+    while (matcher.find()) {
+        def value = pathParams[matcher.group(1)]
+        if (value == null) return null
+        resolved.append(pattern, last, matcher.start()).append(java.util.regex.Pattern.quote(value.toString()))
+        last = matcher.end()
+    }
+    return resolved.append(pattern.substring(last)).toString()
+}
+
 def compatMatchesDelta = { Map delta, Map record ->
     // endpoint: exact string match, OR endpointPattern: regex find(). endpointPattern exists for
     // records whose endpoint embeds a LITERAL path value (the prod-trace replayer does not
@@ -230,7 +251,8 @@ def compatMatchesDelta = { Map delta, Map record ->
     }
     if (delta.messagePattern != null) {
         def msg = record.message
-        if (msg == null || !(msg.toString() =~ delta.messagePattern.toString())) return false
+        def pattern = compatResolvePathParams(delta.messagePattern.toString(), (record.pathParams ?: [:]) as Map)
+        if (msg == null || pattern == null || !(msg.toString() =~ pattern)) return false
     }
     return true
 }

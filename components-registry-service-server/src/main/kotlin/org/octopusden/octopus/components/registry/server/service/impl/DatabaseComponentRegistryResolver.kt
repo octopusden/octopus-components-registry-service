@@ -23,7 +23,7 @@ import org.octopusden.octopus.components.registry.server.repository.DependencyMa
 import org.octopusden.octopus.components.registry.server.service.ComponentRegistryResolver
 import org.octopusden.octopus.components.registry.server.util.ArtifactOwnershipGrouping
 import org.octopusden.octopus.components.registry.server.util.ArtifactOwnershipRendering
-import org.octopusden.octopus.components.registry.server.util.formatVersion
+import org.octopusden.octopus.components.registry.server.util.VcsSettingsResolver
 import org.octopusden.octopus.escrow.MavenArtifactMatcher
 import org.octopusden.octopus.escrow.ModelConfigPostProcessor
 import org.octopusden.octopus.escrow.config.JiraComponentVersionRange
@@ -70,6 +70,7 @@ class DatabaseComponentRegistryResolver(
     private val versionNames: VersionNames,
 ) : ComponentRegistryResolver {
     private val jiraComponentVersionFormatter = JiraComponentVersionFormatter(versionNames)
+    private val vcsSettingsResolver = VcsSettingsResolver(versionNames, jiraComponentVersionFormatter, numericVersionFactory)
     private val jiraComponentVersionRangeFactory = JiraComponentVersionRangeFactory(versionNames)
     private val componentHotfixSupportResolver = ComponentHotfixSupportResolver()
 
@@ -193,29 +194,12 @@ class DatabaseComponentRegistryResolver(
     override fun getVCSSettings(
         component: String,
         version: String,
-    ): VCSSettings {
-        val (jiraComponentVersion, jiraComponentVersionRange) =
-            getJiraComponentVersionToRangeByComponentAndVersion(component, version)
-        val versionFormat = jiraComponentVersion.component.componentVersionFormat
-        val defaultBuildVersion =
-            versionFormat.buildVersionFormat.formatVersion(
-                numericVersionFactory,
-                jiraComponentVersion.version,
-            )
-        val buildVersion =
-            if (jiraComponentVersionRange.component.isHotfixEnabled) {
-                val hotfixVersion =
-                    versionFormat.hotfixVersionFormat.formatVersion(
-                        numericVersionFactory,
-                        jiraComponentVersion.version,
-                    )
-                if (hotfixVersion == jiraComponentVersion.version) hotfixVersion else defaultBuildVersion
-            } else {
-                defaultBuildVersion
-            }
-        return ModelConfigPostProcessor(ComponentVersion.create(component, buildVersion), versionNames)
-            .resolveVariables(jiraComponentVersionRange.vcsSettings)
-    }
+    ): VCSSettings =
+        vcsSettingsResolver.resolve(
+            component,
+            version,
+            getJiraComponentVersionToRangeByComponentAndVersion(component, version),
+        )
 
     override fun getBuildTools(
         component: String,

@@ -4,6 +4,8 @@ import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.DisplayName
 import org.junit.jupiter.api.Test
 import org.junit.jupiter.params.ParameterizedTest
+import org.junit.jupiter.params.provider.CsvSource
+import org.junit.jupiter.params.provider.EnumSource
 import org.junit.jupiter.params.provider.ValueSource
 import org.octopusden.octopus.components.registry.server.model.TemplateExpression.Filter
 import org.octopusden.octopus.components.registry.server.model.TemplateExpression.Part
@@ -46,6 +48,51 @@ class TemplateExpressionParserTest {
         assertEquals(null, parse("{{ COMPONENT_OWNER | lower }}").wholeParameter)
         assertEquals(null, parse("x{{ COMPONENT_OWNER }}").wholeParameter)
     }
+
+    @ParameterizedTest(name = "{0}")
+    @EnumSource(Filter::class)
+    @DisplayName("every filter name parses as its own filter")
+    fun everyFilterParses(filter: Filter) {
+        assertEquals(Part.Parameter("NAME", filter), parse("{{ NAME | ${filter.name.lowercase()} }}").parts.single())
+    }
+
+    @ParameterizedTest(name = "\"{0}\" -> \"{1}\"")
+    @CsvSource(
+        value = [
+            "payment-methods, Payment Methods",
+            "payment_methods, Payment Methods",
+            "PAYMENT-METHODS, Payment Methods",
+            "'-payment--methods-', Payment Methods",
+            "'', ''",
+            "'---', ''",
+            "PaymentMethods, Paymentmethods",
+            "Payment Methods, Payment Methods",
+            "'payment - methods', Payment Methods",
+        ],
+    )
+    @DisplayName("title: splits on '-', '_' and whitespace, capitalizes each non-empty word, drops empty ones")
+    fun titleFilter(
+        value: String,
+        expected: String,
+    ) = assertEquals(expected, Filter.TITLE.transform(value))
+
+    @ParameterizedTest(name = "\"{0}\" -> \"{1}\"")
+    @CsvSource(
+        value = [
+            "Payment Methods, payment-methods",
+            "'  Payment   Methods  ', payment-methods",
+            "'(Acme) Core!!', acme-core",
+            "'', ''",
+            "'---', ''",
+            "already-kebab, already-kebab",
+            "v2 API, v2-api",
+        ],
+    )
+    @DisplayName("kebab: lowercases, collapses non-alphanumeric runs to '-', trims the ends")
+    fun kebabFilter(
+        value: String,
+        expected: String,
+    ) = assertEquals(expected, Filter.KEBAB.transform(value))
 
     @ParameterizedTest(name = "\"{0}\"")
     @ValueSource(

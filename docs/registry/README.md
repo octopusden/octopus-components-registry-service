@@ -67,6 +67,8 @@ PRD (why?) ──→ FS (what?) ──→ TDD (how?)
 | [ADR-021](adr/021-effective-jira-display-name.md) | Jira display name falls back to `componentDisplayName` (Accepted) |
 | [ADR-022](adr/022-vcs-root-checkout-layout.md) | VCS root checkout layout: Source Path, Checkout Directory, Build Working Directory (Accepted) |
 | [ADR-023](adr/023-teamcity-checkout-layout-diff-sync.md) | TeamCity → registry checkout layout Diff/Sync jobs (Accepted) |
+| [ADR-025](adr/025-component-provisioning.md) | Component provisioning: VCS actions in vcs-facade, the sequence in a new provisioning service, the origin in CRS (Proposed) |
+| [ADR-026](adr/026-build-chain-customisations.md) | Build chain customisations in `octopus-teamcity-automation` and the registry; no post-creation patching (Proposed) |
 
 ### Action Items
 

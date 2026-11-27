@@ -4,8 +4,11 @@ import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.Assertions.assertFalse
 import org.junit.jupiter.api.DisplayName
 import org.junit.jupiter.api.Test
+import org.octopusden.octopus.components.registry.server.model.ComponentTemplate
 import org.octopusden.octopus.components.registry.server.service.impl.ActiveStatus
 import org.octopusden.octopus.components.registry.server.support.EXAMPLE_DEFAULTS
+import org.octopusden.octopus.components.registry.server.support.at
+import org.octopusden.octopus.components.registry.server.support.exampleTemplate
 import org.octopusden.octopus.components.registry.server.support.parsedTemplate
 import org.octopusden.octopus.components.registry.server.util.TemplateFields
 import org.springframework.dao.DataIntegrityViolationException
@@ -29,7 +32,7 @@ private class NoTransactions : AbstractPlatformTransactionManager() {
 }
 
 class TemplateDryRunTest {
-    private fun dryRun(failure: DataIntegrityViolationException) =
+    private fun dryRun(failure: RuntimeException) =
         TemplateDryRun(
             parameters = ParameterChecker({ list -> TemplateFields.staticValues(list) ?: setOf("plugin") }) { ActiveStatus.ACTIVE },
             lists = { list -> TemplateFields.staticValues(list) ?: setOf("plugin") },
@@ -38,7 +41,11 @@ class TemplateDryRunTest {
             transactionManager = NoTransactions(),
         )
 
-    private fun run(failure: DataIntegrityViolationException): TemplateRun {
+    private fun run(
+        failure: RuntimeException,
+        template: ComponentTemplate = parsedTemplate(),
+        parameters: Map<String, List<String>> = emptyMap(),
+    ): TemplateRun {
         val input =
             TemplateInput(
                 parameters =
@@ -46,9 +53,9 @@ class TemplateDryRunTest {
                         "CLIENT_CODE" to listOf("ACME"),
                         "PLUGIN_CODE" to listOf("CORE"),
                         "PLUGIN_NAME" to listOf("Core API"),
-                    ),
+                    ) + parameters,
             )
-        return dryRun(failure).run(parsedTemplate(), input, caller = "jdoe", commit = true)
+        return dryRun(failure).run(template, input, caller = "jdoe", commit = true)
     }
 
     @Test
@@ -72,5 +79,26 @@ class TemplateDryRunTest {
         assertEquals(emptySet<String>(), problem.parameters)
         assertFalse(problem.templateProblem)
         assertEquals("Data integrity violation: duplicate or invalid data", problem.message)
+    }
+
+    @Test
+    @DisplayName("SYS-110: a VCS entry whose vcsPath rendered empty is a dry-run problem naming the field and its parameters")
+    fun `SYS-110 dry run reports an empty vcs path`() {
+        val template =
+            parsedTemplate(
+                exampleTemplate().apply {
+                    at("parameters")["UI"] = linkedMapOf("label" to "UI", "type" to "text")
+                    at("fields.baseConfiguration")["vcsEntries"] =
+                        listOf(
+                            linkedMapOf("vcsPath" to "ssh://git@git.example.com/plugin.git"),
+                            linkedMapOf("vcsPath" to "{{ UI | kebab }}", "checkoutDirectory" to "ui"),
+                        )
+                },
+            )
+
+        val run = run(IllegalArgumentException("Invalid version range: '[1,'"), template, mapOf("UI" to listOf("---")))
+
+        val problem = run.problems.single { it.fields == listOf("baseConfiguration.vcsEntries[1].vcsPath") }
+        assertEquals(setOf("UI"), problem.parameters)
     }
 }

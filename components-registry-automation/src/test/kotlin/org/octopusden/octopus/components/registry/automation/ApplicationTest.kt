@@ -18,6 +18,11 @@ class ApplicationTest {
     private val jar = System.getProperty("jar")
         ?: throw IllegalStateException("System property 'jar' must be provided")
 
+    // Run the CLI on the JVM running this test (the Java 21 toolchain), not on whatever `java`
+    // comes first on the agent's PATH: that differs between agents (Java 8 on EL8).
+    private val javaExecutable =
+        Paths.get(System.getProperty("java.home"), "bin", "java").toString()
+
     /**
      * Test successful downloading components and checking existence files
      */
@@ -77,7 +82,7 @@ class ApplicationTest {
     private fun execute(
         name: String,
         vararg commands: String,
-    ) = ProcessBuilder("java", "-jar", jar, *commands)
+    ) = ProcessBuilder(javaExecutable, "-jar", jar, *commands)
         .redirectErrorStream(true)
         .redirectOutput(
             File("")

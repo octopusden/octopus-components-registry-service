@@ -85,7 +85,9 @@ subrange (it does not co-claim). Uniqueness and resolution both operate on this
 effective set — mirrors the existing per-range scalar-override layering.
 
 Invariants (enforced on v4 write + import, 400): an ownership `version_range` must be
-`ALL_VERSIONS` or equal an existing configuration range of the component; per-component
+`ALL_VERSIONS` or equal an existing configuration range of the component (v4 write only — import
+writes a DSL block that differs from the base only in groupId/artifactId as an ownership override
+with no configuration row, so a v4 update also accepts a range the component already owns by); per-component
 non-base ranges are pairwise non-overlapping; within one `(component, range)` a group
 token belongs to ≤1 mapping; `EXPLICIT` requires ≥1 token, `ALL`/`ALL_EXCEPT_CLAIMED`
 carry none; group/token allowlist `[A-Za-z0-9_.-]+` (no regex operators).

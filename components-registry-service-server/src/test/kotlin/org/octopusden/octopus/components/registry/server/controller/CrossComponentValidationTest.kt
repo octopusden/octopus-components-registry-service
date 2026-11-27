@@ -13,12 +13,15 @@ import org.springframework.boot.test.autoconfigure.web.servlet.AutoConfigureMock
 import org.springframework.boot.test.context.SpringBootTest
 import org.springframework.boot.test.mock.mockito.MockBean
 import org.springframework.http.MediaType
+import org.springframework.jdbc.core.JdbcTemplate
 import org.springframework.test.annotation.DirtiesContext
 import org.springframework.test.context.ActiveProfiles
 import org.springframework.test.web.servlet.MockMvc
 import org.springframework.test.web.servlet.ResultActions
+import org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get
 import org.springframework.test.web.servlet.request.MockMvcRequestBuilders.patch
 import org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post
+import org.springframework.test.web.servlet.request.MockMvcRequestBuilders.put
 import org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath
 import org.springframework.test.web.servlet.result.MockMvcResultMatchers.status
 import java.nio.file.Paths
@@ -54,6 +57,9 @@ class CrossComponentValidationTest {
 
     @Autowired
     private lateinit var objectMapper: ObjectMapper
+
+    @Autowired
+    private lateinit var jdbcTemplate: JdbcTemplate
 
     init {
         val testResourcesPath =
@@ -866,6 +872,188 @@ class CrossComponentValidationTest {
                 """"artifactIds":[{"groupPattern":"$group","mode":"ALL_EXCEPT_CLAIMED"}]}""",
         ).andExpect(status().is2xxSuccessful)
     }
+
+    @Test
+    @DisplayName("ownership collides only within supported versions; widening coverage into a rival's claim → 409")
+    fun ownership_limitedToSupportedVersions() {
+        val s = sfx()
+        val group = "org.octopusden.octopus.own$s"
+        // A owns the whole group, but is supported only in [1,2) (like a migrated archived component).
+        val a = createOk(
+            """{"name":"xcc-own-cov-a-$s","baseConfiguration":{"build":{"buildSystem":"MAVEN"}},""" +
+                """"artifactIds":[{"groupPattern":"$group","mode":"ALL"}]}""",
+        )
+        putSupported(a, """{"ranges":["[1,2)"]}""").andExpect(status().is2xxSuccessful)
+        // B is supported only in [3,) and claims an artifact of the same group: no shared version → 2xx.
+        val b = createOk("""{"name":"xcc-own-cov-b-$s","baseConfiguration":{"build":{"buildSystem":"MAVEN"}}}""")
+        putSupported(b, """{"ranges":["[3,)"]}""").andExpect(status().is2xxSuccessful)
+        patchComponent(
+            b,
+            """{"version":${currentVersion(b)},""" +
+                """"artifactIds":[{"groupPattern":"$group","mode":"EXPLICIT","artifactTokens":["lib-b"]}]}""",
+        ).andExpect(status().is2xxSuccessful)
+        // Widening A's coverage into [3,) would make both own lib-b there → 409; shrinking stays allowed.
+        putSupported(a, """{"ranges":["[1,4)"]}""")
+            .andExpect(status().isConflict)
+            .andExpect(jsonPath("$.errorCode").value("UNIQUENESS_VIOLATION"))
+        putSupported(a, """{"ranges":["[1,1.5)"]}""").andExpect(status().is2xxSuccessful)
+    }
+
+    @Test
+    @DisplayName("shrinking supported versions never re-checks ownership, even over a pre-existing conflict")
+    fun ownership_shrinkSupportedOverExistingConflict() {
+        val s = sfx()
+        val group = "org.octopusden.octopus.own$s"
+        val a = createOk(
+            """{"name":"xcc-own-shrink-a-$s","baseConfiguration":{"build":{"buildSystem":"MAVEN"}},""" +
+                """"artifactIds":[{"groupPattern":"$group","mode":"ALL"}]}""",
+        )
+        putSupported(a, """{"ranges":["[1,4)"]}""").andExpect(status().is2xxSuccessful)
+        // The API refuses to create a conflict, so seed one the way migrated data can hold it: B owns the
+        // same group in all versions.
+        val b = createOk("""{"name":"xcc-own-shrink-b-$s","baseConfiguration":{"build":{"buildSystem":"MAVEN"}}}""")
+        jdbcTemplate.update(
+            "INSERT INTO component_artifact_mappings " +
+                "(id, component_id, version_range, group_pattern, artifact_id_mode, sort_order) VALUES (?, ?, ?, ?, ?, 0)",
+            UUID.randomUUID(),
+            UUID.fromString(b),
+            "(,0),[0,)",
+            group,
+            "ALL",
+        )
+        // The conflict is real: widening A is rejected.
+        putSupported(a, """{"ranges":["[1,5)"]}""")
+            .andExpect(status().isConflict)
+            .andExpect(jsonPath("$.errorCode").value("UNIQUENESS_VIOLATION"))
+        // A different string that covers only versions A already had is a shrink → allowed.
+        putSupported(a, """{"ranges":["[1,2)"]}""").andExpect(status().is2xxSuccessful)
+        putSupported(a, """{"ranges":["[1,1.5)","[1.7,2)"]}""").andExpect(status().is2xxSuccessful)
+    }
+
+    @Test
+    @DisplayName(
+        "SYS-108: migrated ownership-only override range (no config row) can be re-saved; a rival's base is limited to its coverage",
+    )
+    fun `SYS-108 migrated ownership-only override range can be re-saved`() {
+        val s = sfx()
+        val group = "org.octopusden.octopus.own$s"
+        val oldBlock = "[1,2)"
+        // OLD: like a migrated archived component whose oldest DSL block differs from the base only in
+        // artifactId — the block becomes an ownership override with NO configuration row at its range.
+        val old = createOk(
+            """{"name":"xcc-own-mig-old-$s","baseConfiguration":{"build":{"buildSystem":"MAVEN"}},""" +
+                """"artifactIds":[{"groupPattern":"$group","mode":"EXPLICIT","artifactTokens":["lib-old"]}]}""",
+        )
+        putSupported(old, """{"ranges":["[1,3)"]}""").andExpect(status().is2xxSuccessful)
+        val mappingId = UUID.randomUUID()
+        jdbcTemplate.update(
+            "INSERT INTO component_artifact_mappings " +
+                "(id, component_id, version_range, group_pattern, artifact_id_mode, sort_order) VALUES (?, ?, ?, ?, ?, 0)",
+            mappingId,
+            UUID.fromString(old),
+            oldBlock,
+            group,
+            "EXPLICIT",
+        )
+        listOf("lib-old", "lib-split").forEachIndexed { i, token ->
+            jdbcTemplate.update(
+                "INSERT INTO component_artifact_mapping_tokens (id, mapping_id, artifact_pattern, sort_order) VALUES (?, ?, ?, ?)",
+                UUID.randomUUID(),
+                mappingId,
+                token,
+                i,
+            )
+        }
+        // NEW: supported only from [11,) — after the split — and owns lib-split at its base (all versions).
+        val new = createOk("""{"name":"xcc-own-mig-new-$s","baseConfiguration":{"build":{"buildSystem":"MAVEN"}}}""")
+        putSupported(new, """{"ranges":["[11,)"]}""").andExpect(status().is2xxSuccessful)
+
+        // NEW saves its ownership: its base is in force only in [11,), OLD's override is [1,2) → no conflict.
+        patchComponent(
+            new,
+            """{"version":${currentVersion(new)},""" +
+                """"artifactIds":[{"groupPattern":"$group","mode":"EXPLICIT","artifactTokens":["lib-split"]}]}""",
+        ).andExpect(status().is2xxSuccessful)
+        // OLD re-sends its override range (which has no configuration row), dropping one token → accepted.
+        patchComponent(
+            old,
+            """{"version":${currentVersion(old)},"artifactIds":[""" +
+                """{"groupPattern":"$group","mode":"EXPLICIT","artifactTokens":["lib-old"]},""" +
+                """{"versionRange":"$oldBlock","groupPattern":"$group","mode":"EXPLICIT","artifactTokens":["lib-old"]}]}""",
+        ).andExpect(status().is2xxSuccessful)
+        // A range that is neither a configuration nor a current ownership range is still rejected.
+        patchComponent(
+            old,
+            """{"version":${currentVersion(old)},"artifactIds":[""" +
+                """{"groupPattern":"$group","mode":"EXPLICIT","artifactTokens":["lib-old"]},""" +
+                """{"versionRange":"[2,3)","groupPattern":"$group","mode":"EXPLICIT","artifactTokens":["lib-old"]}]}""",
+        ).andExpect(status().isBadRequest)
+            .andExpect(jsonPath("$.errorMessage").value(org.hamcrest.Matchers.containsString("versionRange '[2,3)'")))
+    }
+
+    @Test
+    @DisplayName("SYS-109: a rival's base is not in force where its own per-range override replaces it (sub-range of its coverage)")
+    fun `SYS-109 rival base is not in force under its own sub-range override`() {
+        val s = sfx()
+        val group = "org.octopusden.octopus.own$s"
+        // B: base owns lib-b and lib-a, supported [1,); its own override
+        // [1,1.5) owns only lib-b. Seeded the way migration writes it (an override with no config row).
+        val b = createOk(
+            """{"name":"xcc-own-sub-b-$s","baseConfiguration":{"build":{"buildSystem":"MAVEN"}},""" +
+                """"artifactIds":[{"groupPattern":"$group","mode":"EXPLICIT","artifactTokens":["lib-b","lib-a"]}]}""",
+        )
+        putSupported(b, """{"ranges":["[1,)"]}""").andExpect(status().is2xxSuccessful)
+        val override = UUID.randomUUID()
+        jdbcTemplate.update(
+            "INSERT INTO component_artifact_mappings " +
+                "(id, component_id, version_range, group_pattern, artifact_id_mode, sort_order) VALUES (?, ?, ?, ?, ?, 1)",
+            override,
+            UUID.fromString(b),
+            "[1,1.5)",
+            group,
+            "EXPLICIT",
+        )
+        jdbcTemplate.update(
+            "INSERT INTO component_artifact_mapping_tokens (id, mapping_id, artifact_pattern, sort_order) VALUES (?, ?, ?, 0)",
+            UUID.randomUUID(),
+            override,
+            "lib-b",
+        )
+        // A owns lib-a up to 1.5: it meets B only in [1,1.5), where B's base is replaced.
+        val a = createOk("""{"name":"xcc-own-sub-a-$s","baseConfiguration":{"build":{"buildSystem":"MAVEN"}}}""")
+        putSupported(a, """{"ranges":["(,1.5)"]}""").andExpect(status().is2xxSuccessful)
+        patchComponent(
+            a,
+            """{"version":${currentVersion(a)},""" +
+                """"artifactIds":[{"groupPattern":"$group","mode":"EXPLICIT","artifactTokens":["lib-a"]}]}""",
+        ).andExpect(status().is2xxSuccessful)
+        // Past the override B's base is in force again: widening A into [1.5,2) is a real conflict.
+        putSupported(a, """{"ranges":["(,2)"]}""")
+            .andExpect(status().isConflict)
+            .andExpect(jsonPath("$.errorCode").value("UNIQUENESS_VIOLATION"))
+    }
+
+    private fun putSupported(
+        id: String,
+        body: String,
+    ): ResultActions =
+        mvc.perform(
+            put("/rest/api/4/components/$id/supported-versions")
+                .with(adminJwt())
+                .contentType(MediaType.APPLICATION_JSON)
+                .content(body),
+        )
+
+    private fun currentVersion(id: String): Long =
+        objectMapper
+            .readTree(
+                mvc
+                    .perform(get("/rest/api/4/components/$id").with(adminJwt()))
+                    .andExpect(status().isOk)
+                    .andReturn()
+                    .response.contentAsString,
+            )["version"]
+            .asLong()
 
     @Test
     @DisplayName("CREATE rejects ALL_EXCEPT_CLAIMED with a comma group (single-group only) → 400")

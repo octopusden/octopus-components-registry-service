@@ -243,4 +243,90 @@ class VersionRangePartitionTest {
         assertEquals("[2.0,3.0)", listOf("(,1.0)", "[1.0,2.0)", "[2.0,3.0)").maxWith(rank))
         assertEquals("(,2.0)", listOf("(,1.0)", "(,2.0)").maxWith(rank)) // same (-inf) floor → higher ceiling
     }
+
+    // ── subtract (base claim minus the component's own override ranges) ───────────
+
+    @Test
+    @DisplayName("SYS-109: subtract keeps exact bracket inclusivity at both cut points")
+    fun `SYS-109 subtract inclusivity`() {
+        assertEquals(listOf("[1,2)", "[3,5)"), VersionRangePartition.subtract(listOf("[1,5)"), listOf("[2,3)")))
+        assertEquals(listOf("[1,2)", "(3,5)"), VersionRangePartition.subtract(listOf("[1,5)"), listOf("[2,3]")))
+        assertEquals(listOf("[1,2]", "[3,5)"), VersionRangePartition.subtract(listOf("[1,5)"), listOf("(2,3)")))
+        // A cut at the segment's own bound leaves the rest; a cut covering it leaves nothing.
+        assertEquals(listOf("(1,5)"), VersionRangePartition.subtract(listOf("[1,5)"), listOf("[1]")))
+        assertEquals(listOf("[1,5)"), VersionRangePartition.subtract(listOf("[1,5)"), listOf("[5,6)")))
+        assertEquals(emptyList<String>(), VersionRangePartition.subtract(listOf("[1,5)"), listOf("(,10)")))
+    }
+
+    @Test
+    @DisplayName("SYS-109: subtract handles all-versions, composites and whitespace on both sides")
+    fun `SYS-109 subtract composites`() {
+        assertEquals(listOf("(,1)", "[2,)"), VersionRangePartition.subtract(listOf("(,0),[0,)"), listOf("[1,2)")))
+        assertEquals(
+            listOf("[1.1,1.1.39)", "[1.1.40,1.2)"),
+            VersionRangePartition.subtract(listOf("[1.1, 1.2)"), listOf("[1.1.39, 1.1.40)")),
+        )
+        assertEquals(
+            listOf("[0,1)", "[2,3)", "[4,5)"),
+            VersionRangePartition.subtract(listOf("[0,3)", "[4,5)"), listOf("[1,2)", "[5,6),[7,8)")),
+        )
+        assertEquals(null, VersionRangePartition.subtract(listOf("[1,5)"), listOf("not-a-range")))
+    }
+
+    @Test
+    @DisplayName("SYS-109: subtract orders dash-qualified prod bounds with the registry's numeric scheme")
+    fun `SYS-109 subtract with numeric scheme`() {
+        val nvf = NumericVersionFactory(VersionNames("serviceCBranch", "serviceC", "minorC"))
+        val cmp: (String, String) -> Int = { a, b -> nvf.create(a).compareTo(nvf.create(b)) }
+        // Supported [1.0.39,), own overrides up to 1.0.39-361.
+        assertEquals(
+            listOf("[1.0.39-361,)"),
+            VersionRangePartition.subtract(listOf("[1.0.39,)"), listOf("[1.0.39,1.0.39-307)", "[1.0.39-307,1.0.39-361)"), cmp),
+        )
+    }
+
+    @Test
+    @DisplayName("SYS-109: subtract returns null for a range the registry's VersionRangeFactory rejects")
+    fun `SYS-109 subtract rejects ranges the factory rejects`() {
+        val names = VersionNames("serviceCBranch", "serviceC", "minorC")
+        val vrf = VersionRangeFactory(names)
+        val accepts: (String) -> Boolean = { runCatching { vrf.create(it) }.isSuccess }
+        // The lenient parser reads `[,1)` as unbounded below and would subtract all of `[0,1)`.
+        assertEquals(emptyList<String>(), VersionRangePartition.subtract(listOf("[0,1)"), listOf("[,1)")))
+        assertFalse(accepts("[,1)"))
+        assertEquals(null, VersionRangePartition.subtract(listOf("[0,1)"), listOf("[,1)"), accepts = accepts))
+        assertEquals(listOf("[0,0.5)"), VersionRangePartition.subtract(listOf("[0,1)"), listOf("[0.5,1)"), accepts = accepts))
+    }
+
+    @Test
+    @DisplayName("SYS-109: subtract returns null for whitespace the registry's VersionRangeFactory reads as part of a bound")
+    fun `SYS-109 subtract rejects whitespace next to a bracket`() {
+        val names = VersionNames("serviceCBranch", "serviceC", "minorC")
+        val vrf = VersionRangeFactory(names)
+        val nvf = NumericVersionFactory(names)
+        // The factory reads `2.3 ` as a different bound: `[1,2.3 )` does not contain 2.1.
+        assertFalse(vrf.create("[1,2.3 )").containsVersion(nvf.create("2.1")))
+        assertEquals(null, VersionRangePartition.subtract(listOf("[1,3)"), listOf("[1,2.3 )")))
+        assertEquals(null, VersionRangePartition.subtract(listOf("[1,3)"), listOf("[ 1,2.3)")))
+        assertEquals(null, VersionRangePartition.subtract(listOf("[1 ,3)"), listOf("[1,2.3)")))
+        // A space right after a comma (the migrated DSL form) and surrounding whitespace are safe.
+        assertTrue(vrf.create("[1, 2.3)").containsVersion(nvf.create("2.1")))
+        assertEquals(listOf("[2.3,3)"), VersionRangePartition.subtract(listOf("[1,3)"), listOf(" [1, 2.3) ")))
+        assertEquals(listOf("[2.3,3)"), VersionRangePartition.subtract(listOf("[1,3)"), listOf("[1,  2.3)")))
+        assertEquals(listOf("[2.3,3)"), VersionRangePartition.subtract(listOf("[1,3)"), listOf("[1,\t2.3)")))
+    }
+
+    @Test
+    @DisplayName("SYS-109: subtract returns null for non-ASCII whitespace the registry's VersionRangeFactory reads differently")
+    fun `SYS-109 subtract rejects non-ASCII whitespace`() {
+        val names = VersionNames("serviceCBranch", "serviceC", "minorC")
+        val vrf = VersionRangeFactory(names)
+        val nvf = NumericVersionFactory(names)
+        // A no-break space is part of the bound for the factory, even right after the comma.
+        assertFalse(vrf.create("[1,2.3\u00A0)").containsVersion(nvf.create("2.1")))
+        assertTrue(vrf.create("[1,\u00A02.3)").containsVersion(nvf.create("2.3")))
+        listOf("[1,2.3\u00A0)", "[1,\u00A02.3)", "[1,2.3\u2003)", "\u00A0[1,2.3)").forEach {
+            assertEquals(null, VersionRangePartition.subtract(listOf("[1,3)"), listOf(it)), it)
+        }
+    }
 }

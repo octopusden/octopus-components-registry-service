@@ -163,7 +163,8 @@ A dry run with `CLIENT_CODE=ACME`, `PLUGIN_CODE=CORE`, `PLUGIN_NAME=Core API`, o
 ### 3. Expressions: a small subset of Jinja, our own parser
 
 - The syntax is a subset of Jinja, so it looks familiar to template authors:
-  `{{ NAME }}`, `{{ NAME | lower }}`, `{{ NAME | upper }}`; spaces inside the braces are optional.
+  `{{ NAME }}`, `{{ NAME | lower }}`, `{{ NAME | upper }}`, `{{ NAME | title }}`, `{{ NAME | kebab }}`;
+  spaces inside the braces are optional.
 - Parsed by `TemplateExpressionParser` into a `TemplateExpression`, not by a Jinja engine (such
   as Jinjava):
   - the subset needs no engine, and no new dependency;
@@ -201,7 +202,9 @@ A dry run with `CLIENT_CODE=ACME`, `PLUGIN_CODE=CORE`, `PLUGIN_NAME=Core API`, o
   - `component-defaults` supplies it at load (Decision 6's table), also when the template sets it
     from an optional parameter, since rendering then falls back to the default.
 
-  The Portal's fallback values do not count.
+  The Portal's fallback values do not count. "Uses a required parameter" is a load-time, structural
+  check only: a `title` or `kebab` expression can still render blank at runtime for an all-separator
+  value, which the load check cannot see.
 - Build systems that need no VCS skip the VCS fields, as the Portal does: `PROVIDED`,
   `ESCROW_PROVIDED_MANUALLY`, `ESCROW_NOT_SUPPORTED`, `WHISKEY`, `BS2_0`.
 - Fixed values are checked on load against static lists only: build systems, escrow generation

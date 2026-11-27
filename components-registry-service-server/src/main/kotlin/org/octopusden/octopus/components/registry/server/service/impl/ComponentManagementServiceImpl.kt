@@ -839,8 +839,11 @@ class ComponentManagementServiceImpl(
 
         // Per-component child REPLACE — present collection wipes and refills (full ownership set)
         request.artifactIds?.let {
+            // Ranges the component already owns by — captured BEFORE the wipe, so a REPLACE that
+            // re-sends them passes the range-alignment rule (see addArtifactIds).
+            val currentOwnershipRanges = entity.artifactMappings.mapTo(mutableSetOf()) { m -> m.versionRange }
             entity.artifactMappings.clear()
-            addArtifactIds(entity, it)
+            addArtifactIds(entity, it, currentOwnershipRanges)
         }
         request.securityGroups?.let {
             entity.securityGroups.clear()
@@ -1712,6 +1715,14 @@ class ComponentManagementServiceImpl(
                 )
             }
 
+        // A base ownership claim is in force only within the supported versions, so WIDENING coverage can
+        // create an ownership collision → re-check. A pure shrink (or bounded ← ALL) can't, so skip it there
+        // and never 409 a shrink on pre-existing data. Containment is semantic, not by string.
+        val widened =
+            existingRanges.isNotEmpty() &&
+                (finalSet.isEmpty() || !coverageContains(existingRanges, finalSet))
+        if (widened) validateArtifactOwnershipIfChanged(component)
+
         // V1/V5 (warn-and-allow): surface overrides left entirely outside the new supported set — they
         // never resolve (the coverage gate 404s first). Non-blocking; the write still succeeds.
         // `finalRanges` can be empty even when `all=false` (the request's ranges TILED all-versions and
@@ -1758,6 +1769,20 @@ class ComponentManagementServiceImpl(
         // union, not a partition; enumeration breakpoints are derived at read time).
     }
 
+    /**
+     * True iff every version in [inner] is also in [outer] (bounds, inclusivity and gaps included):
+     * adding [inner] to [outer] leaves the canonical merged union unchanged. Errs toward "not contained"
+     * (e.g. one version spelt two ways), which only costs an extra ownership re-check.
+     */
+    private fun coverageContains(
+        outer: Collection<String>,
+        inner: Collection<String>,
+    ): Boolean {
+        val compare = numericVersionComparator(numericVersionFactory)
+        return VersionRangePartition.mergeUnion((outer + inner).toList(), compare) ==
+            VersionRangePartition.mergeUnion(outer.toList(), compare)
+    }
+
     /** True iff [range] denotes all versions (the ALL_VERSIONS sentinel or the unbounded `(,)`). */
     private fun isAllVersionsCoverage(range: String): Boolean {
         val n = normalizeRange(range)
@@ -1789,9 +1814,17 @@ class ComponentManagementServiceImpl(
     // Helpers — child collection management
     // ============================================================
 
+    /**
+     * [currentOwnershipRanges] — the ranges of the component's ownership mappings before this
+     * REPLACE (empty on create). A request range is accepted when it is the base, equals a
+     * configuration range, or is one of these: migration writes a per-range ownership override
+     * WITHOUT a configuration row when a DSL block differs from the base only in groupId/artifactId,
+     * so without this a migrated component could never re-save its own ownership.
+     */
     private fun addArtifactIds(
         component: ComponentEntity,
         requests: List<org.octopusden.octopus.components.registry.server.dto.v4.ArtifactIdRequest>,
+        currentOwnershipRanges: Set<String> = emptySet(),
     ) {
         // Canonicalization: one Maven groupId per stored row. A request's comma group-list expands
         // to one mapping per group (sharing mode/tokens/range), so `sort_order` is a RUNNING counter
@@ -1803,7 +1836,7 @@ class ComponentManagementServiceImpl(
         val claimedByRange = mutableSetOf<Pair<String, String>>()
         var sortOrder = 0
         requests.forEach { req ->
-            val versionRange = req.versionRange?.takeIf { it.isNotBlank() } ?: ALL_VERSIONS
+            val requestedRange = req.versionRange?.takeIf { it.isNotBlank() } ?: ALL_VERSIONS
             val groupRaw = req.groupPattern.trim()
             require(groupRaw.isNotEmpty()) { "artifactIds: groupPattern must not be blank" }
             // Split into per-group rows (canonicalization); fail-loud on an empty comma segment
@@ -1839,9 +1872,11 @@ class ComponentManagementServiceImpl(
                 "artifactIds: 'All unclaimed' (ALL_EXCEPT_CLAIMED) supports a single group only — " +
                     "split into one mapping per group"
             }
-            require(versionRange == ALL_VERSIONS || component.configurations.any { it.versionRange == versionRange }) {
-                "artifactIds: versionRange '$versionRange' must equal an existing configuration range or be the base"
-            }
+            val versionRange =
+                requireNotNull(storedOwnershipRange(component, requestedRange, currentOwnershipRanges)) {
+                    "artifactIds: versionRange '$requestedRange' must equal an existing configuration range, " +
+                        "an existing ownership range, or be the base"
+                }
             groupItems.forEach { g ->
                 require(claimedByRange.add(versionRange to g)) {
                     "artifactIds: group '$g' is claimed by more than one mapping in range '$versionRange'"
@@ -1864,6 +1899,29 @@ class ComponentManagementServiceImpl(
             }
         }
         validateNonOverlappingOwnershipRanges(component)
+    }
+
+    /**
+     * The stored range string an `artifactIds` request range resolves to, or `null` when it is not
+     * allowed: the base, one of the component's current ownership ranges, or a configuration range.
+     * Ranges are compared whitespace-insensitively, since DSL-migrated ranges keep a space after the
+     * comma (`[1.0, 1.1)`) that a client may drop. The STORED form is returned so that exact-string
+     * comparisons elsewhere (shadow skip, resolver, code view) keep matching; a current ownership range
+     * wins over a configuration range spelled differently, so re-saving never changes a mapping's range.
+     * Create passes no current ownership ranges, so a new range must still match a configuration range.
+     */
+    private fun storedOwnershipRange(
+        component: ComponentEntity,
+        requestedRange: String,
+        currentOwnershipRanges: Set<String>,
+    ): String? {
+        val normalized = VersionRangePartition.normalize(requestedRange)
+        if (normalized == VersionRangePartition.normalize(ALL_VERSIONS)) return ALL_VERSIONS
+        val configRanges = component.configurations.map { it.versionRange }
+        return currentOwnershipRanges.firstOrNull { it == requestedRange }
+            ?: currentOwnershipRanges.firstOrNull { VersionRangePartition.normalize(it) == normalized }
+            ?: configRanges.firstOrNull { it == requestedRange }
+            ?: configRanges.firstOrNull { VersionRangePartition.normalize(it) == normalized }
     }
 
     /**
@@ -3674,7 +3732,28 @@ class ComponentManagementServiceImpl(
         val intersect: (String, String) -> Boolean = { a, b ->
             runCatching { versionRangeFactory.create(a).isIntersect(versionRangeFactory.create(b)) }.getOrDefault(true)
         }
-        val violations = computeOwnershipCollisions(ownClaims, rivalClaims, intersect, shadowRanges)
+        // Each component's bounded supported ranges → its base claim is in force only there (a component
+        // with no RANGE_PRESENCE rows is supported in all versions and is simply absent from the map).
+        val coverage =
+            buildMap<String, List<String>> {
+                configurationRepository
+                    .findRangePresenceOfOtherComponents(componentId)
+                    .groupBy({ it.componentKey }, { it.versionRange })
+                    .forEach { (key, ranges) -> put(key, ranges) }
+                entity.configurations
+                    .filter { it.rowType == "RANGE_PRESENCE" }
+                    .map { it.versionRange }
+                    .takeIf { it.isNotEmpty() }
+                    ?.let { put(entity.componentKey, it) }
+            }
+        val compare = numericVersionComparator(numericVersionFactory)
+        // The factory is stricter than the subtraction's own parser: a range it rejects keeps the
+        // unsubtracted coverage, like the intersection above treats it as intersecting.
+        val factoryAccepts: (String) -> Boolean = { runCatching { versionRangeFactory.create(it) }.isSuccess }
+        val subtract: (List<String>, Collection<String>) -> List<String>? = { ranges, minus ->
+            VersionRangePartition.subtract(ranges, minus, compare, factoryAccepts)
+        }
+        val violations = computeOwnershipCollisions(ownClaims, rivalClaims, intersect, shadowRanges, coverage, subtract)
         if (violations.isNotEmpty()) throw CrossComponentConflictException(violations.first())
     }
 

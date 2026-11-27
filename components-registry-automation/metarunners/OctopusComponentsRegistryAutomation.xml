@@ -1,6 +1,10 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <meta-runner name="${description}">
-    <description>Run ${name}</description>
+    <description>
+        Depends on following TeamCity parameters:
+        * OCTOPUS_COMPONENTS_REGISTRY_AUTOMATION_JDK_HOME - home of a JDK 21
+        Run ${name}
+    </description>
     <settings>
         <parameters>
             <param name="ARGS" value="--help" spec="text description='${name} arguments.' validationMode='not_empty' display='normal'"/>
@@ -14,7 +18,7 @@
                     <param name="maven.path" value="%env.BUILD_ENV%/MAVEN/3.6.3"/>
                     <param name="runnerArgs">
                         <![CDATA[-B -Dartifact=${group}:${name}:${version}:jar:all -DoutputDirectory=.]]></param>
-                    <param name="target.jdk.home" value="%env.BUILD_ENV%/JDK/1.8"/>
+                    <param name="target.jdk.home" value="%OCTOPUS_COMPONENTS_REGISTRY_AUTOMATION_JDK_HOME%"/>
                     <param name="userSettingsSelection" value="userSettingsSelection:default"/>
                     <param name="teamcity.build.workingDir" value=".$name"/>
                 </parameters>
@@ -22,7 +26,7 @@
             <runner name="Run $name" type="simpleRunner">
                 <parameters>
                     <param name="script.content">
-                        <![CDATA[%env.BUILD_ENV%/JDK/1.8/bin/java -jar ./.$name/$name-$version-all.jar %ARGS%]]></param>
+                        <![CDATA[%OCTOPUS_COMPONENTS_REGISTRY_AUTOMATION_JDK_HOME%/bin/java -jar ./.$name/$name-$version-all.jar %ARGS%]]></param>
                     <param name="teamcity.step.mode" value="default"/>
                     <param name="use.custom.script" value="true"/>
                 </parameters>

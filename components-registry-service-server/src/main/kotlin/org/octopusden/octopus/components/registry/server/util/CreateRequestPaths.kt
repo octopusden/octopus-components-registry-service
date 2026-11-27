@@ -29,6 +29,8 @@ object CreateRequestPaths {
             "baseConfiguration.jira.buildVersionFormat" to { it.jira()?.buildVersionFormat },
             "baseConfiguration.mavenArtifacts[0].groupPattern" to { it.firstMavenArtifact()?.groupPattern },
             "baseConfiguration.mavenArtifacts[0].artifactPattern" to { it.firstMavenArtifact()?.artifactPattern },
+            "baseConfiguration.mavenArtifacts[0].extension" to { it.firstMavenArtifact()?.extension },
+            "baseConfiguration.mavenArtifacts[0].classifier" to { it.firstMavenArtifact()?.classifier },
             "baseConfiguration.dockerImages[0].imageName" to { it.firstDockerImage()?.imageName },
             "baseConfiguration.dockerImages[0].flavor" to { it.firstDockerImage()?.flavor },
             "baseConfiguration.packages[0].packageName" to { it.firstPackage()?.packageName },

@@ -7,6 +7,7 @@ import org.junit.jupiter.api.DisplayName
 import org.junit.jupiter.api.Test
 import org.junit.jupiter.api.assertThrows
 import org.octopusden.octopus.components.registry.server.dto.v4.ArtifactIdRequest
+import org.octopusden.octopus.components.registry.server.dto.v4.MavenArtifactRequest
 import org.octopusden.octopus.components.registry.server.dto.v4.VcsEntryRequest
 import org.octopusden.octopus.components.registry.server.model.ComponentTemplate
 import org.octopusden.octopus.components.registry.server.support.EXAMPLE_DEFAULTS
@@ -67,9 +68,60 @@ class TemplateRendererTest {
     }
 
     @Test
-    @DisplayName("R1: expressions are replaced, converted by lower or upper, and the text around them kept")
+    @DisplayName("R1: expressions are replaced, converted by lower, upper, title or kebab, and the text around them kept")
     fun r1FreeText() {
         assertEquals("acme-plugin-core", render(values = EXAMPLE_VALUES + ("CLIENT_CODE" to listOf("Acme"))).request.name)
+    }
+
+    @Test
+    @DisplayName("R1: title and kebab render through a field, same as lower and upper")
+    fun r1TitleAndKebabFilters() {
+        val template =
+            parsedTemplate(
+                exampleTemplate().apply {
+                    at("fields")["displayName"] = "{{ PLUGIN_NAME | title }}-{{ CLIENT_CODE | kebab }}"
+                },
+            )
+
+        val rendered =
+            render(
+                template,
+                EXAMPLE_VALUES + ("PLUGIN_NAME" to listOf("payment-methods")) + ("CLIENT_CODE" to listOf("Payment Methods")),
+            )
+
+        assertEquals("Payment Methods-payment-methods", rendered.request.displayName)
+    }
+
+    @Test
+    @DisplayName("R2: a free-text field that kebab collapses to empty is unset, as any other empty render is")
+    fun r2KebabCollapseToEmpty() {
+        val template =
+            parsedTemplate(
+                exampleTemplate().apply {
+                    at("fields")["displayName"] = "{{ PLUGIN_NAME | kebab }}"
+                },
+            )
+
+        val rendered = render(template, EXAMPLE_VALUES + ("PLUGIN_NAME" to listOf("---")))
+
+        assertNull(rendered.request.displayName)
+        assertFalse("displayName" in rendered.sources)
+    }
+
+    @Test
+    @DisplayName("R2: a free-text field that title collapses to empty is unset, as any other empty render is")
+    fun r2TitleCollapseToEmpty() {
+        val template =
+            parsedTemplate(
+                exampleTemplate().apply {
+                    at("fields")["displayName"] = "{{ PLUGIN_NAME | title }}"
+                },
+            )
+
+        val rendered = render(template, EXAMPLE_VALUES + ("PLUGIN_NAME" to listOf("- -")))
+
+        assertNull(rendered.request.displayName)
+        assertFalse("displayName" in rendered.sources)
     }
 
     @Test
@@ -277,6 +329,162 @@ class TemplateRendererTest {
     @DisplayName("R8: an override on a path the template does not list as overridable is refused")
     fun r8NotOverridable() {
         assertThrows<IllegalArgumentException> { render(overrides = mapOf("name" to listOf("other"))) }
+    }
+
+    @Test
+    @DisplayName("SYS-107: a Maven GAV's extension and classifier render into the create request with the coordinate")
+    fun `SYS-107 maven extension and classifier`() {
+        val request =
+            render(
+                parsedTemplate(
+                    exampleTemplate().apply {
+                        at("fields.baseConfiguration")["mavenArtifacts"] =
+                            listOf(
+                                linkedMapOf(
+                                    "groupPattern" to "org.example.plugins.{{ CLIENT_CODE | lower }}",
+                                    "artifactPattern" to "{{ PLUGIN_CODE | lower }}",
+                                    "extension" to "tgz",
+                                    "classifier" to "{{ CLIENT_CODE | lower }}-dist",
+                                ),
+                            )
+                    },
+                ),
+            ).request
+
+        assertEquals(
+            listOf(
+                MavenArtifactRequest(
+                    groupPattern = "org.example.plugins.acme",
+                    artifactPattern = "core",
+                    extension = "tgz",
+                    classifier = "acme-dist",
+                ),
+            ),
+            request.baseConfiguration?.mavenArtifacts,
+        )
+    }
+
+    @Test
+    @DisplayName("SYS-107: a Maven GAV with no extension or classifier sends neither")
+    fun `SYS-107 maven without extension or classifier`() {
+        val request = render(parsedTemplate(exampleTemplate().withExplicitExternalFields())).request
+
+        val maven = requireNotNull(request.baseConfiguration?.mavenArtifacts).single()
+        assertNull(maven.extension)
+        assertNull(maven.classifier)
+    }
+
+    @Test
+    @DisplayName("SYS-110: VCS entries render into the create request in index order, with their checkout directories")
+    fun `SYS-110 vcs entries in index order`() {
+        val request =
+            render(
+                parsedTemplate(
+                    exampleTemplate().apply {
+                        at("fields.baseConfiguration")["buildWorkingDirectory"] = "plugin"
+                        at("fields.baseConfiguration")["vcsEntries"] =
+                            listOf(
+                                linkedMapOf(
+                                    "vcsPath" to "ssh://git@git.example.com/clients/{{ CLIENT_CODE | lower }}/plugin.git",
+                                    "checkoutDirectory" to "plugin",
+                                ),
+                                linkedMapOf(
+                                    "vcsPath" to "ssh://git@git.example.com/clients/{{ CLIENT_CODE | lower }}/ui.git",
+                                    "branch" to "develop",
+                                    "tag" to "ui-\$version",
+                                    "checkoutDirectory" to "{{ PLUGIN_CODE | lower }}-ui",
+                                ),
+                            )
+                    },
+                ),
+            ).request
+
+        assertEquals(
+            listOf(
+                VcsEntryRequest(
+                    vcsPath = "ssh://git@git.example.com/clients/acme/plugin.git",
+                    branch = "main",
+                    tag = "\$module-\$version",
+                    checkoutDirectory = "plugin",
+                ),
+                VcsEntryRequest(
+                    vcsPath = "ssh://git@git.example.com/clients/acme/ui.git",
+                    branch = "develop",
+                    tag = "ui-\$version",
+                    checkoutDirectory = "core-ui",
+                ),
+            ),
+            request.baseConfiguration?.vcsEntries,
+        )
+        assertEquals("plugin", request.baseConfiguration?.buildWorkingDirectory)
+    }
+
+    @Test
+    @DisplayName("SYS-110: a VCS entry that renders empty keeps its place, so the entries after it do not shift")
+    fun `SYS-110 empty vcs entry keeps its place`() {
+        val template =
+            parsedTemplate(
+                exampleTemplate().apply {
+                    at("parameters")["UI"] = linkedMapOf("label" to "UI", "type" to "text")
+                    at("fields.baseConfiguration")["vcsEntries"] =
+                        listOf(
+                            linkedMapOf("vcsPath" to "ssh://git@git.example.com/plugin.git"),
+                            linkedMapOf("vcsPath" to "{{ UI | kebab }}", "checkoutDirectory" to "{{ UI | kebab }}"),
+                            linkedMapOf("vcsPath" to "ssh://git@git.example.com/docs.git", "checkoutDirectory" to "docs"),
+                        )
+                },
+            )
+
+        val request = render(template, values = EXAMPLE_VALUES + ("UI" to listOf("---"))).request
+
+        val entries = requireNotNull(request.baseConfiguration?.vcsEntries)
+
+        assertEquals(listOf("ssh://git@git.example.com/plugin.git", "", "ssh://git@git.example.com/docs.git"), entries.map { it.vcsPath })
+        assertEquals("docs", entries[2].checkoutDirectory)
+    }
+
+    @Test
+    @DisplayName("SYS-110: a last VCS entry that renders empty is kept, not dropped")
+    fun `SYS-110 empty last vcs entry is kept`() {
+        val template =
+            parsedTemplate(
+                exampleTemplate().apply {
+                    at("parameters")["UI"] = linkedMapOf("label" to "UI", "type" to "text")
+                    at("fields.baseConfiguration")["vcsEntries"] =
+                        listOf(
+                            linkedMapOf("vcsPath" to "ssh://git@git.example.com/plugin.git"),
+                            linkedMapOf("vcsPath" to "{{ UI | kebab }}", "checkoutDirectory" to "{{ UI | kebab }}"),
+                        )
+                },
+            )
+
+        val request = render(template, values = EXAMPLE_VALUES + ("UI" to listOf("---"))).request
+
+        assertEquals(
+            listOf("ssh://git@git.example.com/plugin.git", ""),
+            request.baseConfiguration?.vcsEntries?.map { it.vcsPath },
+        )
+    }
+
+    @Test
+    @DisplayName("SYS-110: component-defaults fill the first VCS entry's branch and tag only")
+    fun `SYS-110 further vcs entry takes no defaults`() {
+        val request =
+            render(
+                parsedTemplate(
+                    exampleTemplate().apply {
+                        at("fields.baseConfiguration")["vcsEntries"] =
+                            listOf(
+                                linkedMapOf("vcsPath" to "ssh://git@git.example.com/plugin.git"),
+                                linkedMapOf("vcsPath" to "ssh://git@git.example.com/ui.git", "checkoutDirectory" to "ui"),
+                            )
+                    },
+                ),
+            ).request
+
+        val second = requireNotNull(request.baseConfiguration?.vcsEntries)[1]
+        assertNull(second.branch)
+        assertNull(second.tag)
     }
 
     @Test

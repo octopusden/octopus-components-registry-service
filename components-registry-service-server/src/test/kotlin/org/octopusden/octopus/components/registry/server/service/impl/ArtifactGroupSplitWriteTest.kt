@@ -9,6 +9,7 @@ import org.junit.jupiter.api.Timeout
 import org.mockito.Mockito.mock
 import org.octopusden.octopus.components.registry.server.dto.v4.ArtifactIdRequest
 import org.octopusden.octopus.components.registry.server.entity.ArtifactIdMode
+import org.octopusden.octopus.components.registry.server.entity.ComponentConfigurationEntity
 import org.octopusden.octopus.components.registry.server.entity.ComponentEntity
 import org.octopusden.octopus.components.registry.server.repository.ComponentArtifactMappingRepository
 import org.octopusden.octopus.components.registry.server.repository.ComponentArtifactMappingTokenRepository
@@ -88,6 +89,7 @@ class ArtifactGroupSplitWriteTest {
                 "addArtifactIds",
                 ComponentEntity::class.java,
                 List::class.java,
+                Set::class.java,
             ).apply { isAccessible = true }
     }
 
@@ -97,7 +99,15 @@ class ArtifactGroupSplitWriteTest {
         component: ComponentEntity,
         vararg requests: ArtifactIdRequest,
     ) {
-        addArtifactIds.invoke(service, component, requests.toList())
+        applyWithCurrentRanges(component, emptySet(), *requests)
+    }
+
+    private fun applyWithCurrentRanges(
+        component: ComponentEntity,
+        currentOwnershipRanges: Set<String>,
+        vararg requests: ArtifactIdRequest,
+    ) {
+        addArtifactIds.invoke(service, component, requests.toList(), currentOwnershipRanges)
     }
 
     @Test
@@ -148,5 +158,102 @@ class ArtifactGroupSplitWriteTest {
             c.artifactMappings.map { it.sortOrder },
             "sortOrder must be a running counter, not the request index (which would collide at 0,0,1)",
         )
+    }
+
+    @Test
+    @DisplayName("SYS-108 / ARTGRP-WR-004: an override range that is neither a configuration nor a current ownership range is rejected")
+    fun `SYS-108 ARTGRP-WR-004 unknown override range is rejected`() {
+        val c = component()
+        val ex = org.junit.jupiter.api.Assertions.assertThrows(
+            java.lang.reflect.InvocationTargetException::class.java,
+        ) {
+            apply(
+                c,
+                ArtifactIdRequest(groupPattern = "grp-alfa", mode = "EXPLICIT", artifactTokens = listOf("w1"), versionRange = OLD_BLOCK),
+            )
+        }
+        assertTrue(ex.cause is IllegalArgumentException, "must fail with a 400-mapped IllegalArgumentException")
+        assertTrue(
+            (ex.cause?.message ?: "").contains("versionRange '$OLD_BLOCK'"),
+            "message must name the rejected range: ${ex.cause?.message}",
+        )
+        assertTrue(c.artifactMappings.isEmpty(), "no mappings may be persisted from a rejected request")
+    }
+
+    @Test
+    @DisplayName("SYS-108 / ARTGRP-WR-005: a REPLACE may re-send an ownership range the component already has without a configuration row")
+    fun `SYS-108 ARTGRP-WR-005 current ownership range without configuration row is accepted`() {
+        // Migration shape: a DSL block that differs from the base only in groupId/artifactId becomes an
+        // ownership override with NO configuration row at its range; the component must still be able to
+        // re-save its ownership (e.g. to drop one token from that block).
+        val c = component()
+        applyWithCurrentRanges(
+            c,
+            setOf(OLD_BLOCK),
+            ArtifactIdRequest(groupPattern = "grp-alfa", mode = "EXPLICIT", artifactTokens = listOf("w1")),
+            ArtifactIdRequest(groupPattern = "grp-alfa", mode = "EXPLICIT", artifactTokens = listOf("w2"), versionRange = OLD_BLOCK),
+        )
+
+        assertEquals(listOf("(,0),[0,)", OLD_BLOCK), c.artifactMappings.map { it.versionRange })
+        val overrideTokens = c.artifactMappings.last().tokens
+        assertEquals(listOf("w2"), overrideTokens.map { it.artifactPattern })
+    }
+
+    @Test
+    @DisplayName("SYS-108 / ARTGRP-WR-006: a current ownership range matches whitespace-insensitively and keeps its stored form")
+    fun `SYS-108 ARTGRP-WR-006 spaced migrated range matches its unspaced form`() {
+        // DSL-migrated ranges keep the space after the comma; a client may send the range without it.
+        val stored = "[1.0.36-0000, 1.0.37-0000)"
+        val c = component()
+        applyWithCurrentRanges(
+            c,
+            setOf(stored),
+            ArtifactIdRequest(groupPattern = "grp-alfa", mode = "EXPLICIT", artifactTokens = listOf("w1"), versionRange = OLD_BLOCK),
+        )
+
+        assertEquals(listOf(stored), c.artifactMappings.map { it.versionRange })
+    }
+
+    @Test
+    @DisplayName("SYS-108 / ARTGRP-WR-007: a current ownership spelling wins over a configuration range spelled differently")
+    fun `SYS-108 ARTGRP-WR-007 ownership spelling wins over configuration spelling`() {
+        val stored = "[1.0.36-0000, 1.0.37-0000)"
+        val c = component()
+        c.configurations.add(configRow(c, OLD_BLOCK))
+        applyWithCurrentRanges(
+            c,
+            setOf(stored),
+            ArtifactIdRequest(groupPattern = "grp-alfa", mode = "EXPLICIT", artifactTokens = listOf("w1"), versionRange = OLD_BLOCK),
+        )
+
+        assertEquals(listOf(stored), c.artifactMappings.map { it.versionRange })
+    }
+
+    @Test
+    @DisplayName("SYS-108 / ARTGRP-WR-008: create matches a configuration range or the base ignoring whitespace and stores their form")
+    fun `SYS-108 ARTGRP-WR-008 create matches ranges ignoring whitespace`() {
+        val c = component()
+        c.configurations.add(configRow(c, OLD_BLOCK))
+        apply(
+            c,
+            ArtifactIdRequest(groupPattern = "grp-alfa", mode = "EXPLICIT", artifactTokens = listOf("w1"), versionRange = "(, 0),[0,)"),
+            ArtifactIdRequest(
+                groupPattern = "grp-alfa",
+                mode = "EXPLICIT",
+                artifactTokens = listOf("w2"),
+                versionRange = "[1.0.36-0000, 1.0.37-0000)",
+            ),
+        )
+
+        assertEquals(listOf("(,0),[0,)", OLD_BLOCK), c.artifactMappings.map { it.versionRange })
+    }
+
+    private fun configRow(
+        c: ComponentEntity,
+        range: String,
+    ) = ComponentConfigurationEntity(component = c, versionRange = range, rowType = "BASE")
+
+    private companion object {
+        const val OLD_BLOCK = "[1.0.36-0000,1.0.37-0000)"
     }
 }

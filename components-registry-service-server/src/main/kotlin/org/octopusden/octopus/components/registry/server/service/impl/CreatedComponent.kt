@@ -63,6 +63,8 @@ class EntityCreatedComponent(
                 "baseConfiguration.jira.buildVersionFormat" to { it.base.jiraBuildVersionFormat },
                 "baseConfiguration.mavenArtifacts[0].groupPattern" to { it.firstMaven()?.groupPattern },
                 "baseConfiguration.mavenArtifacts[0].artifactPattern" to { it.firstMaven()?.artifactPattern },
+                "baseConfiguration.mavenArtifacts[0].extension" to { it.firstMaven()?.extension },
+                "baseConfiguration.mavenArtifacts[0].classifier" to { it.firstMaven()?.classifier },
                 "baseConfiguration.dockerImages[0].imageName" to { it.firstDocker()?.imageName },
                 "baseConfiguration.dockerImages[0].flavor" to { it.firstDocker()?.flavor },
                 "baseConfiguration.packages[0].packageName" to { c ->
