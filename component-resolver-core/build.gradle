@@ -22,9 +22,6 @@ dependencies {
     implementation("org.octopusden.octopus.employee:client:${project.properties["octopus-employee-service.version"]}") {
         exclude group: 'org.jetbrains.kotlin', module: '*'
     }
-    implementation "org.gradle:gradle-core:1.6"
-    implementation "org.gradle:gradle-base-services:1.6"
-    implementation "org.gradle:gradle-base-services-groovy:4.2"
     implementation "com.fasterxml.jackson.dataformat:jackson-dataformat-yaml:${project.properties["jackson.version"]}"
     implementation "org.apache.commons:commons-lang3:${project.properties["apache-commons-lang3.version"]}"
 
