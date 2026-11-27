@@ -96,10 +96,7 @@ internal fun computeOwnershipCollisions(
                 else -> false // EXPLICIT × ALL_EXCEPT_CLAIMED — the catch-all yields
             }
         if (!conflict) return
-        violations +=
-            "uniqueness violation: groupId/artifactId ownership of component '${a.componentKey}' " +
-            "(group '$sharedGroup', ${a.mode}) duplicates component '${b.componentKey}' " +
-            "(${b.mode}) in intersecting version ranges '$rangeA' ∩ '$rangeB'"
+        violations += ownershipConflictMessage(a, b, sharedGroup, rangeA, rangeB)
     }
 
     for (i in newClaims.indices) {
@@ -125,6 +122,65 @@ private fun claimRangesInForce(
     val ownOverrides = shadowRangesByComponent[claim.componentKey].orEmpty()
     if (subtractRanges == null || ownOverrides.isEmpty()) return inForce
     return subtractRanges(inForce, ownOverrides) ?: inForce
+}
+
+/** Human wording of what a claim owns inside [group]. */
+private fun describeClaim(
+    c: OwnershipClaim,
+    group: String,
+): String =
+    when (c.mode) {
+        ArtifactIdMode.ALL -> "all artifacts of group '$group'"
+        ArtifactIdMode.ALL_EXCEPT_CLAIMED -> "all artifacts of group '$group' not claimed by other components"
+        ArtifactIdMode.EXPLICIT -> "artifacts ${c.tokens.sorted().joinToString { "'$group:$it'" }}"
+    }
+
+private fun describeRange(r: String): String = if (r == OWNERSHIP_ALL_VERSIONS) "all versions" else "versions $r"
+
+private fun describeRanges(
+    a: String,
+    b: String,
+): String =
+    when {
+        a == b -> "for ${describeRange(a)}"
+        else -> "for ${describeRange(a)} vs ${describeRange(b)} (they overlap)"
+    }
+
+/**
+ * The 409 text for an ownership collision: who claims what, who already owns it, and how to fix it.
+ * Keeps the documented `uniqueness violation: groupId/artifactId ownership` prefix.
+ */
+internal fun ownershipConflictMessage(
+    a: OwnershipClaim,
+    b: OwnershipClaim,
+    group: String,
+    rangeA: String,
+    rangeB: String,
+): String {
+    val hint =
+        when {
+            a.mode == ArtifactIdMode.ALL && b.mode == ArtifactIdMode.ALL ->
+                "Both components claim the whole group, so whichever keeps it leaves nothing for the other; " +
+                    "list explicit artifactIds in both components, or move one of them to another group."
+            a.mode == ArtifactIdMode.ALL ->
+                "List the explicit artifactIds that '${a.componentKey}' publishes instead of all artifacts of the group."
+            b.mode == ArtifactIdMode.ALL ->
+                "'${b.componentKey}' owns the whole group, so no other component can own artifacts in it; " +
+                    "narrow '${b.componentKey}' to explicit artifactIds or use another group."
+            a.mode == ArtifactIdMode.ALL_EXCEPT_CLAIMED && b.mode == ArtifactIdMode.ALL_EXCEPT_CLAIMED ->
+                "Only one component per group can own the not-claimed artifacts; list explicit artifactIds instead."
+            else -> {
+                val shared = a.tokens
+                    .filter { it in b.tokens }
+                    .sorted()
+                    .joinToString { "'$it'" }
+                "An artifact belongs to one component only; remove $shared from one of them."
+            }
+        }
+    return "uniqueness violation: groupId/artifactId ownership conflict. " +
+        "Component '${a.componentKey}' claims ${describeClaim(a, group)}, " +
+        "but component '${b.componentKey}' already owns ${describeClaim(b, group)} " +
+        "${describeRanges(rangeA, rangeB)}. $hint"
 }
 
 /** Split a comma group-list into exact-match group tokens (mirrors `MavenArtifactMatcher.groupIdMatches`). */
