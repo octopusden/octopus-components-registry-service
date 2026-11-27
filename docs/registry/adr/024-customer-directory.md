@@ -83,10 +83,13 @@ scripts) gets it, not only the Portal form. **Scope is the same as ADR-015:** v4
   `service-account-*` identity is added to the service's `allowed-callers`.
 - **Cache.** The full customer list is held in memory as a snapshot with a TTL (~10 min,
   configurable). The upstream only pages, so a refresh reads all pages, and it is
-  **all-or-nothing**: a failed or partial refresh keeps the last good snapshot. With no
-  snapshot at all (first call, upstream down), the outcome is `UNAVAILABLE`, never
-  `UNKNOWN`. There are a few hundred customers at most. The TTL adds nothing meaningful on
-  top of the daily sync.
+  **all-or-nothing**: a failed or partial refresh keeps the last good snapshot. Validation
+  uses a snapshot only while it is **fresh**, that is, while the latest refresh succeeded.
+  With no snapshot at all (first call, upstream down) or with the latest refresh failed,
+  the outcome is `UNAVAILABLE`, never `UNKNOWN` or `INACTIVE`, so an outage never rejects a
+  write. A retained snapshot still serves the dictionary endpoint (see below) until a
+  refresh succeeds. There are a few hundred customers at most. The TTL adds nothing
+  meaningful on top of the daily sync.
 - **Statuses are configuration.** `customer-service.active-statuses` and
   `customer-service.inactive-statuses` list the `status` values that count as active and
   inactive. A value in neither list is "not recognised". Upstream stores `status` as a free
@@ -98,9 +101,9 @@ scripts) gets it, not only the Portal form. **Scope is the same as ADR-015:** v4
   | code found, `status` in the active set | `ACTIVE` | allow |
   | code found, `status` in the inactive set | `INACTIVE` | **reject (400)** |
   | code found, `status` in neither set | `UNAVAILABLE` | allow + WARN log |
-  | code absent from a good snapshot | `UNKNOWN` | **reject (400)**; admins may override, see below |
+  | code absent from a fresh snapshot | `UNKNOWN` | **reject (400)**; admins may override, see below |
   | `clientCode` absent, empty or whitespace | none | allow; no lookup |
-  | no snapshot / refresh failing | `UNAVAILABLE` | allow + WARN log |
+  | no snapshot, or the latest refresh failed (even with a retained snapshot) | `UNAVAILABLE` | allow + WARN log |
   | no bean (flag off / blank URL) | `DISABLED` | allow |
 
   "Reject (400)" is the direct-write contract (v4 POST and PATCH). Template creates report
