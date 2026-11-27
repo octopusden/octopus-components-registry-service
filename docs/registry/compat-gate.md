@@ -48,7 +48,7 @@ All four `COMPAT_*` values are confidential per the open-source rule — they li
 **Reading `build/reports/compat/summary.md`:**
 - `Total recorded / Suppressed / Active` counts at the top — exit code is `0` iff active == 0.
 - Diffs are grouped under `### STATUS_CODE_DIFF`, `### STRUCTURAL_DIFF`, `### VALUE_DIFF` headings (plus `### TIMESTAMP_DRIFT` etc. when present).
-- For a typed-layer (`Feign` recursive comparison) diff, the assertion direction is `assertThat(candidate).isEqualTo(baseline)` — `actual` = candidate, `expected` = baseline.
+- For a typed-layer (`Feign` recursive comparison) diff, the assertion direction is `assertThat(baseline).isEqualTo(candidate)` (`Comparators.compareDto`) — `actual` = baseline, `expected` = candidate.
 - An agent owning one cluster (B / C / D+E / F+G) cares only that diffs scoped to their cluster's endpoint+field signature go to zero. Diffs from sibling PRs not yet landed are expected and tracked separately.
 
 The skill `/crs-compat verify` (user-local, not in this repo) wraps `verify.sh` with the same flag semantics; if invoked from the user's session, prefer the skill — it also surfaces `summary.md` cluster digest. If invoked directly (subagent / CI), call `verify.sh`.

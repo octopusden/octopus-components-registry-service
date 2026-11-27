@@ -29,8 +29,17 @@ object TemplateFields {
             "baseConfiguration.packages[0].packageType" to PACKAGE_TYPE_NAMES,
         )
 
+    /** Required once every VCS entry has a checkout directory; for templates only, as no rule may name it. */
+    const val BUILD_WORKING_DIRECTORY = "baseConfiguration.buildWorkingDirectory"
+
+    /**
+     * Free text of any VCS entry, its index written without leading zeros. Only the first entry's `vcsPath`,
+     * `branch` and `tag` are rule paths ([CreateRequestPaths.PATHS]); the rest are for templates only.
+     */
+    private val VCS_ENTRY_FIELD = Regex("""baseConfiguration\.vcsEntries\[(0|[1-9]\d*)]\.(vcsPath|branch|tag|checkoutDirectory)""")
+
     val KINDS: Map<String, TemplateFieldKind> =
-        CreateRequestPaths.PATHS.associateWith { TemplateFieldKind.FREE_TEXT } +
+        (CreateRequestPaths.PATHS + BUILD_WORKING_DIRECTORY).associateWith { TemplateFieldKind.FREE_TEXT } +
             CRS_VALUE_LISTS.keys.associateWith { TemplateFieldKind.CRS_VALUE } +
             mapOf(
                 "componentOwner" to TemplateFieldKind.PERSON,
@@ -40,6 +49,20 @@ object TemplateFields {
                 "securityChampion" to TemplateFieldKind.PEOPLE_LIST,
             ) +
             FIXED_CHOICES.keys.associateWith { TemplateFieldKind.FIXED_CHOICE }
+
+    /** The kind of a path a template may set, or `null` for any other path. */
+    fun kind(path: String): TemplateFieldKind? = KINDS[path] ?: TemplateFieldKind.FREE_TEXT.takeIf { vcsEntryIndex(path) != null }
+
+    /** The entry index of a VCS entry field path; `null` for any other path, or for an index too large for an `Int`. */
+    fun vcsEntryIndex(path: String): Int? =
+        VCS_ENTRY_FIELD
+            .matchEntire(path)
+            ?.groupValues
+            ?.get(1)
+            ?.toIntOrNull()
+
+    /** Whether [path] is a VCS entry field, whatever the size of its index. */
+    fun isVcsEntryField(path: String): Boolean = VCS_ENTRY_FIELD.matches(path)
 
     /** The values a list has on load, or `null` for one that changes at runtime. */
     fun staticValues(list: TemplateList): Set<String>? =

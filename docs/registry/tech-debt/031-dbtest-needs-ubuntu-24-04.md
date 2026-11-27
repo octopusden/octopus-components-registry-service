@@ -2,7 +2,8 @@
 
 ## Status
 
-Open · P2 · tracked in #558.
+**Resolved** · P2 · #558. The server module's tests use Testcontainers 1.21.4, and the quality
+jobs run on ubuntu-26.04 again.
 
 ## Context
 
@@ -10,22 +11,36 @@ Open · P2 · tracked in #558.
 tests fail: a Testcontainers Postgres dies partway through the run (`unexpected postmaster
 exit`) and every later Spring context fails in Docker discovery. Evidence in #556.
 
-## Workaround applied
+## Cause
 
-The quality and build jobs run on `ubuntu-24.04` because the octopus-base reusable workflows
-pin that label from v3.4.1 on (octopus-base #249). CRS sets no `runs-on` of its own. Moving to
-an octopus-base release that switches to ubuntu-26.04 (octopus-base #260) brings the failure
-back.
+ubuntu-26.04 ships Docker 29, which rejects clients older than Docker API 1.40
+(`client version 1.32 is too old. Minimum supported API version is 1.40`). The server module
+took Testcontainers 1.19.3 from the Spring Boot 3.2.2 BOM; its docker-java speaks API 1.32.
+The client and light-client modules already used 1.21.4 and passed their `dbTest` on the same
+runner.
 
-## Removal
+The earlier lead (Ryuk disabled, containers never stopped) was not the cause: with only the
+Testcontainers version changed, the whole server `dbTest` passed on ubuntu-26.04
+(run 43434113899, PR #559).
 
-1. Find the cause on a 26.04 runner. The lead: `TESTCONTAINERS_RYUK_DISABLED=true` in
-   `build.gradle`, and 28 test classes start `PostgreSQLContainer(...).apply { start() }` without
-   ever stopping it, so containers pile up during one `dbTest` run.
-2. Fix it, for example with one JVM-wide container in test-common or `stop()` in `@AfterAll`.
-3. Show `quality/tests-coverage` passing on ubuntu-26.04, then delete this entry.
+## Workaround applied (removed)
+
+The quality jobs ran on `ubuntu-24.04`, the default `runs-on` of the octopus-base reusable
+workflows from v3.4.1 on (octopus-base #249).
+
+## Resolution
+
+1. `components-registry-service-server/build.gradle` imports `testcontainers-bom:1.21.4` for
+   tests, as `components-registry-service-client` does.
+2. `.github/workflows/merge-gate.yml` and `.github/workflows/quality.yml` pass
+   `runs-on: ubuntu-26.04` to the quality-gates workflow, so `dbTest` keeps running against
+   Docker 29. The input can be dropped once octopus-base defaults to ubuntu-26.04
+   (octopus-base #260).
+
+TeamCity agents were never affected: they run Podman 4.9.4, which reports API 1.41.
 
 ## References
 
-- #556 (symptom), #558 (fix), octopus-base #249 and #260
-- `build.gradle` (Ryuk setting), `.github/workflows/merge-gate.yml`, `.github/workflows/quality.yml`
+- #556 (symptom), #558 (fix), #559 (first run on ubuntu-26.04), octopus-base #249 and #260
+- `components-registry-service-server/build.gradle`, `.github/workflows/merge-gate.yml`,
+  `.github/workflows/quality.yml`
