@@ -159,6 +159,9 @@ internal fun ownershipConflictMessage(
 ): String {
     val hint =
         when {
+            a.mode == ArtifactIdMode.ALL && b.mode == ArtifactIdMode.ALL ->
+                "Both components claim the whole group, so whichever keeps it leaves nothing for the other; " +
+                    "list explicit artifactIds in both components, or move one of them to another group."
             a.mode == ArtifactIdMode.ALL ->
                 "List the explicit artifactIds that '${a.componentKey}' publishes instead of all artifacts of the group."
             b.mode == ArtifactIdMode.ALL ->

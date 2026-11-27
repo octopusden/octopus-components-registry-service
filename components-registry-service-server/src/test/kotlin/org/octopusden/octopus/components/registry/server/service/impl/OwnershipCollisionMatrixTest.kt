@@ -43,8 +43,8 @@ class OwnershipCollisionMatrixTest {
     ) = computeOwnershipCollisions(listOf(a), listOf(b), always).isNotEmpty()
 
     @Test
-    @DisplayName("message: ALL vs EXPLICIT says what each side owns and how to fix it")
-    fun messageAllVsExplicit() {
+    @DisplayName("SYS-111: ALL vs EXPLICIT says what each side owns and how to fix it")
+    fun `SYS-111 message for ALL vs EXPLICIT`() {
         val v =
             computeOwnershipCollisions(
                 listOf(claim("acme-promotion", group = "org.example.acme", mode = ArtifactIdMode.ALL)),
@@ -71,8 +71,30 @@ class OwnershipCollisionMatrixTest {
     }
 
     @Test
-    @DisplayName("message: EXPLICIT vs EXPLICIT names the shared artifactIds and the ranges")
-    fun messageExplicitVsExplicit() {
+    @DisplayName("SYS-111: ALL vs ALL tells both sides to narrow, since narrowing one still conflicts")
+    fun `SYS-111 message for ALL vs ALL`() {
+        val v =
+            computeOwnershipCollisions(
+                listOf(claim("acme-promotion", group = "org.example.acme", mode = ArtifactIdMode.ALL)),
+                listOf(claim("acme-dlgen", group = "org.example.acme", mode = ArtifactIdMode.ALL)),
+                always,
+            )
+        assertEquals(
+            listOf(
+                "uniqueness violation: groupId/artifactId ownership conflict. " +
+                    "Component 'acme-promotion' claims all artifacts of group 'org.example.acme', " +
+                    "but component 'acme-dlgen' already owns all artifacts of group 'org.example.acme' " +
+                    "for all versions. Both components claim the whole group, so whichever keeps it leaves " +
+                    "nothing for the other; list explicit artifactIds in both components, or move one of them " +
+                    "to another group.",
+            ),
+            v,
+        )
+    }
+
+    @Test
+    @DisplayName("SYS-111: EXPLICIT vs EXPLICIT names the shared artifactIds and the ranges")
+    fun `SYS-111 message for EXPLICIT vs EXPLICIT`() {
         val v =
             computeOwnershipCollisions(
                 listOf(claim("a", mode = ArtifactIdMode.EXPLICIT, tokens = setOf("x", "y"), range = "[1,2)")),

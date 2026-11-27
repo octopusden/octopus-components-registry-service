@@ -103,6 +103,7 @@
 | SYS-108 | v4 `artifactIds` REPLACE may re-send the component's current ownership ranges even without a configuration row (DSL-migrated ownership-only blocks); request ranges match the base, current ownership ranges and configuration ranges ignoring whitespace, store the stored form, and prefer the ownership spelling; a range that is none of these is rejected with 400 naming it                                                                                                          | High | unit + integration-test | ✅ Tested |
 | SYS-109 | Cross-component ownership uniqueness compares a base (`ALL_VERSIONS`) mapping only where it is in force: the component's supported versions minus its own per-range override ranges (range subtraction with exact bracket inclusivity, composite ranges and whitespace after a comma, in the registry's numeric version order); an unparseable range keeps the unsubtracted ranges                                                                                                                       | High | unit + integration-test | ✅ Tested |
 | SYS-110 | Component templates: a template may set any number of VCS entries (`baseConfiguration.vcsEntries[i]`: `vcsPath`, `branch`, `tag`, `checkoutDirectory`) and `baseConfiguration.buildWorkingDirectory`, rendered into the create request in index order; only the first entry takes the `component-defaults` branch and tag. With more than one entry, a gap in the indexes is failed on load with one problem naming the first missing entry, and a template missing any entry's `vcsPath`, or a `checkoutDirectory` after the first, is failed on load with a problem naming it; so is a first-entry `checkoutDirectory` without a build working directory. An entry after the first that renders empty keeps its place, and the dry run reports its empty `vcsPath`. A checkout layout failure of the create names the template field, and a field that rendered empty names its parameters. Profile `rules` still name only the first entry's `vcsPath`, `branch` and `tag` | High | unit-test | ✅ Tested |
+| SYS-111 | An ownership-uniqueness 409 explains the conflict in plain words: what each component claims (all artifacts of the group, all not claimed by others, or the `group:artifactId` list), the versions (`all versions` instead of `(,0),[0,)`), and a fix hint that resolves that pairing (ALL vs ALL: narrow both or move one to another group). The `uniqueness violation: groupId/artifactId ownership` prefix and `UNIQUENESS_VIOLATION` code are unchanged                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                   | High | unit-test | ✅ Tested |
 
 ---
 
@@ -4033,3 +4034,34 @@ created from a template.
 `TemplateProblemsTest` — `` `SYS-110 empty vcs path is a problem` `` (12),
 `` `SYS-110 failure on an empty field names its parameters` `` (12);
 `TemplateDryRunTest` — `` `SYS-110 dry run reports an empty vcs path` `` (12).
+
+### SYS-111: Ownership conflict message explains the conflict and how to fix it
+
+**Priority:** High
+**Test layer:** unit-test
+**Status:** ✅ Tested
+
+**Motivation:**
+The ownership-uniqueness 409 showed internal mode names (`ALL`, `EXPLICIT`, `ALL_EXCEPT_CLAIMED`) and
+raw range notation such as `'(,0),[0,)' ∩ '(,0),[0,)'`. Users read it as a version problem, when the
+usual cause is claiming all artifacts of a group another component already partly owns.
+
+**Description:**
+- The message names what each component claims in plain words: all artifacts of the group, all
+  artifacts not claimed by other components, or the list of `group:artifactId`.
+- The ranges where the claims are in force are shown as `all versions` or `versions X`, and
+  `X vs Y (they overlap)` when they differ.
+- The message ends with a fix hint for the pairing, and following it removes the conflict: ALL vs ALL
+  narrows both or moves one to another group; ALL vs anything else narrows the ALL side; two
+  ALL_EXCEPT_CLAIMED keep one; EXPLICIT vs EXPLICIT removes the shared artifactIds from one side.
+- The `uniqueness violation: groupId/artifactId ownership` prefix and `errorCode: UNIQUENESS_VIOLATION`
+  are unchanged.
+
+**Acceptance criteria:**
+1. ALL vs EXPLICIT names both claims, says `all versions`, and tells the ALL side to list explicit
+   artifactIds.
+2. ALL vs ALL tells both sides to narrow, or one to move to another group.
+3. EXPLICIT vs EXPLICIT names the shared artifactIds and both version ranges.
+
+**Test method:** `OwnershipCollisionMatrixTest` — `` `SYS-111 message for ALL vs EXPLICIT` `` (1),
+`` `SYS-111 message for ALL vs ALL` `` (2), `` `SYS-111 message for EXPLICIT vs EXPLICIT` `` (3).
