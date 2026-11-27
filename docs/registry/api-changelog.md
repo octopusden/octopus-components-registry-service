@@ -18,6 +18,18 @@ refresh it with `./gradlew :components-registry-service-server:generateOpenApiDo
 
 ## Unreleased
 
+- **`POST /rest/api/4/components/{idOrName}/distribution/preview` added (SYS-111).** Read-only:
+  for a concrete `version`, reports which source each `distribution.*` marker path takes over a
+  candidate override set. Body `DistributionPreviewRequest { version, fieldOverrides?,
+  supportedVersions? }` — `fieldOverrides` is the `FieldOverrideUpsertRequest` list a component PATCH
+  sends and, when present, replaces the saved overrides entirely (only `distribution.*` entries are
+  evaluated); `supportedVersions` is `DistributionPreviewCoverage { all?, ranges? }`; an omitted field
+  means the saved state. Response `DistributionPreviewResponse { version, supported, paths }`, one
+  `DistributionPathPreview { attribute, source, matchedRanges, unevaluableRanges }` per
+  `distribution.*` family (`source` = `BASE` | `OVERRIDE` | `CONFLICT`); `paths` is `[]` when
+  `supported=false`. Ranges are echoed exactly as sent. Only a missing/blank/non-numeric `version` is `400`
+  (for blank/non-numeric, `errorMessage` starts with `version`); candidate data never fails the request. Requires
+  `ACCESS_COMPONENTS` (no edit rights); unauthenticated → `401`, unknown component → `404`.
 - **`artifactIds` PATCH accepts the component's current ownership ranges.** A per-range ownership
   mapping may now be re-sent at a range the component already owns by, even with no configuration row
   there (migration writes a DSL block that differs from the base only in groupId/artifactId that way),

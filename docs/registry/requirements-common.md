@@ -103,6 +103,7 @@
 | SYS-108 | v4 `artifactIds` REPLACE may re-send the component's current ownership ranges even without a configuration row (DSL-migrated ownership-only blocks); request ranges match the base, current ownership ranges and configuration ranges ignoring whitespace, store the stored form, and prefer the ownership spelling; a range that is none of these is rejected with 400 naming it                                                                                                          | High | unit + integration-test | ✅ Tested |
 | SYS-109 | Cross-component ownership uniqueness compares a base (`ALL_VERSIONS`) mapping only where it is in force: the component's supported versions minus its own per-range override ranges (range subtraction with exact bracket inclusivity, composite ranges and whitespace after a comma, in the registry's numeric version order); an unparseable range keeps the unsubtracted ranges                                                                                                                       | High | unit + integration-test | ✅ Tested |
 | SYS-110 | Component templates: a template may set any number of VCS entries (`baseConfiguration.vcsEntries[i]`: `vcsPath`, `branch`, `tag`, `checkoutDirectory`) and `baseConfiguration.buildWorkingDirectory`, rendered into the create request in index order; only the first entry takes the `component-defaults` branch and tag. With more than one entry, a gap in the indexes is failed on load with one problem naming the first missing entry, and a template missing any entry's `vcsPath`, or a `checkoutDirectory` after the first, is failed on load with a problem naming it; so is a first-entry `checkoutDirectory` without a build working directory. An entry after the first that renders empty keeps its place, and the dry run reports its empty `vcsPath`. A checkout layout failure of the create names the template field, and a field that rendered empty names its parameters. Profile `rules` still name only the first entry's `vcsPath`, `branch` and `tag` | High | unit-test | ✅ Tested |
+| SYS-111 | `POST /rest/api/4/components/{idOrName}/distribution/preview` resolves, for a concrete version, which source each `distribution.*` marker path takes — `BASE`, `OVERRIDE` (one matching range) or `CONFLICT` (several) — over a **candidate** override set (when present it replaces the saved set entirely) and candidate supported versions sent by the caller (omitted = saved state), with the resolver's own containment, ordering and coverage-gate semantics; one path entry per family, ranges echoed exactly as sent; a version outside coverage answers `supported=false` with no paths, not 404; unparseable override ranges never match and are listed per path; only a missing, blank or non-numeric `version` is 400; read-only, `ACCESS_COMPONENTS` | High | unit + integration-test | ✅ Tested |
 
 ---
 
@@ -4033,3 +4034,113 @@ created from a template.
 `TemplateProblemsTest` — `` `SYS-110 empty vcs path is a problem` `` (12),
 `` `SYS-110 failure on an empty field names its parameters` `` (12);
 `TemplateDryRunTest` — `` `SYS-110 dry run reports an empty vcs path` `` (12).
+
+### SYS-111: Distribution preview over a candidate override set
+
+**Priority:** High
+**Test layer:** unit + integration-test
+**Status:** ✅ Tested
+
+**Motivation:**
+The Portal's Distribution tab needs to answer "for version X, which artifacts
+does this component publish, and from which range?" while the user is editing
+overrides that are not saved yet. Answering it client-side would duplicate the
+resolver's version ordering, which handles qualified versions (`1.2-0003`,
+`2.1.0-RC1`, `1.0.0-SNAPSHOT`) that a client mirror would get wrong. A stateless
+endpoint that applies the resolver's own rules to the caller's candidate state
+keeps a single implementation.
+
+**Description:**
+`POST /rest/api/4/components/{idOrName}/distribution/preview`, resolving the
+component exactly as `getComponent` does. Request:
+`{ version, fieldOverrides?, supportedVersions? }` — `fieldOverrides` is the same
+`FieldOverrideUpsertRequest` list a component PATCH sends and, when present,
+**replaces the saved override set entirely** (the PATCH full-set semantics: a
+saved override absent from the list does not participate); only entries on
+`distribution.*` attributes are evaluated, any other entry is ignored.
+`supportedVersions` is `{ all, ranges }` (`all=true` or no ranges = no
+restriction). An omitted field means the saved state: the component's `MARKER`
+rows, and the supported versions `GET .../supported-versions` returns. Nothing is
+persisted.
+
+For the version, using the same `NumericVersionFactory` / `VersionRangeFactory`
+beans and the same shared containment helpers as resolution at read time
+(`toResolvedEscrowModuleConfig`):
+1. **Coverage** — the rule `toResolvedEscrowModuleConfig` applies (MIG-042): with
+   no restriction every version is supported; otherwise the version must lie in
+   a supported range (or a bounded base range), and a blank or unparseable
+   supported range counts as covering. Outside coverage the response is
+   `supported=false` with `paths: []`.
+2. **Per marker path** — one entry for every `distribution.*` marker family the
+   resolver knows (today `distribution.maven`, `distribution.fileUrl`,
+   `distribution.docker`, `distribution.packages`, `distribution.generic`),
+   `BASE` entries included, in
+   the resolver's stable order. Candidate overrides on that attribute whose range
+   contains the version: none → `BASE`; exactly one → `OVERRIDE`; more than one →
+   `CONFLICT`. A candidate set has not been through write validation, so overlap
+   is reported rather than resolved positionally. `matchedRanges` lists the
+   matching ranges. An override whose child list is empty is a normal `OVERRIDE`
+   (it replaces the base with nothing).
+3. An override range that is blank or does not parse never matches (as on the
+   resolve path) and is listed in that path's `unevaluableRanges`.
+4. `matchedRanges` and `unevaluableRanges` echo each override's `versionRange`
+   byte-for-byte as it was sent (or stored); candidate ranges are evaluated in the
+   normalised form a save would store, the echo is never normalised.
+
+Errors: the only `400` is a missing, blank or non-numeric `version` — a blank or
+non-numeric one answers an `errorMessage` starting with `version`; a body without
+`version` is rejected while it is read (`Malformed request body`). Candidate data
+never fails the request. Unknown component →
+`404`.
+
+Response: `{ version, supported, paths: [{ attribute, source, matchedRanges,
+unevaluableRanges }] }`. Children are not echoed: the caller sent them.
+
+**Acceptance criteria:**
+1. No covering override → `BASE`; one → `OVERRIDE` with its range; several →
+   `CONFLICT` with all of them. Paths are independent; `paths` has exactly one
+   entry per `distribution.*` family, and an empty child list is a normal
+   `OVERRIDE`.
+2. A version outside candidate coverage (including one in the gap between two
+   supported ranges, or outside a bounded base range, which candidate
+   `supportedVersions` do not lift) → `supported=false`, `paths: []`; no
+   restriction, or an unparseable supported range, → supported.
+3. A blank or unparseable override range never matches and is listed in
+   `unevaluableRanges`.
+4. Qualified versions are ordered as at read time (`1.2-0003` lies in `[1.2,1.3)`).
+5. Omitted `fieldOverrides` / `supportedVersions` use the saved state; present
+   ones replace it entirely. For a saved component whose ranges are disjoint, the
+   verdict agrees with `GET .../versions/{v}/distribution`.
+6. A blank or non-numeric version → `400` naming `version`; a body without
+   `version` → `400`; unknown component →
+   `404`; unauthenticated → `401`; a caller without `ACCESS_COMPONENTS` → `403`;
+   a caller with `ACCESS_COMPONENTS` and no edit rights → `200`.
+7. `matchedRanges` / `unevaluableRanges` echo each range exactly as sent
+   (whitespace included).
+
+**Test method:** `DistributionPreviewTest` (unit) —
+`` `SYS-111 no override gives BASE on every distribution family` ``,
+`` `SYS-111 one matching override gives OVERRIDE and paths are independent` ``,
+`` `SYS-111 several matching overrides give CONFLICT` ``,
+`` `SYS-111 empty child list is a normal OVERRIDE` ``,
+`` `SYS-111 non-distribution entries are ignored` `` (1);
+`` `SYS-111 version outside coverage is unsupported` ``,
+`` `SYS-111 no restriction supports every version` ``,
+`` `SYS-111 unparseable supported range counts as covering` ``,
+`` `SYS-111 bounded base bounds coverage` ``,
+`` `SYS-111 version in coverage gap is unsupported` `` (2);
+`` `SYS-111 unparseable override range is listed and never matches` `` (3);
+`` `SYS-111 qualified version lies in range` `` (4);
+`` `SYS-111 omitted fields use saved state` ``,
+`` `SYS-111 present fields replace saved state` `` (5);
+`` `SYS-111 non-numeric version is rejected` `` (6);
+`` `SYS-111 ranges are echoed byte-for-byte` `` (7);
+shared helpers `` `SYS-111 overrideRangeContains` ``, `` `SYS-111 coverageRangeContains` ``,
+`` `SYS-111 isInCoverage` ``, `` `SYS-111 normalizeVersionRange` ``.
+`DistributionPreviewApiTest` (integration) —
+`` `SYS-111 preview evaluates candidate overrides` `` (1, 3, 7),
+`` `SYS-111 saved state agrees with distribution endpoint` `` (5),
+`` `SYS-111 candidate coverage replaces saved coverage` `` (2, 5),
+`` `SYS-111 non-numeric version is 400` ``, `` `SYS-111 missing version is 400` ``,
+`` `SYS-111 unknown component is 404` ``,
+`` `SYS-111 unauthenticated is 401` ``, `` `SYS-111 read permission is required and sufficient` `` (6).

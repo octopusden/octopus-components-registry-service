@@ -16,6 +16,8 @@ import org.octopusden.octopus.components.registry.server.mapper.ComponentConfigu
 import org.octopusden.octopus.components.registry.server.mapper.MarkerAttributes
 import org.octopusden.octopus.components.registry.server.mapper.NOT_AVAILABLE_EXTERNAL_REGISTRY
 import org.octopusden.octopus.components.registry.server.mapper.extractScalarValue
+import org.octopusden.octopus.components.registry.server.mapper.isInCoverage
+import org.octopusden.octopus.components.registry.server.mapper.overrideRangeContains
 import org.octopusden.octopus.components.registry.server.service.rms.ComponentBuildRanges
 import org.octopusden.octopus.components.registry.server.service.rms.RegisteredBuildParametersMapper
 import org.octopusden.releng.versions.NumericVersionFactory
@@ -203,44 +205,16 @@ class ComponentCodeRenderer(
                 return null
             }
 
-        // Mirror EntityMappers.toResolvedEscrowModuleConfig's coverage gate (MIG-042 / ADR-018):
-        // a version outside `supported` resolves to NO config (404). In the decoupled model the
-        // base is the ALL_VERSIONS default and coverage is the union of RANGE_PRESENCE / override
-        // rows (plus a bounded base range for legacy/API components); the gate is skipped only when
-        // there is no coverage restriction (ALL_VERSIONS base AND no RANGE_PRESENCE rows). Without
-        // this the as-code resolved view was more lenient than the real resolver and would render a
-        // component for a version the v2 endpoints return 404 for. Canonical logic lives in
-        // EntityMappers.kt; kept in sync by tests on both sides.
-        val hasBoundedBase = base.versionRange != ALL_VERSIONS
-        val hasRangePresence = configs.any { it.rowType == ROW_RANGE_PRESENCE }
-        if (hasBoundedBase || hasRangePresence) {
-            val containsVersion = { range: String? ->
-                range.isNullOrBlank() ||
-                    range == ALL_VERSIONS ||
-                    try {
-                        versionRangeFactory.create(range).containsVersion(numericVersion)
-                    } catch (_: Exception) {
-                        true
-                    }
-            }
-            // Coverage = RANGE_PRESENCE rows (+ bounded base) only; overrides do NOT extend supported
-            // (ADR-018). Mirror of the EntityMappers gate — kept in sync by tests on both sides.
-            val inSupported =
-                configs.any { it.rowType == ROW_RANGE_PRESENCE && containsVersion(it.versionRange) } ||
-                    (hasBoundedBase && containsVersion(base.versionRange))
-            if (!inSupported) return null
-        }
+        // Same coverage gate as EntityMappers.toResolvedEscrowModuleConfig (MIG-042 / ADR-018, shared
+        // isInCoverage): a version outside `supported` resolves to NO config (404), so the as-code
+        // resolved view is never more lenient than the v2 endpoints.
+        val presenceRanges = configs.filter { it.rowType == ROW_RANGE_PRESENCE }.map { it.versionRange }
+        if (!versionRangeFactory.isInCoverage(presenceRanges, base.versionRange, numericVersion)) return null
 
         val matching =
             configs
                 .filter { it.rowType == ROW_SCALAR_OVERRIDE || it.rowType == ROW_MARKER }
-                .filter { override ->
-                    try {
-                        versionRangeFactory.create(override.versionRange).containsVersion(numericVersion)
-                    } catch (_: Exception) {
-                        false
-                    }
-                }
+                .filter { versionRangeFactory.overrideRangeContains(it.versionRange, numericVersion) }
         val scalarOverrides = matching.filter { it.rowType == ROW_SCALAR_OVERRIDE }
         val markerOverrides = matching.filter { it.rowType == ROW_MARKER }
 
@@ -290,13 +264,7 @@ class ComponentCodeRenderer(
             ownershipByRange.keys
                 .filter { it != ALL_VERSIONS_RANGE }
                 .sorted()
-                .firstOrNull { range ->
-                    try {
-                        versionRangeFactory.create(range).containsVersion(numericVersion)
-                    } catch (_: Exception) {
-                        false
-                    }
-                }
+                .firstOrNull { versionRangeFactory.overrideRangeContains(it, numericVersion) }
         val effectiveOwnership =
             overrideOwnershipRange?.let { ownershipByRange[it] } ?: ownershipByRange[ALL_VERSIONS_RANGE].orEmpty()
 
